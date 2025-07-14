@@ -385,7 +385,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 025f6af135c91ed4cb9a205b1a0d9e92, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pathSectionPrefab: {fileID: 4692333251774592102, guid: 827e8425aaabac74e813d2a57cb6e906, type: 3}
+  pathNodePrefab: {fileID: 3326808074419072509, guid: 9039b112a97483042ac95f6eeb289632, type: 3}
+  pathEdgePrefab: {fileID: 2616021756888154325, guid: c88f639d0e4f17e4c960fdad9b90e7b7, type: 3}
 --- !u!4 &1620178443
 Transform:
   m_ObjectHideFlags: 0

@@ -9,7 +9,8 @@ public class PlanMovement : MonoBehaviour
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
     GameObject visualPath;
-    [SerializeField] private GameObject pathSectionPrefab; // Prefab for the path visual nodes
+    [SerializeField] private GameObject pathNodePrefab; // Prefab for the path visual nodes
+    [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
 
     // Start is called before the first frame update
     void Start()
@@ -55,7 +56,9 @@ public class PlanMovement : MonoBehaviour
         if (movementPath.Count >= 2 && movementPath[^2] == currentTile) //Undoing movementPath
         {
             movementPath.RemoveAt(movementPath.Count - 1); // Remove the last tile if the current tile is the same as the previous one
-            Destroy(visualPath.transform.GetChild(visualPath.transform.childCount - 1).gameObject); // Remove the last path node visual
+            Destroy(backOfVisualPath(1)); // Remove the last path edge visual
+            Destroy(backOfVisualPath(2)); // Remove the last path node visual
+
             return;
         }
 
@@ -79,13 +82,14 @@ public class PlanMovement : MonoBehaviour
 
     void AddPathSectionVisual(Vector3 cell, Vector3 last)
     {
-        Renderer childNode = pathSectionPrefab.transform.Find("PathNode").GetComponent<Renderer>();
-        Vector3 offset = childNode.bounds.center - pathSectionPrefab.transform.position; // Get the offset of the prefab's center
-        Vector3 height = new Vector3(0, childNode.bounds.size.y / 2, 0);
+        Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
+        GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
+        node.transform.parent = visualPath.transform;
 
-        GameObject node = Instantiate(pathSectionPrefab, cell - offset + height , Quaternion.identity);
-        node.transform.parent = visualPath.transform; // Set parent to pathNodes
-        //node.transform.LookAt(last); // Rotate to face the last position
+        GameObject edge = Instantiate(pathEdgePrefab, (cell+last) / 2 + heightOffset, Quaternion.identity);
+        edge.transform.parent = visualPath.transform;
+        edge.transform.Rotate(90, 0, 0); // Rotate the edge on its side
+
     }
 
     public Vector2Int ConvertToGridCoords(Vector3 position)
@@ -129,4 +133,8 @@ public class PlanMovement : MonoBehaviour
         return new Vector3(x, 0, z);
     }
 
+    GameObject backOfVisualPath(int index)
+    {
+        return visualPath.transform.GetChild(visualPath.transform.childCount - index).gameObject;
+    }
 }
