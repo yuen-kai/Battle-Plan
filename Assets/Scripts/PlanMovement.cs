@@ -8,6 +8,8 @@ public class PlanMovement : MonoBehaviour
     List<Vector3> movementPath = new List<Vector3>();
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
+    GameObject visualPath;
+    [SerializeField] private GameObject pathSectionPrefab; // Prefab for the path visual nodes
 
     // Start is called before the first frame update
     void Start()
@@ -41,6 +43,7 @@ public class PlanMovement : MonoBehaviour
         }
         movementPath.Clear();
         movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
+        visualPath = new GameObject("PathNodes");
         isDragging = true;
     }
 
@@ -48,10 +51,20 @@ public class PlanMovement : MonoBehaviour
     {
         Vector3 currentTile = GetGridCellUnderMouse();
         Vector3 last = movementPath[^1]; //^1 => -1
-        if (IsValidNextTile(last, currentTile) && !movementPath.Contains(currentTile))
+
+        if (movementPath.Count >= 2 && movementPath[^2] == currentTile) //Undoing movementPath
+        {
+            movementPath.RemoveAt(movementPath.Count - 1); // Remove the last tile if the current tile is the same as the previous one
+            Destroy(visualPath.transform.GetChild(visualPath.transform.childCount - 1).gameObject); // Remove the last path node visual
+            return;
+        }
+
+        if (movementPath.Count - 1 < selectedUnit.GetComponent<Movement>().MOVE_DIST //Cause move dist excludes start tile
+            && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
+            && !movementPath.Contains(currentTile))
         {
             movementPath.Add(currentTile);
-            //DrawPathVisual(movementPath);
+            AddPathSectionVisual(currentTile, last);
         }
     }
 
@@ -60,22 +73,27 @@ public class PlanMovement : MonoBehaviour
         isDragging = false;
         if (!selectedUnit) return;
         StartCoroutine(selectedUnit.GetComponent<Movement>().MoveToCells(movementPath));
-
+        Destroy(visualPath);
         //ConfirmPathButton.Show(); // optional
+    }
+
+    void AddPathSectionVisual(Vector3 cell, Vector3 last)
+    {
+        Renderer childNode = pathSectionPrefab.transform.Find("PathNode").GetComponent<Renderer>();
+        Vector3 offset = childNode.bounds.center - pathSectionPrefab.transform.position; // Get the offset of the prefab's center
+        Vector3 height = new Vector3(0, childNode.bounds.size.y / 2, 0);
+
+        GameObject node = Instantiate(pathSectionPrefab, cell - offset + height , Quaternion.identity);
+        node.transform.parent = visualPath.transform; // Set parent to pathNodes
+        //node.transform.LookAt(last); // Rotate to face the last position
     }
 
     public Vector2Int ConvertToGridCoords(Vector3 position)
     {
+        //Assuming grid's bottom left corner is at (0,0) and the grid is aligned with the world axes
         int x = Mathf.RoundToInt(position.x / cellSize);
         int z = Mathf.RoundToInt(position.z / cellSize);
         return new Vector2Int(x, z);
-    }
-
-    bool IsValidNextTile(Vector3 current, Vector3 next)
-    {
-        float distance = Vector3.Distance(current, next);
-        float buffer = 0.1f; // Small buffer amount
-        return Mathf.Abs(distance - cellSize) <= buffer;
     }
 
     GameObject GetCharacterUnderMouse()
@@ -91,7 +109,7 @@ public class PlanMovement : MonoBehaviour
 
     Vector3 GetGameCellUnderCharacter(GameObject character)
     {
-       Vector3 position = character.transform.position; // Get the position of the character
+        Vector3 position = character.transform.position; // Get the position of the character
         return GetNearestGridCell(position); // Return the nearest grid cell position
     }
 

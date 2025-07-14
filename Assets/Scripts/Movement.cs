@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Movement : MonoBehaviour
 {
-    private float cellSize;
+    public int MOVE_DIST = 5;
     [SerializeField] private const float MOVE_SPEED = 5f;
 
     // Start is called before the first frame update

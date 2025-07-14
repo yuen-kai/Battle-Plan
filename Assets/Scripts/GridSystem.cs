@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class GridSystem : MonoBehaviour
 {
-    public GameObject cellPrefab; // Public variable for the GameObject prefab
+    [SerializeField] private GameObject cellPrefab; // Public variable for the GameObject prefab
     public static float cellSize {  get; private set; } // Size of each grid cell
     [SerializeField] private int gridWidth = 10; // Width of the grid
     [SerializeField] private int gridHeight = 10; // Height of the grid
@@ -31,9 +31,6 @@ public class GridSystem : MonoBehaviour
                 gridArray[x, z] = cell; // Store the cell in the grid array
             }
         }
-
-        gridArray[3, 5].transform.Find("Inner").GetComponent<Renderer>().material.color = Color.red; // Change the color of the child named 'inner' to red
-
     }
 
     // Update is called once per frame
