@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 1615146233764630380}
   - component: {fileID: 6876076939830931503}
   - component: {fileID: 8176942273018549824}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GridCell
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -119,7 +119,7 @@ GameObject:
   - component: {fileID: 5691673206553149882}
   - component: {fileID: 5376674381906996885}
   - component: {fileID: 2828933500087830788}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Inner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
