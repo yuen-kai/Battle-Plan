@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class PlanMovement : MonoBehaviour
 {
-    private float cellSize;
+    private float cellSize = 2.7f;
     List<Vector3> movementPath = new List<Vector3>();
     bool isDragging = false;
     [SerializeField] private GameObject Cube; // Reference to the Cube GameObject that will move
@@ -12,46 +12,43 @@ public class PlanMovement : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        cellSize = GridSystem.cellSize;
     }
 
     void Update()
     {
         if (Input.GetMouseButtonDown(0))
         {
-            Debug.Log("start");
-
             StartPath();
-            Debug.Log("Path started at: " + movementPath[0]);
+
         }
         else if (Input.GetMouseButton(0) && isDragging)
         {
             ExtendPath();
-            Debug.Log("Path extended to: " + movementPath[movementPath.Count - 1]);
         }
         else if (Input.GetMouseButtonUp(0))
         {
             EndPath();
-            Debug.Log("Path ended with " + movementPath.Count + " tiles.");
         }
     }
 
     void StartPath()
     {
-        Vector3 tile = GetCellUnderMouse();
+        Vector3 tile = GetPositionUnderMouse();
         //if (TileHasFriendlyUnit(tile))
         //{
         //    selectedUnit = GetUnit(tile);
         movementPath.Clear();
         movementPath.Add(tile);
+
         isDragging = true;
+
         //}
     }
 
     void ExtendPath()
     {
-        Vector3 currentTile = GetCellUnderMouse();
-        Vector3 last = movementPath[-1];
+        Vector3 currentTile = GetPositionUnderMouse();
+        Vector3 last = movementPath[^1]; //^1 => -1
         if (IsValidNextTile(last, currentTile) && !movementPath.Contains(currentTile))
         {
             movementPath.Add(currentTile);
@@ -59,20 +56,29 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-    bool IsValidNextTile(Vector3 current, Vector3 next)
-    {
-        float distance = Vector3.Distance(current, next);
-        return distance == cellSize;
-    }
-
     void EndPath()
     {
         isDragging = false;
         StartCoroutine(Cube.GetComponent<Movement>().MoveToCells(movementPath));
+
         //ConfirmPathButton.Show(); // optional
     }
 
-    public Vector3 GetCellUnderMouse()
+    public Vector2Int ConvertToGridCoords(Vector3 position)
+    {
+        int x = Mathf.RoundToInt(position.x / cellSize);
+        int z = Mathf.RoundToInt(position.z / cellSize);
+        return new Vector2Int(x, z);
+    }
+
+    bool IsValidNextTile(Vector3 current, Vector3 next)
+    {
+        float distance = Vector3.Distance(current, next);
+        float buffer = 0.1f; // Small buffer amount
+        return Mathf.Abs(distance - cellSize) <= buffer;
+    }
+
+    public Vector3 GetPositionUnderMouse()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
@@ -80,11 +86,11 @@ public class PlanMovement : MonoBehaviour
         return GetNearestGridCell(worldPosition);
     }
 
-    public Vector3 GetNearestGridCell(Vector3 position)
+    Vector3 GetNearestGridCell(Vector3 position)
     {
         float x = Mathf.Round(position.x / cellSize) * cellSize;
         float z = Mathf.Round(position.z / cellSize) * cellSize;
-        return new Vector3(x, position.y, z);
+        return new Vector3(x, 0, z);
     }
 
 }
