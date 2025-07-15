@@ -16286,8 +16286,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1620178443}
   - component: {fileID: 1620178442}
+  - component: {fileID: 1620178444}
   m_Layer: 0
-  m_Name: MovementInput
+  m_Name: GameManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -16308,6 +16309,11 @@ MonoBehaviour:
   pathNodePrefab: {fileID: 3326808074419072509, guid: 9039b112a97483042ac95f6eeb289632, type: 3}
   pathEdgePrefab: {fileID: 2616021756888154325, guid: c88f639d0e4f17e4c960fdad9b90e7b7, type: 3}
   team: BlueTeam
+  teamSize: 3
+  teamCharacters:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
 --- !u!4 &1620178443
 Transform:
   m_ObjectHideFlags: 0
@@ -16323,6 +16329,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1620178444
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1620178441}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a98efc931bfe86438ea9342ed940761, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1621429733
 GameObject:
   m_ObjectHideFlags: 0

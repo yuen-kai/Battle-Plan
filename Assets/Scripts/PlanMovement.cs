@@ -5,7 +5,7 @@ using UnityEngine;
 public class PlanMovement : MonoBehaviour
 {
     private float cellSize = 2.7f;
-    List<Vector3> movementPath = new List<Vector3>();
+
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
     GameObject visualPath;
@@ -13,12 +13,18 @@ public class PlanMovement : MonoBehaviour
     [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
     public string team = "BlueTeam";
 
+    public GameObject[] teamCharacters = new GameObject[3];
+    public Dictionary<GameObject, List<Vector3>> movementPaths = new Dictionary<GameObject, List<Vector3>>();
+    private List<Vector3> movementPath = new List<Vector3>(); // List to store the path of the selected unit
+
+
     // Start is called before the first frame update
     void Start()
     {
 
     }
 
+    //public IEnumerator ChoosePaths()
     void Update()
     {
         if (Input.GetMouseButtonDown(0))
