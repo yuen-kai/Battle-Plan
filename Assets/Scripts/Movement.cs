@@ -25,6 +25,7 @@ public class Movement : MonoBehaviour
         {
             yield return StartCoroutine(MoveToCell(cell)); //yield return pauses the coroutine until MoveToCell is done
         }
+        //Start shooting
     }
 
     private IEnumerator MoveToCell(Vector3 cell)

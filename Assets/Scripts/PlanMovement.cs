@@ -8,14 +8,23 @@ public class PlanMovement : MonoBehaviour
 
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
-    GameObject visualPath;
+
     [SerializeField] private GameObject pathNodePrefab; // Prefab for the path visual nodes
     [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
     public string team = "BlueTeam";
+    public float selectionTime = 10f; // Time in seconds to select paths
 
     public GameObject[] teamCharacters = new GameObject[3];
     public Dictionary<GameObject, List<Vector3>> movementPaths = new Dictionary<GameObject, List<Vector3>>();
-    private List<Vector3> movementPath = new List<Vector3>(); // List to store the path of the selected unit
+    List<Vector3> movementPath = new List<Vector3>(); // List to store the path of the selected unit
+
+    GameObject visualPathsParent;
+    Dictionary<GameObject, GameObject> visualPaths = new Dictionary<GameObject, GameObject>();
+
+    //Current path visual objects
+    GameObject visualPath;
+    GameObject pathNodes;
+    GameObject pathEdges;
 
 
     // Start is called before the first frame update
@@ -24,43 +33,63 @@ public class PlanMovement : MonoBehaviour
 
     }
 
-    //public IEnumerator ChoosePaths()
-    void Update()
+    public IEnumerator ChoosePaths(string team, GameObject[] teamCharacters, System.Action<Dictionary<GameObject, List<Vector3>>> callback)
     {
-        if (Input.GetMouseButtonDown(0))
+        this.team = team;
+        this.teamCharacters = teamCharacters;
+        movementPaths = new Dictionary<GameObject, List<Vector3>>();
+
+        float timer = selectionTime;
+        visualPathsParent = new GameObject("VisualPaths");
+
+        while (timer > 0)
         {
-            StartPath();
+            if (Input.GetMouseButtonDown(0))
+            {
+                StartPath();
+            }
+            else if (Input.GetMouseButton(0) && isDragging)
+            {
+                ExtendPath();
+            }
+            else if (Input.GetMouseButtonUp(0))
+            {
+                EndPath();
+            }
+
+            timer -= Time.deltaTime; // Decrease timer each frame
+            yield return null; // Wait for the next frame
         }
-        else if (Input.GetMouseButton(0) && isDragging)
-        {
-            ExtendPath();
-        }
-        else if (Input.GetMouseButtonUp(0))
+
+        // Time is up, finalize any in-progress path
+        if (isDragging)
         {
             EndPath();
         }
+        Destroy(visualPathsParent); // Clean up the visual path
+        callback(movementPaths); // Return the paths after the selection time is over
     }
-
-    // Add these fields to the class
-    private GameObject pathNodes;
-    private GameObject pathEdges;
 
     // Modify StartPath to create the child objects
     void StartPath()
     {
         selectedUnit = GetCharacterUnderMouse();
-        if (selectedUnit == null) //TODO: Check if is enemy character
-        {
-            Debug.Log("No character selected");
-            return;
-        }
-        movementPath.Clear();
-        movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
-        visualPath = new GameObject("VisualPath");
+        if (selectedUnit == null) return;
 
-        // Create empty child objects for nodes and edges
+        //Reset movement path
+        movementPaths[selectedUnit] = new List<Vector3>();
+        movementPath = movementPaths[selectedUnit];
+        movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
+
+        //Reset visual path
+        if (visualPaths.ContainsKey(selectedUnit)) Destroy(visualPaths[selectedUnit]);
+        visualPath = new GameObject("VisualPath");
+        visualPath.transform.parent = visualPathsParent.transform;
+        visualPaths[selectedUnit] = visualPath;
+
         pathNodes = new GameObject("PathNodes");
         pathNodes.transform.parent = visualPath.transform;
+
         pathEdges = new GameObject("PathEdges");
         pathEdges.transform.parent = visualPath.transform;
 
@@ -79,9 +108,9 @@ public class PlanMovement : MonoBehaviour
     }
 
     // Update backOfVisualPath to use pathEdgesParent and pathNodesParent
-    GameObject backOfVisualPath(GameObject parent,  int index = 1)
+    GameObject backOfVisualPath(GameObject parent, int index = 1)
     {
-       return parent.transform.GetChild(parent.transform.childCount - index).gameObject;
+        return parent.transform.GetChild(parent.transform.childCount - index).gameObject;
     }
 
     void ExtendPath()
@@ -111,12 +140,17 @@ public class PlanMovement : MonoBehaviour
     {
         isDragging = false;
         if (!selectedUnit) return;
-        StartCoroutine(selectedUnit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath))); //C# passes paramaters by reference, so we need to create a new list
-        Destroy(visualPath);
-        Debug.Log("Path confirmed");
+        //PrintPaths(movementPaths);
         //ConfirmPathButton.Show(); // optional
     }
 
+    void PrintPaths(Dictionary<GameObject, List<Vector3>> paths)
+    {
+        foreach (var pair in paths)
+        {
+            Debug.Log($"Unit: {pair.Key.name}, Path: {string.Join(", ", pair.Value)}");
+        }
+    }
 
     public Vector2Int ConvertToGridCoords(Vector3 position)
     {
