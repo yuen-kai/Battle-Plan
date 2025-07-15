@@ -11,10 +11,12 @@ public class PlanMovement : MonoBehaviour
     GameObject visualPath;
     [SerializeField] private GameObject pathNodePrefab; // Prefab for the path visual nodes
     [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
+    public string team = "BlueTeam";
 
     // Start is called before the first frame update
     void Start()
     {
+
     }
 
     void Update()
@@ -22,7 +24,6 @@ public class PlanMovement : MonoBehaviour
         if (Input.GetMouseButtonDown(0))
         {
             StartPath();
-
         }
         else if (Input.GetMouseButton(0) && isDragging)
         {
@@ -34,6 +35,11 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
+    // Add these fields to the class
+    private GameObject pathNodes;
+    private GameObject pathEdges;
+
+    // Modify StartPath to create the child objects
     void StartPath()
     {
         selectedUnit = GetCharacterUnderMouse();
@@ -44,8 +50,32 @@ public class PlanMovement : MonoBehaviour
         }
         movementPath.Clear();
         movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
-        visualPath = new GameObject("PathNodes");
+        visualPath = new GameObject("VisualPath");
+
+        // Create empty child objects for nodes and edges
+        pathNodes = new GameObject("PathNodes");
+        pathNodes.transform.parent = visualPath.transform;
+        pathEdges = new GameObject("PathEdges");
+        pathEdges.transform.parent = visualPath.transform;
+
         isDragging = true;
+    }
+
+    // Update AddPathSectionVisual to parent to the correct child
+    void AddPathSectionVisual(Vector3 cell, Vector3 last)
+    {
+        Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
+        GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
+        node.transform.parent = pathNodes.transform;
+
+        GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2 + heightOffset, Quaternion.identity);
+        edge.transform.parent = pathEdges.transform;
+    }
+
+    // Update backOfVisualPath to use pathEdgesParent and pathNodesParent
+    GameObject backOfVisualPath(GameObject parent,  int index = 1)
+    {
+       return parent.transform.GetChild(parent.transform.childCount - index).gameObject;
     }
 
     void ExtendPath()
@@ -56,8 +86,8 @@ public class PlanMovement : MonoBehaviour
         if (movementPath.Count >= 2 && movementPath[^2] == currentTile) //Undoing movementPath
         {
             movementPath.RemoveAt(movementPath.Count - 1); // Remove the last tile if the current tile is the same as the previous one
-            Destroy(backOfVisualPath(1)); // Remove the last path edge visual
-            Destroy(backOfVisualPath(2)); // Remove the last path node visual
+            Destroy(backOfVisualPath(pathNodes)); // Remove the last path edge visual
+            Destroy(backOfVisualPath(pathEdges)); // Remove the last path node visual
 
             return;
         }
@@ -75,22 +105,12 @@ public class PlanMovement : MonoBehaviour
     {
         isDragging = false;
         if (!selectedUnit) return;
-        StartCoroutine(selectedUnit.GetComponent<Movement>().MoveToCells(movementPath));
+        StartCoroutine(selectedUnit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath))); //C# passes paramaters by reference, so we need to create a new list
         Destroy(visualPath);
+        Debug.Log("Path confirmed");
         //ConfirmPathButton.Show(); // optional
     }
 
-    void AddPathSectionVisual(Vector3 cell, Vector3 last)
-    {
-        Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
-        GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
-        node.transform.parent = visualPath.transform;
-
-        GameObject edge = Instantiate(pathEdgePrefab, (cell+last) / 2 + heightOffset, Quaternion.identity);
-        edge.transform.parent = visualPath.transform;
-        edge.transform.Rotate(90, 0, 0); // Rotate the edge on its side
-
-    }
 
     public Vector2Int ConvertToGridCoords(Vector3 position)
     {
@@ -104,7 +124,7 @@ public class PlanMovement : MonoBehaviour
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Player")))
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask(team)))
         {
             return hit.collider.gameObject; // Return the GameObject that was hit
         }
