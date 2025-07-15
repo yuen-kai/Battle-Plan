@@ -5,6 +5,8 @@ using UnityEngine;
 public class Shooting : MonoBehaviour
 {
     public GameObject bulletPrefab;
+    Rigidbody bulletRb;
+    Bullet bulletScript;
 
     public float timeToFindTarget = 0.15f; // Time to find a target before shooting
     public float timeBetweenShots = 0.3f;
@@ -22,29 +24,30 @@ public class Shooting : MonoBehaviour
     public string enemyTeam = "RedTeam";
 
     private int currentAmmo;
-    private bool isReloading = false;
 
     void Start()
     {
-        currentAmmo = magazineSize;
+        bulletRb = bulletPrefab.GetComponent<Rigidbody>();
+        bulletScript = bulletPrefab.GetComponent<Bullet>();
     }
 
     public IEnumerator StartShooting()
     {
-        if (bullet.GetComponent<Rigidbody>() == null || bullet.GetComponent<Bullet>() == null)
+        currentAmmo = magazineSize;
+        if (bulletRb == null || bulletScript == null)
         {
-            Debug.Warn("Bullet set up wrongly!");
+            Debug.LogWarning("Bullet set up wrongly!");
             yield break; // Exit the coroutine if bullet setup is incorrect
         }
 
         while (true)
         {
-            GameObject target;
+            GameObject target = null;
 
             while (currentAmmo > 0)
             {
                 //Find/Refind target
-                while (target == null || !lineOfSight(target) || !IsTargetInRange(target))
+                while (target == null || !lineOfSight(target))
                 {
                     target = FindNearestEnemy();
                     yield return null;
@@ -78,10 +81,8 @@ public class Shooting : MonoBehaviour
 
     IEnumerator Reload()
     {
-        isReloading = true;
         yield return new WaitForSeconds(reloadTime);
         currentAmmo = magazineSize;
-        isReloading = false;
     }
 
     GameObject FindNearestEnemy()
@@ -106,24 +107,17 @@ public class Shooting : MonoBehaviour
 
     bool lineOfSight(GameObject enemy)
     {
-        // Check for clear line of sight
+        // Check for clear line of sight within range
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
         RaycastHit hit;
 
-        if (Physics.Raycast(transform.position, directionToEnemy, out hit, distance))
+        if (Physics.Raycast(transform.position, directionToEnemy, out hit, bulletRange))
         {
-            // If we hit the enemy first, we have clear line of sight
             if (hit.collider.gameObject == enemy)
             {
                 return true;
             }
         }
         return false;
-    }
-
-    bool IsTargetInRange(GameObject target)
-    {
-        float distanceToTarget = Vector3.Distance(transform.position, target.transform.position);
-        return distanceToTarget <= bulletRange;
     }
 }
