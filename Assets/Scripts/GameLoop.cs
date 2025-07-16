@@ -52,7 +52,6 @@ public class GameLoop : MonoBehaviour
 
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
     {
-        //TODO all units need to move so they can shoot
         foreach (var pair in paths)
         {
             GameObject unit = pair.Key;

@@ -33,11 +33,19 @@ public class PlanMovement : MonoBehaviour
 
     }
 
+    //TODO: Redo part of the path by dragging from node
+
     public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback)
     {
         this.team = team;
         this.teamCharacters = GameObject.FindGameObjectsWithTag(team);
         movementPaths = new Dictionary<GameObject, List<Vector3>>();
+
+        // Initialize movement paths for each character
+        foreach (GameObject character in teamCharacters)
+        {
+            movementPaths[character] = new List<Vector3>();
+        }
 
         float timer = selectionTime;
         visualPathsParent = new GameObject("VisualPaths");
@@ -77,7 +85,7 @@ public class PlanMovement : MonoBehaviour
         if (selectedUnit == null) return;
 
         //Reset movement path
-        movementPaths[selectedUnit] = new List<Vector3>();
+        movementPaths[selectedUnit].Clear();
         movementPath = movementPaths[selectedUnit];
         movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
 

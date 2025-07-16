@@ -69,18 +69,6 @@ public class Shooting : MonoBehaviour
                 bulletRb.velocity = shootDirection * bulletSpeed;
                 bulletScript.damage = damage;
                 bulletScript.range = bulletRange;
-                bulletScript.team = team;
-                bulletScript.enemyTeam = enemyTeam;
-
-                int bulletLayer = LayerMask.NameToLayer("Projectile");
-
-                // Prevent friendly fire
-                GameObject[] friendlyPlayers = GameObject.FindGameObjectsWithTag(team);
-                foreach (GameObject player in friendlyPlayers)
-                {
-                    Physics.IgnoreCollision(GetComponent<Collider>(), player.GetComponent<Collider>());
-                }
-
                 currentAmmo--;
 
                 yield return new WaitForSeconds(timeBetweenShots);
