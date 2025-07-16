@@ -5,19 +5,17 @@ using UnityEngine;
 public class Shooting : MonoBehaviour
 {
     public GameObject bulletPrefab;
-    Rigidbody bulletRb;
-    Bullet bulletScript;
 
-    public float timeToFindTarget = 0.15f; // Time to find a target before shooting
     public float timeBetweenShots = 0.3f;
 
     public int magazineSize = 10;
     public float reloadTime = 2f;
 
-    public float bulletSpread = 3f; // Angle of spread in degrees on one side of the center line
+    public float bulletSpread = 1f; // Angle of spread in degrees on one side of the center line
 
-    public float bulletSpeed = 20f;
-    public float bulletRange = 50f;
+    public float bulletSpeed = 30f;
+    public float targetRange = 50f; // Range to find targets within
+    public float bulletRange = 100f;
     public int damage = 10;
 
     public string team = "BlueTeam";
@@ -27,18 +25,14 @@ public class Shooting : MonoBehaviour
 
     void Start()
     {
-        bulletRb = bulletPrefab.GetComponent<Rigidbody>();
-        bulletScript = bulletPrefab.GetComponent<Bullet>();
+        
     }
 
     public IEnumerator StartShooting()
     {
         currentAmmo = magazineSize;
-        if (bulletRb == null || bulletScript == null)
-        {
-            Debug.LogWarning("Bullet set up wrongly!");
-            yield break; // Exit the coroutine if bullet setup is incorrect
-        }
+        GameObject bullets = new GameObject(transform.name + "'s Bullets");
+
 
         while (true)
         {
@@ -53,8 +47,6 @@ public class Shooting : MonoBehaviour
                     yield return null;
                 }
 
-                yield return new WaitForSeconds(timeToFindTarget);
-
                 // Face the target
                 Vector3 directionToTarget = (target.transform.position - transform.position).normalized;
                 transform.rotation = Quaternion.LookRotation(directionToTarget);
@@ -65,10 +57,28 @@ public class Shooting : MonoBehaviour
                 Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
 
                 GameObject bullet = Instantiate(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
+                bullet.transform.parent = bullets.transform;
+
+                Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
+                Bullet bulletScript = bullet.GetComponent<Bullet>();
+                if (bulletRb == null || bulletScript == null)
+                {
+                    Debug.LogWarning("Bullet set up wrongly!");
+                    yield break; // Exit the coroutine if bullet setup is incorrect
+                } //Error handling
                 bulletRb.velocity = shootDirection * bulletSpeed;
                 bulletScript.damage = damage;
                 bulletScript.range = bulletRange;
                 bulletScript.team = team;
+                bulletScript.enemyTeam = enemyTeam;
+
+                int bulletLayer = LayerMask.NameToLayer("Projectile");
+                int enemyLayer = LayerMask.NameToLayer(team);
+
+                // Prevent collision between Player and Enemy layers
+                Physics.IgnoreLayerCollision(bulletLayer, enemyLayer, true);
+                Physics.IgnoreLayerCollision(bulletLayer, bulletLayer, true);
+
 
                 currentAmmo--;
 
@@ -101,7 +111,6 @@ public class Shooting : MonoBehaviour
                 nearestDistance = distance;
             }
         }
-
         return nearestEnemy;
     }
 
@@ -111,7 +120,7 @@ public class Shooting : MonoBehaviour
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
         RaycastHit hit;
 
-        if (Physics.Raycast(transform.position, directionToEnemy, out hit, bulletRange))
+        if (Physics.Raycast(transform.position, directionToEnemy, out hit, targetRange, LayerMask.GetMask("Walls", enemyTeam)))
         {
             if (hit.collider.gameObject == enemy)
             {
