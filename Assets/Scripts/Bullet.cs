@@ -9,7 +9,7 @@ public class Bullet : MonoBehaviour
     public string team = "BlueTeam";
     public string enemyTeam = "RedTeam";
 
-    private Vector3 startPosition; // Starting position of the bullet
+    private Vector3 startPosition;
     // Start is called before the first frame update
     void Start()
     {
@@ -32,10 +32,10 @@ public class Bullet : MonoBehaviour
         {
             return;
         }
-        //if (hitObject.CompareTag(enemyTeam))
-        //{
-        //    hitObject.GetComponent<Health>().TakeDamage(damage);
-        //}
+        if (hitObject.CompareTag(enemyTeam))
+        {
+            hitObject.GetComponent<Health>().TakeDamage(damage);
+        }
         // Destroy self (bullet)
         Destroy(gameObject);
     }
