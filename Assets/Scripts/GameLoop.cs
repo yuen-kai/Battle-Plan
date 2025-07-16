@@ -4,31 +4,8 @@ using UnityEngine;
 
 public class GameLoop : MonoBehaviour
 {
-    public GameObject[] blueTeamCharacters;
-    public GameObject[] redTeamCharacters;
-    // Start is called before the first frame update
     void Start()
     {
-        // Start shooting for all blue team characters
-        //foreach (GameObject character in blueTeamCharacters)
-        //{
-        //    if (character.GetComponent<Shooting>() != null)
-        //    {
-        //        StartCoroutine(character.GetComponent<Shooting>().StartShooting());
-        //    }
-        //}
-
-        //// Start shooting for all red team characters
-        //foreach (GameObject character in redTeamCharacters)
-        //{
-        //    if (character.GetComponent<Shooting>() != null)
-        //    {
-        //        StartCoroutine(character.GetComponent<Shooting>().StartShooting());
-        //    }
-        //}
-
-        //StartCoroutine(blueTeamCharacters[0].GetComponent<Shooting>().StartShooting());
-        //StartCoroutine(redTeamCharacters[1].GetComponent<Shooting>().StartShooting());
         StartCoroutine(GameLoopTemp());
     }
 
