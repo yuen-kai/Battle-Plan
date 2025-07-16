@@ -10,26 +10,26 @@ public class GameLoop : MonoBehaviour
     void Start()
     {
         // Start shooting for all blue team characters
-        foreach (GameObject character in blueTeamCharacters)
-        {
-            if (character.GetComponent<Shooting>() != null)
-            {
-                StartCoroutine(character.GetComponent<Shooting>().StartShooting());
-            }
-        }
+        //foreach (GameObject character in blueTeamCharacters)
+        //{
+        //    if (character.GetComponent<Shooting>() != null)
+        //    {
+        //        StartCoroutine(character.GetComponent<Shooting>().StartShooting());
+        //    }
+        //}
 
-        // Start shooting for all red team characters
-        foreach (GameObject character in redTeamCharacters)
-        {
-            if (character.GetComponent<Shooting>() != null)
-            {
-                StartCoroutine(character.GetComponent<Shooting>().StartShooting());
-            }
-        }
+        //// Start shooting for all red team characters
+        //foreach (GameObject character in redTeamCharacters)
+        //{
+        //    if (character.GetComponent<Shooting>() != null)
+        //    {
+        //        StartCoroutine(character.GetComponent<Shooting>().StartShooting());
+        //    }
+        //}
 
         //StartCoroutine(blueTeamCharacters[0].GetComponent<Shooting>().StartShooting());
         //StartCoroutine(redTeamCharacters[1].GetComponent<Shooting>().StartShooting());
-        //StartCoroutine(GameLoopTemp());
+        StartCoroutine(GameLoopTemp());
     }
 
     IEnumerator GameLoopTemp()
@@ -52,6 +52,7 @@ public class GameLoop : MonoBehaviour
 
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
     {
+        //TODO all units need to move so they can shoot
         foreach (var pair in paths)
         {
             GameObject unit = pair.Key;
