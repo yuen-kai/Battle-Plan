@@ -33,10 +33,10 @@ public class PlanMovement : MonoBehaviour
 
     }
 
-    public IEnumerator ChoosePaths(string team, GameObject[] teamCharacters, System.Action<Dictionary<GameObject, List<Vector3>>> callback)
+    public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback)
     {
         this.team = team;
-        this.teamCharacters = teamCharacters;
+        this.teamCharacters = GameObject.FindGameObjectsWithTag(team);
         movementPaths = new Dictionary<GameObject, List<Vector3>>();
 
         float timer = selectionTime;

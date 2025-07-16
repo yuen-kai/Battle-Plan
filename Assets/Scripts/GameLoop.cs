@@ -4,31 +4,31 @@ using UnityEngine;
 
 public class GameLoop : MonoBehaviour
 {
-    [SerializeField] private GameObject[] blueTeamCharacters;
-    [SerializeField] private GameObject[] redTeamCharacters;
+    public GameObject[] blueTeamCharacters;
+    public GameObject[] redTeamCharacters;
     // Start is called before the first frame update
     void Start()
     {
-        //// Start shooting for all blue team characters
-        //foreach (GameObject character in blueTeamCharacters)
-        //{
-        //    if (character.GetComponent<Shooting>() != null)
-        //    {
-        //        StartCoroutine(character.GetComponent<Shooting>().StartShooting());
-        //    }
-        //}
+        // Start shooting for all blue team characters
+        foreach (GameObject character in blueTeamCharacters)
+        {
+            if (character.GetComponent<Shooting>() != null)
+            {
+                StartCoroutine(character.GetComponent<Shooting>().StartShooting());
+            }
+        }
 
-        //// Start shooting for all red team characters
-        //foreach (GameObject character in redTeamCharacters)
-        //{
-        //    if (character.GetComponent<Shooting>() != null)
-        //    {
-        //        StartCoroutine(character.GetComponent<Shooting>().StartShooting());
-        //    }
-        //}
+        // Start shooting for all red team characters
+        foreach (GameObject character in redTeamCharacters)
+        {
+            if (character.GetComponent<Shooting>() != null)
+            {
+                StartCoroutine(character.GetComponent<Shooting>().StartShooting());
+            }
+        }
 
-        StartCoroutine(blueTeamCharacters[0].GetComponent<Shooting>().StartShooting());
-        StartCoroutine(redTeamCharacters[0].GetComponent<Shooting>().StartShooting());
+        //StartCoroutine(blueTeamCharacters[0].GetComponent<Shooting>().StartShooting());
+        //StartCoroutine(redTeamCharacters[1].GetComponent<Shooting>().StartShooting());
         //StartCoroutine(GameLoopTemp());
     }
 
@@ -37,11 +37,11 @@ public class GameLoop : MonoBehaviour
         Dictionary<GameObject, List<Vector3>> bluePaths = new Dictionary<GameObject, List<Vector3>>();
         Dictionary<GameObject, List<Vector3>> redPaths = new Dictionary<GameObject, List<Vector3>>();
 
-        yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("BlueTeam", blueTeamCharacters, (Dictionary<GameObject, List<Vector3>> paths) =>
+        yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("BlueTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
         {
             bluePaths = new Dictionary<GameObject, List<Vector3>>(paths);
         }));
-        yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("RedTeam", redTeamCharacters, (Dictionary<GameObject, List<Vector3>> paths) =>
+        yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("RedTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
         {
             redPaths = new Dictionary<GameObject, List<Vector3>>(paths);
         }));

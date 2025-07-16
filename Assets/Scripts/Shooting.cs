@@ -73,12 +73,13 @@ public class Shooting : MonoBehaviour
                 bulletScript.enemyTeam = enemyTeam;
 
                 int bulletLayer = LayerMask.NameToLayer("Projectile");
-                int enemyLayer = LayerMask.NameToLayer(team);
 
-                // Prevent collision between Player and Enemy layers
-                Physics.IgnoreLayerCollision(bulletLayer, enemyLayer, true);
-                Physics.IgnoreLayerCollision(bulletLayer, bulletLayer, true);
-
+                // Prevent friendly fire
+                GameObject[] friendlyPlayers = GameObject.FindGameObjectsWithTag(team);
+                foreach (GameObject player in friendlyPlayers)
+                {
+                    Physics.IgnoreCollision(GetComponent<Collider>(), player.GetComponent<Collider>());
+                }
 
                 currentAmmo--;
 
