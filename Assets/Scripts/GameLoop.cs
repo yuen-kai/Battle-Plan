@@ -4,6 +4,10 @@ using UnityEngine;
 
 public class GameLoop : MonoBehaviour
 {
+    List<GameObject> doneMovingUnits = new List<GameObject>();
+    List<GameObject> doneShootingUnits = new List<GameObject>();
+    bool waiting = false;
+
     void Start()
     {
         StartCoroutine(GameLoopTemp());
@@ -11,20 +15,31 @@ public class GameLoop : MonoBehaviour
 
     IEnumerator GameLoopTemp()
     {
-        Dictionary<GameObject, List<Vector3>> bluePaths = new Dictionary<GameObject, List<Vector3>>();
-        Dictionary<GameObject, List<Vector3>> redPaths = new Dictionary<GameObject, List<Vector3>>();
-
-        yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("BlueTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
+        while (GameObject.FindGameObjectsWithTag("BlueTeam").Length > 0 && GameObject.FindGameObjectsWithTag("RedTeam").Length > 0)
         {
-            bluePaths = new Dictionary<GameObject, List<Vector3>>(paths);
-        }));
-        yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("RedTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
-        {
-            redPaths = new Dictionary<GameObject, List<Vector3>>(paths);
-        }));
+            Dictionary<GameObject, List<Vector3>> bluePaths = new Dictionary<GameObject, List<Vector3>>();
+            Dictionary<GameObject, List<Vector3>> redPaths = new Dictionary<GameObject, List<Vector3>>();
 
-        ExecuteMoves(bluePaths);
-        ExecuteMoves(redPaths);
+            yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("BlueTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
+            {
+                bluePaths = new Dictionary<GameObject, List<Vector3>>(paths);
+            }));
+            yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("RedTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
+            {
+                redPaths = new Dictionary<GameObject, List<Vector3>>(paths);
+            }));
+
+            waiting = true;
+            ExecuteMoves(bluePaths);
+            ExecuteMoves(redPaths);
+
+            while (waiting)
+            {
+                yield return null;
+            }
+        }
+        Debug.Log("Game Over");
+        //yield return StartCoroutine(GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting());
     }
 
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
@@ -33,7 +48,38 @@ public class GameLoop : MonoBehaviour
         {
             GameObject unit = pair.Key;
             List<Vector3> movementPath = pair.Value;
-            StartCoroutine(unit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath))); // C# passes parameters by reference, so we need to create a new list
+            StartCoroutine(unit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath), () => // C# passes parameters by reference, so we need to create a new list
+            {
+                doneMovingUnits.Add(unit);
+                if (doneMovingUnits.Count >= getRemainingUnits())
+                {
+                    OrderStopShooting();
+                }
+            }, () =>
+            {
+                doneShootingUnits.Add(unit);
+                if (doneShootingUnits.Count >= getRemainingUnits())
+                {
+                    waiting = false;
+                }
+            }));
+        }
+    }
+
+    int getRemainingUnits()
+    {
+        return GameObject.FindGameObjectsWithTag("BlueTeam").Length + GameObject.FindGameObjectsWithTag("RedTeam").Length;
+    }
+
+    void OrderStopShooting()
+    {
+        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        {
+            unit.GetComponent<Shooting>().shooting = false;
+        }
+        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
+        {
+            unit.GetComponent<Shooting>().shooting = false;
         }
     }
 

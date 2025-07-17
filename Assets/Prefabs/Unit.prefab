@@ -216,10 +216,11 @@ MonoBehaviour:
   magazineSize: 10
   reloadTime: 2
   bulletSpread: 3
-  bulletSpeed: 20
-  targetRange: 100
-  bulletRange: 50
+  bulletSpeed: 3
+  targetRange: 5
+  bulletRange: 10
   damage: 10
+  cellSize: 2.7
   team: BlueTeam
   enemyTeam: RedTeam
 --- !u!114 &2188586334649481472

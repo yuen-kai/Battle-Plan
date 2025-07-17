@@ -6,45 +6,51 @@ public class Shooting : MonoBehaviour
 {
     public GameObject bulletPrefab;
 
-    public float timeBetweenShots = 0.3f;
+    public float timeBetweenShots;
 
-    public int magazineSize = 10;
-    public float reloadTime = 2f;
+    public int magazineSize;
+    public float reloadTime;
 
-    public float bulletSpread = 1f; // Angle of spread in degrees on one side of the center line
+    public float bulletSpread; // Angle of spread in degrees on one side of the center line
 
-    public float bulletSpeed = 30f;
-    public float targetRange = 50f; // Range to find targets within
-    public float bulletRange = 100f;
-    public int damage = 10;
+    //Parameters in terms of cell size
+    public float bulletSpeed;
+    public float targetRange; // Range to find targets within
+    public float bulletRange;
+    public int damage;
+
+    public float cellSize;
 
     public string team = "BlueTeam";
     public string enemyTeam = "RedTeam";
 
     private int currentAmmo;
+    public bool shooting = true; // Controls whether the unit is currently shooting
 
     void Start()
     {
-        
     }
 
-    public IEnumerator StartShooting()
+    public IEnumerator StartShooting(System.Action broadcastDoneShooting)
     {
         currentAmmo = magazineSize;
-        GameObject bullets = new GameObject(transform.name + "'s Bullets");
+        string bulletObjectName = transform.name + "'s Bullets";
+        GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
+        shooting = true;
 
-
-        while (true)
+        while (shooting)
         {
-            GameObject target = null;
+            GameObject target = FindNearestEnemy();
 
             while (currentAmmo > 0)
             {
                 //Find/Refind target
-                while (target == null || !lineOfSight(target))
+                if (target == null || !lineOfSight(target))
                 {
                     target = FindNearestEnemy();
+                    if(!shooting) break;
                     yield return null;
+                    continue;
                 }
 
                 // Face the target
@@ -66,16 +72,26 @@ public class Shooting : MonoBehaviour
                     Debug.LogWarning("Bullet set up wrongly!");
                     yield break; // Exit the coroutine if bullet setup is incorrect
                 } //Error handling
-                bulletRb.velocity = shootDirection * bulletSpeed;
+                bulletRb.velocity = shootDirection * bulletSpeed * cellSize;
                 bulletScript.damage = damage;
-                bulletScript.range = bulletRange;
+                bulletScript.range = bulletRange * cellSize;
                 currentAmmo--;
 
                 yield return new WaitForSeconds(timeBetweenShots);
             }
 
-            yield return StartCoroutine(Reload());
+            if (shooting)
+            {
+                yield return StartCoroutine(Reload());
+            }
         }
+        
+        while(bullets.transform.childCount > 0)
+        {
+            yield return null; // Wait for all bullets to be destoryed
+        }
+        yield return new WaitForSeconds(0.1f); // Small delay to ensure player deaths are processed
+        broadcastDoneShooting?.Invoke(); //?.Invoke is good for null checks
     }
 
     IEnumerator Reload()
@@ -108,8 +124,7 @@ public class Shooting : MonoBehaviour
         // Check for clear line of sight within range
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
         RaycastHit hit;
-
-        if (Physics.Raycast(transform.position, directionToEnemy, out hit, targetRange, LayerMask.GetMask("Walls", enemyTeam)))
+        if (Physics.Raycast(transform.position, directionToEnemy, out hit, targetRange * cellSize, LayerMask.GetMask("Walls", enemyTeam)))
         {
             if (hit.collider.gameObject == enemy)
             {

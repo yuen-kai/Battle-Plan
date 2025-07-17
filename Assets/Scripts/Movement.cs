@@ -19,14 +19,15 @@ public class Movement : MonoBehaviour
 
     }
 
-    public IEnumerator MoveToCells(List<Vector3> cells) //IEnumerator allows for this function to run over multiple frames
+    public IEnumerator MoveToCells(List<Vector3> cells, System.Action broadcastDoneMoving, System.Action broadcastDoneShooting) //IEnumerator allows for this function to run over multiple frames
     {
         foreach (Vector3 cell in cells)
         {
             yield return StartCoroutine(MoveToCell(cell)); //yield return pauses the coroutine until MoveToCell is done
         }
         
-        StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
+        StartCoroutine(transform.GetComponent<Shooting>().StartShooting(broadcastDoneShooting));
+        broadcastDoneMoving();
     }
 
     private IEnumerator MoveToCell(Vector3 cell)
