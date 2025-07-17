@@ -16488,7 +16488,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   pathNodePrefab: {fileID: 3326808074419072509, guid: 9039b112a97483042ac95f6eeb289632, type: 3}
   pathEdgePrefab: {fileID: 2616021756888154325, guid: c88f639d0e4f17e4c960fdad9b90e7b7, type: 3}
-  team: BlueTeam
   selectionTime: 10
   teamCharacters:
   - {fileID: 2025263007}
@@ -22523,6 +22522,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1237306512}
     m_Modifications:
+    - target: {fileID: 3381112852907784867, guid: ec80aa1b1ead1554e81103453b6830e3, type: 3}
+      propertyPath: m_Camera
+      value: 
+      objectReference: {fileID: 963194227}
     - target: {fileID: 4136433947033533029, guid: ec80aa1b1ead1554e81103453b6830e3, type: 3}
       propertyPath: m_Name
       value: Sniper
