@@ -6,7 +6,6 @@ public class GameLoop : MonoBehaviour
 {
     List<GameObject> doneMovingUnits = new List<GameObject>();
     List<GameObject> doneShootingUnits = new List<GameObject>();
-    bool waiting = false;
 
     void Start()
     {
@@ -29,11 +28,15 @@ public class GameLoop : MonoBehaviour
                 redPaths = new Dictionary<GameObject, List<Vector3>>(paths);
             }));
 
-            waiting = true;
             ExecuteMoves(bluePaths);
             ExecuteMoves(redPaths);
 
-            while (waiting)
+            while (CheckStillMoving())
+            {
+                yield return null;
+            }
+            OrderStopShooting();
+            while (CheckStillShooting())
             {
                 yield return null;
             }
@@ -48,21 +51,7 @@ public class GameLoop : MonoBehaviour
         {
             GameObject unit = pair.Key;
             List<Vector3> movementPath = pair.Value;
-            StartCoroutine(unit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath), () => // C# passes parameters by reference, so we need to create a new list
-            {
-                doneMovingUnits.Add(unit);
-                if (doneMovingUnits.Count >= getRemainingUnits())
-                {
-                    OrderStopShooting();
-                }
-            }, () =>
-            {
-                doneShootingUnits.Add(unit);
-                if (doneShootingUnits.Count >= getRemainingUnits())
-                {
-                    waiting = false;
-                }
-            }));
+            StartCoroutine(unit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath))); // C# passes parameters by reference, so we need to create a new list
         }
     }
 
@@ -71,16 +60,44 @@ public class GameLoop : MonoBehaviour
         return GameObject.FindGameObjectsWithTag("BlueTeam").Length + GameObject.FindGameObjectsWithTag("RedTeam").Length;
     }
 
+    bool CheckStillMoving()
+    {
+        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        {
+            if (unit.GetComponent<Movement>().moving == true) return true;
+        }
+        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
+        {
+            if (unit.GetComponent<Movement>().moving == true) return true;
+        }
+        return false;
+    }
+
     void OrderStopShooting()
     {
         foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
         {
-            unit.GetComponent<Shooting>().shooting = false;
+            unit.GetComponent<Shooting>().allowShooting = false;
         }
         foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
         {
-            unit.GetComponent<Shooting>().shooting = false;
+            unit.GetComponent<Shooting>().allowShooting = false;
         }
+    }
+
+    bool CheckStillShooting()
+    {
+        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        {
+            if (unit.GetComponent<Shooting>().stillShooting == true) return true;
+
+        }
+        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
+        {
+            if (unit.GetComponent<Shooting>().stillShooting == true) return true;
+
+        }
+        return false;
     }
 
     void PrintPaths(Dictionary<GameObject, List<Vector3>> paths)

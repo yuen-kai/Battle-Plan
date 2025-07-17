@@ -198,7 +198,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5cf3b40cbcf426a46a64852294e786b6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MOVE_DIST: 1
+  MOVE_DIST: 5
+  moving: 1
 --- !u!114 &-159396357692938789
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -223,6 +224,8 @@ MonoBehaviour:
   cellSize: 2.7
   team: BlueTeam
   enemyTeam: RedTeam
+  allowShooting: 1
+  stillShooting: 1
 --- !u!114 &2188586334649481472
 MonoBehaviour:
   m_ObjectHideFlags: 0

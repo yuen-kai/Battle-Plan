@@ -18,7 +18,13 @@ public class Health : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
+        {
+            Transform healthBar = healthFill?.parent;
+            healthBar?.LookAt(mainCamera.transform);
+            healthBar?.Rotate(0, 180, 0);
+        }
     }
 
     public void TakeDamage(float damage)

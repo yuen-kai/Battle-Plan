@@ -6,6 +6,7 @@ public class Movement : MonoBehaviour
 {
     public int MOVE_DIST = 5;
     [SerializeField] private const float MOVE_SPEED = 5f;
+    public bool moving = true;
 
     // Start is called before the first frame update
     void Start()
@@ -19,15 +20,16 @@ public class Movement : MonoBehaviour
 
     }
 
-    public IEnumerator MoveToCells(List<Vector3> cells, System.Action broadcastDoneMoving, System.Action broadcastDoneShooting) //IEnumerator allows for this function to run over multiple frames
+    public IEnumerator MoveToCells(List<Vector3> cells) //IEnumerator allows for this function to run over multiple frames
     {
+        moving = true;
         foreach (Vector3 cell in cells)
         {
             yield return StartCoroutine(MoveToCell(cell)); //yield return pauses the coroutine until MoveToCell is done
         }
         
-        StartCoroutine(transform.GetComponent<Shooting>().StartShooting(broadcastDoneShooting));
-        broadcastDoneMoving();
+        StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
+       moving = false;
     }
 
     private IEnumerator MoveToCell(Vector3 cell)

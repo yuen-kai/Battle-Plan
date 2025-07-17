@@ -25,20 +25,22 @@ public class Shooting : MonoBehaviour
     public string enemyTeam = "RedTeam";
 
     private int currentAmmo;
-    public bool shooting = true; // Controls whether the unit is currently shooting
+    public bool allowShooting = true; // Controls whether the unit is currently shooting
+    public bool stillShooting = true;
 
     void Start()
     {
     }
 
-    public IEnumerator StartShooting(System.Action broadcastDoneShooting)
+    public IEnumerator StartShooting()
     {
         currentAmmo = magazineSize;
         string bulletObjectName = transform.name + "'s Bullets";
         GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
-        shooting = true;
+        allowShooting = true;
+        stillShooting = true;
 
-        while (shooting)
+        while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
 
@@ -48,7 +50,7 @@ public class Shooting : MonoBehaviour
                 if (target == null || !lineOfSight(target))
                 {
                     target = FindNearestEnemy();
-                    if(!shooting) break;
+                    if(!allowShooting) break;
                     yield return null;
                     continue;
                 }
@@ -80,7 +82,7 @@ public class Shooting : MonoBehaviour
                 yield return new WaitForSeconds(timeBetweenShots);
             }
 
-            if (shooting)
+            if (allowShooting)
             {
                 yield return StartCoroutine(Reload());
             }
@@ -91,7 +93,7 @@ public class Shooting : MonoBehaviour
             yield return null; // Wait for all bullets to be destoryed
         }
         yield return new WaitForSeconds(0.1f); // Small delay to ensure player deaths are processed
-        broadcastDoneShooting?.Invoke(); //?.Invoke is good for null checks
+        stillShooting = false;
     }
 
     IEnumerator Reload()
