@@ -4,14 +4,15 @@ using UnityEngine;
 
 public class Movement : MonoBehaviour
 {
-    public int MOVE_DIST = 5;
-    [SerializeField] private const float MOVE_SPEED = 5f;
+    public int moveDist;
+    public float moveSpeed; //cells per second
     public bool moving = true;
+    float cellSize;
 
     // Start is called before the first frame update
     void Start()
     {
-       
+        cellSize = GameLoop.cellSize;
     }
 
     // Update is called once per frame
@@ -38,7 +39,7 @@ public class Movement : MonoBehaviour
 
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f) //not 0 because of floating point precision or because movetowards only moves by fixed amount
         {
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, MOVE_SPEED * Time.deltaTime);
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * cellSize * Time.deltaTime);
             yield return null; //go to next frame
         }
 

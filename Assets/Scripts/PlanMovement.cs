@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class PlanMovement : MonoBehaviour
 {
-    private float cellSize = 2.7f;
+    float cellSize;
 
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
@@ -30,7 +30,7 @@ public class PlanMovement : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-
+        cellSize = GameLoop.cellSize;
     }
 
     //TODO: Redo part of the path by dragging from node
@@ -135,7 +135,7 @@ public class PlanMovement : MonoBehaviour
             return;
         }
 
-        if (movementPath.Count - 1 < selectedUnit.GetComponent<Movement>().MOVE_DIST //Cause move dist excludes start tile
+        if (movementPath.Count - 1 < selectedUnit.GetComponent<Movement>().moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
             && !movementPath.Contains(currentTile))
         {

@@ -6,6 +6,7 @@ public class GameLoop : MonoBehaviour
 {
     List<GameObject> doneMovingUnits = new List<GameObject>();
     List<GameObject> doneShootingUnits = new List<GameObject>();
+    public static float cellSize = 2.7f; // Size of each cell in the grid
 
     void Start()
     {

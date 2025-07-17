@@ -14,7 +14,7 @@ public class Shooting : MonoBehaviour
 
     public float bulletSpread; // Angle of spread in degrees on one side of the center line
 
-    //Parameters in terms of cell size
+    //Parameters in cells (/sec)
     public float bulletSpeed;
     public float targetRange; // Range to find targets within
     public float bulletRange;
