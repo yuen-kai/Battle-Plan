@@ -212,7 +212,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 344837ce88ca4014bba1c0c9d493aa26, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  bulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
   timeBetweenShots: 0.3
   magazineSize: 10
   reloadTime: 2
@@ -222,7 +223,6 @@ MonoBehaviour:
   bulletRange: 10
   damage: 10
   cellSize: 2.7
-  team: BlueTeam
   enemyTeam: RedTeam
   allowShooting: 1
   stillShooting: 1

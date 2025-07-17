@@ -11,7 +11,7 @@ public class PlanMovement : MonoBehaviour
 
     [SerializeField] private GameObject pathNodePrefab; // Prefab for the path visual nodes
     [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
-    public string team = "BlueTeam";
+    string team;
     public float selectionTime = 10f; // Time in seconds to select paths
 
     public GameObject[] teamCharacters = new GameObject[3];

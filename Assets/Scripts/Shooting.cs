@@ -4,7 +4,8 @@ using UnityEngine;
 
 public class Shooting : MonoBehaviour
 {
-    public GameObject bulletPrefab;
+    public GameObject blueBulletPrefab;
+    public GameObject redBulletPrefab;
 
     public float timeBetweenShots;
 
@@ -21,8 +22,7 @@ public class Shooting : MonoBehaviour
 
     public float cellSize;
 
-    public string team = "BlueTeam";
-    public string enemyTeam = "RedTeam";
+    public string enemyTeam;
 
     private int currentAmmo;
     public bool allowShooting = true; // Controls whether the unit is currently shooting
@@ -34,6 +34,10 @@ public class Shooting : MonoBehaviour
 
     public IEnumerator StartShooting()
     {
+        enemyTeam = transform.tag == "BlueTeam" ? "RedTeam" : "BlueTeam";
+        GameObject bulletPrefab = transform.tag == "BlueTeam" ? blueBulletPrefab : redBulletPrefab;
+
+
         currentAmmo = magazineSize;
         string bulletObjectName = transform.name + "'s Bullets";
         GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
