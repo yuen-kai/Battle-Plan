@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using System.Linq;
 
 public class PlanMovement : MonoBehaviour
 {
@@ -13,7 +14,6 @@ public class PlanMovement : MonoBehaviour
     [SerializeField] private GameObject pathNodePrefab; // Prefab for the path visual nodes
     [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
     string team;
-    public float selectionTime = 10f; // Time in seconds to select paths
 
     public GameObject[] teamCharacters = new GameObject[3];
     public Dictionary<GameObject, List<Vector3>> movementPaths = new Dictionary<GameObject, List<Vector3>>();
@@ -38,7 +38,7 @@ public class PlanMovement : MonoBehaviour
 
     //TODO: Redo part of the path by dragging from node
 
-    public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback)
+    public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer)
     {
         this.team = team;
         this.teamCharacters = GameObject.FindGameObjectsWithTag(team);
@@ -50,7 +50,6 @@ public class PlanMovement : MonoBehaviour
             movementPaths[character] = new List<Vector3>();
         }
 
-        float timer = selectionTime;
         visualPathsParent = new GameObject("VisualPaths");
 
         while (timer > 0)
@@ -87,30 +86,58 @@ public class PlanMovement : MonoBehaviour
     void StartPath()
     {
         selectedUnit = GetCharacterUnderMouse();
-        if (selectedUnit == null) return;
+        if (selectedUnit != null)
+        {
 
-        //Reset movement path
-        movementPaths[selectedUnit].Clear();
-        movementPath = movementPaths[selectedUnit];
-        movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
+            //Reset movement path
+            movementPaths[selectedUnit].Clear();
+            movementPath = movementPaths[selectedUnit];
+            movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
 
-        //Reset visual path
-        if (visualPaths.ContainsKey(selectedUnit)) Destroy(visualPaths[selectedUnit]);
-        visualPath = new GameObject("VisualPath");
-        visualPath.transform.parent = visualPathsParent.transform;
-        visualPaths[selectedUnit] = visualPath;
+            //Reset visual path
+            if (visualPaths.ContainsKey(selectedUnit)) Destroy(visualPaths[selectedUnit]);
+            visualPath = new GameObject("VisualPath");
+            visualPath.transform.parent = visualPathsParent.transform;
+            visualPaths[selectedUnit] = visualPath;
 
-        pathNodes = new GameObject("PathNodes");
-        pathNodes.transform.parent = visualPath.transform;
+            pathNodes = new GameObject("PathNodes");
+            pathNodes.transform.parent = visualPath.transform;
 
-        pathEdges = new GameObject("PathEdges");
-        pathEdges.transform.parent = visualPath.transform;
+            pathEdges = new GameObject("PathEdges");
+            pathEdges.transform.parent = visualPath.transform;
+
+            isDragging = true;
+        }
+        else
+        {
+            GameObject node = GetNodeUnderMouse();
+            if (node == null) return;
+
+            //Set up path info from node
+            visualPath = node.transform.parent.parent.gameObject;
+            pathNodes = visualPath.transform.Find("PathNodes").gameObject;
+            pathEdges = visualPath.transform.Find("PathEdges").gameObject;
+
+            selectedUnit = visualPaths.FirstOrDefault(x => x.Value == visualPath).Key;
+
+            //Remove all nodes after it
+            int index = node.transform.GetSiblingIndex();
+            movementPaths[selectedUnit].RemoveRange(index + 2, movementPaths[selectedUnit].Count - (index + 2)); //movement path includes start but visual does not
+
+            for (int i = pathNodes.transform.childCount - 1; i > index; i--)
+            {
+                Destroy(pathNodes.transform.GetChild(i).gameObject);
+                Destroy(pathEdges.transform.GetChild(i).gameObject);
+            }
+
+            movementPath = movementPaths[selectedUnit];
+        }
 
         isDragging = true;
     }
 
     // Update AddPathSectionVisual to parent to the correct child
-    void AddPathSectionVisual(Vector3 cell, Vector3 last)
+    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length)
     {
         Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
         GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
@@ -118,6 +145,11 @@ public class PlanMovement : MonoBehaviour
 
         GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2 + heightOffset, Quaternion.identity);
         edge.transform.parent = pathEdges.transform;
+
+        if (length == selectedUnit.GetComponent<Movement>().moveDist)
+        {
+            node.transform.GetComponent<Renderer>().material.color = Color.green;
+        }
     }
 
     // Update backOfVisualPath to use pathEdgesParent and pathNodesParent
@@ -145,7 +177,7 @@ public class PlanMovement : MonoBehaviour
             && !movementPath.Contains(currentTile))
         {
             movementPath.Add(currentTile);
-            AddPathSectionVisual(currentTile, last);
+            AddPathSectionVisual(currentTile, last, movementPath.Count - 1);
         }
     }
 
@@ -178,6 +210,17 @@ public class PlanMovement : MonoBehaviour
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask(team)))
+        {
+            return hit.collider.gameObject; // Return the GameObject that was hit
+        }
+        return null; // Return null if no object was hit
+    }
+
+    GameObject GetNodeUnderMouse()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
+        RaycastHit hit; // Variable to store raycast hit information
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("PathNode")))
         {
             return hit.collider.gameObject; // Return the GameObject that was hit
         }
