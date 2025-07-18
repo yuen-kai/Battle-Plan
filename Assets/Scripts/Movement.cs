@@ -35,7 +35,7 @@ public class Movement : MonoBehaviour
 
     private IEnumerator MoveToCell(Vector3 cell)
     {
-        Vector3 targetPosition = new Vector3(cell.x, GetComponent<Renderer>().bounds.size.y / 2, cell.z);
+        Vector3 targetPosition = new Vector3(cell.x, GetComponent<Collider>().bounds.size.y / 2, cell.z);
 
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f) //not 0 because of floating point precision or because movetowards only moves by fixed amount
         {
