@@ -10,7 +10,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: bulletRange
-      value: 6
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: bulletSpeed
@@ -18,7 +18,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: targetRange
-      value: 3
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: bulletSpread
