@@ -230,6 +230,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Battle Plan character blue soldier
       objectReference: {fileID: 0}
+    - target: {fileID: 4424396828587804706, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: m_Name
+      value: Helmet
+      objectReference: {fileID: 0}
+    - target: {fileID: 4424396828587804706, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: m_TagString
+      value: TeamIndicatorProp
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

@@ -8,6 +8,22 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 8278047107763744475}
     m_Modifications:
+    - target: {fileID: -7391105858175201956, guid: 0fe6e76126251614d8842f291a333617, type: 3}
+      propertyPath: m_Name
+      value: LeftSleeve
+      objectReference: {fileID: 0}
+    - target: {fileID: -7391105858175201956, guid: 0fe6e76126251614d8842f291a333617, type: 3}
+      propertyPath: m_TagString
+      value: TeamIndicatorProp
+      objectReference: {fileID: 0}
+    - target: {fileID: -6265906547635730760, guid: 0fe6e76126251614d8842f291a333617, type: 3}
+      propertyPath: m_Name
+      value: Body
+      objectReference: {fileID: 0}
+    - target: {fileID: -6265906547635730760, guid: 0fe6e76126251614d8842f291a333617, type: 3}
+      propertyPath: m_TagString
+      value: TeamIndicatorProp
+      objectReference: {fileID: 0}
     - target: {fileID: -5716681864270162303, guid: 0fe6e76126251614d8842f291a333617, type: 3}
       propertyPath: m_Enabled
       value: 1
@@ -70,7 +86,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -927199367670048503, guid: 0fe6e76126251614d8842f291a333617, type: 3}
       propertyPath: m_Name
-      value: Battle Plan Shotgunner
+      value: Shotgunner
+      objectReference: {fileID: 0}
+    - target: {fileID: 748748645750174535, guid: 0fe6e76126251614d8842f291a333617, type: 3}
+      propertyPath: m_Name
+      value: RightSleeve
+      objectReference: {fileID: 0}
+    - target: {fileID: 748748645750174535, guid: 0fe6e76126251614d8842f291a333617, type: 3}
+      propertyPath: m_TagString
+      value: TeamIndicatorProp
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:
@@ -269,7 +293,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -927199367670048503, guid: 4aece87f5f0e546459b86c4efebd91d0, type: 3}
       propertyPath: m_Name
-      value: Battle Plan Shotgun
+      value: Shotgun
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

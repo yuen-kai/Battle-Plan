@@ -6,6 +6,7 @@ TagManager:
   tags:
   - BlueTeam
   - RedTeam
+  - TeamIndicatorProp
   layers:
   - Default
   - TransparentFX
