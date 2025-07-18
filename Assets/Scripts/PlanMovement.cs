@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 
 public class PlanMovement : MonoBehaviour
 {
@@ -25,6 +26,8 @@ public class PlanMovement : MonoBehaviour
     GameObject visualPath;
     GameObject pathNodes;
     GameObject pathEdges;
+
+    [SerializeField] private TMP_Text timerTextUI;
 
 
     // Start is called before the first frame update
@@ -52,6 +55,7 @@ public class PlanMovement : MonoBehaviour
 
         while (timer > 0)
         {
+            timerTextUI.text = (Mathf.CeilToInt(timer)).ToString();
             if (Input.GetMouseButtonDown(0))
             {
                 StartPath();
@@ -75,6 +79,7 @@ public class PlanMovement : MonoBehaviour
             EndPath();
         }
         Destroy(visualPathsParent); // Clean up the visual path
+        timerTextUI.text = "";
         callback(movementPaths); // Return the paths after the selection time is over
     }
 

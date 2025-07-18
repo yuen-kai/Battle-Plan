@@ -1,12 +1,18 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
+using System.Linq;
 
 public class GameLoop : MonoBehaviour
 {
+    public List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
     List<GameObject> doneMovingUnits = new List<GameObject>();
     List<GameObject> doneShootingUnits = new List<GameObject>();
     public static float cellSize = 2.7f; // Size of each cell in the grid
+    [SerializeField] private TMP_Text overlayUIText;
+    [SerializeField] private List<Color> planningColors;
+    [SerializeField] private Color executingMoves;
 
     void Start()
     {
@@ -15,22 +21,31 @@ public class GameLoop : MonoBehaviour
 
     IEnumerator GameLoopTemp()
     {
-        while (GameObject.FindGameObjectsWithTag("BlueTeam").Length > 0 && GameObject.FindGameObjectsWithTag("RedTeam").Length > 0)
+        while (teams.Any(team => teamSize(team) > 0))
         {
-            Dictionary<GameObject, List<Vector3>> bluePaths = new Dictionary<GameObject, List<Vector3>>();
-            Dictionary<GameObject, List<Vector3>> redPaths = new Dictionary<GameObject, List<Vector3>>();
+            List<Dictionary<GameObject, List<Vector3>>> pathsList = new List<Dictionary<GameObject, List<Vector3>>>();
 
-            yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("BlueTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
+            System.Action<Dictionary<GameObject, List<Vector3>>> addPaths = (Dictionary<GameObject, List<Vector3>> paths) =>
             {
-                bluePaths = new Dictionary<GameObject, List<Vector3>>(paths);
-            }));
-            yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("RedTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
-            {
-                redPaths = new Dictionary<GameObject, List<Vector3>>(paths);
-            }));
+                pathsList.Add(new Dictionary<GameObject, List<Vector3>>(paths));
+            };
 
-            ExecuteMoves(bluePaths);
-            ExecuteMoves(redPaths);
+            for (int i = 0; i < teams.Count; i++)
+            {
+                string team = teams[i];
+                overlayUIText.text = $"Planning: {team}";
+                overlayUIText.color = planningColors[i];
+                yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths));
+            }
+
+            overlayUIText.text = "Executing Moves";
+            overlayUIText.color = executingMoves;
+
+            foreach (var paths in pathsList)
+            {
+                ExecuteMoves(paths);
+
+            }
 
             while (CheckStillMoving())
             {
@@ -46,6 +61,8 @@ public class GameLoop : MonoBehaviour
         //yield return StartCoroutine(GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting());
     }
 
+
+
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
     {
         foreach (var pair in paths)
@@ -56,48 +73,46 @@ public class GameLoop : MonoBehaviour
         }
     }
 
-    int getRemainingUnits()
+    int teamSize(string team)
     {
-        return GameObject.FindGameObjectsWithTag("BlueTeam").Length + GameObject.FindGameObjectsWithTag("RedTeam").Length;
+        return GameObject.FindGameObjectsWithTag(team).Length;
     }
+
 
     bool CheckStillMoving()
     {
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        foreach (var team in teams)
         {
-            if (unit.GetComponent<Movement>().moving == true) return true;
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                if (unit.GetComponent<Movement>().moving == true) return true;
+            }
         }
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
-        {
-            if (unit.GetComponent<Movement>().moving == true) return true;
-        }
+
         return false;
     }
 
     void OrderStopShooting()
     {
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        foreach (var team in teams)
         {
-            unit.GetComponent<Shooting>().allowShooting = false;
-        }
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
-        {
-            unit.GetComponent<Shooting>().allowShooting = false;
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                unit.GetComponent<Shooting>().allowShooting = false;
+            }
         }
     }
 
     bool CheckStillShooting()
     {
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        foreach (var team in teams)
         {
-            if (unit.GetComponent<Shooting>().stillShooting == true) return true;
-
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                if (unit.GetComponent<Shooting>().stillShooting == true) return true;
+            }
         }
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
-        {
-            if (unit.GetComponent<Shooting>().stillShooting == true) return true;
 
-        }
         return false;
     }
 
