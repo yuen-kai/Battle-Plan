@@ -15458,7 +15458,7 @@ MonoBehaviour:
   - {fileID: 2025263007}
   - {fileID: 1485382690}
   - {fileID: 1074828892}
-  timerText: {fileID: 1249345995}
+  timerTextUI: {fileID: 1249345995}
 --- !u!4 &1620178443
 Transform:
   m_ObjectHideFlags: 0
@@ -15486,9 +15486,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 78310e33cbb1b904092facb30345e0f3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  teams:
+  - BlueTeam
+  - RedTeam
   overlayUIText: {fileID: 1429746702}
-  planningBlue: {r: 0.45882356, g: 0.60784316, b: 0.9450981, a: 1}
-  planningRed: {r: 0.93333334, g: 0.35686275, b: 0.35686275, a: 1}
+  planningColors:
+  - {r: 0.22352937, g: 0.61769044, b: 0.91764706, a: 1}
+  - {r: 0.91764706, g: 0.22352937, b: 0.23093441, a: 1}
   executingMoves: {r: 0.8862745, g: 0.8666667, b: 0.8666667, a: 1}
 --- !u!1 &1621429733
 GameObject:
