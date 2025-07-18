@@ -13,6 +13,7 @@ public class GameLoop : MonoBehaviour
     [SerializeField] private TMP_Text overlayUIText;
     [SerializeField] private List<Color> planningColors;
     [SerializeField] private Color executingMoves;
+    [SerializeField] private float planningTimePerUnit = 4f; 
 
     void Start()
     {
@@ -21,7 +22,7 @@ public class GameLoop : MonoBehaviour
 
     IEnumerator GameLoopTemp()
     {
-        while (teams.Any(team => teamSize(team) > 0))
+        while (teams.All(team => teamSize(team) > 0))
         {
             List<Dictionary<GameObject, List<Vector3>>> pathsList = new List<Dictionary<GameObject, List<Vector3>>>();
 
@@ -30,12 +31,14 @@ public class GameLoop : MonoBehaviour
                 pathsList.Add(new Dictionary<GameObject, List<Vector3>>(paths));
             };
 
+            float timerLength = planningTimePerUnit * teams.Max(teamSize);
             for (int i = 0; i < teams.Count; i++)
             {
                 string team = teams[i];
                 overlayUIText.text = $"Planning: {team}";
                 overlayUIText.color = planningColors[i];
-                yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths));
+                
+                yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
             }
 
             overlayUIText.text = "Executing Moves";
