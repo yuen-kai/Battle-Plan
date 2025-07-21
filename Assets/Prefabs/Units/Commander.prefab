@@ -69,7 +69,23 @@ PrefabInstance:
       value: Pistol
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 8009987137999418058, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -6763858364670572316, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -2045257923548263128, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: 281855664364225751, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -208595431880416365, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -466329591000292508, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -1599826595754709761, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -7640558969779515294, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -7146521406498821007, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: 8485173162082002552, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -7271449666460269675, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: 1502877291743220047, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: 8700725330082129686, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -8380157826906577798, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -8961359253771211100, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
+    - {fileID: -5824510187379060028, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 476a0c6748c259f42a20947ce4669cb0, type: 3}

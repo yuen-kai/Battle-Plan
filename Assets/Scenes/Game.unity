@@ -11992,10 +11992,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1237306512}
     m_Modifications:
+    - target: {fileID: 2037441798709487468, guid: 5cd209f94c39d564196aa6fd31e9f689, type: 3}
+      propertyPath: m_AABB.m_Center.x
+      value: -0.38
+      objectReference: {fileID: 0}
     - target: {fileID: 3381112852907784867, guid: 5cd209f94c39d564196aa6fd31e9f689, type: 3}
       propertyPath: m_Camera
       value: 
       objectReference: {fileID: 963194227}
+    - target: {fileID: 4112192734819506264, guid: 5cd209f94c39d564196aa6fd31e9f689, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 122.49
+      objectReference: {fileID: 0}
     - target: {fileID: 4136433947033533029, guid: 5cd209f94c39d564196aa6fd31e9f689, type: 3}
       propertyPath: m_Name
       value: Shotgunner
