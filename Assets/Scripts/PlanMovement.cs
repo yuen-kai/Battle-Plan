@@ -6,7 +6,7 @@ using System.Linq;
 
 public class PlanMovement : MonoBehaviour
 {
-    float cellSize;
+    static float cellSize;
 
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
@@ -38,7 +38,7 @@ public class PlanMovement : MonoBehaviour
 
     //TODO: Redo part of the path by dragging from node
 
-    public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer)
+    public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer, List<GameObject> dashUnits = null, int dashDist = -1)
     {
         this.team = team;
         this.teamCharacters = GameObject.FindGameObjectsWithTag(team);
@@ -57,11 +57,11 @@ public class PlanMovement : MonoBehaviour
             timerTextUI.text = (Mathf.CeilToInt(timer)).ToString();
             if (Input.GetMouseButtonDown(0))
             {
-                StartPath();
+                StartPath(dashUnits);
             }
             else if (Input.GetMouseButton(0) && isDragging)
             {
-                ExtendPath();
+                ExtendPath(dashDist);
             }
             else if (Input.GetMouseButtonUp(0))
             {
@@ -83,16 +83,15 @@ public class PlanMovement : MonoBehaviour
     }
 
     // Modify StartPath to create the child objects
-    void StartPath()
+    void StartPath(List<GameObject> dashUnits = null)
     {
         selectedUnit = GetCharacterUnderMouse();
-        if (selectedUnit != null)
+        if (selectedUnit != null || (dashUnits != null && !dashUnits.Contains(selectedUnit)))
         {
-
             //Reset movement path
             movementPaths[selectedUnit].Clear();
             movementPath = movementPaths[selectedUnit];
-            movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
+            movementPath.Add(GetGridCellUnderCharacter(selectedUnit));
 
             //Reset visual path
             if (visualPaths.ContainsKey(selectedUnit)) Destroy(visualPaths[selectedUnit]);
@@ -158,7 +157,7 @@ public class PlanMovement : MonoBehaviour
         return parent.transform.GetChild(parent.transform.childCount - index).gameObject;
     }
 
-    void ExtendPath()
+    void ExtendPath(int dashDist = -1)
     {
         Vector3 currentTile = GetGridCellUnderMouse();
         Vector3 last = movementPath[^1]; //^1 => -1
@@ -172,7 +171,8 @@ public class PlanMovement : MonoBehaviour
             return;
         }
 
-        if (movementPath.Count - 1 < selectedUnit.GetComponent<Movement>().moveDist //Cause move dist excludes start tile
+        int moveDist = dashDist != -1?  selectedUnit.GetComponent<Movement>().moveDist : dashDist;
+        if (movementPath.Count - 1 < moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
             && !movementPath.Contains(currentTile))
         {
@@ -227,14 +227,14 @@ public class PlanMovement : MonoBehaviour
         return null; // Return null if no object was hit
     }
 
-    Vector3 GetGameCellUnderCharacter(GameObject character)
+    Vector3 GetGridCellUnderCharacter(GameObject character)
     {
         Vector3 position = character.transform.position; // Get the position of the character
         return GetNearestGridCell(position); // Return the nearest grid cell position
     }
 
 
-    Vector3 GetGridCellUnderMouse()
+    public static Vector3 GetGridCellUnderMouse()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
@@ -242,7 +242,7 @@ public class PlanMovement : MonoBehaviour
         return GetNearestGridCell(worldPosition);
     }
 
-    Vector3 GetNearestGridCell(Vector3 position)
+    static Vector3 GetNearestGridCell(Vector3 position)
     {
         float x = Mathf.Round(position.x / cellSize) * cellSize;
         float z = Mathf.Round(position.z / cellSize) * cellSize;
