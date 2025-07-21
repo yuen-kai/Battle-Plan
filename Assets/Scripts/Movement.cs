@@ -6,8 +6,12 @@ public class Movement : MonoBehaviour
 {
     public int moveDist;
     public float moveSpeed; //cells per second
+    public float diveSpeed;
     public bool moving = true;
     float cellSize;
+    private Coroutine moveListRoutine;
+    private Coroutine moveRoutine;
+
 
     // Start is called before the first frame update
     void Start()
@@ -15,32 +19,56 @@ public class Movement : MonoBehaviour
         cellSize = GameLoop.cellSize;
     }
 
-    // Update is called once per frame
-    void Update()
-    {
 
+    public void StartMovement(List<Vector3> cells, bool dive = false)
+    {
+        if (moveListRoutine != null) StopCoroutine(moveListRoutine);
+        if (moveRoutine != null) StopCoroutine(moveRoutine);
+        moveRoutine = StartCoroutine(MoveToCells(cells, dive));
     }
 
-    public IEnumerator MoveToCells(List<Vector3> cells) //IEnumerator allows for this function to run over multiple frames
+
+    public IEnumerator MoveToCells(List<Vector3> cells, bool dive = false) //IEnumerator allows for this function to run over multiple frames
     {
         moving = true;
         foreach (Vector3 cell in cells)
         {
-            yield return StartCoroutine(MoveToCell(cell)); //yield return pauses the coroutine until MoveToCell is done
+            yield return StartCoroutine(MoveToCell(cell, dive)); //yield return pauses the coroutine until MoveToCell is done
         }
-        
-        StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
-       moving = false;
+
+        moveRoutine = StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
+        moving = false;
+        if (dive)
+        {
+            Debug.Log("Done moving");
+        }
     }
 
-    private IEnumerator MoveToCell(Vector3 cell)
+    private IEnumerator MoveToCell(Vector3 cell, bool dive = false)
     {
         Vector3 targetPosition = new Vector3(cell.x, GetComponent<Collider>().bounds.size.y / 2, cell.z);
 
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f) //not 0 because of floating point precision or because movetowards only moves by fixed amount
         {
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * cellSize * Time.deltaTime);
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, (dive ? diveSpeed : moveSpeed) * cellSize * Time.deltaTime);
+            if (dive)
+            {
+                Debug.Log($"{Vector3.Distance(transform.position, targetPosition) > 0.01f}");
+
+            }
             yield return null; //go to next frame
+
+            if (dive && Vector3.Distance(transform.position, targetPosition) <= 0.01f) //Temporary fix for snapping to position
+            {
+                Debug.Log("tf");
+                transform.position = targetPosition;
+                break;
+            }
+        }
+
+        if (dive)
+        {
+            Debug.Log("Done moving to cell");
         }
 
         transform.position = targetPosition; // Snap to final position

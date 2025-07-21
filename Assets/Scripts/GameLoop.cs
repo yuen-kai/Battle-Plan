@@ -13,7 +13,7 @@ public class GameLoop : MonoBehaviour
     [SerializeField] private TMP_Text overlayUIText;
     [SerializeField] private List<Color> planningColors;
     [SerializeField] private Color executingMoves;
-    [SerializeField] private float planningTimePerUnit = 4f;
+    float planningTimePerUnit = 2f; //TODO: CHANGE TO 4
     [SerializeField] private GameObject unitCards;
 
     void Start()
@@ -83,7 +83,7 @@ public class GameLoop : MonoBehaviour
         {
             GameObject unit = pair.Key;
             List<Vector3> movementPath = pair.Value;
-            StartCoroutine(unit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath))); // C# passes parameters by reference, so we need to create a new list
+            unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath)); // C# passes parameters by reference, so we need to create a new list
         }
     }
 

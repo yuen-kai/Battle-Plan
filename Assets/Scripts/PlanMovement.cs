@@ -15,7 +15,7 @@ public class PlanMovement : MonoBehaviour
     [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
     string team;
 
-    public GameObject[] teamCharacters = new GameObject[3];
+    public List<GameObject> teamCharacters = new List<GameObject>();
     public Dictionary<GameObject, List<Vector3>> movementPaths = new Dictionary<GameObject, List<Vector3>>();
     List<Vector3> movementPath = new List<Vector3>(); // List to store the path of the selected unit
 
@@ -41,7 +41,7 @@ public class PlanMovement : MonoBehaviour
     public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer, List<GameObject> dashUnits = null, int dashDist = -1)
     {
         this.team = team;
-        this.teamCharacters = GameObject.FindGameObjectsWithTag(team);
+        this.teamCharacters = GameObject.FindGameObjectsWithTag(team).ToList();
         movementPaths = new Dictionary<GameObject, List<Vector3>>();
 
         // Initialize movement paths for each character
@@ -68,7 +68,7 @@ public class PlanMovement : MonoBehaviour
                 EndPath();
             }
 
-            timer -= Time.deltaTime; // Decrease timer each frame
+            timer -= Time.unscaledDeltaTime; // Decrease timer each frame (unaffected by time scale)
             yield return null; // Wait for the next frame
         }
 
@@ -86,7 +86,7 @@ public class PlanMovement : MonoBehaviour
     void StartPath(List<GameObject> dashUnits = null)
     {
         selectedUnit = GetCharacterUnderMouse();
-        if (selectedUnit != null || (dashUnits != null && !dashUnits.Contains(selectedUnit)))
+        if (selectedUnit != null && (dashUnits == null || dashUnits.Contains(selectedUnit)))
         {
             //Reset movement path
             movementPaths[selectedUnit].Clear();
@@ -136,7 +136,7 @@ public class PlanMovement : MonoBehaviour
     }
 
     // Update AddPathSectionVisual to parent to the correct child
-    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length)
+    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
     {
         Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
         GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
@@ -145,7 +145,7 @@ public class PlanMovement : MonoBehaviour
         GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2 + heightOffset, Quaternion.identity);
         edge.transform.parent = pathEdges.transform;
 
-        if (length == selectedUnit.GetComponent<Movement>().moveDist)
+        if (length == moveDist)
         {
             node.transform.GetComponent<Renderer>().material.color = Color.green;
         }
@@ -171,13 +171,13 @@ public class PlanMovement : MonoBehaviour
             return;
         }
 
-        int moveDist = dashDist != -1?  selectedUnit.GetComponent<Movement>().moveDist : dashDist;
+        int moveDist = dashDist == -1 ? selectedUnit.GetComponent<Movement>().moveDist : dashDist;
         if (movementPath.Count - 1 < moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
             && !movementPath.Contains(currentTile))
         {
             movementPath.Add(currentTile);
-            AddPathSectionVisual(currentTile, last, movementPath.Count - 1);
+            AddPathSectionVisual(currentTile, last, movementPath.Count - 1, moveDist);
         }
     }
 

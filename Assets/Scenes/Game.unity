@@ -22338,6 +22338,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   selectAbilitySquare: 0
   unit: {fileID: 1485382690}
+  PlanMovementScript: {fileID: 1620178442}
+  responseRange: 5
+  overlayUIText: {fileID: 1429746702}
 --- !u!1 &2134019779
 GameObject:
   m_ObjectHideFlags: 0

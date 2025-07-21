@@ -200,6 +200,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveDist: 3
   moveSpeed: 1
+  diveSpeed: 4
   moving: 1
 --- !u!114 &-159396357692938789
 MonoBehaviour:
@@ -227,6 +228,7 @@ MonoBehaviour:
   enemyTeam: RedTeam
   allowShooting: 1
   stillShooting: 1
+  disabledShooting: 0
 --- !u!114 &2188586334649481472
 MonoBehaviour:
   m_ObjectHideFlags: 0
