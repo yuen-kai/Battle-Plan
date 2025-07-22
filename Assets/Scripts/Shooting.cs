@@ -25,8 +25,9 @@ public class Shooting : MonoBehaviour
     public string enemyTeam;
 
     private int currentAmmo;
-    public bool allowShooting = true; // Controls whether the unit is currently shooting
-    public bool stillShooting = true;
+    public bool allowShooting; // Controls whether the unit is currently shooting
+    public bool stillShooting;
+    public bool disabledShooting; // Used to disable shooting when ability is used
 
     void Start()
     {
@@ -34,6 +35,8 @@ public class Shooting : MonoBehaviour
 
     public IEnumerator StartShooting()
     {
+        if (disabledShooting) yield break; // Exit if shooting is disabled
+
         enemyTeam = transform.tag == "BlueTeam" ? "RedTeam" : "BlueTeam";
         GameObject bulletPrefab = transform.tag == "BlueTeam" ? blueBulletPrefab : redBulletPrefab;
 
@@ -83,7 +86,7 @@ public class Shooting : MonoBehaviour
                 bulletScript.range = bulletRange * cellSize;
                 currentAmmo--;
 
-                yield return new WaitForSeconds(timeBetweenShots);
+                yield return new WaitForSecondsRealtime(timeBetweenShots); //respects timer pauses
             }
 
             if (allowShooting)
@@ -96,13 +99,13 @@ public class Shooting : MonoBehaviour
         {
             yield return null; // Wait for all bullets to be destoryed
         }
-        yield return new WaitForSeconds(0.1f); // Small delay to ensure player deaths are processed
+        yield return new WaitForSecondsRealtime(0.1f); // Small delay to ensure player deaths are processed
         stillShooting = false;
     }
 
     IEnumerator Reload()
     {
-        yield return new WaitForSeconds(reloadTime);
+        yield return new WaitForSecondsRealtime(reloadTime);
         currentAmmo = magazineSize;
     }
 

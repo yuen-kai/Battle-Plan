@@ -13,7 +13,8 @@ public class GameLoop : MonoBehaviour
     [SerializeField] private TMP_Text overlayUIText;
     [SerializeField] private List<Color> planningColors;
     [SerializeField] private Color executingMoves;
-    [SerializeField] private float planningTimePerUnit = 4f; 
+    float planningTimePerUnit = 4f;
+    [SerializeField] private GameObject unitCards;
 
     void Start()
     {
@@ -31,6 +32,8 @@ public class GameLoop : MonoBehaviour
                 pathsList.Add(new Dictionary<GameObject, List<Vector3>>(paths));
             };
 
+            setUnitCardsInteractable(false);
+            
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
             for (int i = 0; i < teams.Count; i++)
             {
@@ -41,6 +44,7 @@ public class GameLoop : MonoBehaviour
                 yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
             }
 
+            setUnitCardsInteractable(true);
             overlayUIText.text = "Executing Moves";
             overlayUIText.color = executingMoves;
 
@@ -64,6 +68,13 @@ public class GameLoop : MonoBehaviour
         //yield return StartCoroutine(GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting());
     }
 
+    void setUnitCardsInteractable(bool interactable)
+    {
+        foreach (Transform child in unitCards.transform)
+        {
+            child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+        }
+    }
 
 
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
@@ -72,7 +83,7 @@ public class GameLoop : MonoBehaviour
         {
             GameObject unit = pair.Key;
             List<Vector3> movementPath = pair.Value;
-            StartCoroutine(unit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath))); // C# passes parameters by reference, so we need to create a new list
+            unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath)); // C# passes parameters by reference, so we need to create a new list
         }
     }
 
