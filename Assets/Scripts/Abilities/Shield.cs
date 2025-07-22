@@ -6,15 +6,15 @@ public class Shield : MonoBehaviour, IAbility
 {
     public float abilityTime = 3;
 
-    public IEnumerator ExecuteAbility(Transform unit, Vector3 abilitySquare)
+    public IEnumerator ExecuteAbility(Vector3 abilitySquare)
     {
-        AbilityHelper.DisableShooting(unit);
+        AbilityHelper.DisableShooting(transform);
 
-        GameObject shield = unit.Find("Shield").gameObject;
+        GameObject shield = transform.Find("Shield").gameObject;
         shield?.SetActive(true);
         yield return new WaitForSecondsRealtime(abilityTime);
         shield?.SetActive(false);
 
-        AbilityHelper.EnableShooting(unit);
+        AbilityHelper.EnableShooting(transform);
     }
 }
