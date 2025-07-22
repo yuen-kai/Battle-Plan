@@ -24,7 +24,7 @@ public class Movement : MonoBehaviour
     {
         if (moveListRoutine != null) StopCoroutine(moveListRoutine);
         if (moveRoutine != null) StopCoroutine(moveRoutine);
-        moveRoutine = StartCoroutine(MoveToCells(cells, dive));
+        moveListRoutine = StartCoroutine(MoveToCells(cells, dive));
     }
 
 
@@ -33,10 +33,10 @@ public class Movement : MonoBehaviour
         moving = true;
         foreach (Vector3 cell in cells)
         {
-            yield return StartCoroutine(MoveToCell(cell, dive)); //yield return pauses the coroutine until MoveToCell is done
+            yield return moveRoutine = StartCoroutine(MoveToCell(cell, dive)); //yield return pauses the coroutine until MoveToCell is done
         }
 
-        moveRoutine = StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
+        StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
         moving = false;
     }
 
@@ -46,11 +46,19 @@ public class Movement : MonoBehaviour
 
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f) //not 0 because of floating point precision or because movetowards only moves by fixed amount
         {
-            yield return null; //go to next frame. Needs to be before transform.position setting cause of some confusing bug
+            yield return null; //go to next frame. Before transform.position setting incase is being moved by something else
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, (dive ? diveSpeed : moveSpeed) * cellSize * Time.deltaTime);
         }
 
         transform.position = targetPosition; // Snap to final position
+    }
+
+    public Vector2Int ConvertToGridCoords(Vector3 position)
+    {
+        //Assuming grid's bottom left corner is at (0,0) and the grid is aligned with the world axes
+        int x = Mathf.RoundToInt(position.x / cellSize);
+        int z = Mathf.RoundToInt(position.z / cellSize);
+        return new Vector2Int(x, z);
     }
 
 }

@@ -9,6 +9,7 @@ public class ActivateAbility : MonoBehaviour
     public PlanMovement PlanMovementScript;
 
     [SerializeField] private bool selectAbilitySquare;
+    [SerializeField] private GameObject abilitySquareIndicator;
     [SerializeField] private float abilitySquareRange = 3f;
     [SerializeField] private float selectTime = 4f;
 
@@ -22,9 +23,49 @@ public class ActivateAbility : MonoBehaviour
         //pause time
         Time.timeScale = 0f;
 
-        //player selects ability square
-        Vector3 abilitySquare = selectAbilitySquare ? PlanMovement.GetGridCellUnderMouse() : unit.transform.position; //TODO: fix
+        StartCoroutine(selectAbilitySquareFunc());
+    }
 
+    IEnumerator selectAbilitySquareFunc()
+    {
+        if (!selectAbilitySquare)
+        {
+            planEnemyResponse(unit.transform.position);
+            yield break;
+        }
+        overlayUIText.text = $"{unit.tag} - {unit.name}: Select ability target square";
+
+        float timeRemaining = selectTime;
+        Vector3 selectedSquare = unit.transform.position; //TODO: change default selection
+        GameObject abilityIndicator = null;
+
+        while (timeRemaining > 0f)
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                Vector3 mouseSquare = PlanMovement.GetGridCellUnderMouse();
+                if (Vector3.Distance(unit.transform.position, mouseSquare) <= abilitySquareRange * GameLoop.cellSize)
+                {
+                    selectedSquare = mouseSquare;
+                    if (abilityIndicator) Destroy(abilityIndicator);
+                    abilityIndicator = Instantiate(abilitySquareIndicator, mouseSquare, Quaternion.identity);
+                }
+                else
+                {
+                    Debug.Log($"Too far! Range: {abilitySquareRange}");
+                }
+            }
+
+            timeRemaining -= Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (abilityIndicator) Destroy(abilityIndicator);
+        planEnemyResponse(selectedSquare);
+    }
+
+    void planEnemyResponse(Vector3 abilitySquare)
+    {
         //Response
         string enemyTeam = unit.tag == "BlueTeam" ? "RedTeam" : "BlueTeam";
 
@@ -50,7 +91,6 @@ public class ActivateAbility : MonoBehaviour
         }, timeDivePerUnit * enemiesInRange.Count, enemiesInRange, diveRange));
     }
 
-
     public List<GameObject> GetEnemiesInRange(Vector3 abilitySquare, string enemyTeam)
     {
         List<GameObject> enemiesInRange = new List<GameObject>();
@@ -67,10 +107,4 @@ public class ActivateAbility : MonoBehaviour
 
         return enemiesInRange;
     }
-
-    //IEnumerator selectAbilitySquareFunc()
-    //{
-        
-    //}
-
 }
