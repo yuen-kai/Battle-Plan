@@ -12,7 +12,7 @@ public class Shield : MonoBehaviour, IAbility
 
         GameObject shield = transform.Find("Shield").gameObject;
         shield?.SetActive(true);
-        yield return new WaitForSecondsRealtime(abilityTime);
+        yield return new WaitForSeconds(abilityTime);
         shield?.SetActive(false);
 
         AbilityHelper.EnableShooting(transform);

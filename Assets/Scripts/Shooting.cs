@@ -86,7 +86,7 @@ public class Shooting : MonoBehaviour
                 bulletScript.range = bulletRange * cellSize;
                 currentAmmo--;
 
-                yield return new WaitForSecondsRealtime(timeBetweenShots); //respects timer pauses
+                yield return new WaitForSeconds(timeBetweenShots); //respects timer pauses
             }
 
             if (allowShooting)
@@ -99,13 +99,13 @@ public class Shooting : MonoBehaviour
         {
             yield return null; // Wait for all bullets to be destoryed
         }
-        yield return new WaitForSecondsRealtime(0.1f); // Small delay to ensure player deaths are processed
+        yield return new WaitForSeconds(0.1f); // Small delay to ensure player deaths are processed
         stillShooting = false;
     }
 
     IEnumerator Reload()
     {
-        yield return new WaitForSecondsRealtime(reloadTime);
+        yield return new WaitForSeconds(reloadTime);
         currentAmmo = magazineSize;
     }
 
