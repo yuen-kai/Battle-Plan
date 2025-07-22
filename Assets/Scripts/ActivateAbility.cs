@@ -7,6 +7,8 @@ public class ActivateAbility : MonoBehaviour
 {
     public GameObject unit;
     public PlanMovement PlanMovementScript;
+    public MonoBehaviour abilityScriptMono;
+    IAbility abilityScript;
 
     [SerializeField] private bool selectAbilitySquare;
     [SerializeField] private GameObject abilitySquareIndicator;
@@ -14,9 +16,15 @@ public class ActivateAbility : MonoBehaviour
     [SerializeField] private float selectTime = 4f;
 
     [SerializeField] private float responseRange = 5f;
+
     [SerializeField] private TMP_Text overlayUIText;
     [SerializeField] private float timeDivePerUnit = 3f;
     [SerializeField] private int diveRange = 2;
+
+    void Start()
+    {
+        abilityScript = abilityScriptMono as IAbility;
+    }
 
     public void activateAbility()
     {
@@ -87,7 +95,7 @@ public class ActivateAbility : MonoBehaviour
             }
 
             //activate ability
-            StartCoroutine(unit.GetComponent<Ability>().ExecuteAbility(abilitySquare));
+            StartCoroutine(abilityScript.ExecuteAbility(unit.transform, abilitySquare));
         }, timeDivePerUnit * enemiesInRange.Count, enemiesInRange, diveRange));
     }
 
