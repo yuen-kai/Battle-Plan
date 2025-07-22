@@ -11,9 +11,9 @@ public class Ability : MonoBehaviour
         AbilityHelper.DisableShooting(transform);
 
         GameObject shield = transform.Find("Shield").gameObject;
-        shield.SetActive(true);
+        shield?.SetActive(true);
         yield return new WaitForSecondsRealtime(abilityTime);
-        shield.SetActive(false);
+        shield?.SetActive(false);
 
         AbilityHelper.EnableShooting(transform);
     }

@@ -5,13 +5,17 @@ using TMPro;
 
 public class ActivateAbility : MonoBehaviour
 {
-
-    public bool selectAbilitySquare;
     public GameObject unit;
     public PlanMovement PlanMovementScript;
-    public float responseRange = 5f;
-    float timeDivePerUnit = 3f;
+
+    [SerializeField] private bool selectAbilitySquare;
+    [SerializeField] private float abilitySquareRange = 3f;
+    [SerializeField] private float selectTime = 4f;
+
+    [SerializeField] private float responseRange = 5f;
     [SerializeField] private TMP_Text overlayUIText;
+    [SerializeField] private float timeDivePerUnit = 3f;
+    [SerializeField] private int diveRange = 2;
 
     public void activateAbility()
     {
@@ -43,7 +47,7 @@ public class ActivateAbility : MonoBehaviour
 
             //activate ability
             StartCoroutine(unit.GetComponent<Ability>().ExecuteAbility(abilitySquare));
-        }, timeDivePerUnit * enemiesInRange.Count, enemiesInRange, 2));
+        }, timeDivePerUnit * enemiesInRange.Count, enemiesInRange, diveRange));
     }
 
 
@@ -63,5 +67,10 @@ public class ActivateAbility : MonoBehaviour
 
         return enemiesInRange;
     }
+
+    //IEnumerator selectAbilitySquareFunc()
+    //{
+        
+    //}
 
 }

@@ -38,10 +38,6 @@ public class Movement : MonoBehaviour
 
         moveRoutine = StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
         moving = false;
-        if (dive)
-        {
-            Debug.Log("Done moving");
-        }
     }
 
     private IEnumerator MoveToCell(Vector3 cell, bool dive = false)
@@ -50,25 +46,8 @@ public class Movement : MonoBehaviour
 
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f) //not 0 because of floating point precision or because movetowards only moves by fixed amount
         {
+            yield return null; //go to next frame. Needs to be before transform.position setting cause of some confusing bug
             transform.position = Vector3.MoveTowards(transform.position, targetPosition, (dive ? diveSpeed : moveSpeed) * cellSize * Time.deltaTime);
-            if (dive)
-            {
-                Debug.Log($"{Vector3.Distance(transform.position, targetPosition) > 0.01f}");
-
-            }
-            yield return null; //go to next frame
-
-            if (dive && Vector3.Distance(transform.position, targetPosition) <= 0.01f) //Temporary fix for snapping to position
-            {
-                Debug.Log("tf");
-                transform.position = targetPosition;
-                break;
-            }
-        }
-
-        if (dive)
-        {
-            Debug.Log("Done moving to cell");
         }
 
         transform.position = targetPosition; // Snap to final position

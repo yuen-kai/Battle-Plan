@@ -13,7 +13,7 @@ public class GameLoop : MonoBehaviour
     [SerializeField] private TMP_Text overlayUIText;
     [SerializeField] private List<Color> planningColors;
     [SerializeField] private Color executingMoves;
-    float planningTimePerUnit = 2f; //TODO: CHANGE TO 4
+    float planningTimePerUnit = 4f;
     [SerializeField] private GameObject unitCards;
 
     void Start()
