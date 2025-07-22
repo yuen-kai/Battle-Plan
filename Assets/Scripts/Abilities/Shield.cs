@@ -4,11 +4,11 @@ using UnityEngine;
 
 public class Shield : MonoBehaviour, IAbility
 {
-    public float abilityTime = 3;
+    float abilityTime = 3;
 
     public IEnumerator ExecuteAbility(Vector3 abilitySquare)
     {
-        AbilityHelper.DisableShooting(transform);
+        AbilityHelper.DisableShooting(transform); //TODO: Fix shooting disable/enable
 
         GameObject shield = transform.Find("Shield").gameObject;
         shield?.SetActive(true);

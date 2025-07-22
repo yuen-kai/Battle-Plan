@@ -7,6 +7,9 @@ public class ActivateAbility : MonoBehaviour
 {
     public GameObject unit;
     public PlanMovement PlanMovementScript;
+    public GameLoop gameLoopScript;
+    [SerializeField] private TMP_Text timerTextUI;
+
 
     [SerializeField] private bool selectAbilitySquare;
     [SerializeField] private GameObject abilitySquareIndicator;
@@ -15,7 +18,6 @@ public class ActivateAbility : MonoBehaviour
 
     [SerializeField] private float responseRange = 5f;
 
-    [SerializeField] private TMP_Text overlayUIText;
     [SerializeField] private float timeDivePerUnit = 3f;
     [SerializeField] private int diveRange = 2;
 
@@ -34,7 +36,9 @@ public class ActivateAbility : MonoBehaviour
             planEnemyResponse(unit.transform.position);
             yield break;
         }
-        overlayUIText.text = $"{unit.tag} - {unit.name}: Select ability target square";
+
+        gameLoopScript.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
+
 
         float timeRemaining = selectTime;
         Vector3 selectedSquare = unit.transform.position; //TODO: change default selection
@@ -42,6 +46,8 @@ public class ActivateAbility : MonoBehaviour
 
         while (timeRemaining > 0f)
         {
+            timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
+
             if (Input.GetMouseButtonDown(0))
             {
                 Vector3 mouseSquare = PlanMovement.GetGridCellUnderMouse();
@@ -62,6 +68,8 @@ public class ActivateAbility : MonoBehaviour
         }
 
         if (abilityIndicator) Destroy(abilityIndicator);
+        timerTextUI.text = "";
+
         planEnemyResponse(selectedSquare);
     }
 
@@ -72,10 +80,12 @@ public class ActivateAbility : MonoBehaviour
 
         List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
 
-        overlayUIText.text = $"Dodging: {enemyTeam}";
+        gameLoopScript.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
+
         StartCoroutine(PlanMovementScript.ChoosePaths(enemyTeam, (Dictionary<GameObject, List<Vector3>> paths) =>
         {
-            overlayUIText.text = "Executing Moves";
+            gameLoopScript.setOverlayUIText("Executing Moves", "neutral");
+
             //continue time
             Time.timeScale = 1f;
 
@@ -84,6 +94,7 @@ public class ActivateAbility : MonoBehaviour
             {
                 GameObject unit = pair.Key;
                 List<Vector3> movementPath = pair.Value;
+                if(movementPath.Count == 0) continue; //skip if no path
                 unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath), true);
             }
 

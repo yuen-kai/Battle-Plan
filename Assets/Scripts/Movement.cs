@@ -20,11 +20,22 @@ public class Movement : MonoBehaviour
     }
 
 
-    public void StartMovement(List<Vector3> cells, bool dive = false)
+    public void StopMovement()
     {
         if (moveListRoutine != null) StopCoroutine(moveListRoutine);
         if (moveRoutine != null) StopCoroutine(moveRoutine);
+    }
+
+    public void StartMovement(List<Vector3> cells, bool dive = false)
+    {
+        StopMovement(); //stop any previous movement
         moveListRoutine = StartCoroutine(MoveToCells(cells, dive));
+    }
+
+    public void transitionToShooting()
+    {
+        StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
+        moving = false;
     }
 
 
@@ -36,13 +47,12 @@ public class Movement : MonoBehaviour
             yield return moveRoutine = StartCoroutine(MoveToCell(cell, dive)); //yield return pauses the coroutine until MoveToCell is done
         }
 
-        StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
-        moving = false;
+        transitionToShooting();
     }
 
     private IEnumerator MoveToCell(Vector3 cell, bool dive = false)
     {
-        Vector3 targetPosition = new Vector3(cell.x, GetComponent<Collider>().bounds.size.y / 2, cell.z);
+        Vector3 targetPosition = cell + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0);
 
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f) //not 0 because of floating point precision or because movetowards only moves by fixed amount
         {

@@ -109,7 +109,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 47, y: -10.6}
+  m_AnchoredPosition: {x: 47, y: -10.4}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1121522412243405560
@@ -140,7 +140,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Shield
+  m_text: Pogo
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -235,7 +235,7 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6877355979647964550}
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -0.08485302}
   m_LocalScale: {x: 0.123500004, y: 0.30875, z: 1.235}
   m_ConstrainProportionsScale: 0
@@ -300,12 +300,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   unit: {fileID: 0}
   PlanMovementScript: {fileID: 0}
+  gameLoopScript: {fileID: 0}
+  timerTextUI: {fileID: 0}
   selectAbilitySquare: 0
   abilitySquareIndicator: {fileID: 3326808074419072509, guid: 19764b8f6b5db2c4c8736d1e35f41184, type: 3}
   abilitySquareRange: 3
   selectTime: 4
   responseRange: 5
-  overlayUIText: {fileID: 0}
   timeDivePerUnit: 3
   diveRange: 2
 --- !u!1 &8861979398241179818

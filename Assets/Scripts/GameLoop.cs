@@ -11,10 +11,22 @@ public class GameLoop : MonoBehaviour
     List<GameObject> doneShootingUnits = new List<GameObject>();
     public static float cellSize = 2.7f; // Size of each cell in the grid
     [SerializeField] private TMP_Text overlayUIText;
-    [SerializeField] private List<Color> planningColors;
+    public List<Color> planningColors;
     [SerializeField] private Color executingMoves;
     float planningTimePerUnit = 4f;
     [SerializeField] private GameObject unitCards;
+
+    public void setOverlayUIText(string message, string team = "neutral")
+    {
+        overlayUIText.text = message;
+        overlayUIText.color = GetTeamColor(team);
+    }
+
+    public Color GetTeamColor(string team)
+    {
+        if (!teams.Contains(team)) return executingMoves;
+        return planningColors[teams.IndexOf(team)];
+    }
 
     void Start()
     {
@@ -35,18 +47,15 @@ public class GameLoop : MonoBehaviour
             setUnitCardsInteractable(false);
             
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
-            for (int i = 0; i < teams.Count; i++)
+            foreach(var team in teams)
             {
-                string team = teams[i];
-                overlayUIText.text = $"Planning: {team}";
-                overlayUIText.color = planningColors[i];
+                setOverlayUIText($"Planning: {team}", team);
                 
                 yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
             }
 
             setUnitCardsInteractable(true);
-            overlayUIText.text = "Executing Moves";
-            overlayUIText.color = executingMoves;
+            setOverlayUIText("Executing Moves", "neutral");
 
             foreach (var paths in pathsList)
             {
