@@ -13,7 +13,7 @@ public class GameLoop : MonoBehaviour
     [SerializeField] private TMP_Text overlayUIText;
     public List<Color> planningColors;
     [SerializeField] private Color executingMoves;
-    float planningTimePerUnit = 4f;
+    float planningTimePerUnit = 1.5f;
     [SerializeField] private GameObject unitCards;
 
     public void setOverlayUIText(string message, string team = "neutral")
@@ -45,6 +45,7 @@ public class GameLoop : MonoBehaviour
             };
 
             setUnitCardsInteractable(false);
+            OrderStillShooting(true);
 
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
             foreach (var team in teams)
@@ -136,6 +137,17 @@ public class GameLoop : MonoBehaviour
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
                 unit.GetComponent<Shooting>().allowShooting = toggle;
+            }
+        }
+    }
+
+    void OrderStillShooting(bool toggle)
+    {
+        foreach (var team in teams)
+        {
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                unit.GetComponent<Shooting>().stillShooting = toggle;
             }
         }
     }
