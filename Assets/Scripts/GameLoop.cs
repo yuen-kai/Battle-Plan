@@ -92,7 +92,15 @@ public class GameLoop : MonoBehaviour
     {
         foreach (Transform child in unitCards.transform)
         {
-            child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+            ActivateAbility abilityScript = child.GetComponent<ActivateAbility>();
+            if (abilityScript.uses <= 0 || abilityScript.unit == null)
+            {
+                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+            }
+            else
+            {
+                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+            }
         }
     }
 

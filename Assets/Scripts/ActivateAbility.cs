@@ -10,7 +10,6 @@ public class ActivateAbility : MonoBehaviour
     public GameLoop gameLoopScript;
     [SerializeField] private TMP_Text timerTextUI;
 
-
     [SerializeField] private bool selectAbilitySquare;
     [SerializeField] private GameObject abilitySquareIndicator;
     [SerializeField] private float abilitySquareRange = 3f;
@@ -21,8 +20,12 @@ public class ActivateAbility : MonoBehaviour
     [SerializeField] private float timeDivePerUnit = 3f;
     [SerializeField] private int diveRange = 2;
 
+    public int uses = 1; // Number of times the ability can be used
+
     public void activateAbility()
     {
+        uses--;
+
         //pause time
         Time.timeScale = 0f;
         gameLoopScript.setUnitCardsInteractable(false);
