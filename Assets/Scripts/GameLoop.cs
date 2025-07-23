@@ -11,9 +11,11 @@ public class GameLoop : MonoBehaviour
     List<GameObject> doneShootingUnits = new List<GameObject>();
     public static float cellSize = 2.7f; // Size of each cell in the grid
     [SerializeField] private TMP_Text overlayUIText;
-    public List<Color> planningColors;
+    public List<Color> teamColors;
+    public List<Material> teamMaterials;
+
     [SerializeField] private Color executingMoves;
-    float planningTimePerUnit = 1.5f;
+    float planningTimePerUnit = 4f;
     [SerializeField] private GameObject unitCards;
 
     public void setOverlayUIText(string message, string team = "neutral")
@@ -25,7 +27,13 @@ public class GameLoop : MonoBehaviour
     public Color GetTeamColor(string team)
     {
         if (!teams.Contains(team)) return executingMoves;
-        return planningColors[teams.IndexOf(team)];
+        return teamColors[teams.IndexOf(team)];
+    }
+
+    public Material GetTeamMaterial(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teamMaterials[teams.IndexOf(team)];
     }
 
     void Start()
@@ -35,6 +43,8 @@ public class GameLoop : MonoBehaviour
 
     IEnumerator GameLoopTemp()
     {
+        SetTeamIndicators();
+
         while (teams.All(team => teamSize(team) > 0))
         {
             List<Dictionary<GameObject, List<Vector3>>> pathsList = new List<Dictionary<GameObject, List<Vector3>>>();
@@ -78,14 +88,45 @@ public class GameLoop : MonoBehaviour
                         yield return null;
                     }
                     yield return null; // Wait a bit before stopping shooting
-                    OrderAllowShooting(false);
                 }
+                OrderAllowShooting(false);
 
                 yield return null;
             }
         }
         Debug.Log("Game Over");
         //GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting(); //TESTING
+    }
+
+    void SetTeamIndicators()
+    {
+        GameObject[] teamIndicators = GameObject.FindGameObjectsWithTag("TeamIndicatorProp");
+        foreach (GameObject indicator in teamIndicators)
+        {
+            // Find the parent unit with a team tag
+            Transform current = indicator.transform;
+            string parentTeam = null;
+
+            while (current != null)
+            {
+                if (teams.Contains(current.tag))
+                {
+                    parentTeam = current.tag;
+                    break;
+                }
+                current = current.parent;
+            }
+
+            if (parentTeam != null)
+            {
+                Renderer renderer = indicator.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    renderer.material = GetTeamMaterial(parentTeam);
+                }
+            }
+        }
+
     }
 
     public void setUnitCardsInteractable(bool interactable)
@@ -129,7 +170,6 @@ public class GameLoop : MonoBehaviour
             {
                 if (unit.GetComponent<Movement>().moving == true)
                 {
-                    //Debug.Log(unit.name); 
                     return true;
                 }
             }

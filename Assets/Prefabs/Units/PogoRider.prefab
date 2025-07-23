@@ -220,7 +220,7 @@ GameObject:
   - component: {fileID: 7845059691475252356}
   m_Layer: 0
   m_Name: Cylinder.002
-  m_TagString: Untagged
+  m_TagString: TeamIndicatorProp
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -801,7 +801,7 @@ GameObject:
   - component: {fileID: 7132486125687931077}
   m_Layer: 0
   m_Name: Cylinder.001
-  m_TagString: Untagged
+  m_TagString: TeamIndicatorProp
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -884,7 +884,7 @@ GameObject:
   - component: {fileID: 7737795279339178606}
   m_Layer: 0
   m_Name: Cube.001
-  m_TagString: Untagged
+  m_TagString: TeamIndicatorProp
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -967,7 +967,7 @@ GameObject:
   - component: {fileID: 1114230015479104454}
   m_Layer: 0
   m_Name: Cylinder.003
-  m_TagString: Untagged
+  m_TagString: TeamIndicatorProp
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0

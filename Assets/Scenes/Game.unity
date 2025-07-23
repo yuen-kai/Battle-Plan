@@ -11310,7 +11310,7 @@ PrefabInstance:
       objectReference: {fileID: 1429746702}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: responseRange
-      value: 3
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: gameLoopScript
@@ -13576,7 +13576,7 @@ PrefabInstance:
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: unit
       value: 
-      objectReference: {fileID: 312933439}
+      objectReference: {fileID: 1074828892}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: timerTextUI
       value: 
@@ -13688,7 +13688,7 @@ PrefabInstance:
     - target: {fileID: 3689484883408530691, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: m_Sprite
       value: 
-      objectReference: {fileID: 0}
+      objectReference: {fileID: 21300000, guid: 7a8ffb4f66cdddf4caf23340b10ca162, type: 3}
     - target: {fileID: 3689484883408530691, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: m_Maskable
       value: 1
@@ -13739,7 +13739,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8309046905029243863, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: m_text
-      value: Pogo
+      value: Grenade
+      objectReference: {fileID: 0}
+    - target: {fileID: 8309046905029243863, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
+      propertyPath: m_fontSize
+      value: 36
+      objectReference: {fileID: 0}
+    - target: {fileID: 8309046905029243863, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
+      propertyPath: m_enableAutoSizing
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -15947,9 +15955,12 @@ MonoBehaviour:
   - BlueTeam
   - RedTeam
   overlayUIText: {fileID: 1429746702}
-  planningColors:
-  - {r: 0.118948035, g: 0.57133716, b: 0.9339623, a: 1}
-  - {r: 0.9339623, g: 0.4273318, b: 0.4273318, a: 1}
+  teamColors:
+  - {r: 0.06541473, g: 0.52782196, b: 0.9245283, a: 1}
+  - {r: 0.9245283, g: 0.10902455, b: 0.10902455, a: 1}
+  teamMaterials:
+  - {fileID: 2100000, guid: 8b24f4b922356ea4aa94816ac64a0b3f, type: 2}
+  - {fileID: 2100000, guid: 727707c55eb0d15409a100bb6a744124, type: 2}
   executingMoves: {r: 0.990566, g: 0.9578586, b: 0.9578586, a: 1}
   unitCards: {fileID: 1381940050}
 --- !u!1 &1621429733
@@ -17131,6 +17142,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1237306512}
     m_Modifications:
+    - target: {fileID: -7993313060572799514, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
+      propertyPath: grenadePrefab
+      value: 
+      objectReference: {fileID: 5062763313020825273, guid: c79d8a5b8690bca45876c9875de67463, type: 3}
+    - target: {fileID: -7993313060572799514, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
+      propertyPath: grenadeExplosionPrefab
+      value: 
+      objectReference: {fileID: 7426381648914058826, guid: ae8b6b4593e1ede4f9708cd44c729170, type: 3}
     - target: {fileID: 288457845206816681, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
       propertyPath: m_LocalScale.x
       value: 1.3
