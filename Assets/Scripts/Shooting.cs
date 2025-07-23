@@ -25,6 +25,8 @@ public class Shooting : MonoBehaviour
 
     public string enemyTeam;
 
+    public float targetLockDuration;
+
     private int currentAmmo;
     public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
     public bool stillShooting = true;
@@ -56,11 +58,13 @@ public class Shooting : MonoBehaviour
         if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
         allowShooting = true;
         stillShooting = true;
+        lockedTarget = null;
+        targetLockTime = 0f;
     }
 
     public IEnumerator InitiateShooting()
     {
-        enemyTeam = transform.tag == "BlueTeam" ? "RedTeam" : "BlueTeam";
+        enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
         GameObject bulletPrefab = transform.tag == "BlueTeam" ? blueBulletPrefab : redBulletPrefab;
 
 
@@ -68,9 +72,12 @@ public class Shooting : MonoBehaviour
         string bulletObjectName = transform.name + "'s Bullets";
         GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
 
+        float remainingTargetLockTime = targetLockDuration;
+
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
+            remainingTargetLockTime = targetLockDuration;
 
             while (currentAmmo > 0)
             {
@@ -78,8 +85,19 @@ public class Shooting : MonoBehaviour
                 if (target == null || !lineOfSight(target))
                 {
                     target = FindNearestEnemy();
-                    if(!allowShooting) break;
+                    remainingTargetLockTime = targetLockDuration;
+                    if (!allowShooting) break;
                     yield return null;
+                    continue;
+                }
+
+                //Target lock
+                if(remainingTargetLockTime > 0f)
+                {
+                    // Face the target
+                    Vector3 directionToTarget = (target.transform.position - transform.position).normalized;
+                    transform.rotation = Quaternion.LookRotation(directionToTarget);
+                    remainingTargetLockTime -= Time.deltaTime;
                     continue;
                 }
 

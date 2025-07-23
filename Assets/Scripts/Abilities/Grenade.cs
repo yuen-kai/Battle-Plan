@@ -44,7 +44,7 @@ public class Grenade : MonoBehaviour, IAbility
 
     private void ExplodeGrenade(Vector3 explosionPosition)
     {
-        string enemyTeam = transform.gameObject.tag == "BlueTeam" ? "RedTeam" : "BlueTeam";
+        string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
 
         // Find all enemies within explosion range
         Collider[] enemiesInRange = Physics.OverlapSphere(explosionPosition, explosionRange * GameLoop.cellSize, LayerMask.GetMask(enemyTeam));

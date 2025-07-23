@@ -18,24 +18,6 @@ public class GameLoop : MonoBehaviour
     float planningTimePerUnit = 4f;
     [SerializeField] private GameObject unitCards;
 
-    public void setOverlayUIText(string message, string team = "neutral")
-    {
-        overlayUIText.text = message;
-        overlayUIText.color = GetTeamColor(team);
-    }
-
-    public Color GetTeamColor(string team)
-    {
-        if (!teams.Contains(team)) return executingMoves;
-        return teamColors[teams.IndexOf(team)];
-    }
-
-    public Material GetTeamMaterial(string team)
-    {
-        if (!teams.Contains(team)) return null;
-        return teamMaterials[teams.IndexOf(team)];
-    }
-
     void Start()
     {
         StartCoroutine(GameLoopTemp());
@@ -96,6 +78,30 @@ public class GameLoop : MonoBehaviour
         }
         Debug.Log("Game Over");
         //GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting(); //TESTING
+    }
+
+    public void setOverlayUIText(string message, string team = "neutral")
+    {
+        overlayUIText.text = message;
+        overlayUIText.color = GetTeamColor(team);
+    }
+
+    public Color GetTeamColor(string team)
+    {
+        if (!teams.Contains(team)) return executingMoves;
+        return teamColors[teams.IndexOf(team)];
+    }
+
+    public Material GetTeamMaterial(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teamMaterials[teams.IndexOf(team)];
+    }
+
+    public static string GetEnemyTeam(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teams.FirstOrDefault(t => t != team);
     }
 
     void SetTeamIndicators()

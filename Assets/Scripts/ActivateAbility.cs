@@ -80,7 +80,7 @@ public class ActivateAbility : MonoBehaviour
     void planEnemyResponse(Vector3 abilitySquare)
     {
         //Response
-        string enemyTeam = unit.tag == "BlueTeam" ? "RedTeam" : "BlueTeam";
+        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
 
         List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
 
