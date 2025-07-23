@@ -19,6 +19,7 @@ public class Shooting : MonoBehaviour
     public float targetRange; // Range to find targets within
     public float bulletRange;
     public int damage;
+    public float backstabMultiplier;
 
     public float cellSize;
 
@@ -103,6 +104,7 @@ public class Shooting : MonoBehaviour
                 } //Error handling
                 bulletRb.velocity = shootDirection * bulletSpeed * cellSize;
                 bulletScript.damage = damage;
+                bulletScript.backstabMultiplier = backstabMultiplier;
                 bulletScript.range = bulletRange * cellSize;
                 currentAmmo--;
 

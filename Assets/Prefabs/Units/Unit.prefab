@@ -224,11 +224,11 @@ MonoBehaviour:
   targetRange: 5
   bulletRange: 10
   damage: 10
+  backstabMultiplier: 1
   cellSize: 2.7
   enemyTeam: RedTeam
   allowShooting: 1
   stillShooting: 1
-  disabledShooting: 0
 --- !u!114 &2188586334649481472
 MonoBehaviour:
   m_ObjectHideFlags: 0

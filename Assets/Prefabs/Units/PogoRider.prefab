@@ -1104,6 +1104,10 @@ PrefabInstance:
       propertyPath: timeBetweenShots
       value: 0.5
       objectReference: {fileID: 0}
+    - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: backstabMultiplier
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 808478331550645447, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: moveDist
       value: 8
