@@ -34,7 +34,7 @@ public class Bullet : MonoBehaviour
         }
         if (hitObject.CompareTag(enemyTeam))
         {
-            hitObject.GetComponent<Health>().TakeDamage(damage);
+            hitObject.GetComponent<Health>()?.TakeDamage(damage);
         }
         // Destroy self (bullet)
         Destroy(gameObject);

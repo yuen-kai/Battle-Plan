@@ -8,13 +8,9 @@ public class Shield : MonoBehaviour, IAbility
 
     public IEnumerator ExecuteAbility(Vector3 abilitySquare)
     {
-        AbilityHelper.DisableShooting(transform); //TODO: Fix shooting disable/enable
-
         GameObject shield = transform.Find("Shield").gameObject;
         shield?.SetActive(true);
         yield return new WaitForSeconds(abilityTime);
         shield?.SetActive(false);
-
-        AbilityHelper.EnableShooting(transform);
     }
 }

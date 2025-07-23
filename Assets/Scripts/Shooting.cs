@@ -25,18 +25,40 @@ public class Shooting : MonoBehaviour
     public string enemyTeam;
 
     private int currentAmmo;
-    public bool allowShooting; // Controls whether the unit is currently shooting
-    public bool stillShooting;
-    public bool disabledShooting; // Used to disable shooting when ability is used
+    public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
+    public bool stillShooting = true;
+
+    Coroutine shootingCoroutine;
 
     void Start()
     {
     }
 
-    public IEnumerator StartShooting()
+    public void StartShooting()
     {
-        if (disabledShooting) yield break; // Exit if shooting is disabled
+        StopShooting();
+        shootingCoroutine = StartCoroutine(InitiateShooting());
+    }
 
+    public void ContinueShooting()
+    {
+        allowShooting = true;
+        if (stillShooting == false)
+        {
+            stillShooting = true;
+            shootingCoroutine = StartCoroutine(InitiateShooting());
+        }
+    }
+
+    public void StopShooting()
+    {
+        if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
+        allowShooting = true;
+        stillShooting = true;
+    }
+
+    public IEnumerator InitiateShooting()
+    {
         enemyTeam = transform.tag == "BlueTeam" ? "RedTeam" : "BlueTeam";
         GameObject bulletPrefab = transform.tag == "BlueTeam" ? blueBulletPrefab : redBulletPrefab;
 
@@ -44,8 +66,6 @@ public class Shooting : MonoBehaviour
         currentAmmo = magazineSize;
         string bulletObjectName = transform.name + "'s Bullets";
         GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
-        allowShooting = true;
-        stillShooting = true;
 
         while (allowShooting)
         {

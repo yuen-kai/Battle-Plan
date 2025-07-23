@@ -34,7 +34,7 @@ public class Movement : MonoBehaviour
 
     public void transitionToShooting()
     {
-        StartCoroutine(transform.GetComponent<Shooting>().StartShooting());
+        transform.GetComponent<Shooting>().StartShooting();
         moving = false;
     }
 

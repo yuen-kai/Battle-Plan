@@ -45,12 +45,12 @@ public class GameLoop : MonoBehaviour
             };
 
             setUnitCardsInteractable(false);
-            
+
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
-            foreach(var team in teams)
+            foreach (var team in teams)
             {
                 setOverlayUIText($"Planning: {team}", team);
-                
+
                 yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
             }
 
@@ -63,21 +63,31 @@ public class GameLoop : MonoBehaviour
 
             }
 
-            while (CheckStillMoving())
-            {
-                yield return null;
-            }
-            OrderStopShooting();
+
+
             while (CheckStillShooting())
             {
+                //THINKING: ability activates such that theres movement/gameplay extension
+                //If moving continues during this time restart checkStillMoving
+                if (CheckStillMoving())
+                {
+                    OrderContinueShooting();
+                    while (CheckStillMoving())
+                    {
+                        yield return null;
+                    }
+                    yield return null; // Wait a bit before stopping shooting
+                    OrderAllowShooting(false);
+                }
+
                 yield return null;
             }
         }
         Debug.Log("Game Over");
-        //yield return StartCoroutine(GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting());
+        //GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting(); //TESTING
     }
 
-    void setUnitCardsInteractable(bool interactable)
+    public void setUnitCardsInteractable(bool interactable)
     {
         foreach (Transform child in unitCards.transform)
         {
@@ -108,20 +118,35 @@ public class GameLoop : MonoBehaviour
         {
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
-                if (unit.GetComponent<Movement>().moving == true) return true;
+                if (unit.GetComponent<Movement>().moving == true)
+                {
+                    //Debug.Log(unit.name); 
+                    return true;
+                }
             }
         }
 
         return false;
     }
 
-    void OrderStopShooting()
+    void OrderAllowShooting(bool toggle)
     {
         foreach (var team in teams)
         {
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
-                unit.GetComponent<Shooting>().allowShooting = false;
+                unit.GetComponent<Shooting>().allowShooting = toggle;
+            }
+        }
+    }
+
+    void OrderContinueShooting()
+    {
+        foreach (var team in teams)
+        {
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                unit.GetComponent<Shooting>().ContinueShooting();
             }
         }
     }

@@ -25,6 +25,17 @@ public class ActivateAbility : MonoBehaviour
     {
         //pause time
         Time.timeScale = 0f;
+        gameLoopScript.setUnitCardsInteractable(false);
+
+        //THINKING:
+        //main issue: abilities after order to stop moving
+        //remove? => but now is harder to react to plays
+        //keep => how fix bugs?
+        // (definetly before done shooting)
+        // need reactivate shooting (only for a short while)
+        // Regive shooting to dodging enemies as well
+        // Activate and deactivate shooting within a few seconds 
+        // Better: or reset movement for dodging enemies + ability unit and have that determine order to stop shooting
 
         StartCoroutine(selectAbilitySquareFunc());
     }
@@ -88,6 +99,7 @@ public class ActivateAbility : MonoBehaviour
 
             //continue time
             Time.timeScale = 1f;
+            gameLoopScript.setUnitCardsInteractable(true);
 
             //execute dive
             foreach (var pair in paths)
@@ -95,6 +107,7 @@ public class ActivateAbility : MonoBehaviour
                 GameObject unit = pair.Key;
                 List<Vector3> movementPath = pair.Value;
                 if(movementPath.Count == 0) continue; //skip if no path
+                unit.GetComponent<Shooting>().StopShooting();
                 unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath), true);
             }
 
