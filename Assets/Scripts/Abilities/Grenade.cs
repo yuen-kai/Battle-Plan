@@ -6,12 +6,11 @@ public class Grenade : MonoBehaviour, IAbility
 {
     float abilityTime = 1;
     float throwHeight = 5f;
-    public float explosionRange = 3f;
     public float damage = 50f;
     public GameObject grenadePrefab;
     public GameObject grenadeExplosionPrefab;
 
-    public IEnumerator ExecuteAbility(Vector3 abilitySquare)
+    public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3)
     {
         // Instantiate the grenade at the current position
         GameObject grenade = Instantiate(grenadePrefab, transform.position, Quaternion.identity);
@@ -36,18 +35,18 @@ public class Grenade : MonoBehaviour, IAbility
         grenade.transform.position = targetPosition;
         
         // Explode and damage enemies
-        ExplodeGrenade(targetPosition);
+        ExplodeGrenade(targetPosition, AreaRadius);
         GameObject explosionEffect = Instantiate(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
         Destroy(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
         Destroy(grenade);
     }
 
-    private void ExplodeGrenade(Vector3 explosionPosition)
+    private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)
     {
         string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
 
         // Find all enemies within explosion range
-        Collider[] enemiesInRange = Physics.OverlapSphere(explosionPosition, explosionRange * GameLoop.cellSize, LayerMask.GetMask(enemyTeam));
+        Collider[] enemiesInRange = Physics.OverlapSphere(explosionPosition, AreaRadius * GameLoop.cellSize, LayerMask.GetMask(enemyTeam));
         
         foreach (Collider enemy in enemiesInRange)
         {

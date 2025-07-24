@@ -4,6 +4,6 @@ using UnityEngine;
 
 public interface IAbility
 {
-    public IEnumerator ExecuteAbility(Vector3 abilitySquare);
+    public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius);
 }
 

@@ -11,8 +11,10 @@ public class ActivateAbility : MonoBehaviour
     [SerializeField] private TMP_Text timerTextUI;
 
     [SerializeField] private bool selectAbilitySquare;
-    [SerializeField] private GameObject abilitySquareIndicator;
+    [SerializeField] private GameObject abilitySquareIndicatorPrefab;
+    [SerializeField] private GameObject abilityAOEIndicatorPrefab;
     [SerializeField] private float abilitySquareRange = 3f;
+    [SerializeField] private float abilityRadius = 0f;
     [SerializeField] private float selectTime = 4f;
 
     [SerializeField] private float responseRange = 5f;
@@ -47,6 +49,7 @@ public class ActivateAbility : MonoBehaviour
         float timeRemaining = selectTime;
         Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
         GameObject abilityIndicator = null;
+        GameObject AOEindicator = null;
 
         while (timeRemaining > 0f)
         {
@@ -58,8 +61,12 @@ public class ActivateAbility : MonoBehaviour
                 if (Vector3.Distance(unit.transform.position, mouseSquare) <= abilitySquareRange * GameLoop.cellSize)
                 {
                     selectedSquare = mouseSquare;
-                    if (abilityIndicator) Destroy(abilityIndicator);
-                    abilityIndicator = Instantiate(abilitySquareIndicator, mouseSquare, Quaternion.identity);
+                    Destroy(abilityIndicator);
+                    Destroy(AOEindicator);
+                    abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
+                    AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
+                    float diameter = 2 * abilityRadius * GameLoop.cellSize;
+                    AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
                 }
                 else
                 {
@@ -71,7 +78,8 @@ public class ActivateAbility : MonoBehaviour
             yield return null;
         }
 
-        if (abilityIndicator) Destroy(abilityIndicator);
+        Destroy(abilityIndicator);
+        Destroy(AOEindicator);
         timerTextUI.text = "";
 
         planEnemyResponse(selectedSquare);
@@ -99,13 +107,13 @@ public class ActivateAbility : MonoBehaviour
             {
                 GameObject unit = pair.Key;
                 List<Vector3> movementPath = pair.Value;
-                if(movementPath.Count == 0) continue; //skip if no path
+                if (movementPath.Count == 0) continue; //skip if no path
                 unit.GetComponent<Shooting>().StopShooting();
                 unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath), true);
             }
 
             //activate ability
-            StartCoroutine(unit.GetComponent<IAbility>().ExecuteAbility(abilitySquare));
+            StartCoroutine(unit.GetComponent<IAbility>().ExecuteAbility(abilitySquare, abilityRadius));
         }, timeDivePerUnit * enemiesInRange.Count, enemiesInRange, diveRange));
     }
 

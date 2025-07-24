@@ -66,7 +66,7 @@ public class PlanMovement : MonoBehaviour
             {
                 selectedUnit = GetCharacterUnderMouse();
                 DisplayMoveRange();
-                DisplayAttackRange();
+                //DisplayAttackRange();
                 StartPath(dashUnits);
             }
             else if (Input.GetMouseButton(0) && isDragging)
@@ -94,6 +94,9 @@ public class PlanMovement : MonoBehaviour
         callback(movementPaths); // Return the paths after the selection time is over
     }
 
+
+    //TODO: display on node select as well
+
     void DisplayMoveRange()
     {
         Destroy(moveOverlay);
@@ -117,6 +120,9 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
+
+    //TODO: update attack range on path change
+    //TODO: check line of sight
     void DisplayAttackRange()
     {
         if (attackOverlay) Destroy(attackOverlay);
@@ -124,6 +130,7 @@ public class PlanMovement : MonoBehaviour
         if (selectedUnit == null) return;
 
         Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
+        //TODO: put at end of path
 
         attackOverlay = Instantiate(attackOverlayPrefab, currentPos + new Vector3(0, 0.1f, 0), Quaternion.identity);
         float diameter = 2 * selectedUnit.GetComponent<Shooting>().targetRange * cellSize;

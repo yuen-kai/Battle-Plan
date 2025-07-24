@@ -7,7 +7,7 @@ public class Pogo : MonoBehaviour, IAbility
     float abilityTime = 1;
     float jumpHeight = 5f;
 
-    public IEnumerator ExecuteAbility(Vector3 abilitySquare)
+    public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         Vector3 startPosition = transform.position;
         Vector3 targetPosition = abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0); //Has to be before collider is disabled
