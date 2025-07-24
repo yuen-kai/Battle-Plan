@@ -5,6 +5,8 @@ using UnityEngine;
 public class Bullet : MonoBehaviour
 {
     public float damage = 10f;
+    public float backstabMultiplier = 1f; //by default, no backstab multiplier
+    public float backstabAngle = 90f; // Angle in degrees to consider a backstab
     public float range = 50f;
     public string team = "BlueTeam";
     public string enemyTeam = "RedTeam";
@@ -34,7 +36,19 @@ public class Bullet : MonoBehaviour
         }
         if (hitObject.CompareTag(enemyTeam))
         {
-            hitObject.GetComponent<Health>().TakeDamage(damage);
+            float finalDamage = damage;
+
+            Vector3 bulletDirection = (hitObject.transform.position - startPosition).normalized;
+            Vector3 targetForward = hitObject.transform.forward;
+
+            // Calculate dot product to determine if hit from behind
+            float angle = Vector3.Angle(targetForward, -bulletDirection);
+            if (angle > backstabAngle)
+            {
+                finalDamage = damage * backstabMultiplier;
+            }
+
+            hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
         }
         // Destroy self (bullet)
         Destroy(gameObject);

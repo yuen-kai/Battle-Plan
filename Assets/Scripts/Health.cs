@@ -4,14 +4,17 @@ using UnityEngine;
 
 public class Health : MonoBehaviour
 {
-    public float maxHealth = 100f;
+    public float maxHealth;
     private float currentHealth;
     private Transform healthFill;
 
     // Start is called before the first frame update
     void Start()
     {
-        healthFill = transform.Find("HealthBar").Find("HealthFill");
+        Transform healthBar = transform.Find("HealthBar");
+        healthBar.localScale = new Vector3(maxHealth/100f, 1f, 1f);
+
+        healthFill = healthBar.Find("HealthFill");
         SetHealth(maxHealth);
     }
 

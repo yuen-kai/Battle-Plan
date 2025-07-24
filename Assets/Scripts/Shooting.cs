@@ -4,7 +4,8 @@ using UnityEngine;
 
 public class Shooting : MonoBehaviour
 {
-    public GameObject bulletPrefab;
+    public GameObject blueBulletPrefab;
+    public GameObject redBulletPrefab;
 
     public float timeBetweenShots;
 
@@ -13,47 +14,107 @@ public class Shooting : MonoBehaviour
 
     public float bulletSpread; // Angle of spread in degrees on one side of the center line
 
-    //Parameters in terms of cell size
+    //Parameters in cells (/sec)
     public float bulletSpeed;
     public float targetRange; // Range to find targets within
     public float bulletRange;
     public int damage;
+    public float backstabMultiplier;
 
     public float cellSize;
 
-    public string team = "BlueTeam";
-    public string enemyTeam = "RedTeam";
+    public string enemyTeam;
+
+    public float targetLockDuration;
+
+    LineRenderer targetLaser;
+    float startAnimWidth = 0.05f;
+    float endAnimWidth = 0.2f;
+    Color startAnimColor = Color.white;
+    Color endAnimColor = Color.red;
 
     private int currentAmmo;
-    public bool allowShooting = true; // Controls whether the unit is currently shooting
+    public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
     public bool stillShooting = true;
+
+    Coroutine shootingCoroutine;
 
     void Start()
     {
+        targetLaser = gameObject.AddComponent<LineRenderer>();
+        targetLaser.enabled = false;
     }
 
-    public IEnumerator StartShooting()
+    public void StartShooting()
     {
+        StopShooting();
+        shootingCoroutine = StartCoroutine(InitiateShooting());
+    }
+
+    public void ContinueShooting()
+    {
+        allowShooting = true;
+        if (stillShooting == false)
+        {
+            stillShooting = true;
+            shootingCoroutine = StartCoroutine(InitiateShooting());
+        }
+    }
+
+    public void StopShooting()
+    {
+        if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
+        allowShooting = true;
+        stillShooting = true;
+    }
+
+    public IEnumerator InitiateShooting()
+    {
+        enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
+        GameObject bulletPrefab = transform.tag == "BlueTeam" ? blueBulletPrefab : redBulletPrefab;
+
+
         currentAmmo = magazineSize;
         string bulletObjectName = transform.name + "'s Bullets";
         GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
-        allowShooting = true;
-        stillShooting = true;
+
+        float remainingTargetLockTime = targetLockDuration;
 
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
+            remainingTargetLockTime = targetLockDuration;
 
             while (currentAmmo > 0)
             {
                 //Find/Refind target
                 if (target == null || !lineOfSight(target))
                 {
+                    targetLaser.enabled = false;
                     target = FindNearestEnemy();
-                    if(!allowShooting) break;
+                    remainingTargetLockTime = targetLockDuration;
+                    if (!allowShooting) break;
                     yield return null;
                     continue;
                 }
+
+                //Target lock
+                if (remainingTargetLockTime > 0f)
+                {
+                    // Face the target
+                    transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized);
+
+                    targetLaser.enabled = true;
+                    targetLaser.SetPositions(new Vector3[] { transform.position, target.transform.position });
+                    targetLaser.startWidth = targetLaser.endWidth = Mathf.Lerp(startAnimWidth, endAnimWidth, 1 - remainingTargetLockTime / targetLockDuration);
+                    targetLaser.startColor = targetLaser.endColor = Color.Lerp(startAnimColor, endAnimColor, 1 - remainingTargetLockTime / targetLockDuration);
+
+
+                    remainingTargetLockTime -= Time.deltaTime;
+                    yield return null;
+                    continue;
+                }
+                targetLaser.enabled = false;
 
                 // Face the target
                 Vector3 directionToTarget = (target.transform.position - transform.position).normalized;
@@ -69,17 +130,14 @@ public class Shooting : MonoBehaviour
 
                 Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
                 Bullet bulletScript = bullet.GetComponent<Bullet>();
-                if (bulletRb == null || bulletScript == null)
-                {
-                    Debug.LogWarning("Bullet set up wrongly!");
-                    yield break; // Exit the coroutine if bullet setup is incorrect
-                } //Error handling
+
                 bulletRb.velocity = shootDirection * bulletSpeed * cellSize;
                 bulletScript.damage = damage;
+                bulletScript.backstabMultiplier = backstabMultiplier;
                 bulletScript.range = bulletRange * cellSize;
                 currentAmmo--;
 
-                yield return new WaitForSeconds(timeBetweenShots);
+                yield return new WaitForSeconds(timeBetweenShots); //respects timer pauses
             }
 
             if (allowShooting)
@@ -87,8 +145,8 @@ public class Shooting : MonoBehaviour
                 yield return StartCoroutine(Reload());
             }
         }
-        
-        while(bullets.transform.childCount > 0)
+
+        while (bullets.transform.childCount > 0)
         {
             yield return null; // Wait for all bullets to be destoryed
         }

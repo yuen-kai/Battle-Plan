@@ -6,6 +6,7 @@ TagManager:
   tags:
   - BlueTeam
   - RedTeam
+  - TeamIndicatorProp
   layers:
   - Default
   - TransparentFX
@@ -16,10 +17,10 @@ TagManager:
   - BlueTeam
   - RedTeam
   - Projectile
-  - 
-  - 
-  - 
-  - 
+  - Walls
+  - PathNode
+  - BlueShield
+  - RedShield
   - 
   - 
   - 

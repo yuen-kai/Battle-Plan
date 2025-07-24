@@ -1,11 +1,24 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
+using System.Linq;
 
 public class GameLoop : MonoBehaviour
 {
+    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
     List<GameObject> doneMovingUnits = new List<GameObject>();
     List<GameObject> doneShootingUnits = new List<GameObject>();
+    public static float cellSize = 2.7f; // Size of each cell in the grid
+    public static Rect gridBounds = new Rect(new Vector2(0, 0), new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f));
+
+    [SerializeField] private TMP_Text overlayUIText;
+    public List<Color> teamColors;
+    public List<Material> teamMaterials;
+
+    [SerializeField] private Color executingMoves;
+    float planningTimePerUnit = 0.3f;
+    [SerializeField] private GameObject unitCards;
 
     void Start()
     {
@@ -14,36 +27,132 @@ public class GameLoop : MonoBehaviour
 
     IEnumerator GameLoopTemp()
     {
-        while (GameObject.FindGameObjectsWithTag("BlueTeam").Length > 0 && GameObject.FindGameObjectsWithTag("RedTeam").Length > 0)
+        SetTeamIndicators();
+
+        while (teams.All(team => teamSize(team) > 0))
         {
-            Dictionary<GameObject, List<Vector3>> bluePaths = new Dictionary<GameObject, List<Vector3>>();
-            Dictionary<GameObject, List<Vector3>> redPaths = new Dictionary<GameObject, List<Vector3>>();
+            List<Dictionary<GameObject, List<Vector3>>> pathsList = new List<Dictionary<GameObject, List<Vector3>>>();
 
-            yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("BlueTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
+            System.Action<Dictionary<GameObject, List<Vector3>>> addPaths = (Dictionary<GameObject, List<Vector3>> paths) =>
             {
-                bluePaths = new Dictionary<GameObject, List<Vector3>>(paths);
-            }));
-            yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths("RedTeam", (Dictionary<GameObject, List<Vector3>> paths) =>
-            {
-                redPaths = new Dictionary<GameObject, List<Vector3>>(paths);
-            }));
+                pathsList.Add(new Dictionary<GameObject, List<Vector3>>(paths));
+            };
 
-            ExecuteMoves(bluePaths);
-            ExecuteMoves(redPaths);
+            setUnitCardsInteractable(false);
+            OrderStillShooting(true);
 
-            while (CheckStillMoving())
+            float timerLength = planningTimePerUnit * teams.Max(teamSize);
+            foreach (var team in teams)
             {
-                yield return null;
+                setOverlayUIText($"Planning: {team}", team);
+
+                yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
             }
-            OrderStopShooting();
+
+            setUnitCardsInteractable(true);
+            setOverlayUIText("Executing Moves", "neutral");
+
+            foreach (var paths in pathsList)
+            {
+                ExecuteMoves(paths);
+
+            }
+
+
+
             while (CheckStillShooting())
             {
+                //THINKING: ability activates such that theres movement/gameplay extension
+                //If moving continues during this time restart checkStillMoving
+                if (CheckStillMoving())
+                {
+                    OrderContinueShooting();
+                    while (CheckStillMoving())
+                    {
+                        yield return null;
+                    }
+                    yield return null; // Wait a bit before stopping shooting
+                }
+                OrderAllowShooting(false);
+
                 yield return null;
             }
         }
         Debug.Log("Game Over");
-        //yield return StartCoroutine(GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting());
+        //GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting(); //TESTING
     }
+
+    public void setOverlayUIText(string message, string team = "neutral")
+    {
+        overlayUIText.text = message;
+        overlayUIText.color = GetTeamColor(team);
+    }
+
+    public Color GetTeamColor(string team)
+    {
+        if (!teams.Contains(team)) return executingMoves;
+        return teamColors[teams.IndexOf(team)];
+    }
+
+    public Material GetTeamMaterial(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teamMaterials[teams.IndexOf(team)];
+    }
+
+    public static string GetEnemyTeam(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teams.FirstOrDefault(t => t != team);
+    }
+
+    void SetTeamIndicators()
+    {
+        GameObject[] teamIndicators = GameObject.FindGameObjectsWithTag("TeamIndicatorProp");
+        foreach (GameObject indicator in teamIndicators)
+        {
+            // Find the parent unit with a team tag
+            Transform current = indicator.transform;
+            string parentTeam = null;
+
+            while (current != null)
+            {
+                if (teams.Contains(current.tag))
+                {
+                    parentTeam = current.tag;
+                    break;
+                }
+                current = current.parent;
+            }
+
+            if (parentTeam != null)
+            {
+                Renderer renderer = indicator.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    renderer.material = GetTeamMaterial(parentTeam);
+                }
+            }
+        }
+
+    }
+
+    public void setUnitCardsInteractable(bool interactable)
+    {
+        foreach (Transform child in unitCards.transform)
+        {
+            ActivateAbility abilityScript = child.GetComponent<ActivateAbility>();
+            if (abilityScript.uses <= 0 || abilityScript.unit == null)
+            {
+                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+            }
+            else
+            {
+                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+            }
+        }
+    }
+
 
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
     {
@@ -51,52 +160,75 @@ public class GameLoop : MonoBehaviour
         {
             GameObject unit = pair.Key;
             List<Vector3> movementPath = pair.Value;
-            StartCoroutine(unit.GetComponent<Movement>().MoveToCells(new List<Vector3>(movementPath))); // C# passes parameters by reference, so we need to create a new list
+            unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath)); // C# passes parameters by reference, so we need to create a new list
         }
     }
 
-    int getRemainingUnits()
+    int teamSize(string team)
     {
-        return GameObject.FindGameObjectsWithTag("BlueTeam").Length + GameObject.FindGameObjectsWithTag("RedTeam").Length;
+        return GameObject.FindGameObjectsWithTag(team).Length;
     }
+
 
     bool CheckStillMoving()
     {
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        foreach (var team in teams)
         {
-            if (unit.GetComponent<Movement>().moving == true) return true;
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                if (unit.GetComponent<Movement>().moving == true)
+                {
+                    return true;
+                }
+            }
         }
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
-        {
-            if (unit.GetComponent<Movement>().moving == true) return true;
-        }
+
         return false;
     }
 
-    void OrderStopShooting()
+    void OrderAllowShooting(bool toggle)
     {
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        foreach (var team in teams)
         {
-            unit.GetComponent<Shooting>().allowShooting = false;
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                unit.GetComponent<Shooting>().allowShooting = toggle;
+            }
         }
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
+    }
+
+    void OrderStillShooting(bool toggle)
+    {
+        foreach (var team in teams)
         {
-            unit.GetComponent<Shooting>().allowShooting = false;
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                unit.GetComponent<Shooting>().stillShooting = toggle;
+            }
+        }
+    }
+
+    void OrderContinueShooting()
+    {
+        foreach (var team in teams)
+        {
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                unit.GetComponent<Shooting>().ContinueShooting();
+            }
         }
     }
 
     bool CheckStillShooting()
     {
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("BlueTeam"))
+        foreach (var team in teams)
         {
-            if (unit.GetComponent<Shooting>().stillShooting == true) return true;
-
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                if (unit.GetComponent<Shooting>().stillShooting == true) return true;
+            }
         }
-        foreach (GameObject unit in GameObject.FindGameObjectsWithTag("RedTeam"))
-        {
-            if (unit.GetComponent<Shooting>().stillShooting == true) return true;
 
-        }
         return false;
     }
 

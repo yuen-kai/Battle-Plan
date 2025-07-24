@@ -1,20 +1,21 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
+using System.Linq;
 
 public class PlanMovement : MonoBehaviour
 {
-    private float cellSize = 2.7f;
+    static float cellSize;
 
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
 
     [SerializeField] private GameObject pathNodePrefab; // Prefab for the path visual nodes
     [SerializeField] private GameObject pathEdgePrefab; // Prefab for the path visual edges
-    public string team = "BlueTeam";
-    public float selectionTime = 10f; // Time in seconds to select paths
+    string team;
 
-    public GameObject[] teamCharacters = new GameObject[3];
+    public List<GameObject> teamCharacters = new List<GameObject>();
     public Dictionary<GameObject, List<Vector3>> movementPaths = new Dictionary<GameObject, List<Vector3>>();
     List<Vector3> movementPath = new List<Vector3>(); // List to store the path of the selected unit
 
@@ -26,19 +27,28 @@ public class PlanMovement : MonoBehaviour
     GameObject pathNodes;
     GameObject pathEdges;
 
+    [SerializeField] private TMP_Text timerTextUI;
+
+    [SerializeField] private GameObject moveOverlayCellPrefab;
+    [SerializeField] private GameObject attackOverlayPrefab;
+
+    GameObject moveOverlay;
+    GameObject attackOverlay;
+
+
 
     // Start is called before the first frame update
     void Start()
     {
-
+        cellSize = GameLoop.cellSize;
     }
 
     //TODO: Redo part of the path by dragging from node
 
-    public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback)
+    public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer, List<GameObject> dashUnits = null, int dashDist = -1)
     {
         this.team = team;
-        this.teamCharacters = GameObject.FindGameObjectsWithTag(team);
+        this.teamCharacters = GameObject.FindGameObjectsWithTag(team).ToList();
         movementPaths = new Dictionary<GameObject, List<Vector3>>();
 
         // Initialize movement paths for each character
@@ -47,25 +57,28 @@ public class PlanMovement : MonoBehaviour
             movementPaths[character] = new List<Vector3>();
         }
 
-        float timer = selectionTime;
         visualPathsParent = new GameObject("VisualPaths");
 
         while (timer > 0)
         {
+            timerTextUI.text = (Mathf.CeilToInt(timer)).ToString();
             if (Input.GetMouseButtonDown(0))
             {
-                StartPath();
+                selectedUnit = GetCharacterUnderMouse();
+                DisplayMoveRange();
+                //DisplayAttackRange();
+                StartPath(dashUnits);
             }
             else if (Input.GetMouseButton(0) && isDragging)
             {
-                ExtendPath();
+                ExtendPath(dashDist);
             }
             else if (Input.GetMouseButtonUp(0))
             {
                 EndPath();
             }
 
-            timer -= Time.deltaTime; // Decrease timer each frame
+            timer -= Time.unscaledDeltaTime; // Decrease timer each frame (unaffected by time scale)
             yield return null; // Wait for the next frame
         }
 
@@ -75,37 +88,110 @@ public class PlanMovement : MonoBehaviour
             EndPath();
         }
         Destroy(visualPathsParent); // Clean up the visual path
+        Destroy(moveOverlay);
+        Destroy(attackOverlay);
+        timerTextUI.text = "";
         callback(movementPaths); // Return the paths after the selection time is over
     }
 
-    // Modify StartPath to create the child objects
-    void StartPath()
+
+    //TODO: display on node select as well
+
+    void DisplayMoveRange()
     {
-        selectedUnit = GetCharacterUnderMouse();
+        Destroy(moveOverlay);
+        if (selectedUnit == null) return;
+        moveOverlay = new GameObject("MoveOverlay");
+        int moveDist = selectedUnit.GetComponent<Movement>().moveDist;
+        Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
+
+        for (int i = -moveDist; i <= moveDist; i++)
+        {
+            int horizontalMoveDist = moveDist - Mathf.Abs(i);
+            for (int j = -horizontalMoveDist; j <= horizontalMoveDist; j++)
+            {
+                Vector2 overlayCellPos = new Vector2(currentPos.x + j * cellSize, currentPos.z + i * cellSize);
+                if (GameLoop.gridBounds.Contains(overlayCellPos))
+                {
+                    GameObject moveOverlayCell = Instantiate(moveOverlayCellPrefab, new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y), Quaternion.identity);
+                    moveOverlayCell.transform.parent = moveOverlay.transform;
+                }
+            }
+        }
+    }
+
+
+    //TODO: update attack range on path change
+    //TODO: check line of sight
+    void DisplayAttackRange()
+    {
+        if (attackOverlay) Destroy(attackOverlay);
+
         if (selectedUnit == null) return;
 
-        //Reset movement path
-        movementPaths[selectedUnit].Clear();
-        movementPath = movementPaths[selectedUnit];
-        movementPath.Add(GetGameCellUnderCharacter(selectedUnit));
+        Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
+        //TODO: put at end of path
 
-        //Reset visual path
-        if (visualPaths.ContainsKey(selectedUnit)) Destroy(visualPaths[selectedUnit]);
-        visualPath = new GameObject("VisualPath");
-        visualPath.transform.parent = visualPathsParent.transform;
-        visualPaths[selectedUnit] = visualPath;
+        attackOverlay = Instantiate(attackOverlayPrefab, currentPos + new Vector3(0, 0.1f, 0), Quaternion.identity);
+        float diameter = 2 * selectedUnit.GetComponent<Shooting>().targetRange * cellSize;
 
-        pathNodes = new GameObject("PathNodes");
-        pathNodes.transform.parent = visualPath.transform;
+        attackOverlay.transform.localScale = new Vector3(diameter, attackOverlay.transform.localScale.y, diameter);
+    }
 
-        pathEdges = new GameObject("PathEdges");
-        pathEdges.transform.parent = visualPath.transform;
+    // Modify StartPath to create the child objects
+    void StartPath(List<GameObject> dashUnits = null)
+    {
+        if (selectedUnit?.tag == team && (dashUnits == null || dashUnits.Contains(selectedUnit)))
+        {
+            //Reset movement path
+            movementPaths[selectedUnit].Clear();
+            movementPath = movementPaths[selectedUnit];
+            movementPath.Add(GetGridCellUnderCharacter(selectedUnit));
+
+            //Reset visual path
+            if (visualPaths.ContainsKey(selectedUnit)) Destroy(visualPaths[selectedUnit]);
+            visualPath = new GameObject("VisualPath");
+            visualPath.transform.parent = visualPathsParent.transform;
+            visualPaths[selectedUnit] = visualPath;
+
+            pathNodes = new GameObject("PathNodes");
+            pathNodes.transform.parent = visualPath.transform;
+
+            pathEdges = new GameObject("PathEdges");
+            pathEdges.transform.parent = visualPath.transform;
+
+            isDragging = true;
+        }
+        else
+        {
+            GameObject node = GetNodeUnderMouse();
+            if (node == null) return;
+
+            //Set up path info from node
+            visualPath = node.transform.parent.parent.gameObject;
+            pathNodes = visualPath.transform.Find("PathNodes").gameObject;
+            pathEdges = visualPath.transform.Find("PathEdges").gameObject;
+
+            selectedUnit = visualPaths.FirstOrDefault(x => x.Value == visualPath).Key;
+
+            //Remove all nodes after it
+            int index = node.transform.GetSiblingIndex();
+            movementPaths[selectedUnit].RemoveRange(index + 2, movementPaths[selectedUnit].Count - (index + 2)); //movement path includes start but visual does not
+
+            for (int i = pathNodes.transform.childCount - 1; i > index; i--)
+            {
+                Destroy(pathNodes.transform.GetChild(i).gameObject);
+                Destroy(pathEdges.transform.GetChild(i).gameObject);
+            }
+
+            movementPath = movementPaths[selectedUnit];
+        }
 
         isDragging = true;
     }
 
     // Update AddPathSectionVisual to parent to the correct child
-    void AddPathSectionVisual(Vector3 cell, Vector3 last)
+    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
     {
         Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
         GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
@@ -113,6 +199,11 @@ public class PlanMovement : MonoBehaviour
 
         GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2 + heightOffset, Quaternion.identity);
         edge.transform.parent = pathEdges.transform;
+
+        if (length == moveDist)
+        {
+            node.transform.GetComponent<Renderer>().material.color = Color.green;
+        }
     }
 
     // Update backOfVisualPath to use pathEdgesParent and pathNodesParent
@@ -121,7 +212,7 @@ public class PlanMovement : MonoBehaviour
         return parent.transform.GetChild(parent.transform.childCount - index).gameObject;
     }
 
-    void ExtendPath()
+    void ExtendPath(int dashDist = -1)
     {
         Vector3 currentTile = GetGridCellUnderMouse();
         Vector3 last = movementPath[^1]; //^1 => -1
@@ -135,12 +226,13 @@ public class PlanMovement : MonoBehaviour
             return;
         }
 
-        if (movementPath.Count - 1 < selectedUnit.GetComponent<Movement>().MOVE_DIST //Cause move dist excludes start tile
+        int moveDist = dashDist == -1 ? selectedUnit.GetComponent<Movement>().moveDist : dashDist;
+        if (movementPath.Count - 1 < moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
             && !movementPath.Contains(currentTile))
         {
             movementPath.Add(currentTile);
-            AddPathSectionVisual(currentTile, last);
+            AddPathSectionVisual(currentTile, last, movementPath.Count - 1, moveDist);
         }
     }
 
@@ -172,21 +264,32 @@ public class PlanMovement : MonoBehaviour
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask(team)))
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask(GameLoop.teams.ToArray())))
         {
             return hit.collider.gameObject; // Return the GameObject that was hit
         }
         return null; // Return null if no object was hit
     }
 
-    Vector3 GetGameCellUnderCharacter(GameObject character)
+    GameObject GetNodeUnderMouse()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
+        RaycastHit hit; // Variable to store raycast hit information
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("PathNode")))
+        {
+            return hit.collider.gameObject; // Return the GameObject that was hit
+        }
+        return null; // Return null if no object was hit
+    }
+
+    public static Vector3 GetGridCellUnderCharacter(GameObject character)
     {
         Vector3 position = character.transform.position; // Get the position of the character
         return GetNearestGridCell(position); // Return the nearest grid cell position
     }
 
 
-    Vector3 GetGridCellUnderMouse()
+    public static Vector3 GetGridCellUnderMouse()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
@@ -194,7 +297,7 @@ public class PlanMovement : MonoBehaviour
         return GetNearestGridCell(worldPosition);
     }
 
-    Vector3 GetNearestGridCell(Vector3 position)
+    static Vector3 GetNearestGridCell(Vector3 position)
     {
         float x = Mathf.Round(position.x / cellSize) * cellSize;
         float z = Mathf.Round(position.z / cellSize) * cellSize;
