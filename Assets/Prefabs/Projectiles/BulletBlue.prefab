@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 8139040922690023944}
   - component: {fileID: 1054968791189548301}
   m_Layer: 8
-  m_Name: BlueBullet
+  m_Name: BulletBlue
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
