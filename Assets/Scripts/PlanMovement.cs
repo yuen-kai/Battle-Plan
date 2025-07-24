@@ -29,6 +29,13 @@ public class PlanMovement : MonoBehaviour
 
     [SerializeField] private TMP_Text timerTextUI;
 
+    [SerializeField] private GameObject moveOverlayCellPrefab;
+    [SerializeField] private GameObject attackOverlayPrefab;
+
+    GameObject moveOverlay;
+    GameObject attackOverlay;
+
+
 
     // Start is called before the first frame update
     void Start()
@@ -57,6 +64,9 @@ public class PlanMovement : MonoBehaviour
             timerTextUI.text = (Mathf.CeilToInt(timer)).ToString();
             if (Input.GetMouseButtonDown(0))
             {
+                selectedUnit = GetCharacterUnderMouse();
+                DisplayMoveRange();
+                DisplayAttackRange();
                 StartPath(dashUnits);
             }
             else if (Input.GetMouseButton(0) && isDragging)
@@ -78,15 +88,53 @@ public class PlanMovement : MonoBehaviour
             EndPath();
         }
         Destroy(visualPathsParent); // Clean up the visual path
+        Destroy(moveOverlay);
+        Destroy(attackOverlay);
         timerTextUI.text = "";
         callback(movementPaths); // Return the paths after the selection time is over
+    }
+
+    void DisplayMoveRange()
+    {
+        Destroy(moveOverlay);
+        if (selectedUnit == null) return;
+        moveOverlay = new GameObject("MoveOverlay");
+        int moveDist = selectedUnit.GetComponent<Movement>().moveDist;
+        Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
+
+        for (int i = -moveDist; i <= moveDist; i++)
+        {
+            int horizontalMoveDist = moveDist - Mathf.Abs(i);
+            for (int j = -horizontalMoveDist; j <= horizontalMoveDist; j++)
+            {
+                Vector2 overlayCellPos = new Vector2(currentPos.x + j * cellSize, currentPos.z + i * cellSize);
+                if (GameLoop.gridBounds.Contains(overlayCellPos))
+                {
+                    GameObject moveOverlayCell = Instantiate(moveOverlayCellPrefab, new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y), Quaternion.identity);
+                    moveOverlayCell.transform.parent = moveOverlay.transform;
+                }
+            }
+        }
+    }
+
+    void DisplayAttackRange()
+    {
+        if (attackOverlay) Destroy(attackOverlay);
+
+        if (selectedUnit == null) return;
+
+        Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
+
+        attackOverlay = Instantiate(attackOverlayPrefab, currentPos + new Vector3(0, 0.1f, 0), Quaternion.identity);
+        float diameter = 2 * selectedUnit.GetComponent<Shooting>().targetRange * cellSize;
+
+        attackOverlay.transform.localScale = new Vector3(diameter, attackOverlay.transform.localScale.y, diameter);
     }
 
     // Modify StartPath to create the child objects
     void StartPath(List<GameObject> dashUnits = null)
     {
-        selectedUnit = GetCharacterUnderMouse();
-        if (selectedUnit != null && (dashUnits == null || dashUnits.Contains(selectedUnit)))
+        if (selectedUnit?.tag == team && (dashUnits == null || dashUnits.Contains(selectedUnit)))
         {
             //Reset movement path
             movementPaths[selectedUnit].Clear();
@@ -209,7 +257,7 @@ public class PlanMovement : MonoBehaviour
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask(team)))
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask(GameLoop.teams.ToArray())))
         {
             return hit.collider.gameObject; // Return the GameObject that was hit
         }
@@ -227,7 +275,7 @@ public class PlanMovement : MonoBehaviour
         return null; // Return null if no object was hit
     }
 
-    Vector3 GetGridCellUnderCharacter(GameObject character)
+    public static Vector3 GetGridCellUnderCharacter(GameObject character)
     {
         Vector3 position = character.transform.position; // Get the position of the character
         return GetNearestGridCell(position); // Return the nearest grid cell position

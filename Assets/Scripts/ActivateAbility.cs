@@ -45,7 +45,7 @@ public class ActivateAbility : MonoBehaviour
 
 
         float timeRemaining = selectTime;
-        Vector3 selectedSquare = unit.transform.position; //TODO: change default selection
+        Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
         GameObject abilityIndicator = null;
 
         while (timeRemaining > 0f)

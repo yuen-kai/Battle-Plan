@@ -27,6 +27,12 @@ public class Shooting : MonoBehaviour
 
     public float targetLockDuration;
 
+    LineRenderer targetLaser;
+    float startAnimWidth = 0.05f;
+    float endAnimWidth = 0.2f;
+    Color startAnimColor = Color.white;
+    Color endAnimColor = Color.red;
+
     private int currentAmmo;
     public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
     public bool stillShooting = true;
@@ -35,6 +41,8 @@ public class Shooting : MonoBehaviour
 
     void Start()
     {
+        targetLaser = gameObject.AddComponent<LineRenderer>();
+        targetLaser.enabled = false;
     }
 
     public void StartShooting()
@@ -58,8 +66,6 @@ public class Shooting : MonoBehaviour
         if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
         allowShooting = true;
         stillShooting = true;
-        lockedTarget = null;
-        targetLockTime = 0f;
     }
 
     public IEnumerator InitiateShooting()
@@ -84,6 +90,7 @@ public class Shooting : MonoBehaviour
                 //Find/Refind target
                 if (target == null || !lineOfSight(target))
                 {
+                    targetLaser.enabled = false;
                     target = FindNearestEnemy();
                     remainingTargetLockTime = targetLockDuration;
                     if (!allowShooting) break;
@@ -92,14 +99,22 @@ public class Shooting : MonoBehaviour
                 }
 
                 //Target lock
-                if(remainingTargetLockTime > 0f)
+                if (remainingTargetLockTime > 0f)
                 {
                     // Face the target
-                    Vector3 directionToTarget = (target.transform.position - transform.position).normalized;
-                    transform.rotation = Quaternion.LookRotation(directionToTarget);
+                    transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized);
+
+                    targetLaser.enabled = true;
+                    targetLaser.SetPositions(new Vector3[] { transform.position, target.transform.position });
+                    targetLaser.startWidth = targetLaser.endWidth = Mathf.Lerp(startAnimWidth, endAnimWidth, 1 - remainingTargetLockTime / targetLockDuration);
+                    targetLaser.startColor = targetLaser.endColor = Color.Lerp(startAnimColor, endAnimColor, 1 - remainingTargetLockTime / targetLockDuration);
+
+
                     remainingTargetLockTime -= Time.deltaTime;
+                    yield return null;
                     continue;
                 }
+                targetLaser.enabled = false;
 
                 // Face the target
                 Vector3 directionToTarget = (target.transform.position - transform.position).normalized;
@@ -115,11 +130,7 @@ public class Shooting : MonoBehaviour
 
                 Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
                 Bullet bulletScript = bullet.GetComponent<Bullet>();
-                if (bulletRb == null || bulletScript == null)
-                {
-                    Debug.LogWarning("Bullet set up wrongly!");
-                    yield break; // Exit the coroutine if bullet setup is incorrect
-                } //Error handling
+
                 bulletRb.velocity = shootDirection * bulletSpeed * cellSize;
                 bulletScript.damage = damage;
                 bulletScript.backstabMultiplier = backstabMultiplier;
@@ -134,8 +145,8 @@ public class Shooting : MonoBehaviour
                 yield return StartCoroutine(Reload());
             }
         }
-        
-        while(bullets.transform.childCount > 0)
+
+        while (bullets.transform.childCount > 0)
         {
             yield return null; // Wait for all bullets to be destoryed
         }

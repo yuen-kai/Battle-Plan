@@ -6,10 +6,12 @@ using System.Linq;
 
 public class GameLoop : MonoBehaviour
 {
-    public List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
+    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
     List<GameObject> doneMovingUnits = new List<GameObject>();
     List<GameObject> doneShootingUnits = new List<GameObject>();
     public static float cellSize = 2.7f; // Size of each cell in the grid
+    public static Rect gridBounds = new Rect(new Vector2(0, 0), new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f));
+
     [SerializeField] private TMP_Text overlayUIText;
     public List<Color> teamColors;
     public List<Material> teamMaterials;
