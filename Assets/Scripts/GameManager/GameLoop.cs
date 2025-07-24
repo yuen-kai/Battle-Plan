@@ -17,7 +17,7 @@ public class GameLoop : MonoBehaviour
     public List<Material> teamMaterials;
 
     [SerializeField] private Color executingMoves;
-    float planningTimePerUnit = 0.3f;
+    float planningTimePerUnit = 1f;
     [SerializeField] private GameObject unitCards;
 
     void Start()

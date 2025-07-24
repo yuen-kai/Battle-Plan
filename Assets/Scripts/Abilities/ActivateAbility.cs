@@ -11,9 +11,10 @@ public class ActivateAbility : MonoBehaviour
     [SerializeField] private TMP_Text timerTextUI;
 
     [SerializeField] private bool selectAbilitySquare;
+    [SerializeField] private GameObject abilityRangeOverlayPrefab;
     [SerializeField] private GameObject abilitySquareIndicatorPrefab;
     [SerializeField] private GameObject abilityAOEIndicatorPrefab;
-    [SerializeField] private float abilitySquareRange = 3f;
+    [SerializeField] private int abilitySquareRange = 3;
     [SerializeField] private float abilityRadius = 0f;
     [SerializeField] private float selectTime = 4f;
 
@@ -21,6 +22,8 @@ public class ActivateAbility : MonoBehaviour
 
     [SerializeField] private float timeDivePerUnit = 3f;
     [SerializeField] private int diveRange = 2;
+
+    GameObject abilityRangeOverlay;
 
     public int uses = 1; // Number of times the ability can be used
 
@@ -45,6 +48,10 @@ public class ActivateAbility : MonoBehaviour
 
         gameLoopScript.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
 
+        Destroy(abilityRangeOverlay);
+        Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
+        abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, abilitySquareRange, abilityRangeOverlayPrefab);
+
 
         float timeRemaining = selectTime;
         Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
@@ -58,7 +65,10 @@ public class ActivateAbility : MonoBehaviour
             if (Input.GetMouseButtonDown(0))
             {
                 Vector3 mouseSquare = PlanMovement.GetGridCellUnderMouse();
-                if (Vector3.Distance(unit.transform.position, mouseSquare) <= abilitySquareRange * GameLoop.cellSize)
+                float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
+                float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
+
+                if (horizontalDistance + verticalDistance <= (abilitySquareRange + 0.1f) * GameLoop.cellSize)
                 {
                     selectedSquare = mouseSquare;
                     Destroy(abilityIndicator);
@@ -80,6 +90,8 @@ public class ActivateAbility : MonoBehaviour
 
         Destroy(abilityIndicator);
         Destroy(AOEindicator);
+        Destroy(abilityRangeOverlay);
+
         timerTextUI.text = "";
 
         planEnemyResponse(selectedSquare);

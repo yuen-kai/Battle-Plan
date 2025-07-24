@@ -1682,6 +1682,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1014441447}
     m_Modifications:
+    - target: {fileID: -7993313060572799514, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
+      propertyPath: grenadePrefab
+      value: 
+      objectReference: {fileID: 5062763313020825273, guid: c79d8a5b8690bca45876c9875de67463, type: 3}
+    - target: {fileID: -7993313060572799514, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
+      propertyPath: grenadeExplosionPrefab
+      value: 
+      objectReference: {fileID: 7426381648914058826, guid: ae8b6b4593e1ede4f9708cd44c729170, type: 3}
     - target: {fileID: 288457845206816681, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
       propertyPath: m_LocalPosition.x
       value: -4.38
@@ -7986,7 +7994,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8278047107763744475, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.39
+      value: -0.91
       objectReference: {fileID: 0}
     - target: {fileID: 8278047107763744475, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
       propertyPath: m_LocalRotation.w
@@ -11337,6 +11345,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 103789117567813075, guid: a601eda5ed58e484cbb8dfcac8cf1640, type: 3}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
+      propertyPath: abilityRangeOverlayPrefab
+      value: 
+      objectReference: {fileID: 5853487972985149831, guid: 8a1a42420f7e9da4ea3bac7019b72d1e, type: 3}
+    - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: abilitySquareIndicatorPrefab
       value: 
       objectReference: {fileID: 3326808074419072509, guid: 19764b8f6b5db2c4c8736d1e35f41184, type: 3}
@@ -13629,6 +13641,10 @@ PrefabInstance:
       propertyPath: abilityAOEIndicatorPrefab
       value: 
       objectReference: {fileID: 103789117567813075, guid: a601eda5ed58e484cbb8dfcac8cf1640, type: 3}
+    - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
+      propertyPath: abilityRangeOverlayPrefab
+      value: 
+      objectReference: {fileID: 5853487972985149831, guid: 8a1a42420f7e9da4ea3bac7019b72d1e, type: 3}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: abilitySquareIndicatorPrefab
       value: 
@@ -21836,6 +21852,10 @@ PrefabInstance:
       propertyPath: abilityAOEIndicatorPrefab
       value: 
       objectReference: {fileID: 103789117567813075, guid: a601eda5ed58e484cbb8dfcac8cf1640, type: 3}
+    - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
+      propertyPath: abilityRangeOverlayPrefab
+      value: 
+      objectReference: {fileID: 5853487972985149831, guid: 8a1a42420f7e9da4ea3bac7019b72d1e, type: 3}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: abilitySquareIndicatorPrefab
       value: 
