@@ -101,23 +101,8 @@ public class PlanMovement : MonoBehaviour
     {
         Destroy(moveOverlay);
         if (selectedUnit == null) return;
-        moveOverlay = new GameObject("MoveOverlay");
-        int moveDist = selectedUnit.GetComponent<Movement>().moveDist;
-        Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
 
-        for (int i = -moveDist; i <= moveDist; i++)
-        {
-            int horizontalMoveDist = moveDist - Mathf.Abs(i);
-            for (int j = -horizontalMoveDist; j <= horizontalMoveDist; j++)
-            {
-                Vector2 overlayCellPos = new Vector2(currentPos.x + j * cellSize, currentPos.z + i * cellSize);
-                if (GameLoop.gridBounds.Contains(overlayCellPos))
-                {
-                    GameObject moveOverlayCell = Instantiate(moveOverlayCellPrefab, new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y), Quaternion.identity);
-                    moveOverlayCell.transform.parent = moveOverlay.transform;
-                }
-            }
-        }
+        moveOverlay = Helper.DisplayGridRange(GetGridCellUnderCharacter(selectedUnit), selectedUnit.GetComponent<Movement>().moveDist, moveOverlayCellPrefab);
     }
 
 
@@ -239,7 +224,8 @@ public class PlanMovement : MonoBehaviour
     void EndPath()
     {
         isDragging = false;
-        if (!selectedUnit) return;
+        selectedUnit = null;
+        //if (!selectedUnit) return;
         //PrintPaths(movementPaths);
         //ConfirmPathButton.Show(); // optional
     }
