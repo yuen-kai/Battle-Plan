@@ -25,6 +25,7 @@ public class Shooting : MonoBehaviour
 
     public string enemyTeam;
 
+    public float findTargetTime;
     public float targetLockDuration;
 
     LineRenderer targetLaser;
@@ -92,8 +93,13 @@ public class Shooting : MonoBehaviour
                 {
                     targetLaser.enabled = false;
                     target = FindNearestEnemy();
-                    remainingTargetLockTime = targetLockDuration;
+                    if (target)
+                    {
+                        remainingTargetLockTime = targetLockDuration;
+                        yield return new WaitForSeconds(findTargetTime);
+                    }
                     if (!allowShooting) break;
+
                     yield return null;
                     continue;
                 }

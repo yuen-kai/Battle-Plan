@@ -25,8 +25,7 @@ public class Health : MonoBehaviour
         if (mainCamera != null)
         {
             Transform healthBar = healthFill?.parent;
-            healthBar?.LookAt(mainCamera.transform);
-            healthBar?.Rotate(0, 180, 0);
+            healthBar.forward = Camera.main.transform.forward;
         }
     }
 
