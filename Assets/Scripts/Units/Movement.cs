@@ -12,11 +12,15 @@ public class Movement : MonoBehaviour
     private Coroutine moveListRoutine;
     private Coroutine moveRoutine;
 
+    private Animator anim;
+
 
     // Start is called before the first frame update
     void Start()
     {
         cellSize = GameLoop.cellSize;
+        //Getting the component for the all classes animators.
+        anim = GetComponent<Animator>();
     }
 
 
@@ -24,6 +28,8 @@ public class Movement : MonoBehaviour
     {
         if (moveListRoutine != null) StopCoroutine(moveListRoutine);
         if (moveRoutine != null) StopCoroutine(moveRoutine);
+        //Added bool for Idle pogo stick animation.
+        anim.SetBool("Moving", false);
     }
 
     public void StartMovement(List<Vector3> cells, bool dive = false)
@@ -42,6 +48,8 @@ public class Movement : MonoBehaviour
     public IEnumerator MoveToCells(List<Vector3> cells, bool dive = false) //IEnumerator allows for this function to run over multiple frames
     {
         moving = true;
+        //Added bool for Pogo stick bouncing animation.
+        anim.SetBool("Moving", true);
         foreach (Vector3 cell in cells)
         {
             yield return moveRoutine = StartCoroutine(MoveToCell(cell, dive)); //yield return pauses the coroutine until MoveToCell is done

@@ -164,15 +164,23 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: 8b24f4b922356ea4aa94816ac64a0b3f, type: 2}
     - target: {fileID: -516098083770646512, guid: 9a6574b312ddc7a49b6323265ffde6fc, type: 3}
       propertyPath: m_Name
-      value: Hat
+      value: Body
       objectReference: {fileID: 0}
     - target: {fileID: -516098083770646512, guid: 9a6574b312ddc7a49b6323265ffde6fc, type: 3}
       propertyPath: m_TagString
-      value: TeamIndicatorProp
+      value: Untagged
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 9a6574b312ddc7a49b6323265ffde6fc, type: 3}
       propertyPath: m_Name
       value: Commander
+      objectReference: {fileID: 0}
+    - target: {fileID: 8416272007918961125, guid: 9a6574b312ddc7a49b6323265ffde6fc, type: 3}
+      propertyPath: m_Name
+      value: True Hat
+      objectReference: {fileID: 0}
+    - target: {fileID: 8416272007918961125, guid: 9a6574b312ddc7a49b6323265ffde6fc, type: 3}
+      propertyPath: m_TagString
+      value: TeamIndicatorProp
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -257,7 +265,8 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 3955571231526106402, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 5014284374218104416, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       insertIndex: 0
