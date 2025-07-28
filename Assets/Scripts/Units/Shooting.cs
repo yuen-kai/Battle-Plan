@@ -27,6 +27,7 @@ public class Shooting : MonoBehaviour
 
     public float findTargetTime;
     public float targetLockDuration;
+    public float rotationSpeed;
 
     LineRenderer targetLaser;
     float startAnimWidth = 0.05f;
@@ -69,6 +70,11 @@ public class Shooting : MonoBehaviour
         stillShooting = true;
     }
 
+    private IEnumerator RotateToFaceTarget(GameObject target)
+    {
+        yield return StartCoroutine(transform.GetComponent<Movement>().RotateToFaceTarget(target.transform.position, rotationSpeed));
+    }
+
     public IEnumerator InitiateShooting()
     {
         enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
@@ -84,6 +90,8 @@ public class Shooting : MonoBehaviour
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
+            if(target) yield return StartCoroutine(RotateToFaceTarget(target));
+
             remainingTargetLockTime = targetLockDuration;
 
             while (currentAmmo > 0)
@@ -96,7 +104,7 @@ public class Shooting : MonoBehaviour
                     if (target)
                     {
                         remainingTargetLockTime = targetLockDuration;
-                        yield return new WaitForSeconds(findTargetTime);
+                        yield return StartCoroutine(RotateToFaceTarget(target));
                     }
                     if (!allowShooting) break;
 
@@ -121,10 +129,6 @@ public class Shooting : MonoBehaviour
                     continue;
                 }
                 targetLaser.enabled = false;
-
-                // Face the target
-                Vector3 directionToTarget = (target.transform.position - transform.position).normalized;
-                transform.rotation = Quaternion.LookRotation(directionToTarget);
 
                 // Fire bullet with spread
                 Vector3 baseDirection = transform.forward;

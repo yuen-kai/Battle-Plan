@@ -277,6 +277,7 @@ MonoBehaviour:
   moveSpeed: 1
   diveSpeed: 4
   moving: 1
+  rotationSpeed: 360
 --- !u!114 &-159396357692938789
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -304,6 +305,7 @@ MonoBehaviour:
   enemyTeam: RedTeam
   findTargetTime: 0
   targetLockDuration: 0
+  rotationSpeed: 270
   allowShooting: 1
   stillShooting: 1
 --- !u!114 &2188586334649481472
