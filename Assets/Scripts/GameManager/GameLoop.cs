@@ -94,6 +94,12 @@ public class GameLoop : MonoBehaviour
         return teamColors[teams.IndexOf(team)];
     }
 
+    public static int GetTeamIndex(string team)
+    {
+        if (!teams.Contains(team)) return -1;
+        return teams.IndexOf(team);
+    }
+
     public Material GetTeamMaterial(string team)
     {
         if (!teams.Contains(team)) return null;

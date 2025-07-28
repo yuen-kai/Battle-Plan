@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using System.Linq;
+using cakeslice;
+using Outline = cakeslice.Outline;
 
 public class PlanMovement : MonoBehaviour
 {
@@ -48,13 +50,30 @@ public class PlanMovement : MonoBehaviour
     public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer, List<GameObject> dashUnits = null, int dashDist = -1)
     {
         this.team = team;
-        this.teamCharacters = GameObject.FindGameObjectsWithTag(team).ToList();
+        this.teamCharacters = dashUnits ?? GameObject.FindGameObjectsWithTag(team).ToList();
         movementPaths = new Dictionary<GameObject, List<Vector3>>();
 
         // Initialize movement paths for each character
         foreach (GameObject character in teamCharacters)
         {
             movementPaths[character] = new List<Vector3>();
+        }
+
+        //Add outline effect
+        foreach (GameObject character in teamCharacters)
+        {
+            Renderer[] renderers = character.GetComponentsInChildren<Renderer>();
+            foreach (Renderer rend in renderers)
+            {
+                GameObject go = rend.gameObject;
+                if (go.GetComponent<Outline>() == null)
+                {
+                    go.AddComponent<Outline>();
+                    go.GetComponent<Outline>().color = GameLoop.GetTeamIndex(team);
+                }
+
+                go.GetComponent<Outline>().enabled = true;
+            }
         }
 
         visualPathsParent = new GameObject("VisualPaths");
@@ -86,6 +105,16 @@ public class PlanMovement : MonoBehaviour
         if (isDragging)
         {
             EndPath();
+        }
+
+        foreach (GameObject character in teamCharacters)
+        {
+            Renderer[] renderers = character.GetComponentsInChildren<Renderer>();
+            foreach (Renderer rend in renderers)
+            {
+                GameObject go = rend.gameObject;
+                go.GetComponent<Outline>().enabled = false;
+            }
         }
         Destroy(visualPathsParent); // Clean up the visual path
         Destroy(moveOverlay);
@@ -199,7 +228,9 @@ public class PlanMovement : MonoBehaviour
 
     void ExtendPath(int dashDist = -1)
     {
-        Vector3 currentTile = GetGridCellUnderMouse();
+        Vector3? selectedTile = GetGridCellUnderMouse();
+        if (selectedTile == null) return;
+        Vector3 currentTile = selectedTile.Value;
         Vector3 last = movementPath[^1]; //^1 => -1
 
         if (movementPath.Count >= 2 && movementPath[^2] == currentTile) //Undoing movementPath
@@ -238,7 +269,7 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-    public Vector2Int ConvertToGridCoords(Vector3 position)
+    public static Vector2Int ConvertToGridCoords(Vector3 position)
     {
         //Assuming grid's bottom left corner is at (0,0) and the grid is aligned with the world axes
         int x = Mathf.RoundToInt(position.x / cellSize);
@@ -275,12 +306,14 @@ public class PlanMovement : MonoBehaviour
     }
 
 
-    public static Vector3 GetGridCellUnderMouse()
+    public static Vector3? GetGridCellUnderMouse()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
-        Vector3 worldPosition = Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Grid")) ? hit.point : Input.mousePosition; //if no collision use mouse position
-        return GetNearestGridCell(worldPosition);
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Grid"))) {
+            return GetNearestGridCell(hit.point);
+        }
+        return null;
     }
 
     static Vector3 GetNearestGridCell(Vector3 position)

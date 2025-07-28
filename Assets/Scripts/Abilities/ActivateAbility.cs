@@ -64,7 +64,10 @@ public class ActivateAbility : MonoBehaviour
 
             if (Input.GetMouseButtonDown(0))
             {
-                Vector3 mouseSquare = PlanMovement.GetGridCellUnderMouse();
+                Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
+                if (potentialSquare == null) continue;
+                Vector3 mouseSquare = potentialSquare.Value;
+
                 float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
                 float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
 

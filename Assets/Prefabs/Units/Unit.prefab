@@ -227,6 +227,7 @@ MonoBehaviour:
   backstabMultiplier: 1
   cellSize: 2.7
   enemyTeam: RedTeam
+  findTargetTime: 0
   targetLockDuration: 0
   allowShooting: 1
   stillShooting: 1
