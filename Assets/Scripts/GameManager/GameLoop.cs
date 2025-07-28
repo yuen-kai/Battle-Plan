@@ -15,6 +15,7 @@ public class GameLoop : MonoBehaviour
     [SerializeField] private TMP_Text overlayUIText;
     public List<Color> teamColors;
     public List<Material> teamMaterials;
+    public List<GameObject> allUnits;
 
     [SerializeField] private Color executingMoves;
     float planningTimePerUnit = 4f;
@@ -31,6 +32,11 @@ public class GameLoop : MonoBehaviour
     {
         StartCoroutine(GameLoopTemp());
     }
+
+    //IEnumerator StartGame()
+    //{
+    
+    //}
 
     IEnumerator GameLoopTemp()
     {
