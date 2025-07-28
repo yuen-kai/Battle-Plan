@@ -80,6 +80,21 @@ public class ActivateAbility : MonoBehaviour
                     AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
                     float diameter = 2 * abilityRadius * GameLoop.cellSize;
                     AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+
+                    string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
+                    
+                    // Clear previous alerts
+                    GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+                    foreach (GameObject enemy in allEnemies)
+                    {
+                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+                    }
+
+                    List<GameObject> enemiesInRange = GetEnemiesInRange(selectedSquare, enemyTeam);
+                    foreach (GameObject enemy in enemiesInRange)
+                    {
+                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
+                    }
                 }
                 else
                 {
@@ -106,6 +121,7 @@ public class ActivateAbility : MonoBehaviour
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
 
         List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
+        
 
         gameLoopScript.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
 
@@ -116,6 +132,11 @@ public class ActivateAbility : MonoBehaviour
             //continue time
             Time.timeScale = 1f;
             gameLoopScript.setUnitCardsInteractable(true);
+
+            foreach (GameObject enemy in enemiesInRange)
+            {
+                enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+            }
 
             //execute dive
             foreach (var pair in paths)

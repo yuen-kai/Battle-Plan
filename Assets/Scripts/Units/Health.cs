@@ -11,7 +11,7 @@ public class Health : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        Transform healthBar = transform.Find("HealthBar");
+        Transform healthBar = transform.Find("UnitCanvas").Find("HealthBar");
         healthBar.localScale = new Vector3(maxHealth/100f, 1f, 1f);
 
         healthFill = healthBar.Find("HealthFill");
@@ -24,8 +24,8 @@ public class Health : MonoBehaviour
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
-            Transform healthBar = healthFill?.parent;
-            healthBar.forward = Camera.main.transform.forward;
+            Transform UnitCanvas = transform.Find("UnitCanvas");
+            UnitCanvas.forward = Camera.main.transform.forward;
         }
     }
 
