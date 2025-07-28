@@ -35,6 +35,7 @@ public class Health : MonoBehaviour
 
         if (currentHealth <= 0)
         {
+            GameLoop.disableUnitCard(gameObject);
             gameObject.SetActive(false);
         }
     }
