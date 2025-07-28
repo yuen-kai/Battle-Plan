@@ -20,6 +20,13 @@ public class GameLoop : MonoBehaviour
     float planningTimePerUnit = 1f;
     [SerializeField] private GameObject unitCards;
 
+    static GameLoop Instance; //allows static functions to access GameLoop variables
+
+    void Awake()
+    {
+        Instance = this;
+    }
+
     void Start()
     {
         StartCoroutine(GameLoopTemp());
@@ -57,8 +64,6 @@ public class GameLoop : MonoBehaviour
                 ExecuteMoves(paths);
 
             }
-
-
 
             while (CheckStillShooting())
             {
@@ -155,6 +160,19 @@ public class GameLoop : MonoBehaviour
             else
             {
                 child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+            }
+        }
+    }
+
+    public static void disableUnitCard(GameObject unit)
+    {
+        foreach (Transform child in Instance.unitCards.transform)
+        {
+            ActivateAbility abilityScript = child.GetComponent<ActivateAbility>();
+            if (abilityScript.unit == unit)
+            {
+                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+                return;
             }
         }
     }
