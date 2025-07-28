@@ -11,9 +11,10 @@ public class ActivateAbility : MonoBehaviour
     [SerializeField] private TMP_Text timerTextUI;
 
     [SerializeField] private bool selectAbilitySquare;
+    [SerializeField] private GameObject abilityRangeOverlayPrefab;
     [SerializeField] private GameObject abilitySquareIndicatorPrefab;
     [SerializeField] private GameObject abilityAOEIndicatorPrefab;
-    [SerializeField] private float abilitySquareRange = 3f;
+    [SerializeField] private int abilitySquareRange = 3;
     [SerializeField] private float abilityRadius = 0f;
     [SerializeField] private float selectTime = 4f;
 
@@ -21,6 +22,8 @@ public class ActivateAbility : MonoBehaviour
 
     [SerializeField] private float timeDivePerUnit = 3f;
     [SerializeField] private int diveRange = 2;
+
+    GameObject abilityRangeOverlay;
 
     public int uses = 1; // Number of times the ability can be used
 
@@ -45,6 +48,10 @@ public class ActivateAbility : MonoBehaviour
 
         gameLoopScript.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
 
+        Destroy(abilityRangeOverlay);
+        Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
+        abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, abilitySquareRange, abilityRangeOverlayPrefab);
+
 
         float timeRemaining = selectTime;
         Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
@@ -57,8 +64,14 @@ public class ActivateAbility : MonoBehaviour
 
             if (Input.GetMouseButtonDown(0))
             {
-                Vector3 mouseSquare = PlanMovement.GetGridCellUnderMouse();
-                if (Vector3.Distance(unit.transform.position, mouseSquare) <= abilitySquareRange * GameLoop.cellSize)
+                Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
+                if (potentialSquare == null) continue;
+                Vector3 mouseSquare = potentialSquare.Value;
+
+                float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
+                float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
+
+                if (horizontalDistance + verticalDistance <= (abilitySquareRange + 0.1f) * GameLoop.cellSize)
                 {
                     selectedSquare = mouseSquare;
                     Destroy(abilityIndicator);
@@ -67,6 +80,21 @@ public class ActivateAbility : MonoBehaviour
                     AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
                     float diameter = 2 * abilityRadius * GameLoop.cellSize;
                     AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+
+                    string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
+                    
+                    // Clear previous alerts
+                    GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+                    foreach (GameObject enemy in allEnemies)
+                    {
+                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+                    }
+
+                    List<GameObject> enemiesInRange = GetEnemiesInRange(selectedSquare, enemyTeam);
+                    foreach (GameObject enemy in enemiesInRange)
+                    {
+                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
+                    }
                 }
                 else
                 {
@@ -80,6 +108,8 @@ public class ActivateAbility : MonoBehaviour
 
         Destroy(abilityIndicator);
         Destroy(AOEindicator);
+        Destroy(abilityRangeOverlay);
+
         timerTextUI.text = "";
 
         planEnemyResponse(selectedSquare);
@@ -91,6 +121,7 @@ public class ActivateAbility : MonoBehaviour
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
 
         List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
+        
 
         gameLoopScript.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
 
@@ -101,6 +132,11 @@ public class ActivateAbility : MonoBehaviour
             //continue time
             Time.timeScale = 1f;
             gameLoopScript.setUnitCardsInteractable(true);
+
+            foreach (GameObject enemy in enemiesInRange)
+            {
+                enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+            }
 
             //execute dive
             foreach (var pair in paths)
