@@ -4,7 +4,8 @@ using UnityEngine;
 
 public class Health : MonoBehaviour
 {
-    public float maxHealth;
+    public UnitData unitData;
+
     private float currentHealth;
     private Transform healthFill;
 
@@ -12,10 +13,10 @@ public class Health : MonoBehaviour
     void Start()
     {
         Transform healthBar = transform.Find("UnitCanvas").Find("HealthBar");
-        healthBar.localScale = new Vector3(maxHealth/100f, 1f, 1f);
+        healthBar.localScale = new Vector3(unitData.maxHealth/100f, 1f, 1f);
 
         healthFill = healthBar.Find("HealthFill");
-        SetHealth(maxHealth);
+        SetHealth(unitData.maxHealth);
     }
 
     // Update is called once per frame
@@ -43,6 +44,6 @@ public class Health : MonoBehaviour
     public void SetHealth(float health)
     {
         currentHealth = health;
-        healthFill.localScale = new Vector3(Mathf.Clamp(currentHealth / maxHealth, 0f, 1f), 1f, 1f);
+        healthFill.localScale = new Vector3(Mathf.Clamp(currentHealth / unitData.maxHealth, 0f, 1f), 1f, 1f);
     }
 }

@@ -221,6 +221,10 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: 91853e8d33926694ca6407f836c4f495, type: 2}
+    - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: bulletRange
       value: 3
       objectReference: {fileID: 0}
@@ -240,10 +244,18 @@ PrefabInstance:
       propertyPath: timeBetweenShots
       value: 0.01
       objectReference: {fileID: 0}
+    - target: {fileID: 808478331550645447, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: 91853e8d33926694ca6407f836c4f495, type: 2}
     - target: {fileID: 1013387072258837214, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: m_Name
       value: Shotgunner
       objectReference: {fileID: 0}
+    - target: {fileID: 2188586334649481472, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: 91853e8d33926694ca6407f836c4f495, type: 2}
     - target: {fileID: 2188586334649481472, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: maxHealth
       value: 200
@@ -350,7 +362,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 87e2869991756bf4d89a480367d55d16, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  abilityTime: 3
 --- !u!4 &8278047107763744475 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5014284374218104416, guid: 73e003ef324e37948a4305b0ab228998, type: 3}

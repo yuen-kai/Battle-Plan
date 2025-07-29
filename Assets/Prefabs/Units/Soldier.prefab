@@ -9,6 +9,10 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: 2cddb1e866200124caf84cf6885d6122, type: 2}
+    - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: bulletRange
       value: 8
       objectReference: {fileID: 0}
@@ -20,10 +24,18 @@ PrefabInstance:
       propertyPath: magazineSize
       value: 5
       objectReference: {fileID: 0}
+    - target: {fileID: 808478331550645447, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: 2cddb1e866200124caf84cf6885d6122, type: 2}
     - target: {fileID: 1013387072258837214, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: m_Name
       value: Soldier
       objectReference: {fileID: 0}
+    - target: {fileID: 2188586334649481472, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: 2cddb1e866200124caf84cf6885d6122, type: 2}
     - target: {fileID: 4781910448937898772, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 1.3960001
@@ -113,8 +125,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   damage: 50
-  grenadePrefab: {fileID: 0}
-  grenadeExplosionPrefab: {fileID: 0}
+  grenadePrefab: {fileID: 5062763313020825273, guid: c79d8a5b8690bca45876c9875de67463, type: 3}
+  grenadeExplosionPrefab: {fileID: 7426381648914058826, guid: ae8b6b4593e1ede4f9708cd44c729170, type: 3}
 --- !u!1001 &5489869268760417126
 PrefabInstance:
   m_ObjectHideFlags: 0

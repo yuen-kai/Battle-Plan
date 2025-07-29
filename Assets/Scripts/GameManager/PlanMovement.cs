@@ -8,7 +8,7 @@ using Outline = cakeslice.Outline;
 
 public class PlanMovement : MonoBehaviour
 {
-    static float cellSize;
+    static float cellSize => GameLoop.cellSize;
 
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
@@ -36,14 +36,6 @@ public class PlanMovement : MonoBehaviour
 
     GameObject moveOverlay;
     GameObject attackOverlay;
-
-
-
-    // Start is called before the first frame update
-    void Start()
-    {
-        cellSize = GameLoop.cellSize;
-    }
 
     //TODO: Redo part of the path by dragging from node
 
@@ -131,7 +123,7 @@ public class PlanMovement : MonoBehaviour
         Destroy(moveOverlay);
         if (selectedUnit == null) return;
 
-        moveOverlay = Helper.DisplayGridRange(GetGridCellUnderCharacter(selectedUnit), selectedUnit.GetComponent<Movement>().moveDist, moveOverlayCellPrefab);
+        moveOverlay = Helper.DisplayGridRange(GetGridCellUnderCharacter(selectedUnit), selectedUnit.GetComponent<Movement>().unitData.moveDist, moveOverlayCellPrefab);
     }
 
 
@@ -147,7 +139,7 @@ public class PlanMovement : MonoBehaviour
         //TODO: put at end of path
 
         attackOverlay = Instantiate(attackOverlayPrefab, currentPos + new Vector3(0, 0.1f, 0), Quaternion.identity);
-        float diameter = 2 * selectedUnit.GetComponent<Shooting>().targetRange * cellSize;
+        float diameter = 2 * selectedUnit.GetComponent<Shooting>().unitData.targetRange * cellSize;
 
         attackOverlay.transform.localScale = new Vector3(diameter, attackOverlay.transform.localScale.y, diameter);
     }
@@ -242,7 +234,7 @@ public class PlanMovement : MonoBehaviour
             return;
         }
 
-        int moveDist = dashDist == -1 ? selectedUnit.GetComponent<Movement>().moveDist : dashDist;
+        int moveDist = dashDist == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : dashDist;
         if (movementPath.Count - 1 < moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
             && !movementPath.Contains(currentTile))
