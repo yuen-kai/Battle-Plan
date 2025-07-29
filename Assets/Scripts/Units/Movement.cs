@@ -47,7 +47,7 @@ public class Movement : MonoBehaviour
 
     private IEnumerator MoveToCell(Vector3 cell, bool dive = false)
     {
-        Vector3 targetPosition = cell + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0);
+        Vector3 targetPosition = cell + Helper.heightOffset(transform);
 
         if (rotateRoutine != null) StopCoroutine(rotateRoutine);
         rotateRoutine = StartCoroutine(RotateToFaceTarget(targetPosition, unitData.rotationSpeed)); //Rotate while moving

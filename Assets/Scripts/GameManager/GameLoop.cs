@@ -6,26 +6,77 @@ using System.Linq;
 
 public class GameLoop : MonoBehaviour
 {
+    // Game Instance
+    public static GameLoop Instance; //allows static functions to access GameLoop variables
+
+    // Team Configuration
     public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
-    List<GameObject> doneMovingUnits = new List<GameObject>();
-    List<GameObject> doneShootingUnits = new List<GameObject>();
+   
+    // Grid Configuration
     public static float cellSize = 2.7f; // Size of each cell in the grid
     public static Rect gridBounds = new Rect(new Vector2(0, 0), new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f));
 
+    // Actions
+    public static System.Action<bool> setUnitCardsInteractable;
+    public static System.Action<GameObject> disableUnitCard;
+
+    // UI Components
     [SerializeField] private TMP_Text overlayUIText;
+    [SerializeField] private GameObject unitCardsBlue;
+    [SerializeField] private GameObject unitCardsRed;
+
+    // Visual Properties
     public List<Color> teamColors;
-    public List<Material> teamMaterials;
-    public List<GameObject> allUnits;
-
     [SerializeField] private Color executingMoves;
-    float planningTimePerUnit = 4f;
-    [SerializeField] private GameObject unitCards;
+    public List<Material> teamMaterials;
 
-    public static GameLoop Instance; //allows static functions to access GameLoop variables
+    // Game State
+    List<GameObject> doneMovingUnits = new List<GameObject>();
+    List<GameObject> doneShootingUnits = new List<GameObject>();
+
+    // Game Settings
+    float planningTimePerUnit = 0.3f;
+
+    // Game Setup: Objects and Prefabs
+    [SerializeField] private GameObject wallPrefab;
+    public GameObject wallsParent;
+    public List<GameObject> allUnits;
+    public List<GameObject> unitCardPrefabs;
+
+    public int[] blueUnits;
+    public int[] redUnits;
+
+    // Level Layout (col, row) from bottom left corner
+    HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
+        {
+            new Vector2Int(7, 2),
+            new Vector2Int(1, 3),
+            new Vector2Int(0, 3),
+            new Vector2Int(6, 4),
+            new Vector2Int(2, 5),
+            new Vector2Int(8, 6),
+            new Vector2Int(7, 6),
+            new Vector2Int(1, 7)
+        };
+
+    HashSet<Vector2Int> blueSpawn = new HashSet<Vector2Int>()
+    {
+        new Vector2Int(0, 0),
+        new Vector2Int(5, 5),
+        new Vector2Int(8, 0)
+    };
+
+    HashSet<Vector2Int> redSpawn = new HashSet<Vector2Int>()
+    {
+        new Vector2Int(0, 9),
+        new Vector2Int(4, 9),
+        new Vector2Int(8, 9)
+    };
 
     void Awake()
     {
         Instance = this;
+        StartGame();
     }
 
     void Start()
@@ -33,13 +84,50 @@ public class GameLoop : MonoBehaviour
         StartCoroutine(GameLoopTemp());
     }
 
-    //IEnumerator StartGame()
-    //{
-    
-    //}
+    void StartGame()
+    {
+        Destroy(wallsParent); // Remove the walls GameObject from the scene
+        wallsParent = new GameObject("Walls"); // Create a new empty GameObject to hold the walls
+        //Spawn in walls
+        foreach (var pos in wallLayout)
+        {
+            Vector3 worldPos = gridCoordToWorld(pos);
+            GameObject wall = Instantiate(wallPrefab, worldPos, Quaternion.identity);
+            wall.transform.position += Helper.heightOffset(wall.transform);
+            wall.transform.SetParent(wallsParent.transform);
+        }
+
+        SetupUnitsAndCards(blueUnits, unitCardsBlue, blueSpawn, Quaternion.Euler(0, 0, 0), teams[0]);
+        SetupUnitsAndCards(redUnits, unitCardsRed, redSpawn, Quaternion.Euler(0, 180, 0), teams[1]);
+    }
+
+    void SetupUnitsAndCards(int[] teamUnits, GameObject unitCardTeamContainer, HashSet<Vector2Int> spawnPositions, Quaternion rotation, string team)
+    {
+        GameObject teamParent = new GameObject(team);
+        for (int i = 0; i < teamUnits.Length; i++)
+        {
+            GameObject oldUnitCard = unitCardTeamContainer.transform.GetChild(i).gameObject;
+            GameObject newUnitCard = Instantiate(unitCardPrefabs[teamUnits[i]], oldUnitCard.transform.position, oldUnitCard.transform.rotation, unitCardTeamContainer.transform);
+            Destroy(oldUnitCard);
+
+            GameObject unit = Instantiate(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
+            unit.transform.position += Helper.heightOffset(unit.transform); //Doesnt work if use prefab for height offset
+            unit.transform.SetParent(teamParent.transform);
+            unit.tag = team;
+            unit.layer = LayerMask.NameToLayer(team);
+
+            newUnitCard.GetComponent<ActivateAbility>().unit = unit;
+        }
+    }
+
+    Vector3 gridCoordToWorld(Vector2Int coords)
+    {
+        return new Vector3(gridBounds.xMin + coords.x * cellSize, 0, gridBounds.yMin + coords.y * cellSize);
+    }
 
     IEnumerator GameLoopTemp()
     {
+        yield return null;
         SetTeamIndicators();
 
         while (teams.All(team => teamSize(team) > 0))
@@ -51,7 +139,7 @@ public class GameLoop : MonoBehaviour
                 pathsList.Add(new Dictionary<GameObject, List<Vector3>>(paths));
             };
 
-            setUnitCardsInteractable(false);
+            setUnitCardsInteractable?.Invoke(false);
             OrderStillShooting(true);
 
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
@@ -62,7 +150,7 @@ public class GameLoop : MonoBehaviour
                 yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
             }
 
-            setUnitCardsInteractable(true);
+            setUnitCardsInteractable?.Invoke(true);
             setOverlayUIText("Executing Moves", "neutral");
 
             foreach (var paths in pathsList)
@@ -93,97 +181,6 @@ public class GameLoop : MonoBehaviour
         //GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting(); //TESTING
     }
 
-    public void setOverlayUIText(string message, string team = "neutral")
-    {
-        overlayUIText.text = message;
-        overlayUIText.color = GetTeamColor(team);
-    }
-
-    public Color GetTeamColor(string team)
-    {
-        if (!teams.Contains(team)) return executingMoves;
-        return teamColors[teams.IndexOf(team)];
-    }
-
-    public static int GetTeamIndex(string team)
-    {
-        if (!teams.Contains(team)) return -1;
-        return teams.IndexOf(team);
-    }
-
-    public Material GetTeamMaterial(string team)
-    {
-        if (!teams.Contains(team)) return null;
-        return teamMaterials[teams.IndexOf(team)];
-    }
-
-    public static string GetEnemyTeam(string team)
-    {
-        if (!teams.Contains(team)) return null;
-        return teams.FirstOrDefault(t => t != team);
-    }
-
-    void SetTeamIndicators()
-    {
-        GameObject[] teamIndicators = GameObject.FindGameObjectsWithTag("TeamIndicatorProp");
-        foreach (GameObject indicator in teamIndicators)
-        {
-            // Find the parent unit with a team tag
-            Transform current = indicator.transform;
-            string parentTeam = null;
-
-            while (current != null)
-            {
-                if (teams.Contains(current.tag))
-                {
-                    parentTeam = current.tag;
-                    break;
-                }
-                current = current.parent;
-            }
-
-            if (parentTeam != null)
-            {
-                Renderer renderer = indicator.GetComponent<Renderer>();
-                if (renderer != null)
-                {
-                    renderer.material = GetTeamMaterial(parentTeam);
-                }
-            }
-        }
-
-    }
-
-    public void setUnitCardsInteractable(bool interactable)
-    {
-        foreach (Transform child in unitCards.transform)
-        {
-            ActivateAbility abilityScript = child.GetComponent<ActivateAbility>();
-            if (abilityScript.uses <= 0 || abilityScript.unit == null)
-            {
-                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
-            }
-            else
-            {
-                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
-            }
-        }
-    }
-
-    public static void disableUnitCard(GameObject unit)
-    {
-        foreach (Transform child in Instance.unitCards.transform)
-        {
-            ActivateAbility abilityScript = child.GetComponent<ActivateAbility>();
-            if (abilityScript.unit == unit)
-            {
-                child.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
-                return;
-            }
-        }
-    }
-
-
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
     {
         foreach (var pair in paths)
@@ -193,12 +190,6 @@ public class GameLoop : MonoBehaviour
             unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath)); // C# passes parameters by reference, so we need to create a new list
         }
     }
-
-    int teamSize(string team)
-    {
-        return GameObject.FindGameObjectsWithTag(team).Length;
-    }
-
 
     bool CheckStillMoving()
     {
@@ -262,17 +253,79 @@ public class GameLoop : MonoBehaviour
         return false;
     }
 
+
+
+    public void setOverlayUIText(string message, string team = "neutral")
+    {
+        overlayUIText.text = message;
+        overlayUIText.color = GetTeamColor(team);
+    }
+
+    public Color GetTeamColor(string team)
+    {
+        if (!teams.Contains(team)) return executingMoves;
+        return teamColors[teams.IndexOf(team)];
+    }
+
+    public static int GetTeamIndex(string team)
+    {
+        if (!teams.Contains(team)) return -1;
+        return teams.IndexOf(team);
+    }
+
+    public Material GetTeamMaterial(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teamMaterials[teams.IndexOf(team)];
+    }
+
+    public static string GetEnemyTeam(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teams.FirstOrDefault(t => t != team);
+    }
+
+    int teamSize(string team)
+    {
+        return GameObject.FindGameObjectsWithTag(team).Length;
+    }
+
+    void SetTeamIndicators()
+    {
+        GameObject[] teamIndicators = GameObject.FindGameObjectsWithTag("TeamIndicatorProp");
+        foreach (GameObject indicator in teamIndicators)
+        {
+            // Find the parent unit with a team tag
+            Transform current = indicator.transform;
+            string parentTeam = null;
+
+            while (current != null)
+            {
+                if (teams.Contains(current.tag))
+                {
+                    parentTeam = current.tag;
+                    break;
+                }
+                current = current.parent;
+            }
+
+            if (parentTeam != null)
+            {
+                Renderer renderer = indicator.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    renderer.materials = new Material[] { GetTeamMaterial(parentTeam) };
+                }
+            }
+        }
+
+    }
+
     void PrintPaths(Dictionary<GameObject, List<Vector3>> paths)
     {
         foreach (var pair in paths)
         {
             Debug.Log($"Unit: {pair.Key.name}, Path: {string.Join(", ", pair.Value)}");
         }
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-
     }
 }

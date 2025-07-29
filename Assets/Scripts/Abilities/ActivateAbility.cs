@@ -16,9 +16,32 @@ public class ActivateAbility : MonoBehaviour
 
     GameObject abilityRangeOverlay;
 
-    void Awake()
+    void Start()
     {
         uses = unitData.uses;
+        GameLoop.setUnitCardsInteractable += setUnitCardsInteractable;
+        GameLoop.disableUnitCard += disableUnitCard;
+    }
+
+    public void setUnitCardsInteractable(bool interactable)
+    {
+        if (uses <= 0 || unit == null)
+        {
+            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+        }
+        else
+        {
+            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+        }
+    }
+
+    public void disableUnitCard(GameObject disableUnit)
+    {
+        if (unit == disableUnit)
+        {
+            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+            return;
+        }
     }
 
     public void activateAbility()
@@ -27,7 +50,7 @@ public class ActivateAbility : MonoBehaviour
 
         //pause time
         Time.timeScale = 0f;
-        GameLoop.Instance.setUnitCardsInteractable(false);
+        GameLoop.setUnitCardsInteractable(false);
 
         StartCoroutine(selectAbilitySquareFunc());
     }
@@ -76,7 +99,7 @@ public class ActivateAbility : MonoBehaviour
                     AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
 
                     string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-                    
+
                     // Clear previous alerts
                     GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
                     foreach (GameObject enemy in allEnemies)
@@ -115,7 +138,7 @@ public class ActivateAbility : MonoBehaviour
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
 
         List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
-        
+
 
         GameLoop.Instance.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
 
@@ -125,7 +148,7 @@ public class ActivateAbility : MonoBehaviour
 
             //continue time
             Time.timeScale = 1f;
-            GameLoop.Instance.setUnitCardsInteractable(true);
+            GameLoop.setUnitCardsInteractable(true);
 
             foreach (GameObject enemy in enemiesInRange)
             {

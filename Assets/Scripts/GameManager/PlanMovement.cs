@@ -207,7 +207,7 @@ public class PlanMovement : MonoBehaviour
     // Update AddPathSectionVisual to parent to the correct child
     void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
     {
-        Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
+        Vector3 heightOffset = Helper.heightOffset(pathNodePrefab.transform);
         GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
         node.transform.parent = pathNodes.transform;
 

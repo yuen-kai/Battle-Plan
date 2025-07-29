@@ -68,7 +68,7 @@ public class Shooting : MonoBehaviour
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
-            if(target) yield return StartCoroutine(RotateToFaceTarget(target));
+            if (target) yield return StartCoroutine(RotateToFaceTarget(target));
 
             remainingTargetLockTime = unitData.targetLockDuration;
 
@@ -157,7 +157,6 @@ public class Shooting : MonoBehaviour
         foreach (GameObject enemy in enemies)
         {
             float distance = Vector3.Distance(transform.position, enemy.transform.position);
-
             if (distance < nearestDistance && lineOfSight(enemy))
             {
                 nearestEnemy = enemy;
