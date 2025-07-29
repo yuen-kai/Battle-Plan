@@ -6,26 +6,20 @@ using TMPro;
 public class ActivateAbility : MonoBehaviour
 {
     public GameObject unit;
-    public PlanMovement PlanMovementScript;
-    public GameLoop gameLoopScript;
-    [SerializeField] private TMP_Text timerTextUI;
 
-    [SerializeField] private bool selectAbilitySquare;
+    public UnitData unitData;
+    public int uses;
+
     [SerializeField] private GameObject abilityRangeOverlayPrefab;
     [SerializeField] private GameObject abilitySquareIndicatorPrefab;
     [SerializeField] private GameObject abilityAOEIndicatorPrefab;
-    [SerializeField] private int abilitySquareRange = 3;
-    [SerializeField] private float abilityRadius = 0f;
-    [SerializeField] private float selectTime = 4f;
-
-    [SerializeField] private float responseRange = 5f;
-
-    [SerializeField] private float timeDivePerUnit = 3f;
-    [SerializeField] private int diveRange = 2;
 
     GameObject abilityRangeOverlay;
 
-    public int uses = 1; // Number of times the ability can be used
+    void Awake()
+    {
+        uses = unitData.uses;
+    }
 
     public void activateAbility()
     {
@@ -33,34 +27,34 @@ public class ActivateAbility : MonoBehaviour
 
         //pause time
         Time.timeScale = 0f;
-        gameLoopScript.setUnitCardsInteractable(false);
+        GameLoop.Instance.setUnitCardsInteractable(false);
 
         StartCoroutine(selectAbilitySquareFunc());
     }
 
     IEnumerator selectAbilitySquareFunc()
     {
-        if (!selectAbilitySquare)
+        if (!unitData.selectAbilitySquare)
         {
             planEnemyResponse(unit.transform.position);
             yield break;
         }
 
-        gameLoopScript.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
+        GameLoop.Instance.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
 
         Destroy(abilityRangeOverlay);
         Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
-        abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, abilitySquareRange, abilityRangeOverlayPrefab);
+        abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, unitData.abilitySquareRange, abilityRangeOverlayPrefab);
 
 
-        float timeRemaining = selectTime;
+        float timeRemaining = unitData.selectTime;
         Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
         GameObject abilityIndicator = null;
         GameObject AOEindicator = null;
 
         while (timeRemaining > 0f)
         {
-            timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
+            PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
 
             if (Input.GetMouseButtonDown(0))
             {
@@ -71,14 +65,14 @@ public class ActivateAbility : MonoBehaviour
                 float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
                 float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
 
-                if (horizontalDistance + verticalDistance <= (abilitySquareRange + 0.1f) * GameLoop.cellSize)
+                if (horizontalDistance + verticalDistance <= (unitData.abilitySquareRange + 0.1f) * GameLoop.cellSize)
                 {
                     selectedSquare = mouseSquare;
                     Destroy(abilityIndicator);
                     Destroy(AOEindicator);
                     abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
                     AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
-                    float diameter = 2 * abilityRadius * GameLoop.cellSize;
+                    float diameter = 2 * unitData.abilityRadius * GameLoop.cellSize;
                     AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
 
                     string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
@@ -98,7 +92,7 @@ public class ActivateAbility : MonoBehaviour
                 }
                 else
                 {
-                    Debug.Log($"Too far! Range: {abilitySquareRange}");
+                    Debug.Log($"Too far! Range: {unitData.abilitySquareRange}");
                 }
             }
 
@@ -110,7 +104,7 @@ public class ActivateAbility : MonoBehaviour
         Destroy(AOEindicator);
         Destroy(abilityRangeOverlay);
 
-        timerTextUI.text = "";
+        PlanMovement.Instance.timerTextUI.text = "";
 
         planEnemyResponse(selectedSquare);
     }
@@ -123,15 +117,15 @@ public class ActivateAbility : MonoBehaviour
         List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
         
 
-        gameLoopScript.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
+        GameLoop.Instance.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
 
-        StartCoroutine(PlanMovementScript.ChoosePaths(enemyTeam, (Dictionary<GameObject, List<Vector3>> paths) =>
+        StartCoroutine(PlanMovement.Instance.ChoosePaths(enemyTeam, (Dictionary<GameObject, List<Vector3>> paths) =>
         {
-            gameLoopScript.setOverlayUIText("Executing Moves", "neutral");
+            GameLoop.Instance.setOverlayUIText("Executing Moves", "neutral");
 
             //continue time
             Time.timeScale = 1f;
-            gameLoopScript.setUnitCardsInteractable(true);
+            GameLoop.Instance.setUnitCardsInteractable(true);
 
             foreach (GameObject enemy in enemiesInRange)
             {
@@ -149,8 +143,8 @@ public class ActivateAbility : MonoBehaviour
             }
 
             //activate ability
-            StartCoroutine(unit.GetComponent<IAbility>().ExecuteAbility(abilitySquare, abilityRadius));
-        }, timeDivePerUnit * enemiesInRange.Count, enemiesInRange, diveRange));
+            StartCoroutine(unit.GetComponent<IAbility>().ExecuteAbility(abilitySquare, unitData.abilityRadius));
+        }, unitData.timeDivePerUnit * enemiesInRange.Count, enemiesInRange, unitData.diveRange));
     }
 
     public List<GameObject> GetEnemiesInRange(Vector3 abilitySquare, string enemyTeam)
@@ -161,7 +155,7 @@ public class ActivateAbility : MonoBehaviour
         foreach (GameObject enemy in allEnemies)
         {
             float distance = Vector3.Distance(abilitySquare, enemy.transform.position);
-            if (distance <= responseRange * GameLoop.cellSize)
+            if (distance <= unitData.responseRange * GameLoop.cellSize)
             {
                 enemiesInRange.Add(enemy);
             }

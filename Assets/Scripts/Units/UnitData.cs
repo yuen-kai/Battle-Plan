@@ -64,4 +64,29 @@ public class UnitData : ScriptableObject
     [Header("=== HEALTH PARAMETERS ===")]
     [Tooltip("Maximum health points for this unit")]
     public float maxHealth = 100f;
+
+    [Header("=== ABILITY PARAMETERS ===")]
+
+    public bool selectAbilitySquare = true;
+
+    [Tooltip("Range in cells for ability target selection")]
+    public int abilitySquareRange = 3;
+    
+    [Tooltip("Radius of ability area of effect in cells")]
+    public float abilityRadius = 0f;
+    
+    [Tooltip("Time allowed for ability target selection in seconds")]
+    public float selectTime = 4f;
+    
+    [Tooltip("Range in cells that triggers enemy response to ability")]
+    public float responseRange = 5f;
+    
+    [Tooltip("Time per unit for dive movement planning in seconds")]
+    public float timeDivePerUnit = 3f;
+    
+    [Tooltip("Range in cells for dive movement")]
+    public int diveRange = 2;
+    
+    [Tooltip("Number of times the ability can be used")]
+    public int uses = 1;
 }

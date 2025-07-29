@@ -21,7 +21,7 @@ public class GameLoop : MonoBehaviour
     float planningTimePerUnit = 4f;
     [SerializeField] private GameObject unitCards;
 
-    static GameLoop Instance; //allows static functions to access GameLoop variables
+    public static GameLoop Instance; //allows static functions to access GameLoop variables
 
     void Awake()
     {

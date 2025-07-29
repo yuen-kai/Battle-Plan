@@ -31,3 +31,10 @@ MonoBehaviour:
   targetLockDuration: 0
   aimRotationSpeed: 270
   maxHealth: 100
+  abilitySquareRange: 5
+  abilityRadius: 2
+  selectTime: 4
+  responseRange: 3
+  timeDivePerUnit: 3
+  diveRange: 2
+  uses: 1

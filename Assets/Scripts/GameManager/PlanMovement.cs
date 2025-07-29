@@ -29,7 +29,7 @@ public class PlanMovement : MonoBehaviour
     GameObject pathNodes;
     GameObject pathEdges;
 
-    [SerializeField] private TMP_Text timerTextUI;
+    public TMP_Text timerTextUI;
 
     [SerializeField] private GameObject moveOverlayCellPrefab;
     [SerializeField] private GameObject attackOverlayPrefab;
@@ -37,7 +37,15 @@ public class PlanMovement : MonoBehaviour
     GameObject moveOverlay;
     GameObject attackOverlay;
 
-    //TODO: Redo part of the path by dragging from node
+    public static PlanMovement Instance
+    {
+        get; private set;
+    } // Singleton instance for easy access
+
+    void Awake()
+    {
+        Instance = this; // Set the singleton instance
+    }
 
     public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer, List<GameObject> dashUnits = null, int dashDist = -1)
     {
@@ -302,7 +310,8 @@ public class PlanMovement : MonoBehaviour
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Grid"))) {
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Grid")))
+        {
             return GetNearestGridCell(hit.point);
         }
         return null;

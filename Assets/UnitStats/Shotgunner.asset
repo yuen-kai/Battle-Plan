@@ -29,5 +29,13 @@ MonoBehaviour:
   backstabMultiplier: 1
   findTargetTime: 0
   targetLockDuration: 0
-  aimRotationSpeed: 270
+  aimRotationSpeed: 450
   maxHealth: 200
+  selectAbilitySquare: 0
+  abilitySquareRange: 3
+  abilityRadius: 0
+  selectTime: 4
+  responseRange: 1
+  timeDivePerUnit: 3
+  diveRange: 2
+  uses: 1
