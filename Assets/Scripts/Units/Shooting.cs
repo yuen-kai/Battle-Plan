@@ -17,12 +17,16 @@ public class Shooting : MonoBehaviour
     [HideInInspector] public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
     [HideInInspector] public bool stillShooting = true;
 
+    GameObject bulletsParent;
+
     Coroutine shootingCoroutine;
 
     void Start()
     {
         targetLaser = gameObject.AddComponent<LineRenderer>();
         targetLaser.enabled = false;
+        string bulletObjectName = transform.name + "'s Bullets";
+        bulletsParent = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
     }
 
     public void StartShooting()
@@ -46,6 +50,7 @@ public class Shooting : MonoBehaviour
         if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
         allowShooting = true;
         stillShooting = true;
+        targetLaser.enabled = false;
     }
 
     private IEnumerator RotateToFaceTarget(GameObject target)
@@ -56,12 +61,8 @@ public class Shooting : MonoBehaviour
     public IEnumerator InitiateShooting()
     {
         enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
-        GameObject bulletPrefab = transform.tag == "BlueTeam" ? unitData.blueBulletPrefab : unitData.redBulletPrefab;
-
 
         currentAmmo = unitData.magazineSize;
-        string bulletObjectName = transform.name + "'s Bullets";
-        GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
 
         float remainingTargetLockTime = unitData.targetLockDuration;
 
@@ -108,22 +109,7 @@ public class Shooting : MonoBehaviour
                 }
                 targetLaser.enabled = false;
 
-                // Fire bullet with spread
-                Vector3 baseDirection = transform.forward;
-                float spreadAngle = Random.Range(-unitData.bulletSpread, unitData.bulletSpread);
-                Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
-
-                GameObject bullet = Instantiate(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
-                bullet.transform.parent = bullets.transform;
-
-                Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
-                Bullet bulletScript = bullet.GetComponent<Bullet>();
-
-                bulletRb.velocity = shootDirection * unitData.bulletSpeed * GameLoop.cellSize;
-                bulletScript.damage = unitData.damage;
-                bulletScript.backstabMultiplier = unitData.backstabMultiplier;
-                bulletScript.range = unitData.bulletRange * GameLoop.cellSize;
-                currentAmmo--;
+                FireBullet();
 
                 yield return new WaitForSeconds(unitData.timeBetweenShots); //respects timer pauses
             }
@@ -134,12 +120,41 @@ public class Shooting : MonoBehaviour
             }
         }
 
-        while (bullets.transform.childCount > 0)
+        while (bulletsParent.transform.childCount > 0)
         {
             yield return null; // Wait for all bullets to be destoryed
         }
         yield return new WaitForSeconds(0.1f); // Small delay to ensure player deaths are processed
         stillShooting = false;
+    }
+
+    public void FireBullet(float spread = -1, float bulletSpeed = -1, float damage = -1, float backstabMultiplier = -1, float range = -1, float backstabAngle = -1, GameObject bulletPrefab = null)
+    {
+        spread = spread == -1 ? unitData.bulletSpread : spread;
+        bulletSpeed = bulletSpeed == -1 ? unitData.bulletSpeed : bulletSpeed;
+        damage = damage == -1 ? unitData.damage : damage;
+        backstabMultiplier = backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
+        range = range == -1 ? unitData.bulletRange : range;
+        backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
+        bulletPrefab = bulletPrefab ?? (transform.tag == "BlueTeam" ? unitData.blueBulletPrefab : unitData.redBulletPrefab);
+
+        // Fire bullet with spread
+        Vector3 baseDirection = transform.forward;
+        float spreadAngle = Random.Range(-spread, spread);
+        Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
+
+        GameObject bullet = Instantiate(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
+        bullet.transform.parent = bulletsParent.transform;
+
+        Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
+        Bullet bulletScript = bullet.GetComponent<Bullet>();
+
+        bulletRb.velocity = shootDirection * bulletSpeed * GameLoop.cellSize;
+        bulletScript.damage = damage;
+        bulletScript.backstabMultiplier = backstabMultiplier;
+        bulletScript.range = range * GameLoop.cellSize;
+        bulletScript.backstabAngle = backstabAngle;
+        currentAmmo--;
     }
 
     IEnumerator Reload()
@@ -170,8 +185,7 @@ public class Shooting : MonoBehaviour
     {
         // Check for clear line of sight within range
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, directionToEnemy, out hit, unitData.targetRange * GameLoop.cellSize, LayerMask.GetMask("Walls", enemyTeam)))
+        if (Physics.Raycast(transform.position, directionToEnemy, out RaycastHit hit, unitData.targetRange * GameLoop.cellSize, LayerMask.GetMask("Walls", enemyTeam)))
         {
             if (hit.collider.gameObject == enemy)
             {

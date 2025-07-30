@@ -19,11 +19,11 @@ public class ActivateAbility : MonoBehaviour
     void Start()
     {
         uses = unitData.uses;
-        GameLoop.setUnitCardsInteractable += setUnitCardsInteractable;
+        GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
         GameLoop.disableUnitCard += disableUnitCard;
     }
 
-    public void setUnitCardsInteractable(bool interactable)
+    public void setUnitCardInteractable(bool interactable)
     {
         if (uses <= 0 || unit == null)
         {
@@ -50,7 +50,7 @@ public class ActivateAbility : MonoBehaviour
 
         //pause time
         Time.timeScale = 0f;
-        GameLoop.setUnitCardsInteractable(false);
+        GameLoop.setUnitCardsInteractable?.Invoke(false);
 
         StartCoroutine(selectAbilitySquareFunc());
     }

@@ -317,7 +317,7 @@ public class PlanMovement : MonoBehaviour
         return null;
     }
 
-    static Vector3 GetNearestGridCell(Vector3 position)
+    public static Vector3 GetNearestGridCell(Vector3 position)
     {
         float x = Mathf.Round(position.x / cellSize) * cellSize;
         float z = Mathf.Round(position.z / cellSize) * cellSize;

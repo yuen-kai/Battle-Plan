@@ -35,11 +35,13 @@ public class GameLoop : MonoBehaviour
     List<GameObject> doneShootingUnits = new List<GameObject>();
 
     // Game Settings
-    float planningTimePerUnit = 0.3f;
+    float planningTimePerUnit = 1f;
 
     // Game Setup: Objects and Prefabs
     [SerializeField] private GameObject wallPrefab;
     public GameObject wallsParent;
+    public GameObject blueTeam;
+    public GameObject redTeam;
     public List<GameObject> allUnits;
     public List<GameObject> unitCardPrefabs;
 
@@ -62,7 +64,7 @@ public class GameLoop : MonoBehaviour
     HashSet<Vector2Int> blueSpawn = new HashSet<Vector2Int>()
     {
         new Vector2Int(0, 0),
-        new Vector2Int(5, 5),
+        new Vector2Int(4, 0),
         new Vector2Int(8, 0)
     };
 
@@ -97,11 +99,13 @@ public class GameLoop : MonoBehaviour
             wall.transform.SetParent(wallsParent.transform);
         }
 
-        SetupUnitsAndCards(blueUnits, unitCardsBlue, blueSpawn, Quaternion.Euler(0, 0, 0), teams[0]);
-        SetupUnitsAndCards(redUnits, unitCardsRed, redSpawn, Quaternion.Euler(0, 180, 0), teams[1]);
+        Destroy(blueTeam);
+        blueTeam = SetupUnitsAndCards(blueUnits, unitCardsBlue, blueSpawn, Quaternion.Euler(0, 0, 0), teams[0]);
+        Destroy(redTeam);
+        redTeam = SetupUnitsAndCards(redUnits, unitCardsRed, redSpawn, Quaternion.Euler(0, 180, 0), teams[1]);
     }
 
-    void SetupUnitsAndCards(int[] teamUnits, GameObject unitCardTeamContainer, HashSet<Vector2Int> spawnPositions, Quaternion rotation, string team)
+    GameObject SetupUnitsAndCards(int[] teamUnits, GameObject unitCardTeamContainer, HashSet<Vector2Int> spawnPositions, Quaternion rotation, string team)
     {
         GameObject teamParent = new GameObject(team);
         for (int i = 0; i < teamUnits.Length; i++)
@@ -114,9 +118,19 @@ public class GameLoop : MonoBehaviour
             unit.transform.position += Helper.heightOffset(unit.transform); //Doesnt work if use prefab for height offset
             unit.transform.SetParent(teamParent.transform);
             unit.tag = team;
-            unit.layer = LayerMask.NameToLayer(team);
+            SetLayerRecursively(unit, LayerMask.NameToLayer(team));
 
             newUnitCard.GetComponent<ActivateAbility>().unit = unit;
+        }
+        return teamParent;
+    }
+
+    void SetLayerRecursively(GameObject obj, int layer)
+    {
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
+        {
+            SetLayerRecursively(child.gameObject, layer);
         }
     }
 
@@ -178,7 +192,6 @@ public class GameLoop : MonoBehaviour
             }
         }
         Debug.Log("Game Over");
-        //GameObject.FindGameObjectsWithTag("BlueTeam")[0].GetComponent<Shooting>().StartShooting(); //TESTING
     }
 
     void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)

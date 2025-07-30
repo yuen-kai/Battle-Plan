@@ -8,7 +8,6 @@ public class Bullet : MonoBehaviour
     public float backstabMultiplier = 1f; //by default, no backstab multiplier
     public float backstabAngle = 90f; // Angle in degrees to consider a backstab
     public float range = 50f;
-    public string team = "BlueTeam";
     public string enemyTeam = "RedTeam";
 
     private Vector3 startPosition;
@@ -30,10 +29,6 @@ public class Bullet : MonoBehaviour
     private void OnCollisionEnter(Collision other) // built-in function
     {
         GameObject hitObject = other.gameObject;
-        if (hitObject.CompareTag(team))
-        {
-            return;
-        }
         if (hitObject.CompareTag(enemyTeam))
         {
             float finalDamage = damage;
@@ -41,9 +36,8 @@ public class Bullet : MonoBehaviour
             Vector3 bulletDirection = (hitObject.transform.position - startPosition).normalized;
             Vector3 targetForward = hitObject.transform.forward;
 
-            // Calculate dot product to determine if hit from behind
             float angle = Vector3.Angle(targetForward, -bulletDirection);
-            if (angle > backstabAngle)
+            if (angle >= backstabAngle)
             {
                 finalDamage = damage * backstabMultiplier;
             }

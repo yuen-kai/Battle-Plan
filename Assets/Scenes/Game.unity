@@ -6726,7 +6726,7 @@ Transform:
   m_GameObject: {fileID: 705507993}
   serializedVersion: 2
   m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalPosition: {x: 0, y: 4.248, z: -3.17}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -9978,7 +9978,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1014441447
 Transform:
   m_ObjectHideFlags: 0
@@ -12408,7 +12408,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1237306512
 Transform:
   m_ObjectHideFlags: 0
@@ -16022,6 +16022,8 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 727707c55eb0d15409a100bb6a744124, type: 2}
   wallPrefab: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
   wallsParent: {fileID: 1961413151}
+  blueTeam: {fileID: 1237306511}
+  redTeam: {fileID: 1014441446}
   allUnits:
   - {fileID: 4136433947033533029, guid: 9b67c3ffd1e9c1f4d810e0a404dd6666, type: 3}
   - {fileID: 4136433947033533029, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
@@ -16032,9 +16034,9 @@ MonoBehaviour:
   - {fileID: 2382762545376367883, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
   - {fileID: 2382762545376367883, guid: 3decdbbdc4454b2449c9d5bab7bcc07e, type: 3}
   - {fileID: 2382762545376367883, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
-  - {fileID: 2382762545376367883, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
+  - {fileID: 2382762545376367883, guid: 4b0a1207a0194534cada8fef541629a8, type: 3}
   - {fileID: 2382762545376367883, guid: 278f4e8231de08d4697c0e20de4b3bbe, type: 3}
-  blueUnits: 000000000100000002000000
+  blueUnits: 000000000200000001000000
   redUnits: 020000000300000004000000
 --- !u!1 &1621429733
 GameObject:

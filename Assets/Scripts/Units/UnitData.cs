@@ -50,7 +50,10 @@ public class UnitData : ScriptableObject
     
     [Tooltip("Damage multiplier when attacking from behind")]
     public float backstabMultiplier = 1f;
-    
+
+    [Tooltip("Minimum angle in degrees from forward direction to consider a backstab")]
+    public float backstabAngle = 90f;
+
     [Header("=== TARGETING PARAMETERS ===")]
     [Tooltip("DISABLED: Time to find and acquire a target")]
     public float findTargetTime = 0f;
