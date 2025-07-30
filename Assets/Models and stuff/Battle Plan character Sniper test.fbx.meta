@@ -34,7 +34,7 @@ ModelImporter:
     clipAnimations:
     - serializedVersion: 16
       name: Gun Idle
-      takeName: Idle
+      takeName: Gun|Gun Idle
       internalID: -2587098661940774401
       firstFrame: 0
       lastFrame: 62
@@ -63,7 +63,7 @@ ModelImporter:
       additiveReferencePoseFrame: 0
     - serializedVersion: 16
       name: Gun Shoot
-      takeName: Shoot
+      takeName: Gun|Gun Shoot
       internalID: -811935254810467834
       firstFrame: 0
       lastFrame: 4
@@ -92,7 +92,7 @@ ModelImporter:
       additiveReferencePoseFrame: 0
     - serializedVersion: 16
       name: Person Shoot
-      takeName: Person|Shoot
+      takeName: Person|Person Shoot
       internalID: -5666360371360097956
       firstFrame: 0
       lastFrame: 4
@@ -121,7 +121,7 @@ ModelImporter:
       additiveReferencePoseFrame: 0
     - serializedVersion: 16
       name: Person Idle
-      takeName: Person|Idle
+      takeName: Person|Person Idle
       internalID: 7716515609458443299
       firstFrame: 0
       lastFrame: 62
@@ -149,7 +149,7 @@ ModelImporter:
       maskSource: {instanceID: 0}
       additiveReferencePoseFrame: 0
     - serializedVersion: 16
-      name: Person|Sniping Position
+      name: Sniping Position
       takeName: Person|Sniping Position
       internalID: 1847643357681191669
       firstFrame: 0
@@ -178,11 +178,40 @@ ModelImporter:
       maskSource: {instanceID: 0}
       additiveReferencePoseFrame: 0
     - serializedVersion: 16
-      name: Person|T pose
+      name: T pose
       takeName: Person|T pose
       internalID: -6656544940429799887
       firstFrame: 0
       lastFrame: 0
+      wrapMode: 0
+      orientationOffsetY: 0
+      level: 0
+      cycleOffset: 0
+      loop: 0
+      hasAdditiveReferencePose: 0
+      loopTime: 0
+      loopBlend: 0
+      loopBlendOrientation: 0
+      loopBlendPositionY: 0
+      loopBlendPositionXZ: 0
+      keepOriginalOrientation: 0
+      keepOriginalPositionY: 1
+      keepOriginalPositionXZ: 0
+      heightFromFeet: 0
+      mirror: 0
+      bodyMask: 01000000010000000100000001000000010000000100000001000000010000000100000001000000010000000100000001000000
+      curves: []
+      events: []
+      transformMask: []
+      maskType: 3
+      maskSource: {instanceID: 0}
+      additiveReferencePoseFrame: 0
+    - serializedVersion: 16
+      name: Person Walking
+      takeName: Person|Walking
+      internalID: 8546420964852242699
+      firstFrame: 0
+      lastFrame: 40
       wrapMode: 0
       orientationOffsetY: 0
       level: 0

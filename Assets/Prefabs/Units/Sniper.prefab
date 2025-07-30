@@ -94,7 +94,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6203226041495089483, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6639101259921982155, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: m_Mesh
@@ -122,32 +122,44 @@ PrefabInstance:
     m_TransformParent: {fileID: 8278047107763744475}
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.32010776
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.21873091
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.2849425
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: 0.218
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: -0.088
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 1
+      value: 0.68805337
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: 0.72566015
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -155,7 +167,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
+      value: 93.048
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
@@ -165,6 +177,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Battle Plan character Sniper test
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 22345b4995a830b4b8b4ab567f006d55, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
