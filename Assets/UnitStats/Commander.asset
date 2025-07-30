@@ -27,7 +27,16 @@ MonoBehaviour:
   bulletRange: 7
   damage: 5
   backstabMultiplier: 1
+  backstabAngle: 90
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 270
   maxHealth: 100
+  selectAbilitySquare: 0
+  abilitySquareRange: 3
+  abilityRadius: 0
+  selectTime: 4
+  responseRange: 5
+  timeDivePerUnit: 3
+  diveRange: 2
+  uses: 1

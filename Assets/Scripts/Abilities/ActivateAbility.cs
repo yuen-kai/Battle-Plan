@@ -136,7 +136,7 @@ public class ActivateAbility : MonoBehaviour
         }
 
         // Set alerts for enemies in range
-        List<GameObject> enemiesInRange = GetEnemiesInRange(selectedSquare, enemyTeam);
+        List<GameObject> enemiesInRange = GetUnitsInRange(selectedSquare, enemyTeam, unitData.responseRange);
         foreach (GameObject enemy in enemiesInRange)
         {
             enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
@@ -148,7 +148,7 @@ public class ActivateAbility : MonoBehaviour
         //Response
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
 
-        List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
+        List<GameObject> enemiesInRange = GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange);
 
 
         GameLoop.Instance.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
@@ -181,20 +181,20 @@ public class ActivateAbility : MonoBehaviour
         }, unitData.timeDivePerUnit * enemiesInRange.Count, enemiesInRange, unitData.diveRange));
     }
 
-    public List<GameObject> GetEnemiesInRange(Vector3 abilitySquare, string enemyTeam)
+    public static List<GameObject> GetUnitsInRange(Vector3 abilitySquare, string team, float range)
     {
-        List<GameObject> enemiesInRange = new List<GameObject>();
-        GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+        List<GameObject> unitsInRange = new List<GameObject>();
+        GameObject[] allUnits = GameObject.FindGameObjectsWithTag(team);
 
-        foreach (GameObject enemy in allEnemies)
+        foreach (GameObject unit in allUnits)
         {
-            float distance = Vector3.Distance(abilitySquare, enemy.transform.position);
-            if (distance <= unitData.responseRange * GameLoop.cellSize)
+            float distance = Vector3.Distance(abilitySquare, unit.transform.position);
+            if (distance <= range * GameLoop.cellSize)
             {
-                enemiesInRange.Add(enemy);
+                unitsInRange.Add(unit);
             }
         }
 
-        return enemiesInRange;
+        return unitsInRange;
     }
 }
