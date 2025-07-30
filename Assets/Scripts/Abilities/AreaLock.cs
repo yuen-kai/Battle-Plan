@@ -10,9 +10,6 @@ public class AreaLock : MonoBehaviour, IAbility
     public GameObject superBulletBlue;
     public GameObject superBulletRed;
 
-    float shakeDuration = 0.5f;
-    float shakeIntensity = 0.1f;
-
     float initialWidth = 0.1f;
     float finalWidth = 0.5f;
 
@@ -109,28 +106,6 @@ public class AreaLock : MonoBehaviour, IAbility
         }
     }
 
-    private IEnumerator CameraShake()
-    {
-        Camera mainCamera = Camera.main;
-        if (mainCamera == null) yield break;
-
-        Vector3 originalPosition = mainCamera.transform.position;
-        float elapsed = 0f;
-
-        while (elapsed < shakeDuration)
-        {
-            float x = Random.Range(-1f, 1f) * shakeIntensity;
-            float y = Random.Range(-1f, 1f) * shakeIntensity;
-
-            mainCamera.transform.position = originalPosition + new Vector3(x, y, 0);
-
-            elapsed += Time.unscaledDeltaTime;
-            yield return null;
-        }
-
-        mainCamera.transform.position = originalPosition;
-    }
-
     private IEnumerator AnimateLaserRush(float speed, GameObject target)
     {
         if (laserLine == null) yield break;
@@ -149,7 +124,7 @@ public class AreaLock : MonoBehaviour, IAbility
         yield return StartCoroutine(AnimateRushEffect(rushDuration, segments, startPos, endPos));
 
         StartCoroutine(CreateExplosionEffect(target.transform.position));
-        StartCoroutine(CameraShake());
+        StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
 
         // Execute cleanup animation
         yield return StartCoroutine(AnimateCleanupEffect(segments, endPos));
