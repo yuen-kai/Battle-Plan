@@ -44,9 +44,14 @@ public class AreaLock : MonoBehaviour, IAbility
 
     private void CreateLaserLine(Vector3 start, Vector3 end)
     {
-        // Calculate direction and extend the line far beyond the target
         Vector3 direction = (end - start).normalized;
-        Vector3 extendedEnd = end + direction * 50f;
+        Vector3 finalEnd = end + direction * 50f;
+
+        // Stop if there is a wall in the way
+        if (Physics.Raycast(start, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+        {
+            finalEnd = hit.point;
+        }
 
         GameObject laserObject = new GameObject("LaserLine");
         laserLine = laserObject.AddComponent<LineRenderer>();
@@ -57,7 +62,7 @@ public class AreaLock : MonoBehaviour, IAbility
         laserLine.endWidth = 0.1f;
         laserLine.positionCount = 2;
         laserLine.SetPosition(0, start);
-        laserLine.SetPosition(1, extendedEnd);
+        laserLine.SetPosition(1, finalEnd);
     }
 
     private bool CheckForCrossingTarget(Vector3 start, Vector3 end)
@@ -119,7 +124,7 @@ public class AreaLock : MonoBehaviour, IAbility
 
             mainCamera.transform.position = originalPosition + new Vector3(x, y, 0);
 
-            elapsed += Time.deltaTime;
+            elapsed += Time.unscaledDeltaTime;
             yield return null;
         }
 
@@ -230,7 +235,6 @@ public class AreaLock : MonoBehaviour, IAbility
     private IEnumerator CreateExplosionEffect(Vector3 explosionCenter)
     {
         float explosionDuration = 0.8f;
-        float explosionRadius = 3f;
         int particleCount = 12;
 
         // Create explosion particles

@@ -69,7 +69,6 @@ public class ActivateAbility : MonoBehaviour
         Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
         abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, unitData.abilitySquareRange, abilityRangeOverlayPrefab);
 
-
         float timeRemaining = unitData.selectTime;
         Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
         GameObject abilityIndicator = null;
@@ -81,42 +80,7 @@ public class ActivateAbility : MonoBehaviour
 
             if (Input.GetMouseButtonDown(0))
             {
-                Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
-                if (potentialSquare == null) continue;
-                Vector3 mouseSquare = potentialSquare.Value;
-
-                float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
-                float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
-
-                if (horizontalDistance + verticalDistance <= (unitData.abilitySquareRange + 0.1f) * GameLoop.cellSize)
-                {
-                    selectedSquare = mouseSquare;
-                    Destroy(abilityIndicator);
-                    Destroy(AOEindicator);
-                    abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
-                    AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
-                    float diameter = 2 * unitData.abilityRadius * GameLoop.cellSize;
-                    AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
-
-                    string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-
-                    // Clear previous alerts
-                    GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
-                    foreach (GameObject enemy in allEnemies)
-                    {
-                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
-                    }
-
-                    List<GameObject> enemiesInRange = GetEnemiesInRange(selectedSquare, enemyTeam);
-                    foreach (GameObject enemy in enemiesInRange)
-                    {
-                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
-                    }
-                }
-                else
-                {
-                    Debug.Log($"Too far! Range: {unitData.abilitySquareRange}");
-                }
+                HandleMouseClick(nearestCell, ref selectedSquare, ref abilityIndicator, ref AOEindicator);
             }
 
             timeRemaining -= Time.unscaledDeltaTime;
@@ -130,6 +94,53 @@ public class ActivateAbility : MonoBehaviour
         PlanMovement.Instance.timerTextUI.text = "";
 
         planEnemyResponse(selectedSquare);
+    }
+
+    private void HandleMouseClick(Vector3 nearestCell, ref Vector3 selectedSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
+    {
+        Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
+        if (!potentialSquare.HasValue) return;
+
+        Vector3 mouseSquare = potentialSquare.Value;
+        float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
+        float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
+
+        if (horizontalDistance + verticalDistance > (unitData.abilitySquareRange + 0.1f) * GameLoop.cellSize) return;
+
+        selectedSquare = mouseSquare;
+        UpdateAbilityIndicators(mouseSquare, ref abilityIndicator, ref AOEindicator);
+        UpdateEnemyAlerts(selectedSquare);
+    }
+
+    private void UpdateAbilityIndicators(Vector3 mouseSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
+    {
+        Destroy(abilityIndicator);
+        Destroy(AOEindicator);
+        
+        abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
+        AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
+        
+        float diameter = 2 * unitData.abilityRadius * GameLoop.cellSize;
+        AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+    }
+
+    private void UpdateEnemyAlerts(Vector3 selectedSquare)
+    {
+        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
+        GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+        
+        // Clear previous alerts
+        foreach (GameObject enemy in allEnemies)
+        {
+            enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+        }
+
+        // Set alerts for enemies in range
+        List<GameObject> enemiesInRange = GetEnemiesInRange(selectedSquare, enemyTeam);
+        foreach (GameObject enemy in enemiesInRange)
+        {
+            enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
+        }
     }
 
     void planEnemyResponse(Vector3 abilitySquare)

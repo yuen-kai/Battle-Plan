@@ -11,6 +11,10 @@ public class Bullet : MonoBehaviour
     public string enemyTeam = "RedTeam";
 
     private Vector3 startPosition;
+
+    float maxLifetime = 8f;
+    float timeElapsed = 0f;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -20,10 +24,11 @@ public class Bullet : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (Vector3.Distance(startPosition, transform.position) > range)
+        if (Vector3.Distance(startPosition, transform.position) > range || timeElapsed > maxLifetime)
         {
             Destroy(gameObject);
         }
+        timeElapsed += Time.deltaTime;
     }
 
     private void OnCollisionEnter(Collision other) // built-in function
