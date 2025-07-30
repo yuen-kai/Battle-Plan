@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using System.Linq;
+using OutlineEffect = cakeslice.OutlineEffect;
 
 public class GameLoop : MonoBehaviour
 {
@@ -103,6 +104,9 @@ public class GameLoop : MonoBehaviour
         blueTeam = SetupUnitsAndCards(blueUnits, unitCardsBlue, blueSpawn, Quaternion.Euler(0, 0, 0), teams[0]);
         Destroy(redTeam);
         redTeam = SetupUnitsAndCards(redUnits, unitCardsRed, redSpawn, Quaternion.Euler(0, 180, 0), teams[1]);
+
+        Camera.main.GetComponent<OutlineEffect>().lineColor0 = GetTeamColor(teams[0]);
+        Camera.main.GetComponent<OutlineEffect>().lineColor1 = GetTeamColor(teams[1]);
     }
 
     GameObject SetupUnitsAndCards(int[] teamUnits, GameObject unitCardTeamContainer, HashSet<Vector2Int> spawnPositions, Quaternion rotation, string team)
