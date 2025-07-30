@@ -4,30 +4,8 @@ using UnityEngine;
 
 public class Shooting : MonoBehaviour
 {
-    public GameObject blueBulletPrefab;
-    public GameObject redBulletPrefab;
-
-    public float timeBetweenShots;
-
-    public int magazineSize;
-    public float reloadTime;
-
-    public float bulletSpread; // Angle of spread in degrees on one side of the center line
-
-    //Parameters in cells (/sec)
-    public float bulletSpeed;
-    public float targetRange; // Range to find targets within
-    public float bulletRange;
-    public int damage;
-    public float backstabMultiplier;
-
-    public float cellSize;
-
     public string enemyTeam;
-
-    public float findTargetTime;
-    public float targetLockDuration;
-    public float rotationSpeed;
+    public UnitData unitData;
 
     LineRenderer targetLaser;
     float startAnimWidth = 0.05f;
@@ -36,8 +14,10 @@ public class Shooting : MonoBehaviour
     Color endAnimColor = Color.red;
 
     private int currentAmmo;
-    public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
-    public bool stillShooting = true;
+    [HideInInspector] public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
+    [HideInInspector] public bool stillShooting = true;
+
+    GameObject bulletsParent;
 
     Coroutine shootingCoroutine;
 
@@ -45,6 +25,8 @@ public class Shooting : MonoBehaviour
     {
         targetLaser = gameObject.AddComponent<LineRenderer>();
         targetLaser.enabled = false;
+        string bulletObjectName = transform.name + "'s Bullets";
+        bulletsParent = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
     }
 
     public void StartShooting()
@@ -68,31 +50,28 @@ public class Shooting : MonoBehaviour
         if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
         allowShooting = true;
         stillShooting = true;
+        targetLaser.enabled = false;
     }
 
     private IEnumerator RotateToFaceTarget(GameObject target)
     {
-        yield return StartCoroutine(transform.GetComponent<Movement>().RotateToFaceTarget(target.transform.position, rotationSpeed));
+        yield return StartCoroutine(transform.GetComponent<Movement>().RotateToFaceTarget(target.transform.position, unitData.rotationSpeed));
     }
 
     public IEnumerator InitiateShooting()
     {
         enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
-        GameObject bulletPrefab = transform.tag == "BlueTeam" ? blueBulletPrefab : redBulletPrefab;
 
+        currentAmmo = unitData.magazineSize;
 
-        currentAmmo = magazineSize;
-        string bulletObjectName = transform.name + "'s Bullets";
-        GameObject bullets = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
-
-        float remainingTargetLockTime = targetLockDuration;
+        float remainingTargetLockTime = unitData.targetLockDuration;
 
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
-            if(target) yield return StartCoroutine(RotateToFaceTarget(target));
+            if (target) yield return StartCoroutine(RotateToFaceTarget(target));
 
-            remainingTargetLockTime = targetLockDuration;
+            remainingTargetLockTime = unitData.targetLockDuration;
 
             while (currentAmmo > 0)
             {
@@ -103,7 +82,7 @@ public class Shooting : MonoBehaviour
                     target = FindNearestEnemy();
                     if (target)
                     {
-                        remainingTargetLockTime = targetLockDuration;
+                        remainingTargetLockTime = unitData.targetLockDuration;
                         yield return StartCoroutine(RotateToFaceTarget(target));
                     }
                     if (!allowShooting) break;
@@ -120,8 +99,8 @@ public class Shooting : MonoBehaviour
 
                     targetLaser.enabled = true;
                     targetLaser.SetPositions(new Vector3[] { transform.position, target.transform.position });
-                    targetLaser.startWidth = targetLaser.endWidth = Mathf.Lerp(startAnimWidth, endAnimWidth, 1 - remainingTargetLockTime / targetLockDuration);
-                    targetLaser.startColor = targetLaser.endColor = Color.Lerp(startAnimColor, endAnimColor, 1 - remainingTargetLockTime / targetLockDuration);
+                    targetLaser.startWidth = targetLaser.endWidth = Mathf.Lerp(startAnimWidth, endAnimWidth, 1 - remainingTargetLockTime / unitData.targetLockDuration);
+                    targetLaser.startColor = targetLaser.endColor = Color.Lerp(startAnimColor, endAnimColor, 1 - remainingTargetLockTime / unitData.targetLockDuration);
 
 
                     remainingTargetLockTime -= Time.deltaTime;
@@ -130,24 +109,9 @@ public class Shooting : MonoBehaviour
                 }
                 targetLaser.enabled = false;
 
-                // Fire bullet with spread
-                Vector3 baseDirection = transform.forward;
-                float spreadAngle = Random.Range(-bulletSpread, bulletSpread);
-                Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
+                FireBullet();
 
-                GameObject bullet = Instantiate(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
-                bullet.transform.parent = bullets.transform;
-
-                Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
-                Bullet bulletScript = bullet.GetComponent<Bullet>();
-
-                bulletRb.velocity = shootDirection * bulletSpeed * cellSize;
-                bulletScript.damage = damage;
-                bulletScript.backstabMultiplier = backstabMultiplier;
-                bulletScript.range = bulletRange * cellSize;
-                currentAmmo--;
-
-                yield return new WaitForSeconds(timeBetweenShots); //respects timer pauses
+                yield return new WaitForSeconds(unitData.timeBetweenShots); //respects timer pauses
             }
 
             if (allowShooting)
@@ -156,7 +120,7 @@ public class Shooting : MonoBehaviour
             }
         }
 
-        while (bullets.transform.childCount > 0)
+        while (bulletsParent.transform.childCount > 0)
         {
             yield return null; // Wait for all bullets to be destoryed
         }
@@ -164,10 +128,39 @@ public class Shooting : MonoBehaviour
         stillShooting = false;
     }
 
+    public void FireBullet(float spread = -1, float bulletSpeed = -1, float damage = -1, float backstabMultiplier = -1, float range = -1, float backstabAngle = -1, GameObject bulletPrefab = null)
+    {
+        spread = spread == -1 ? unitData.bulletSpread : spread;
+        bulletSpeed = bulletSpeed == -1 ? unitData.bulletSpeed : bulletSpeed;
+        damage = damage == -1 ? unitData.damage : damage;
+        backstabMultiplier = backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
+        range = range == -1 ? unitData.bulletRange : range;
+        backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
+        bulletPrefab = bulletPrefab ?? (transform.tag == "BlueTeam" ? unitData.blueBulletPrefab : unitData.redBulletPrefab);
+
+        // Fire bullet with spread
+        Vector3 baseDirection = transform.forward;
+        float spreadAngle = Random.Range(-spread, spread);
+        Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
+
+        GameObject bullet = Instantiate(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
+        bullet.transform.parent = bulletsParent.transform;
+
+        Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
+        Bullet bulletScript = bullet.GetComponent<Bullet>();
+
+        bulletRb.velocity = shootDirection * bulletSpeed * GameLoop.cellSize;
+        bulletScript.damage = damage;
+        bulletScript.backstabMultiplier = backstabMultiplier;
+        bulletScript.range = range * GameLoop.cellSize;
+        bulletScript.backstabAngle = backstabAngle;
+        currentAmmo--;
+    }
+
     IEnumerator Reload()
     {
-        yield return new WaitForSeconds(reloadTime);
-        currentAmmo = magazineSize;
+        yield return new WaitForSeconds(unitData.reloadTime);
+        currentAmmo = unitData.magazineSize;
     }
 
     GameObject FindNearestEnemy()
@@ -179,7 +172,6 @@ public class Shooting : MonoBehaviour
         foreach (GameObject enemy in enemies)
         {
             float distance = Vector3.Distance(transform.position, enemy.transform.position);
-
             if (distance < nearestDistance && lineOfSight(enemy))
             {
                 nearestEnemy = enemy;
@@ -193,8 +185,7 @@ public class Shooting : MonoBehaviour
     {
         // Check for clear line of sight within range
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, directionToEnemy, out hit, targetRange * cellSize, LayerMask.GetMask("Walls", enemyTeam)))
+        if (Physics.Raycast(transform.position, directionToEnemy, out RaycastHit hit, unitData.targetRange * GameLoop.cellSize, LayerMask.GetMask("Walls", enemyTeam)))
         {
             if (hit.collider.gameObject == enemy)
             {

@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: Sniper
+  m_EditorClassIdentifier: 
+  moveDist: 3
+  moveSpeed: 1
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
+  timeBetweenShots: 0
+  magazineSize: 1
+  reloadTime: 2.5
+  bulletSpread: 0.5
+  bulletSpeed: 15
+  targetRange: 7
+  bulletRange: 14
+  damage: 70
+  backstabMultiplier: 1
+  backstabAngle: 90
+  findTargetTime: 0.3
+  targetLockDuration: 2
+  aimRotationSpeed: 270
+  maxHealth: 50
+  selectAbilitySquare: 1
+  abilitySquareRange: 99
+  abilityRadius: 0
+  selectTime: 4
+  responseRange: 0
+  timeDivePerUnit: 3
+  diveRange: 2
+  uses: 1

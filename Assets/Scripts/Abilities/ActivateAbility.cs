@@ -6,26 +6,43 @@ using TMPro;
 public class ActivateAbility : MonoBehaviour
 {
     public GameObject unit;
-    public PlanMovement PlanMovementScript;
-    public GameLoop gameLoopScript;
-    [SerializeField] private TMP_Text timerTextUI;
 
-    [SerializeField] private bool selectAbilitySquare;
+    public UnitData unitData;
+    public int uses;
+
     [SerializeField] private GameObject abilityRangeOverlayPrefab;
     [SerializeField] private GameObject abilitySquareIndicatorPrefab;
     [SerializeField] private GameObject abilityAOEIndicatorPrefab;
-    [SerializeField] private int abilitySquareRange = 3;
-    [SerializeField] private float abilityRadius = 0f;
-    [SerializeField] private float selectTime = 4f;
-
-    [SerializeField] private float responseRange = 5f;
-
-    [SerializeField] private float timeDivePerUnit = 3f;
-    [SerializeField] private int diveRange = 2;
 
     GameObject abilityRangeOverlay;
 
-    public int uses = 1; // Number of times the ability can be used
+    void Start()
+    {
+        uses = unitData.uses;
+        GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
+        GameLoop.disableUnitCard += disableUnitCard;
+    }
+
+    public void setUnitCardInteractable(bool interactable)
+    {
+        if (uses <= 0 || unit == null)
+        {
+            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+        }
+        else
+        {
+            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+        }
+    }
+
+    public void disableUnitCard(GameObject disableUnit)
+    {
+        if (unit == disableUnit)
+        {
+            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+            return;
+        }
+    }
 
     public void activateAbility()
     {
@@ -33,73 +50,37 @@ public class ActivateAbility : MonoBehaviour
 
         //pause time
         Time.timeScale = 0f;
-        gameLoopScript.setUnitCardsInteractable(false);
+        GameLoop.setUnitCardsInteractable?.Invoke(false);
 
         StartCoroutine(selectAbilitySquareFunc());
     }
 
     IEnumerator selectAbilitySquareFunc()
     {
-        if (!selectAbilitySquare)
+        if (!unitData.selectAbilitySquare)
         {
             planEnemyResponse(unit.transform.position);
             yield break;
         }
 
-        gameLoopScript.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
+        GameLoop.Instance.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
 
         Destroy(abilityRangeOverlay);
         Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
-        abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, abilitySquareRange, abilityRangeOverlayPrefab);
+        abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, unitData.abilitySquareRange, abilityRangeOverlayPrefab);
 
-
-        float timeRemaining = selectTime;
+        float timeRemaining = unitData.selectTime;
         Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
         GameObject abilityIndicator = null;
         GameObject AOEindicator = null;
 
         while (timeRemaining > 0f)
         {
-            timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
+            PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
 
             if (Input.GetMouseButtonDown(0))
             {
-                Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
-                if (potentialSquare == null) continue;
-                Vector3 mouseSquare = potentialSquare.Value;
-
-                float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
-                float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
-
-                if (horizontalDistance + verticalDistance <= (abilitySquareRange + 0.1f) * GameLoop.cellSize)
-                {
-                    selectedSquare = mouseSquare;
-                    Destroy(abilityIndicator);
-                    Destroy(AOEindicator);
-                    abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
-                    AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
-                    float diameter = 2 * abilityRadius * GameLoop.cellSize;
-                    AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
-
-                    string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-                    
-                    // Clear previous alerts
-                    GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
-                    foreach (GameObject enemy in allEnemies)
-                    {
-                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
-                    }
-
-                    List<GameObject> enemiesInRange = GetEnemiesInRange(selectedSquare, enemyTeam);
-                    foreach (GameObject enemy in enemiesInRange)
-                    {
-                        enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
-                    }
-                }
-                else
-                {
-                    Debug.Log($"Too far! Range: {abilitySquareRange}");
-                }
+                HandleMouseClick(nearestCell, ref selectedSquare, ref abilityIndicator, ref AOEindicator);
             }
 
             timeRemaining -= Time.unscaledDeltaTime;
@@ -110,9 +91,56 @@ public class ActivateAbility : MonoBehaviour
         Destroy(AOEindicator);
         Destroy(abilityRangeOverlay);
 
-        timerTextUI.text = "";
+        PlanMovement.Instance.timerTextUI.text = "";
 
         planEnemyResponse(selectedSquare);
+    }
+
+    private void HandleMouseClick(Vector3 nearestCell, ref Vector3 selectedSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
+    {
+        Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
+        if (!potentialSquare.HasValue) return;
+
+        Vector3 mouseSquare = potentialSquare.Value;
+        float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
+        float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
+
+        if (horizontalDistance + verticalDistance > (unitData.abilitySquareRange + 0.1f) * GameLoop.cellSize) return;
+
+        selectedSquare = mouseSquare;
+        UpdateAbilityIndicators(mouseSquare, ref abilityIndicator, ref AOEindicator);
+        UpdateEnemyAlerts(selectedSquare);
+    }
+
+    private void UpdateAbilityIndicators(Vector3 mouseSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
+    {
+        Destroy(abilityIndicator);
+        Destroy(AOEindicator);
+        
+        abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
+        AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
+        
+        float diameter = 2 * unitData.abilityRadius * GameLoop.cellSize;
+        AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+    }
+
+    private void UpdateEnemyAlerts(Vector3 selectedSquare)
+    {
+        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
+        GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+        
+        // Clear previous alerts
+        foreach (GameObject enemy in allEnemies)
+        {
+            enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+        }
+
+        // Set alerts for enemies in range
+        List<GameObject> enemiesInRange = GetUnitsInRange(selectedSquare, enemyTeam, unitData.responseRange);
+        foreach (GameObject enemy in enemiesInRange)
+        {
+            enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
+        }
     }
 
     void planEnemyResponse(Vector3 abilitySquare)
@@ -120,18 +148,18 @@ public class ActivateAbility : MonoBehaviour
         //Response
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
 
-        List<GameObject> enemiesInRange = GetEnemiesInRange(abilitySquare, enemyTeam);
-        
+        List<GameObject> enemiesInRange = GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange);
 
-        gameLoopScript.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
 
-        StartCoroutine(PlanMovementScript.ChoosePaths(enemyTeam, (Dictionary<GameObject, List<Vector3>> paths) =>
+        GameLoop.Instance.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
+
+        StartCoroutine(PlanMovement.Instance.ChoosePaths(enemyTeam, (Dictionary<GameObject, List<Vector3>> paths) =>
         {
-            gameLoopScript.setOverlayUIText("Executing Moves", "neutral");
+            GameLoop.Instance.setOverlayUIText("Executing Moves", "neutral");
 
             //continue time
             Time.timeScale = 1f;
-            gameLoopScript.setUnitCardsInteractable(true);
+            GameLoop.setUnitCardsInteractable(true);
 
             foreach (GameObject enemy in enemiesInRange)
             {
@@ -149,24 +177,24 @@ public class ActivateAbility : MonoBehaviour
             }
 
             //activate ability
-            StartCoroutine(unit.GetComponent<IAbility>().ExecuteAbility(abilitySquare, abilityRadius));
-        }, timeDivePerUnit * enemiesInRange.Count, enemiesInRange, diveRange));
+            StartCoroutine(unit.GetComponent<IAbility>().ExecuteAbility(abilitySquare, unitData.abilityRadius));
+        }, unitData.timeDivePerUnit * enemiesInRange.Count, enemiesInRange, unitData.diveRange));
     }
 
-    public List<GameObject> GetEnemiesInRange(Vector3 abilitySquare, string enemyTeam)
+    public static List<GameObject> GetUnitsInRange(Vector3 abilitySquare, string team, float range)
     {
-        List<GameObject> enemiesInRange = new List<GameObject>();
-        GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+        List<GameObject> unitsInRange = new List<GameObject>();
+        GameObject[] allUnits = GameObject.FindGameObjectsWithTag(team);
 
-        foreach (GameObject enemy in allEnemies)
+        foreach (GameObject unit in allUnits)
         {
-            float distance = Vector3.Distance(abilitySquare, enemy.transform.position);
-            if (distance <= responseRange * GameLoop.cellSize)
+            float distance = Vector3.Distance(abilitySquare, unit.transform.position);
+            if (distance <= range * GameLoop.cellSize)
             {
-                enemiesInRange.Add(enemy);
+                unitsInRange.Add(unit);
             }
         }
 
-        return enemiesInRange;
+        return unitsInRange;
     }
 }

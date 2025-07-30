@@ -33,8 +33,9 @@ public class Grenade : MonoBehaviour, IAbility
             yield return null; // Wait for next frame
         }
         grenade.transform.position = targetPosition;
-        
+
         // Explode and damage enemies
+        StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
         ExplodeGrenade(targetPosition, AreaRadius);
         GameObject explosionEffect = Instantiate(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
         Destroy(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);

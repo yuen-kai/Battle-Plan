@@ -1085,6 +1085,10 @@ PrefabInstance:
       value: 15
       objectReference: {fileID: 0}
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: c0f7a532341014043b1aebb55f7f3b3c, type: 2}
+    - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: reloadTime
       value: 1
       objectReference: {fileID: 0}
@@ -1113,6 +1117,10 @@ PrefabInstance:
       value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 808478331550645447, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: c0f7a532341014043b1aebb55f7f3b3c, type: 2}
+    - target: {fileID: 808478331550645447, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: MOVE_DIST
       value: 8
       objectReference: {fileID: 0}
@@ -1124,6 +1132,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: PogoRider
       objectReference: {fileID: 0}
+    - target: {fileID: 2188586334649481472, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
+      propertyPath: unitData
+      value: 
+      objectReference: {fileID: 11400000, guid: c0f7a532341014043b1aebb55f7f3b3c, type: 2}
     - target: {fileID: 5014284374218104416, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

@@ -25,4 +25,17 @@ public class Helper : MonoBehaviour
 
         return overlay;
     }
+
+    public static Vector3 heightOffset(Transform transform)
+    {
+        if (transform.TryGetComponent<Collider>(out Collider collider))
+        {
+            return new Vector3(0, collider.bounds.size.y / 2, 0);
+        }
+        if (transform.TryGetComponent<Renderer>(out Renderer renderer))
+        {
+            return new Vector3(0, renderer.bounds.size.y / 2, 0);
+        }
+        return Vector3.zero;
+    }
 }

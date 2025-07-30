@@ -299,20 +299,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   unit: {fileID: 0}
-  PlanMovementScript: {fileID: 0}
-  gameLoopScript: {fileID: 0}
-  timerTextUI: {fileID: 0}
-  selectAbilitySquare: 0
+  unitData: {fileID: 0}
+  uses: 1
   abilityRangeOverlayPrefab: {fileID: 5853487972985149831, guid: 8a1a42420f7e9da4ea3bac7019b72d1e, type: 3}
   abilitySquareIndicatorPrefab: {fileID: 3326808074419072509, guid: 19764b8f6b5db2c4c8736d1e35f41184, type: 3}
   abilityAOEIndicatorPrefab: {fileID: 103789117567813075, guid: a601eda5ed58e484cbb8dfcac8cf1640, type: 3}
-  abilitySquareRange: 3
-  abilityRadius: 0
-  selectTime: 4
-  responseRange: 5
-  timeDivePerUnit: 3
-  diveRange: 2
-  uses: 1
 --- !u!1 &8861979398241179818
 GameObject:
   m_ObjectHideFlags: 0

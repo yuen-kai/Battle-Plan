@@ -8,7 +8,7 @@ using Outline = cakeslice.Outline;
 
 public class PlanMovement : MonoBehaviour
 {
-    static float cellSize;
+    static float cellSize => GameLoop.cellSize;
 
     bool isDragging = false;
     GameObject selectedUnit; // Reference to the Cube GameObject that will move
@@ -29,7 +29,7 @@ public class PlanMovement : MonoBehaviour
     GameObject pathNodes;
     GameObject pathEdges;
 
-    [SerializeField] private TMP_Text timerTextUI;
+    public TMP_Text timerTextUI;
 
     [SerializeField] private GameObject moveOverlayCellPrefab;
     [SerializeField] private GameObject attackOverlayPrefab;
@@ -37,15 +37,15 @@ public class PlanMovement : MonoBehaviour
     GameObject moveOverlay;
     GameObject attackOverlay;
 
-
-
-    // Start is called before the first frame update
-    void Start()
+    public static PlanMovement Instance
     {
-        cellSize = GameLoop.cellSize;
-    }
+        get; private set;
+    } // Singleton instance for easy access
 
-    //TODO: Redo part of the path by dragging from node
+    void Awake()
+    {
+        Instance = this; // Set the singleton instance
+    }
 
     public IEnumerator ChoosePaths(string team, System.Action<Dictionary<GameObject, List<Vector3>>> callback, float timer, List<GameObject> dashUnits = null, int dashDist = -1)
     {
@@ -131,7 +131,7 @@ public class PlanMovement : MonoBehaviour
         Destroy(moveOverlay);
         if (selectedUnit == null) return;
 
-        moveOverlay = Helper.DisplayGridRange(GetGridCellUnderCharacter(selectedUnit), selectedUnit.GetComponent<Movement>().moveDist, moveOverlayCellPrefab);
+        moveOverlay = Helper.DisplayGridRange(GetGridCellUnderCharacter(selectedUnit), selectedUnit.GetComponent<Movement>().unitData.moveDist, moveOverlayCellPrefab);
     }
 
 
@@ -147,7 +147,7 @@ public class PlanMovement : MonoBehaviour
         //TODO: put at end of path
 
         attackOverlay = Instantiate(attackOverlayPrefab, currentPos + new Vector3(0, 0.1f, 0), Quaternion.identity);
-        float diameter = 2 * selectedUnit.GetComponent<Shooting>().targetRange * cellSize;
+        float diameter = 2 * selectedUnit.GetComponent<Shooting>().unitData.targetRange * cellSize;
 
         attackOverlay.transform.localScale = new Vector3(diameter, attackOverlay.transform.localScale.y, diameter);
     }
@@ -207,7 +207,7 @@ public class PlanMovement : MonoBehaviour
     // Update AddPathSectionVisual to parent to the correct child
     void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
     {
-        Vector3 heightOffset = new Vector3(0, pathNodePrefab.GetComponent<Renderer>().bounds.size.y / 2, 0);
+        Vector3 heightOffset = Helper.heightOffset(pathNodePrefab.transform);
         GameObject node = Instantiate(pathNodePrefab, cell + heightOffset, Quaternion.identity);
         node.transform.parent = pathNodes.transform;
 
@@ -242,7 +242,7 @@ public class PlanMovement : MonoBehaviour
             return;
         }
 
-        int moveDist = dashDist == -1 ? selectedUnit.GetComponent<Movement>().moveDist : dashDist;
+        int moveDist = dashDist == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : dashDist;
         if (movementPath.Count - 1 < moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
             && !movementPath.Contains(currentTile))
@@ -310,13 +310,14 @@ public class PlanMovement : MonoBehaviour
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Grid"))) {
+        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Grid")))
+        {
             return GetNearestGridCell(hit.point);
         }
         return null;
     }
 
-    static Vector3 GetNearestGridCell(Vector3 position)
+    public static Vector3 GetNearestGridCell(Vector3 position)
     {
         float x = Mathf.Round(position.x / cellSize) * cellSize;
         float z = Mathf.Round(position.z / cellSize) * cellSize;
