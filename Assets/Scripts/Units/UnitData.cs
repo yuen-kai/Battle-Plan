@@ -83,6 +83,8 @@ public class UnitData : ScriptableObject
     
     [Tooltip("Range in cells that triggers enemy response to ability")]
     public float responseRange = 5f;
+
+    public bool responseDistLine = false;
     
     [Tooltip("Time per unit for dive movement planning in seconds")]
     public float timeDivePerUnit = 3f;

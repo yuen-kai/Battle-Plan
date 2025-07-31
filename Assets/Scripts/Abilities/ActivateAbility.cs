@@ -15,6 +15,7 @@ public class ActivateAbility : MonoBehaviour
     [SerializeField] private GameObject abilityAOEIndicatorPrefab;
 
     GameObject abilityRangeOverlay;
+    LineRenderer laserLine;
 
     void Start()
     {
@@ -74,6 +75,11 @@ public class ActivateAbility : MonoBehaviour
         GameObject abilityIndicator = null;
         GameObject AOEindicator = null;
 
+        if(unitData.responseDistLine)
+        {
+            unit.transform.position = PlanMovement.GetNearestGridCell(unit.transform.position) + Helper.heightOffset(unit.transform); //snap to nearest cell
+        }
+
         while (timeRemaining > 0f)
         {
             PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
@@ -90,6 +96,7 @@ public class ActivateAbility : MonoBehaviour
         Destroy(abilityIndicator);
         Destroy(AOEindicator);
         Destroy(abilityRangeOverlay);
+        Destroy(laserLine?.gameObject);
 
         PlanMovement.Instance.timerTextUI.text = "";
 
@@ -110,16 +117,50 @@ public class ActivateAbility : MonoBehaviour
         selectedSquare = mouseSquare;
         UpdateAbilityIndicators(mouseSquare, ref abilityIndicator, ref AOEindicator);
         UpdateEnemyAlerts(selectedSquare);
+
+        if(unitData.responseDistLine)
+        {
+            Destroy(laserLine?.gameObject);
+            Vector3 targetPosition = selectedSquare + Helper.heightOffset(unit.transform);
+            CreateLaserLine(unit.transform.position, targetPosition);
+        }
+    }
+
+    private void CreateLaserLine(Vector3 start, Vector3 end)
+    {
+        Vector3 direction = (end - start).normalized;
+        Vector3 finalEnd = end + direction * 50f;
+
+        // Stop if there is a wall in the way
+        if (Physics.Raycast(start, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+        {
+            finalEnd = hit.point;
+        }
+
+        GameObject laserObject = new GameObject("LaserLinePreview");
+        laserLine = laserObject.AddComponent<LineRenderer>();
+        
+        Material laserMaterial = new Material(Shader.Find("Unlit/Color"));
+        laserMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        laserMaterial.color = Color.red;
+        laserLine.material = laserMaterial;
+
+        laserLine.startColor = Color.red;
+        laserLine.endColor = Color.red;
+        laserLine.startWidth = laserLine.endWidth = 0.1f;
+        laserLine.positionCount = 2;
+        laserLine.SetPosition(0, start);
+        laserLine.SetPosition(1, finalEnd);
     }
 
     private void UpdateAbilityIndicators(Vector3 mouseSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
     {
         Destroy(abilityIndicator);
         Destroy(AOEindicator);
-        
+
         abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
         AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
-        
+
         float diameter = 2 * unitData.abilityRadius * GameLoop.cellSize;
         AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
     }
@@ -128,7 +169,7 @@ public class ActivateAbility : MonoBehaviour
     {
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
         GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
-        
+
         // Clear previous alerts
         foreach (GameObject enemy in allEnemies)
         {
@@ -136,7 +177,7 @@ public class ActivateAbility : MonoBehaviour
         }
 
         // Set alerts for enemies in range
-        List<GameObject> enemiesInRange = GetUnitsInRange(selectedSquare, enemyTeam, unitData.responseRange);
+        List<GameObject> enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(selectedSquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(selectedSquare, enemyTeam, unitData.responseRange);
         foreach (GameObject enemy in enemiesInRange)
         {
             enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
@@ -147,8 +188,8 @@ public class ActivateAbility : MonoBehaviour
     {
         //Response
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-
-        List<GameObject> enemiesInRange = GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange);
+        
+        List<GameObject> enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
 
 
         GameLoop.Instance.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
@@ -197,4 +238,65 @@ public class ActivateAbility : MonoBehaviour
 
         return unitsInRange;
     }
+
+    public List<GameObject> GetUnitsInRangeofLine(Vector3 abilitySquare, string team, float range)
+    {
+        List<GameObject> unitsInRange = new List<GameObject>();
+        GameObject[] allUnits = GameObject.FindGameObjectsWithTag(team);
+
+        Vector3 start = unit.transform.position;
+        Vector3 direction = (abilitySquare - start).normalized;
+        Vector3 end = abilitySquare + direction * 50f;
+
+        // Stop if there is a wall in the way
+        if (Physics.Raycast(start, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+        {
+            end = hit.point;
+        }
+
+        foreach (GameObject targetUnit in allUnits)
+        {
+            Vector3 unitPosition = targetUnit.transform.position;
+            float distanceToLine = DistancePointToLineSegment(unitPosition, start, end);
+            if (distanceToLine <= range * GameLoop.cellSize)
+            {
+                unitsInRange.Add(targetUnit);
+            }
+        }
+
+        return unitsInRange;
+    }
+
+    private float DistancePointToLineSegment(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
+    {
+        // Ignore Y values for 2D calculation
+        Vector2 point2D = new Vector2(point.x, point.z);
+        Vector2 lineStart2D = new Vector2(lineStart.x, lineStart.z);
+        Vector2 lineEnd2D = new Vector2(lineEnd.x, lineEnd.z);
+
+        Vector2 lineDirection = lineEnd2D - lineStart2D;
+        float lineLength = lineDirection.magnitude;
+
+        if (lineDirection == Vector2.zero)
+            return Vector2.Distance(point2D, lineStart2D);
+
+        Vector2 lineDirectionNormalized = lineDirection.normalized;
+        Vector2 pointToStart = point2D - lineStart2D;
+        float projectionLength = Vector2.Dot(pointToStart, lineDirectionNormalized);
+
+        if (projectionLength < 0f)
+        {
+            return 999;
+        }
+        else if (projectionLength > lineLength)
+        {
+            return Vector2.Distance(point2D, lineEnd2D);
+        }
+        else
+        {
+            Vector2 closestPointOnLine = lineStart2D + lineDirectionNormalized * projectionLength;
+            return Vector2.Distance(point2D, closestPointOnLine);
+        }
+    }
+
 }
