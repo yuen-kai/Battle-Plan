@@ -36,7 +36,7 @@ public class GameLoop : MonoBehaviour
     List<GameObject> doneShootingUnits = new List<GameObject>();
 
     // Game Settings
-    float planningTimePerUnit = 4f;
+    float planningTimePerUnit = 1f;
 
     // Game Setup: Objects and Prefabs
     [SerializeField] private GameObject wallPrefab;
