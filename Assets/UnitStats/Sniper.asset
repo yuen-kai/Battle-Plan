@@ -36,7 +36,8 @@ MonoBehaviour:
   abilitySquareRange: 99
   abilityRadius: 0
   selectTime: 4
-  responseRange: 0
+  responseRange: 0.9
+  responseDistLine: 1
   timeDivePerUnit: 3
   diveRange: 2
   uses: 1

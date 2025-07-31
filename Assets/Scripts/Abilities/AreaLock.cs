@@ -9,22 +9,26 @@ public class AreaLock : MonoBehaviour, IAbility
     private LineRenderer laserLine;
     public GameObject superBulletBlue;
     public GameObject superBulletRed;
+    float damageMultiplier = 2f;
+    float delayForDodge = 0.5f;
 
-    float initialWidth = 0.1f;
+    float initialWidth = 0.2f;
     float finalWidth = 0.5f;
 
     public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
-        Vector3 targetPosition = abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0);
 
         transform.GetComponent<Movement>().StopMovement();
         transform.GetComponent<Movement>().moving = false;
-        //snap to nearest cell
-        Vector3 startPosition = transform.position = PlanMovement.GetNearestGridCell(transform.position) + Helper.heightOffset(transform);
 
         transform.GetComponent<Shooting>().StopShooting();
 
+        yield return new WaitForSeconds(delayForDodge);
+
+        Vector3 startPosition = transform.position = PlanMovement.GetNearestGridCell(transform.position) + Helper.heightOffset(transform); //snap to nearest cell
+        Vector3 targetPosition = abilitySquare + Helper.heightOffset(transform);
         CreateLaserLine(startPosition, targetPosition);
+
         yield return StartCoroutine(transform.GetComponent<Movement>().RotateToFaceTarget(targetPosition, rotationSpeed));
 
         float elapsed = 0f;
@@ -37,6 +41,11 @@ public class AreaLock : MonoBehaviour, IAbility
         {
             StartCoroutine(cleanup());
         }
+    }
+
+    void OnDisable()
+    {
+        Destroy(laserLine?.gameObject);
     }
 
     private void CreateLaserLine(Vector3 start, Vector3 end)
@@ -86,11 +95,11 @@ public class AreaLock : MonoBehaviour, IAbility
         Vector3 direction = (target.transform.position - transform.position).normalized;
         float bulletSpeed = direction.magnitude * 40f; // Example speed, adjust as needed
 
-        // Assuming there's a bullet prefab and shooting system
-        if (transform.GetComponent<Shooting>() != null)
-        {
-            transform.GetComponent<Shooting>().FireBullet(spread: 0, bulletSpeed: bulletSpeed, backstabMultiplier: 2f, range: 10f, backstabAngle: 0f, bulletPrefab: gameObject.tag == "BlueTeam" ? superBulletBlue : superBulletRed); //guaranteed 2x damage hit
-        }
+        //// Assuming there's a bullet prefab and shooting system
+        //if (transform.GetComponent<Shooting>() != null)
+        //{
+        //    transform.GetComponent<Shooting>().FireBullet(spread: 0, bulletSpeed: bulletSpeed, backstabMultiplier: 2f, range: 10f, backstabAngle: 0f, bulletPrefab: gameObject.tag == "BlueTeam" ? superBulletBlue : superBulletRed); //guaranteed 2x damage hit
+        //}
 
         StartCoroutine(AnimateLaserRush(bulletSpeed, target));
     }
@@ -125,6 +134,8 @@ public class AreaLock : MonoBehaviour, IAbility
 
         StartCoroutine(CreateExplosionEffect(target.transform.position));
         StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
+
+        target.GetComponent<Health>()?.TakeDamage(transform.GetComponent<Shooting>().unitData.damage * damageMultiplier);
 
         // Execute cleanup animation
         yield return StartCoroutine(AnimateCleanupEffect(segments, endPos));
