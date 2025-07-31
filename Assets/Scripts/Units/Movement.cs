@@ -11,6 +11,12 @@ public class Movement : MonoBehaviour
     private Coroutine moveListRoutine;
     private Coroutine moveRoutine;
     private Coroutine rotateRoutine;
+    Animator animator;
+
+    void Start()
+    {
+        animator = GetComponent<Animator>();
+    }
 
 
     public void StopMovement()
@@ -18,6 +24,11 @@ public class Movement : MonoBehaviour
         if (moveListRoutine != null) StopCoroutine(moveListRoutine);
         if (moveRoutine != null) StopCoroutine(moveRoutine);
         if (rotateRoutine != null) StopCoroutine(rotateRoutine);
+        if (animator != null)
+        {
+            animator.Play("Person Idle", 0);
+            animator.Play("Gun Idle", 1);
+        }
     }
 
     public void StartMovement(List<Vector3> cells, bool dive = false)
@@ -28,6 +39,11 @@ public class Movement : MonoBehaviour
 
     public void transitionToShooting()
     {
+        if (animator != null)
+        {
+            animator.Play("Person Idle", 0);
+            animator.Play("Gun Idle", 1);
+        }
         if (rotateRoutine != null) StopCoroutine(rotateRoutine);
         transform.GetComponent<Shooting>().StartShooting();
         moving = false;
@@ -36,6 +52,12 @@ public class Movement : MonoBehaviour
 
     public IEnumerator MoveToCells(List<Vector3> cells, bool dive = false) //IEnumerator allows for this function to run over multiple frames
     {
+        if (animator != null)
+        {
+            animator.Play("Person Walking");
+            animator.Play("Gun Stop", 1);
+        }
+
         moving = true;
         foreach (Vector3 cell in cells)
         {
