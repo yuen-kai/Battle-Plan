@@ -12,6 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
   m_Name: PogoRider
   m_EditorClassIdentifier: 
+  unitName: PogoRider
+  unitDescription: Boing
+  unitSprite: {fileID: 21300000, guid: c6d3a60f7c31a854d99982aaaa7d832b, type: 3}
   moveDist: 8
   moveSpeed: 2
   diveSpeed: 4
@@ -27,6 +30,7 @@ MonoBehaviour:
   bulletRange: 7
   damage: 15
   backstabMultiplier: 2
+  backstabAngle: 90
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 270
@@ -36,6 +40,7 @@ MonoBehaviour:
   abilityRadius: 0
   selectTime: 4
   responseRange: 0
+  responseDistLine: 0
   timeDivePerUnit: 3
   diveRange: 2
   uses: 1

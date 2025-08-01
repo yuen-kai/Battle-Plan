@@ -24,10 +24,10 @@ public class Movement : MonoBehaviour
         if (moveListRoutine != null) StopCoroutine(moveListRoutine);
         if (moveRoutine != null) StopCoroutine(moveRoutine);
         if (rotateRoutine != null) StopCoroutine(rotateRoutine);
-        if (animator != null)
-        {
-            animator.PlayAnimationExclusive("Idle");
-        }
+        //if (animator != null)
+        //{
+        //    animator.PlayAnimationExclusive("Idle");
+        //}
     }
 
     public void StartMovement(List<Vector3> cells, bool dive = false)

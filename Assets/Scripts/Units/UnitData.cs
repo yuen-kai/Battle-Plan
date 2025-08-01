@@ -3,6 +3,17 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "NewUnitData", menuName = "Units/Unit Data")]
 public class UnitData : ScriptableObject
 {
+    [Header("=== UNIT PARAMETERS ===")]
+    [Tooltip("Name of the unit")]
+    public string unitName = "New Unit";
+
+    [TextArea(3, 5)]
+    [Tooltip("Description of the unit")]
+    public string unitDescription = "New Unit Description";
+
+    [Tooltip("Sprite representing the unit")]
+    public Sprite unitSprite;
+
     [Header("=== MOVEMENT PARAMETERS ===")]
     [Tooltip("Maximum distance the unit can move in cells")]
     public int moveDist = 3;
