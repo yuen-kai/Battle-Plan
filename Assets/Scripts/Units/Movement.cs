@@ -11,11 +11,11 @@ public class Movement : MonoBehaviour
     private Coroutine moveListRoutine;
     private Coroutine moveRoutine;
     private Coroutine rotateRoutine;
-    Animator animator;
+    AnimationHandler animator;
 
     void Start()
     {
-        animator = GetComponent<Animator>();
+        animator = GetComponent<AnimationHandler>();
     }
 
 
@@ -26,8 +26,7 @@ public class Movement : MonoBehaviour
         if (rotateRoutine != null) StopCoroutine(rotateRoutine);
         if (animator != null)
         {
-            animator.Play("Person Idle", 0);
-            animator.Play("Gun Idle", 1);
+            animator.PlayAnimationExclusive("Idle");
         }
     }
 
@@ -41,8 +40,7 @@ public class Movement : MonoBehaviour
     {
         if (animator != null)
         {
-            animator.Play("Person Idle", 0);
-            animator.Play("Gun Idle", 1);
+            animator.PlayAnimationExclusive("Idle");
         }
         if (rotateRoutine != null) StopCoroutine(rotateRoutine);
         transform.GetComponent<Shooting>().StartShooting();
@@ -54,8 +52,7 @@ public class Movement : MonoBehaviour
     {
         if (animator != null)
         {
-            animator.Play("Person Walking");
-            animator.Play("Gun Stop", 1);
+            animator.PlayAnimationExclusive("Moving");
         }
 
         moving = true;
