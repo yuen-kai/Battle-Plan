@@ -1,24 +1,59 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+
 
 public class CharacterSelection : MonoBehaviour
 {
+    public List<Color> teamColors;
+
     public GameObject CharacterSelectionOptionsParent;
     public GameObject characterSelectedParent;
 
     public UnitData[] unitOptions;
     public GameObject characterOptionPrefab;
 
-    int[] team = new int[3] { -1, -1, -1 };
+    int currentSelectionIndex = 0;
+
+    public GameObject confirmButton;
+
+    public static List<int[]> teamUnits = new List<int[]>()
+        {
+            new int[] { -1, -1, -1 }, // Blue Team Units
+            new int[] { -1, -1, -1 }  // Red Team Units
+        };
+
+    int[] team => teamUnits[currentSelectionIndex];
 
     void Start()
     {
+        confirmButton.GetComponent<Button>().onClick.AddListener(() => nextSelection());
+        teamUnits = new List<int[]>()
+        {
+            new int[] { -1, -1, -1 }, // Blue Team Units
+            new int[] { -1, -1, -1 }  // Red Team Units
+        };
+        InitializeCharacterSelection();
+    }
+
+    public void nextSelection()
+    {
+        currentSelectionIndex++;
+        if(currentSelectionIndex >= teamUnits.Count)
+        {
+            Debug.Log("No more teams available for selection.");
+            GameLoop.teamUnits = teamUnits;
+            SceneManager.LoadScene("Game");
+            return;
+        }
         InitializeCharacterSelection();
     }
 
     void InitializeCharacterSelection()
     {
+        GetComponent<Image>().color = teamColors[currentSelectionIndex];
         InitializeOptions();
         InitializeSelected();
     }
@@ -67,7 +102,7 @@ public class CharacterSelection : MonoBehaviour
         }
 
         //Create options
-        for(int i = 0; i < team.Length; i++)
+        for (int i = 0; i < team.Length; i++)
         {
             int unit = team[i];
             GameObject option = Instantiate(characterOptionPrefab, characterSelectedParent.transform);
@@ -89,4 +124,5 @@ public class CharacterSelection : MonoBehaviour
         selectedUnit.GetComponent<CardHandler>().setImage(unit.unitSprite);
         selectedUnit.GetComponent<CardHandler>().setText(unit.unitName);
     }
+
 }

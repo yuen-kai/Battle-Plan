@@ -4,6 +4,8 @@ using UnityEngine;
 using TMPro;
 using System.Linq;
 using OutlineEffect = cakeslice.OutlineEffect;
+using UnityEngine.SceneManagement;
+
 
 public class GameLoop : MonoBehaviour
 {
@@ -13,11 +15,6 @@ public class GameLoop : MonoBehaviour
 
     // UI Components
     [SerializeField] private TMP_Text overlayUIText;
-    [SerializeField] private GameObject unitCardsBlue;
-    [SerializeField] private GameObject unitCardsRed;
-
-    // Team Configuration
-    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
 
     // Visual Properties
     public List<Color> teamColors;
@@ -27,13 +24,18 @@ public class GameLoop : MonoBehaviour
     // Game Setup: Objects and Prefabs
     [SerializeField] private GameObject wallPrefab;
     public GameObject wallsParent;
-    public GameObject blueTeam;
-    public GameObject redTeam;
     public List<GameObject> allUnits;
     public List<GameObject> unitCardPrefabs;
 
-    public int[] blueUnits;
-    public int[] redUnits;
+    // Team Configuration
+    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
+    [SerializeField] private List<GameObject> teamParents;
+    [SerializeField] private List<GameObject> unitCards;
+    public static List<int[]> teamUnits = new List<int[]>()
+        {
+            new int[] { 0, 1, 2 }, // Blue Team Units
+            new int[] { 2, 3, 4 }  // Red Team Units
+        };
 
     // Level Layout (col, row) from bottom left corner
     HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
@@ -48,18 +50,20 @@ public class GameLoop : MonoBehaviour
             new Vector2Int(1, 7)
         };
 
-    HashSet<Vector2Int> blueSpawn = new HashSet<Vector2Int>()
+    List<HashSet<Vector2Int>> spawns = new List<HashSet<Vector2Int>>()
     {
-        new Vector2Int(0, 0),
-        new Vector2Int(4, 0),
-        new Vector2Int(8, 0)
-    };
-
-    HashSet<Vector2Int> redSpawn = new HashSet<Vector2Int>()
-    {
-        new Vector2Int(0, 9),
-        new Vector2Int(4, 9),
-        new Vector2Int(8, 9)
+        new HashSet<Vector2Int>() //Blue Team Spawn Positions
+        {
+            new Vector2Int(0, 0),
+            new Vector2Int(4, 0),
+            new Vector2Int(8, 0)
+        },
+        new HashSet<Vector2Int>() //Red Team Spawn Positions
+        {
+            new Vector2Int(0, 9),
+            new Vector2Int(4, 9),
+            new Vector2Int(8, 9)
+        }
     };
 
 
@@ -102,10 +106,11 @@ public class GameLoop : MonoBehaviour
         }
 
         //Setup teams
-        Destroy(blueTeam);
-        blueTeam = SetupUnitsAndCards(blueUnits, unitCardsBlue, blueSpawn, Quaternion.Euler(0, 0, 0), teams[0]);
-        Destroy(redTeam);
-        redTeam = SetupUnitsAndCards(redUnits, unitCardsRed, redSpawn, Quaternion.Euler(0, 180, 0), teams[1]);
+        for (int i = 0; i < teams.Count; i++)
+        {
+            Destroy(teamParents[i]);
+            teamParents[i] = SetupUnitsAndCards(teamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
+        }
 
         //Setup outline effect for teams
         Camera.main.GetComponent<OutlineEffect>().lineColor0 = GetTeamColor(teams[0]);
@@ -189,7 +194,7 @@ public class GameLoop : MonoBehaviour
                 yield return null;
             }
         }
-        Debug.Log("Game Over");
+        SceneManager.LoadScene("HomeScreen");
     }
 
     void ExecuteMoves(PathsDict paths)

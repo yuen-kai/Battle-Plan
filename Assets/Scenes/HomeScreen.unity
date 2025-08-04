@@ -246,7 +246,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.9433962, g: 0.37824848, b: 0.37824848, a: 1}
+  m_Color: {r: 0.3529412, g: 0.6627451, b: 0.92549026, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -283,6 +283,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7c6e9753d164f6343ba1d68ea39ae879, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  teamColors:
+  - {r: 0.3532396, g: 0.6610572, b: 0.9245283, a: 1}
+  - {r: 0.9245283, g: 0.37068352, b: 0.37068352, a: 1}
   CharacterSelectionOptionsParent: {fileID: 32599747}
   characterSelectedParent: {fileID: 1626600891}
   unitOptions:
@@ -292,6 +295,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: f240797633735c0479b137e3725e7652, type: 2}
   - {fileID: 11400000, guid: 2cddb1e866200124caf84cf6885d6122, type: 2}
   characterOptionPrefab: {fileID: 6877355979647964550, guid: 1ad487e3941f7014192186c1755f02fb, type: 3}
+  confirmButton: {fileID: 531875356}
 --- !u!1001 &265449373
 PrefabInstance:
   m_ObjectHideFlags: 0

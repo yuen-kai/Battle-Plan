@@ -15850,8 +15850,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1620178443}
-  - component: {fileID: 1620178442}
   - component: {fileID: 1620178444}
+  - component: {fileID: 1620178442}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -15904,8 +15904,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   overlayUIText: {fileID: 1429746702}
-  unitCardsBlue: {fileID: 1381940050}
-  unitCardsRed: {fileID: 1150195443}
   teamColors:
   - {r: 0.06541473, g: 0.52782196, b: 0.9245283, a: 1}
   - {r: 0.9245283, g: 0.10902455, b: 0.10902455, a: 1}
@@ -15915,8 +15913,6 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 727707c55eb0d15409a100bb6a744124, type: 2}
   wallPrefab: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
   wallsParent: {fileID: 1961413151}
-  blueTeam: {fileID: 1237306511}
-  redTeam: {fileID: 1014441446}
   allUnits:
   - {fileID: 4136433947033533029, guid: 9b67c3ffd1e9c1f4d810e0a404dd6666, type: 3}
   - {fileID: 4136433947033533029, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
@@ -15929,8 +15925,12 @@ MonoBehaviour:
   - {fileID: 2382762545376367883, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
   - {fileID: 2382762545376367883, guid: 4b0a1207a0194534cada8fef541629a8, type: 3}
   - {fileID: 2382762545376367883, guid: 278f4e8231de08d4697c0e20de4b3bbe, type: 3}
-  blueUnits: 000000000200000001000000
-  redUnits: 020000000300000004000000
+  teamParents:
+  - {fileID: 1237306511}
+  - {fileID: 1014441446}
+  unitCards:
+  - {fileID: 1381940050}
+  - {fileID: 1150195443}
 --- !u!1 &1621429733
 GameObject:
   m_ObjectHideFlags: 0

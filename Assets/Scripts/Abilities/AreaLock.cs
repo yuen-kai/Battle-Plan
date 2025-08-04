@@ -45,7 +45,10 @@ public class AreaLock : MonoBehaviour, IAbility
 
     void OnDisable()
     {
-        Destroy(laserLine?.gameObject);
+        if (laserLine != null)
+        {
+            Destroy(laserLine?.gameObject);
+        }
     }
 
     private void CreateLaserLine(Vector3 start, Vector3 end)
