@@ -30,6 +30,10 @@ public class Shooting : MonoBehaviour
     // CONTROLLER
     void Start()
     {
+        GameLoop.OrderAllowShooting += (toggle) => allowShooting = toggle;
+        GameLoop.OrderStillShooting += (toggle) => stillShooting = toggle;
+        GameLoop.OrderContinueShooting += ContinueShooting;
+
         targetLaser = gameObject.AddComponent<LineRenderer>();
         targetLaser.enabled = false;
 

@@ -73,7 +73,9 @@ public class GameLoop : MonoBehaviour
     // Actions
     public static System.Action<bool> setUnitCardsInteractable;
     public static System.Action<GameObject> disableUnitCard;
-
+    public static System.Action<bool> OrderAllowShooting;
+    public static System.Action<bool> OrderStillShooting;
+    public static System.Action OrderContinueShooting;
 
     public static GameLoop Instance
     {
@@ -200,103 +202,13 @@ public class GameLoop : MonoBehaviour
         }
     }
 
-    bool CheckStillMoving()
+    public static void SetGroupLayer(GameObject obj, int layer)
     {
-        foreach (var team in teams)
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
         {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                if (unit.GetComponent<Movement>().moving == true)
-                {
-                    return true;
-                }
-            }
+            SetGroupLayer(child.gameObject, layer);
         }
-
-        return false;
-    }
-
-    void OrderAllowShooting(bool toggle)
-    {
-        foreach (var team in teams)
-        {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                unit.GetComponent<Shooting>().allowShooting = toggle;
-            }
-        }
-    }
-
-    void OrderStillShooting(bool toggle)
-    {
-        foreach (var team in teams)
-        {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                unit.GetComponent<Shooting>().stillShooting = toggle;
-            }
-        }
-    }
-
-    void OrderContinueShooting()
-    {
-        foreach (var team in teams)
-        {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                unit.GetComponent<Shooting>().ContinueShooting();
-            }
-        }
-    }
-
-    bool CheckStillShooting()
-    {
-        foreach (var team in teams)
-        {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                if (unit.GetComponent<Shooting>().stillShooting == true) return true;
-            }
-        }
-
-        return false;
-    }
-
-
-
-    public void setOverlayUIText(string message, string team = "neutral")
-    {
-        overlayUIText.text = message;
-        overlayUIText.color = GetTeamColor(team);
-    }
-
-    public Color GetTeamColor(string team)
-    {
-        if (!teams.Contains(team)) return executingMoves;
-        return teamColors[teams.IndexOf(team)];
-    }
-
-    public static int GetTeamIndex(string team)
-    {
-        if (!teams.Contains(team)) return -1;
-        return teams.IndexOf(team);
-    }
-
-    public Material GetTeamMaterial(string team)
-    {
-        if (!teams.Contains(team)) return null;
-        return teamMaterials[teams.IndexOf(team)];
-    }
-
-    public static string GetEnemyTeam(string team)
-    {
-        if (!teams.Contains(team)) return null;
-        return teams.FirstOrDefault(t => t != team);
-    }
-
-    int teamSize(string team)
-    {
-        return GameObject.FindGameObjectsWithTag(team).Length;
     }
 
     void SetTeamIndicators()
@@ -331,25 +243,73 @@ public class GameLoop : MonoBehaviour
 
     }
 
-    public static void SetGroupLayer(GameObject obj, int layer)
+    bool CheckStillMoving()
     {
-        obj.layer = layer;
-        foreach (Transform child in obj.transform)
+        foreach (var team in teams)
         {
-            SetGroupLayer(child.gameObject, layer);
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                if (unit.GetComponent<Movement>().moving == true)
+                {
+                    return true;
+                }
+            }
         }
+
+        return false;
+    }
+
+    bool CheckStillShooting()
+    {
+        foreach (var team in teams)
+        {
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                if (unit.GetComponent<Shooting>().stillShooting == true) return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    public void setOverlayUIText(string message, string team = "neutral")
+    {
+        overlayUIText.text = message;
+        overlayUIText.color = GetTeamColor(team);
+    }
+
+    public static int GetTeamIndex(string team)
+    {
+        if (!teams.Contains(team)) return -1;
+        return teams.IndexOf(team);
+    }
+
+    public Color GetTeamColor(string team)
+    {
+        if (!teams.Contains(team)) return executingMoves;
+        return teamColors[teams.IndexOf(team)];
+    }
+
+    public Material GetTeamMaterial(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teamMaterials[teams.IndexOf(team)];
+    }
+
+    public static string GetEnemyTeam(string team)
+    {
+        if (!teams.Contains(team)) return null;
+        return teams.FirstOrDefault(t => t != team);
+    }
+
+    public static int teamSize(string team)
+    {
+        return GameObject.FindGameObjectsWithTag(team).Length;
     }
 
     public static Vector3 gridCoordToWorld(Vector2Int coords)
     {
         return new Vector3(gridBounds.xMin + coords.x * cellSize, 0, gridBounds.yMin + coords.y * cellSize);
-    }
-
-    void PrintPaths(PathsDict paths)
-    {
-        foreach (var pair in paths)
-        {
-            Debug.Log($"Unit: {pair.Key.name}, Path: {string.Join(", ", pair.Value)}");
-        }
     }
 }
