@@ -4,50 +4,38 @@ using UnityEngine;
 using TMPro;
 using System.Linq;
 using OutlineEffect = cakeslice.OutlineEffect;
+using UnityEngine.SceneManagement;
+
 
 public class GameLoop : MonoBehaviour
 {
-    // Game Instance
-    public static GameLoop Instance; //allows static functions to access GameLoop variables
-
-    // Team Configuration
-    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
-   
     // Grid Configuration
     public static float cellSize = 2.7f; // Size of each cell in the grid
     public static Rect gridBounds = new Rect(new Vector2(0, 0), new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f));
 
-    // Actions
-    public static System.Action<bool> setUnitCardsInteractable;
-    public static System.Action<GameObject> disableUnitCard;
-
     // UI Components
     [SerializeField] private TMP_Text overlayUIText;
-    [SerializeField] private GameObject unitCardsBlue;
-    [SerializeField] private GameObject unitCardsRed;
 
     // Visual Properties
     public List<Color> teamColors;
     [SerializeField] private Color executingMoves;
     public List<Material> teamMaterials;
 
-    // Game State
-    List<GameObject> doneMovingUnits = new List<GameObject>();
-    List<GameObject> doneShootingUnits = new List<GameObject>();
-
-    // Game Settings
-    float planningTimePerUnit = 4f;
-
     // Game Setup: Objects and Prefabs
     [SerializeField] private GameObject wallPrefab;
     public GameObject wallsParent;
-    public GameObject blueTeam;
-    public GameObject redTeam;
     public List<GameObject> allUnits;
     public List<GameObject> unitCardPrefabs;
 
-    public int[] blueUnits;
-    public int[] redUnits;
+    // Team Configuration
+    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
+    [SerializeField] private List<GameObject> teamParents;
+    [SerializeField] private List<GameObject> unitCards;
+    public static List<int[]> teamUnits = new List<int[]>()
+        {
+            new int[] { 0, 1, 2 }, // Blue Team Units
+            new int[] { 2, 3, 4 }  // Red Team Units
+        };
 
     // Level Layout (col, row) from bottom left corner
     HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
@@ -62,19 +50,41 @@ public class GameLoop : MonoBehaviour
             new Vector2Int(1, 7)
         };
 
-    HashSet<Vector2Int> blueSpawn = new HashSet<Vector2Int>()
+    List<HashSet<Vector2Int>> spawns = new List<HashSet<Vector2Int>>()
     {
-        new Vector2Int(0, 0),
-        new Vector2Int(4, 0),
-        new Vector2Int(8, 0)
+        new HashSet<Vector2Int>() //Blue Team Spawn Positions
+        {
+            new Vector2Int(0, 0),
+            new Vector2Int(4, 0),
+            new Vector2Int(8, 0)
+        },
+        new HashSet<Vector2Int>() //Red Team Spawn Positions
+        {
+            new Vector2Int(0, 9),
+            new Vector2Int(4, 9),
+            new Vector2Int(8, 9)
+        }
     };
 
-    HashSet<Vector2Int> redSpawn = new HashSet<Vector2Int>()
+
+    // Game Settings
+    float planningTimePerUnit = 4f;
+
+    // Game State
+    List<GameObject> doneMovingUnits = new List<GameObject>();
+    List<GameObject> doneShootingUnits = new List<GameObject>();
+
+    // Actions
+    public static System.Action<bool> setUnitCardsInteractable;
+    public static System.Action<GameObject> disableUnitCard;
+    public static System.Action<bool> OrderAllowShooting;
+    public static System.Action<bool> OrderStillShooting;
+    public static System.Action OrderContinueShooting;
+
+    public static GameLoop Instance
     {
-        new Vector2Int(0, 9),
-        new Vector2Int(4, 9),
-        new Vector2Int(8, 9)
-    };
+        get; private set;
+    }
 
     void Awake()
     {
@@ -82,16 +92,11 @@ public class GameLoop : MonoBehaviour
         StartGame();
     }
 
-    void Start()
-    {
-        StartCoroutine(GameLoopTemp());
-    }
-
     void StartGame()
     {
-        Destroy(wallsParent); // Remove the walls GameObject from the scene
-        wallsParent = new GameObject("Walls"); // Create a new empty GameObject to hold the walls
-        //Spawn in walls
+        // Setup walls
+        Destroy(wallsParent);
+        wallsParent = new GameObject("Walls");
         foreach (var pos in wallLayout)
         {
             Vector3 worldPos = gridCoordToWorld(pos);
@@ -100,11 +105,14 @@ public class GameLoop : MonoBehaviour
             wall.transform.SetParent(wallsParent.transform);
         }
 
-        Destroy(blueTeam);
-        blueTeam = SetupUnitsAndCards(blueUnits, unitCardsBlue, blueSpawn, Quaternion.Euler(0, 0, 0), teams[0]);
-        Destroy(redTeam);
-        redTeam = SetupUnitsAndCards(redUnits, unitCardsRed, redSpawn, Quaternion.Euler(0, 180, 0), teams[1]);
+        //Setup teams
+        for (int i = 0; i < teams.Count; i++)
+        {
+            Destroy(teamParents[i]);
+            teamParents[i] = SetupUnitsAndCards(teamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
+        }
 
+        //Setup outline effect for teams
         Camera.main.GetComponent<OutlineEffect>().lineColor0 = GetTeamColor(teams[0]);
         Camera.main.GetComponent<OutlineEffect>().lineColor1 = GetTeamColor(teams[1]);
     }
@@ -119,28 +127,19 @@ public class GameLoop : MonoBehaviour
             Destroy(oldUnitCard);
 
             GameObject unit = Instantiate(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
-            unit.transform.position += Helper.heightOffset(unit.transform); //Doesnt work if use prefab for height offset
+            unit.transform.position += Helper.heightOffset(unit.transform);
             unit.transform.SetParent(teamParent.transform);
             unit.tag = team;
-            SetLayerRecursively(unit, LayerMask.NameToLayer(team));
+            SetGroupLayer(unit, LayerMask.NameToLayer(team));
 
             newUnitCard.GetComponent<ActivateAbility>().unit = unit;
         }
         return teamParent;
     }
 
-    void SetLayerRecursively(GameObject obj, int layer)
+    void Start()
     {
-        obj.layer = layer;
-        foreach (Transform child in obj.transform)
-        {
-            SetLayerRecursively(child.gameObject, layer);
-        }
-    }
-
-    Vector3 gridCoordToWorld(Vector2Int coords)
-    {
-        return new Vector3(gridBounds.xMin + coords.x * cellSize, 0, gridBounds.yMin + coords.y * cellSize);
+        StartCoroutine(GameLoopTemp());
     }
 
     IEnumerator GameLoopTemp()
@@ -150,11 +149,11 @@ public class GameLoop : MonoBehaviour
 
         while (teams.All(team => teamSize(team) > 0))
         {
-            List<Dictionary<GameObject, List<Vector3>>> pathsList = new List<Dictionary<GameObject, List<Vector3>>>();
+            List<PathsDict> pathsList = new List<PathsDict>();
 
-            System.Action<Dictionary<GameObject, List<Vector3>>> addPaths = (Dictionary<GameObject, List<Vector3>> paths) =>
+            System.Action<PathsDict> addPaths = (PathsDict paths) =>
             {
-                pathsList.Add(new Dictionary<GameObject, List<Vector3>>(paths));
+                pathsList.Add(new PathsDict(paths));
             };
 
             setUnitCardsInteractable?.Invoke(false);
@@ -195,10 +194,10 @@ public class GameLoop : MonoBehaviour
                 yield return null;
             }
         }
-        Debug.Log("Game Over");
+        SceneManager.LoadScene("HomeScreen");
     }
 
-    void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
+    void ExecuteMoves(PathsDict paths)
     {
         foreach (var pair in paths)
         {
@@ -206,6 +205,47 @@ public class GameLoop : MonoBehaviour
             List<Vector3> movementPath = pair.Value;
             unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath)); // C# passes parameters by reference, so we need to create a new list
         }
+    }
+
+    public static void SetGroupLayer(GameObject obj, int layer)
+    {
+        obj.layer = layer;
+        foreach (Transform child in obj.transform)
+        {
+            SetGroupLayer(child.gameObject, layer);
+        }
+    }
+
+    void SetTeamIndicators()
+    {
+        GameObject[] teamIndicators = GameObject.FindGameObjectsWithTag("TeamIndicatorProp");
+        foreach (GameObject indicator in teamIndicators)
+        {
+            string unitTeam = null;
+
+            //Loop through parents to find team tag
+            Transform current = indicator.transform;
+            while (current != null)
+            {
+                if (teams.Contains(current.tag))
+                {
+                    unitTeam = current.tag;
+                    break;
+                }
+                current = current.parent;
+            }
+
+            //Set material based on team tag
+            if (unitTeam != null)
+            {
+                Renderer renderer = indicator.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    renderer.materials = new Material[] { GetTeamMaterial(unitTeam) };
+                }
+            }
+        }
+
     }
 
     bool CheckStillMoving()
@@ -224,39 +264,6 @@ public class GameLoop : MonoBehaviour
         return false;
     }
 
-    void OrderAllowShooting(bool toggle)
-    {
-        foreach (var team in teams)
-        {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                unit.GetComponent<Shooting>().allowShooting = toggle;
-            }
-        }
-    }
-
-    void OrderStillShooting(bool toggle)
-    {
-        foreach (var team in teams)
-        {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                unit.GetComponent<Shooting>().stillShooting = toggle;
-            }
-        }
-    }
-
-    void OrderContinueShooting()
-    {
-        foreach (var team in teams)
-        {
-            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
-            {
-                unit.GetComponent<Shooting>().ContinueShooting();
-            }
-        }
-    }
-
     bool CheckStillShooting()
     {
         foreach (var team in teams)
@@ -271,23 +278,22 @@ public class GameLoop : MonoBehaviour
     }
 
 
-
     public void setOverlayUIText(string message, string team = "neutral")
     {
         overlayUIText.text = message;
         overlayUIText.color = GetTeamColor(team);
     }
 
-    public Color GetTeamColor(string team)
-    {
-        if (!teams.Contains(team)) return executingMoves;
-        return teamColors[teams.IndexOf(team)];
-    }
-
     public static int GetTeamIndex(string team)
     {
         if (!teams.Contains(team)) return -1;
         return teams.IndexOf(team);
+    }
+
+    public Color GetTeamColor(string team)
+    {
+        if (!teams.Contains(team)) return executingMoves;
+        return teamColors[teams.IndexOf(team)];
     }
 
     public Material GetTeamMaterial(string team)
@@ -302,47 +308,13 @@ public class GameLoop : MonoBehaviour
         return teams.FirstOrDefault(t => t != team);
     }
 
-    int teamSize(string team)
+    public static int teamSize(string team)
     {
         return GameObject.FindGameObjectsWithTag(team).Length;
     }
 
-    void SetTeamIndicators()
+    public static Vector3 gridCoordToWorld(Vector2Int coords)
     {
-        GameObject[] teamIndicators = GameObject.FindGameObjectsWithTag("TeamIndicatorProp");
-        foreach (GameObject indicator in teamIndicators)
-        {
-            // Find the parent unit with a team tag
-            Transform current = indicator.transform;
-            string parentTeam = null;
-
-            while (current != null)
-            {
-                if (teams.Contains(current.tag))
-                {
-                    parentTeam = current.tag;
-                    break;
-                }
-                current = current.parent;
-            }
-
-            if (parentTeam != null)
-            {
-                Renderer renderer = indicator.GetComponent<Renderer>();
-                if (renderer != null)
-                {
-                    renderer.materials = new Material[] { GetTeamMaterial(parentTeam) };
-                }
-            }
-        }
-
-    }
-
-    void PrintPaths(Dictionary<GameObject, List<Vector3>> paths)
-    {
-        foreach (var pair in paths)
-        {
-            Debug.Log($"Unit: {pair.Key.name}, Path: {string.Join(", ", pair.Value)}");
-        }
+        return new Vector3(gridBounds.xMin + coords.x * cellSize, 0, gridBounds.yMin + coords.y * cellSize);
     }
 }

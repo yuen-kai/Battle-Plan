@@ -19,7 +19,7 @@ public class Reroute : MonoBehaviour, IAbility
 
         GameLoop.Instance.setOverlayUIText($"Rerouting: {team}", team);
 
-        yield return StartCoroutine(PlanMovement.Instance.ChoosePaths(team, (Dictionary<GameObject, List<Vector3>> paths) =>
+        yield return StartCoroutine(PlanMovement.Instance.ChoosePaths(team, (PathsDict paths) =>
         {
             GameLoop.Instance.setOverlayUIText("Executing Moves", "neutral");
 
@@ -32,7 +32,7 @@ public class Reroute : MonoBehaviour, IAbility
                 GameObject unit = pair.Key;
                 List<Vector3> movementPath = pair.Value;
                 if (movementPath.Count == 0) continue; //skip if no path
-                unit.GetComponent<Shooting>().StopShooting();
+                unit.GetComponent<Shooting>().PauseShooting();
                 unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath));
             }
         }, planningTimePerUnit * alliesInRange.Count, alliesInRange));

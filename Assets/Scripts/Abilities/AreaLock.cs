@@ -18,10 +18,10 @@ public class AreaLock : MonoBehaviour, IAbility
     public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
 
-        transform.GetComponent<Movement>().StopMovement();
+        transform.GetComponent<Movement>().PauseMovement();
         transform.GetComponent<Movement>().moving = false;
 
-        transform.GetComponent<Shooting>().StopShooting();
+        transform.GetComponent<Shooting>().PauseShooting();
 
         yield return new WaitForSeconds(delayForDodge);
 
@@ -45,7 +45,10 @@ public class AreaLock : MonoBehaviour, IAbility
 
     void OnDisable()
     {
-        Destroy(laserLine?.gameObject);
+        if (laserLine != null)
+        {
+            Destroy(laserLine?.gameObject);
+        }
     }
 
     private void CreateLaserLine(Vector3 start, Vector3 end)
