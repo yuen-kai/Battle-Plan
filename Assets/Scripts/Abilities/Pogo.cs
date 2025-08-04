@@ -12,8 +12,8 @@ public class Pogo : MonoBehaviour, IAbility
         Vector3 startPosition = transform.position;
         Vector3 targetPosition = abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0); //Has to be before collider is disabled
 
-        transform.GetComponent<Movement>().StopMovement();
-        transform.GetComponent<Shooting>().StopShooting();
+        transform.GetComponent<Movement>().PauseMovement();
+        transform.GetComponent<Shooting>().PauseShooting();
         transform.GetComponent<Movement>().moving = true;
         transform.GetComponent<Collider>().enabled = false;
 

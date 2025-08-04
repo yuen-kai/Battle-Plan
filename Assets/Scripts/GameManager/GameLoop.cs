@@ -7,36 +7,26 @@ using OutlineEffect = cakeslice.OutlineEffect;
 
 public class GameLoop : MonoBehaviour
 {
-    // Game Instance
-    public static GameLoop Instance; //allows static functions to access GameLoop variables
-
-    // Team Configuration
-    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
-   
     // Grid Configuration
     public static float cellSize = 2.7f; // Size of each cell in the grid
     public static Rect gridBounds = new Rect(new Vector2(0, 0), new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f));
-
-    // Actions
-    public static System.Action<bool> setUnitCardsInteractable;
-    public static System.Action<GameObject> disableUnitCard;
 
     // UI Components
     [SerializeField] private TMP_Text overlayUIText;
     [SerializeField] private GameObject unitCardsBlue;
     [SerializeField] private GameObject unitCardsRed;
 
+    // Game Settings
+    float planningTimePerUnit = 1f;
+
+
+    // Team Configuration
+    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
+
     // Visual Properties
     public List<Color> teamColors;
     [SerializeField] private Color executingMoves;
     public List<Material> teamMaterials;
-
-    // Game State
-    List<GameObject> doneMovingUnits = new List<GameObject>();
-    List<GameObject> doneShootingUnits = new List<GameObject>();
-
-    // Game Settings
-    float planningTimePerUnit = 1f;
 
     // Game Setup: Objects and Prefabs
     [SerializeField] private GameObject wallPrefab;
@@ -75,6 +65,21 @@ public class GameLoop : MonoBehaviour
         new Vector2Int(4, 9),
         new Vector2Int(8, 9)
     };
+
+
+    // Game State
+    List<GameObject> doneMovingUnits = new List<GameObject>();
+    List<GameObject> doneShootingUnits = new List<GameObject>();
+
+    // Actions
+    public static System.Action<bool> setUnitCardsInteractable;
+    public static System.Action<GameObject> disableUnitCard;
+
+
+    public static GameLoop Instance
+    {
+        get; private set;
+    }
 
     void Awake()
     {
@@ -150,11 +155,11 @@ public class GameLoop : MonoBehaviour
 
         while (teams.All(team => teamSize(team) > 0))
         {
-            List<Dictionary<GameObject, List<Vector3>>> pathsList = new List<Dictionary<GameObject, List<Vector3>>>();
+            List<PathsDict> pathsList = new List<PathsDict>();
 
-            System.Action<Dictionary<GameObject, List<Vector3>>> addPaths = (Dictionary<GameObject, List<Vector3>> paths) =>
+            System.Action<PathsDict> addPaths = (PathsDict paths) =>
             {
-                pathsList.Add(new Dictionary<GameObject, List<Vector3>>(paths));
+                pathsList.Add(new PathsDict(paths));
             };
 
             setUnitCardsInteractable?.Invoke(false);
@@ -198,7 +203,7 @@ public class GameLoop : MonoBehaviour
         Debug.Log("Game Over");
     }
 
-    void ExecuteMoves(Dictionary<GameObject, List<Vector3>> paths)
+    void ExecuteMoves(PathsDict paths)
     {
         foreach (var pair in paths)
         {
@@ -338,7 +343,7 @@ public class GameLoop : MonoBehaviour
 
     }
 
-    void PrintPaths(Dictionary<GameObject, List<Vector3>> paths)
+    void PrintPaths(PathsDict paths)
     {
         foreach (var pair in paths)
         {

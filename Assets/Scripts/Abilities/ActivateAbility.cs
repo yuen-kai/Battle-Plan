@@ -194,7 +194,7 @@ public class ActivateAbility : MonoBehaviour
 
         GameLoop.Instance.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
 
-        StartCoroutine(PlanMovement.Instance.ChoosePaths(enemyTeam, (Dictionary<GameObject, List<Vector3>> paths) =>
+        StartCoroutine(PlanMovement.Instance.ChoosePaths(enemyTeam, (PathsDict paths) =>
         {
             GameLoop.Instance.setOverlayUIText("Executing Moves", "neutral");
 
@@ -213,7 +213,7 @@ public class ActivateAbility : MonoBehaviour
                 GameObject unit = pair.Key;
                 List<Vector3> movementPath = pair.Value;
                 if (movementPath.Count == 0) continue; //skip if no path
-                unit.GetComponent<Shooting>().StopShooting();
+                unit.GetComponent<Shooting>().PauseShooting();
                 unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath), true);
             }
 

@@ -4,53 +4,58 @@ using UnityEngine;
 
 public class Shooting : MonoBehaviour
 {
-    public string enemyTeam;
     public UnitData unitData;
 
-    LineRenderer targetLaser;
-    float startAnimWidth = 0.05f;
-    float endAnimWidth = 0.2f;
-    Color startAnimColor = Color.white;
-    Color endAnimColor = Color.red;
+    private string enemyTeam;
 
+    private LineRenderer targetLaser;
+    private float startAnimWidth = 0.05f;
+    private float endAnimWidth = 0.2f;
+    private Color startAnimColor = Color.white;
+    private Color endAnimColor = Color.red;
+
+    private GameObject bulletsParent;
     private int currentAmmo;
     [HideInInspector] public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
     [HideInInspector] public bool stillShooting = true;
 
-    GameObject bulletsParent;
+    private Coroutine shootingCoroutine;
 
-    Coroutine shootingCoroutine;
-
+    // CONTROLLER
     void Start()
     {
         targetLaser = gameObject.AddComponent<LineRenderer>();
         targetLaser.enabled = false;
+
         string bulletObjectName = transform.name + "'s Bullets";
-        bulletsParent = GameObject.Find(bulletObjectName) ?? new GameObject(bulletObjectName);
+        bulletsParent = new GameObject(bulletObjectName);
+
+        enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
+    }
+
+    public void PauseShooting()
+    {
+        if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
+        targetLaser.enabled = false;
+
+        allowShooting = true;
+        stillShooting = true;
     }
 
     public void StartShooting()
     {
-        StopShooting();
+        PauseShooting();
         shootingCoroutine = StartCoroutine(InitiateShooting());
     }
 
     public void ContinueShooting()
     {
-        allowShooting = true;
-        if (stillShooting == false)
+        allowShooting = true; //reallow shooting
+        if (stillShooting == false) //restart shooting if not already shooting
         {
             stillShooting = true;
             shootingCoroutine = StartCoroutine(InitiateShooting());
         }
-    }
-
-    public void StopShooting()
-    {
-        if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
-        allowShooting = true;
-        stillShooting = true;
-        targetLaser.enabled = false;
     }
 
     private IEnumerator RotateToFaceTarget(GameObject target)
@@ -58,10 +63,10 @@ public class Shooting : MonoBehaviour
         yield return StartCoroutine(transform.GetComponent<Movement>().RotateToFaceTarget(target.transform.position, unitData.rotationSpeed));
     }
 
+
+    // SHOOTING
     public IEnumerator InitiateShooting()
     {
-        enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
-
         currentAmmo = unitData.magazineSize;
 
         float remainingTargetLockTime = unitData.targetLockDuration;
@@ -75,7 +80,7 @@ public class Shooting : MonoBehaviour
 
             while (currentAmmo > 0)
             {
-                //Find/Refind target
+                //Refind target
                 if (target == null || !lineOfSight(target))
                 {
                     targetLaser.enabled = false;
@@ -102,8 +107,8 @@ public class Shooting : MonoBehaviour
                     targetLaser.startWidth = targetLaser.endWidth = Mathf.Lerp(startAnimWidth, endAnimWidth, 1 - remainingTargetLockTime / unitData.targetLockDuration);
                     targetLaser.startColor = targetLaser.endColor = Color.Lerp(startAnimColor, endAnimColor, 1 - remainingTargetLockTime / unitData.targetLockDuration);
 
-
                     remainingTargetLockTime -= Time.deltaTime;
+
                     yield return null;
                     continue;
                 }
@@ -111,7 +116,7 @@ public class Shooting : MonoBehaviour
 
                 FireBullet();
 
-                yield return new WaitForSeconds(unitData.timeBetweenShots); //respects timer pauses
+                yield return new WaitForSeconds(unitData.timeBetweenShots);
             }
 
             if (allowShooting)
@@ -120,10 +125,12 @@ public class Shooting : MonoBehaviour
             }
         }
 
+        // Wait for all bullets to be destroyed
         while (bulletsParent.transform.childCount > 0)
         {
-            yield return null; // Wait for all bullets to be destoryed
+            yield return null;
         }
+
         yield return new WaitForSeconds(0.1f); // Small delay to ensure player deaths are processed
         stillShooting = false;
     }
@@ -154,6 +161,7 @@ public class Shooting : MonoBehaviour
         bulletScript.backstabMultiplier = backstabMultiplier;
         bulletScript.range = range * GameLoop.cellSize;
         bulletScript.backstabAngle = backstabAngle;
+
         currentAmmo--;
     }
 
