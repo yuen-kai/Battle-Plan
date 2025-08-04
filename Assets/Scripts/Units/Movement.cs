@@ -2,6 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Movement system on a grid, handling movement and rotation. Transitions to shooting mode after movement.
+/// </summary>
 public class Movement : MonoBehaviour
 {
     public UnitData unitData;

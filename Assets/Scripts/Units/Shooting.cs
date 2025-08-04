@@ -2,6 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Manages combat mechanics for units including enemy detection, targeting systems, ammunition management, and projectile firing.
+/// Features target acquisition with line-of-sight validation, visual targeting laser with animated lock-on sequence,
+/// automatic reloading cycles, and configurable bullet properties such as spread, damage, and backstab mechanics.
+/// Supports pause/resume functionality for tactical control and maintains bullet lifecycle management.
+/// </summary>
 public class Shooting : MonoBehaviour
 {
     public UnitData unitData;
@@ -99,8 +105,7 @@ public class Shooting : MonoBehaviour
                 //Target lock
                 if (remainingTargetLockTime > 0f)
                 {
-                    // Face the target
-                    transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized);
+                    transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized); // Track target
 
                     targetLaser.enabled = true;
                     targetLaser.SetPositions(new Vector3[] { transform.position, target.transform.position });
@@ -114,6 +119,7 @@ public class Shooting : MonoBehaviour
                 }
                 targetLaser.enabled = false;
 
+                transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized); // Track target
                 FireBullet();
 
                 yield return new WaitForSeconds(unitData.timeBetweenShots);

@@ -6,6 +6,9 @@ using System.Linq;
 using cakeslice;
 using Outline = cakeslice.Outline;
 
+/// <summary>
+/// A simple reference to a dictionary that maps GameObjects (units) to their movement paths (list of Vector3 positions).
+/// </summary>
 public class PathsDict : Dictionary<GameObject, List<Vector3>>
 {
     public PathsDict() : base()
@@ -13,8 +16,13 @@ public class PathsDict : Dictionary<GameObject, List<Vector3>>
     }
 
     public PathsDict(PathsDict dict) : base(dict) { }
-} // A simple reference to a dictionary that maps GameObjects (units) to their movement paths (list of Vector3 positions).
+}
 
+/// <summary>
+/// Manages interactive path planning on a grid for team units. 
+/// Handles mouse-driven path creation, visual feedback, range displays, and movement validation.
+/// Supports both normal movement and dash mechanics with configurable distances.
+/// </summary>
 public class PlanMovement : MonoBehaviour
 {
     private string team;
