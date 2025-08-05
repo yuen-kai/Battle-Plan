@@ -166,6 +166,8 @@ GameObject:
   - component: {fileID: -159396357692938789}
   - component: {fileID: 2188586334649481472}
   - component: {fileID: -4149958763578291957}
+  - component: {fileID: -6749919452485262053}
+  - component: {fileID: 8708257098216051031}
   m_Layer: 6
   m_Name: Unit
   m_TagString: Untagged
@@ -288,7 +290,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 344837ce88ca4014bba1c0c9d493aa26, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  enemyTeam: RedTeam
   unitData: {fileID: 0}
   allowShooting: 1
   stillShooting: 1
@@ -317,6 +318,56 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d4cc6ffea0ab02c4f948ee4e069b1195, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &-6749919452485262053
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1013387072258837214}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GlobalObjectIdHash: 951099334
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 1
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+--- !u!114 &8708257098216051031
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1013387072258837214}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  SyncPositionX: 1
+  SyncPositionY: 1
+  SyncPositionZ: 1
+  SyncRotAngleX: 1
+  SyncRotAngleY: 1
+  SyncRotAngleZ: 1
+  SyncScaleX: 0
+  SyncScaleY: 0
+  SyncScaleZ: 0
+  PositionThreshold: 0.001
+  RotAngleThreshold: 0.01
+  ScaleThreshold: 0.01
+  UseQuaternionSynchronization: 0
+  UseQuaternionCompression: 0
+  UseHalfFloatPrecision: 0
+  InLocalSpace: 0
+  Interpolate: 1
+  SlerpPosition: 0
 --- !u!1 &4482195103607676923
 GameObject:
   m_ObjectHideFlags: 0

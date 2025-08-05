@@ -37,9 +37,9 @@ public class Grenade : MonoBehaviour, IAbility
         // Explode and damage enemies
         StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
         ExplodeGrenade(targetPosition, AreaRadius);
-        GameObject explosionEffect = Instantiate(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
-        Destroy(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
-        Destroy(grenade);
+        GameObject explosionEffect = NetworkHelper.SpawnNetworked(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
+        NetworkHelper.DespawnNetworked(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
+        NetworkHelper.DespawnNetworked(grenade);
     }
 
     private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)

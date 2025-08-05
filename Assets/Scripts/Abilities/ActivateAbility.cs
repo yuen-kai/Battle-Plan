@@ -26,7 +26,7 @@ public class ActivateAbility : MonoBehaviour
 
     public void setUnitCardInteractable(bool interactable)
     {
-        if (uses <= 0 || unit == null)
+        if (uses <= 0 || !unit.activeInHierarchy)
         {
             transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
         }
@@ -64,7 +64,7 @@ public class ActivateAbility : MonoBehaviour
             yield break;
         }
 
-        GameLoop.Instance.setOverlayUIText($"{unit.name}:\nSelect ability target square", unit.tag);
+        GameLoop.Instance.setOverlayUITextClientRpc($"{unit.name}:\nSelect ability target square", unit.tag);
 
         Destroy(abilityRangeOverlay);
         Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
@@ -96,7 +96,7 @@ public class ActivateAbility : MonoBehaviour
         Destroy(abilityIndicator);
         Destroy(AOEindicator);
         Destroy(abilityRangeOverlay);
-        Destroy(laserLine?.gameObject);
+        NetworkHelper.DespawnNetworked(laserLine?.gameObject);
 
         PlanMovement.Instance.timerTextUI.text = "";
 
@@ -192,11 +192,11 @@ public class ActivateAbility : MonoBehaviour
         List<GameObject> enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
 
 
-        GameLoop.Instance.setOverlayUIText($"Dodging: {enemyTeam}", enemyTeam);
+        GameLoop.Instance.setOverlayUITextClientRpc($"Dodging: {enemyTeam}", enemyTeam);
 
         StartCoroutine(PlanMovement.Instance.ChoosePaths(enemyTeam, (PathsDict paths) =>
         {
-            GameLoop.Instance.setOverlayUIText("Executing Moves", "neutral");
+            GameLoop.Instance.setOverlayUITextClientRpc("Executing Moves", "neutral");
 
             //continue time
             Time.timeScale = 1f;

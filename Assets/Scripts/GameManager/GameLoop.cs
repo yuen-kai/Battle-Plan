@@ -5,12 +5,12 @@ using TMPro;
 using System.Linq;
 using OutlineEffect = cakeslice.OutlineEffect;
 using UnityEngine.SceneManagement;
+using Unity.Netcode;
 
-
-public class GameLoop : MonoBehaviour
+public class GameLoop : NetworkBehaviour
 {
     // Grid Configuration
-    public static float cellSize = 2.7f; // Size of each cell in the grid
+    public static float cellSize = 2.7f;
     public static Rect gridBounds = new Rect(new Vector2(0, 0), new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f));
 
     // UI Components
@@ -29,7 +29,6 @@ public class GameLoop : MonoBehaviour
 
     // Team Configuration
     public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
-    [SerializeField] private List<GameObject> teamParents;
     [SerializeField] private List<GameObject> unitCards;
     public static List<int[]> teamUnits = new List<int[]>()
         {
@@ -88,6 +87,9 @@ public class GameLoop : MonoBehaviour
 
     void Awake()
     {
+        NetworkHandler.StartGame += () => StartCoroutine(GameLoopTemp());
+        NetworkManager.Singleton.StartHost();
+        if (!NetworkManager.Singleton.IsServer) return;
         Instance = this;
         StartGame();
     }
@@ -100,16 +102,24 @@ public class GameLoop : MonoBehaviour
         //foreach (var pos in wallLayout)
         //{
         //    Vector3 worldPos = gridCoordToWorld(pos);
-        //    GameObject wall = Instantiate(wallPrefab, worldPos, Quaternion.identity);
+        //    GameObject wall = NetworkHelper.SpawnNetworked(wallPrefab, worldPos, Quaternion.identity);
         //    wall.transform.position += Helper.heightOffset(wall.transform);
         //    wall.transform.SetParent(wallsParent.transform);
         //}
 
+        //Destroy all units
+        foreach (string team in teams)
+        {
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                Destroy(unit);
+            }
+        }
+
         //Setup teams
         for (int i = 0; i < teams.Count; i++)
         {
-            Destroy(teamParents[i]);
-            teamParents[i] = SetupUnitsAndCards(teamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
+            SetupUnitsAndCards(teamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
         }
 
         //Setup outline effect for teams
@@ -117,33 +127,27 @@ public class GameLoop : MonoBehaviour
         Camera.main.GetComponent<OutlineEffect>().lineColor1 = GetTeamColor(teams[1]);
     }
 
-    GameObject SetupUnitsAndCards(int[] teamUnits, GameObject unitCardTeamContainer, HashSet<Vector2Int> spawnPositions, Quaternion rotation, string team)
+    void SetupUnitsAndCards(int[] teamUnits, GameObject unitCardTeamContainer, HashSet<Vector2Int> spawnPositions, Quaternion rotation, string team)
     {
-        GameObject teamParent = new GameObject(team);
         for (int i = 0; i < teamUnits.Length; i++)
         {
             GameObject oldUnitCard = unitCardTeamContainer.transform.GetChild(i).gameObject;
             GameObject newUnitCard = Instantiate(unitCardPrefabs[teamUnits[i]], oldUnitCard.transform.position, oldUnitCard.transform.rotation, unitCardTeamContainer.transform);
+
             Destroy(oldUnitCard);
 
-            GameObject unit = Instantiate(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
+            GameObject unit = NetworkHelper.SpawnNetworked(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
             unit.transform.position += Helper.heightOffset(unit.transform);
-            unit.transform.SetParent(teamParent.transform);
             unit.tag = team;
             SetGroupLayer(unit, LayerMask.NameToLayer(team));
 
             newUnitCard.GetComponent<ActivateAbility>().unit = unit;
         }
-        return teamParent;
-    }
-
-    void Start()
-    {
-        StartCoroutine(GameLoopTemp());
     }
 
     IEnumerator GameLoopTemp()
     {
+        if(!NetworkManager.Singleton.IsServer) yield break;
         yield return null;
         SetTeamIndicators();
 
@@ -162,13 +166,13 @@ public class GameLoop : MonoBehaviour
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
             foreach (var team in teams)
             {
-                setOverlayUIText($"Planning: {team}", team);
+                setOverlayUITextClientRpc($"Planning: {team}", team);
 
                 yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
             }
 
             setUnitCardsInteractable?.Invoke(true);
-            setOverlayUIText("Executing Moves", "neutral");
+            setOverlayUITextClientRpc("Executing Moves", "neutral");
 
             foreach (var paths in pathsList)
             {
@@ -277,8 +281,8 @@ public class GameLoop : MonoBehaviour
         return false;
     }
 
-
-    public void setOverlayUIText(string message, string team = "neutral")
+    [ClientRpc]
+    public void setOverlayUITextClientRpc(string message, string team = "neutral")
     {
         overlayUIText.text = message;
         overlayUIText.color = GetTeamColor(team);

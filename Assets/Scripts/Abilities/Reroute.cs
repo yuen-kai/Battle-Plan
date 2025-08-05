@@ -17,11 +17,11 @@ public class Reroute : MonoBehaviour, IAbility
         List<GameObject> alliesInRange = ActivateAbility.GetUnitsInRange(transform.position, team, abilityRange);
 
 
-        GameLoop.Instance.setOverlayUIText($"Rerouting: {team}", team);
+        GameLoop.Instance.setOverlayUITextClientRpc($"Rerouting: {team}", team);
 
         yield return StartCoroutine(PlanMovement.Instance.ChoosePaths(team, (PathsDict paths) =>
         {
-            GameLoop.Instance.setOverlayUIText("Executing Moves", "neutral");
+            GameLoop.Instance.setOverlayUITextClientRpc("Executing Moves", "neutral");
 
             //continue time
             Time.timeScale = 1f;
