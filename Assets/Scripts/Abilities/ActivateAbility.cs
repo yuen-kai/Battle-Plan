@@ -96,7 +96,7 @@ public class ActivateAbility : MonoBehaviour
         Destroy(abilityIndicator);
         Destroy(AOEindicator);
         Destroy(abilityRangeOverlay);
-        NetworkHelper.DespawnNetworked(laserLine?.gameObject);
+        NetworkHelper.Despawn(laserLine?.gameObject);
 
         PlanMovement.Instance.timerTextUI.text = "";
 
@@ -218,7 +218,7 @@ public class ActivateAbility : MonoBehaviour
             }
 
             //activate ability
-            StartCoroutine(unit.GetComponent<IAbility>().ExecuteAbility(abilitySquare, unitData.abilityRadius));
+            StartCoroutine(unit.GetComponent<Ability>().ExecuteAbility(abilitySquare, unitData.abilityRadius));
         }, unitData.timeDivePerUnit * enemiesInRange.Count, enemiesInRange, unitData.diveRange));
     }
 

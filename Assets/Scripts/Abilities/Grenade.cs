@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Grenade : MonoBehaviour, IAbility
+public class Grenade : Ability
 {
     float abilityTime = 1;
     float throwHeight = 5f;
@@ -10,7 +10,7 @@ public class Grenade : MonoBehaviour, IAbility
     public GameObject grenadePrefab;
     public GameObject grenadeExplosionPrefab;
 
-    public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3)
+    public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3)
     {
         // Instantiate the grenade at the current position
         GameObject grenade = Instantiate(grenadePrefab, transform.position, Quaternion.identity);
@@ -37,9 +37,9 @@ public class Grenade : MonoBehaviour, IAbility
         // Explode and damage enemies
         StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
         ExplodeGrenade(targetPosition, AreaRadius);
-        GameObject explosionEffect = NetworkHelper.SpawnNetworked(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
-        NetworkHelper.DespawnNetworked(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
-        NetworkHelper.DespawnNetworked(grenade);
+        GameObject explosionEffect = NetworkHelper.Spawn(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
+        NetworkHelper.Despawn(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
+        NetworkHelper.Despawn(grenade);
     }
 
     private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)

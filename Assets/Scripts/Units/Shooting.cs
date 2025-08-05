@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
 /// <summary>
 /// Manages combat mechanics for units including enemy detection, targeting systems, ammunition management, and projectile firing.
@@ -8,7 +9,7 @@ using UnityEngine;
 /// automatic reloading cycles, and configurable bullet properties such as spread, damage, and backstab mechanics.
 /// Supports pause/resume functionality for tactical control and maintains bullet lifecycle management.
 /// </summary>
-public class Shooting : MonoBehaviour
+public class Shooting : NetworkBehaviour
 {
     public UnitData unitData;
 
@@ -20,12 +21,21 @@ public class Shooting : MonoBehaviour
     private Color startAnimColor = Color.white;
     private Color endAnimColor = Color.red;
 
-    private GameObject bulletsParent;
+    private List<GameObject> bullets = new List<GameObject>();
     private int currentAmmo;
     [HideInInspector] public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
     [HideInInspector] public bool stillShooting = true;
 
     private Coroutine shootingCoroutine;
+
+    public override void OnNetworkSpawn()
+    {
+        if (!IsServer)
+        {
+            enabled = false; // disables Update(), Start(), etc.
+            return;
+        }
+    }
 
     // CONTROLLER
     void Start()
@@ -36,9 +46,6 @@ public class Shooting : MonoBehaviour
 
         targetLaser = gameObject.AddComponent<LineRenderer>();
         targetLaser.enabled = false;
-
-        string bulletObjectName = transform.name + "'s Bullets";
-        bulletsParent = new GameObject(bulletObjectName);
 
         enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
     }
@@ -136,7 +143,7 @@ public class Shooting : MonoBehaviour
         }
 
         // Wait for all bullets to be destroyed
-        while (bulletsParent.transform.childCount > 0)
+        while (GetActiveBulletCount() > 0)
         {
             yield return null;
         }
@@ -160,8 +167,8 @@ public class Shooting : MonoBehaviour
         float spreadAngle = Random.Range(-spread, spread);
         Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
 
-        GameObject bullet = Instantiate(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
-        bullet.transform.parent = bulletsParent.transform;
+        GameObject bullet = NetworkHelper.Spawn(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
+        bullets.Add(bullet);
 
         Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
         Bullet bulletScript = bullet.GetComponent<Bullet>();
@@ -173,6 +180,12 @@ public class Shooting : MonoBehaviour
         bulletScript.backstabAngle = backstabAngle;
 
         currentAmmo--;
+    }
+
+    private int GetActiveBulletCount()
+    {
+        bullets.RemoveAll(bullet => bullet == null);
+        return bullets.Count;
     }
 
     IEnumerator Reload()

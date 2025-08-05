@@ -10,7 +10,7 @@ public class NetworkHandler : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        if (NetworkManager.Singleton.IsServer)
+        if (IsServer)
         {
             NetworkManager.OnClientConnectedCallback += OnClientConnected;
         }
@@ -18,7 +18,7 @@ public class NetworkHandler : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         base.OnNetworkDespawn();
-        if (NetworkManager.Singleton.IsServer)
+        if (IsServer)
         {
             NetworkManager.OnClientConnectedCallback -= OnClientConnected;
         }
@@ -26,8 +26,7 @@ public class NetworkHandler : NetworkBehaviour
 
     void OnClientConnected(ulong clientId)
     {
-        Debug.Log($"Client connected: {clientId}");
-        if (NetworkManager.Singleton.IsServer && NetworkManager.ConnectedClients.Count == 1)
+        if (IsServer && NetworkManager.ConnectedClients.Count == 1)
         {
             StartGame?.Invoke();
         }

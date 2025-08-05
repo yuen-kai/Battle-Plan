@@ -38,6 +38,7 @@ public class Bullet : MonoBehaviour
             hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
         }
 
+        NetworkHelper.Despawn(gameObject);
         Destroy(gameObject);
     }
 

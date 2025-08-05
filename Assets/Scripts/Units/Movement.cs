@@ -18,6 +18,15 @@ public class Movement : NetworkBehaviour
 
     private AnimationHandler animator;
 
+    public override void OnNetworkSpawn()
+    {
+        if (!NetworkManager.Singleton.IsServer)
+        {
+            enabled = false; // disables Update(), Start(), etc.
+            return;
+        }
+    }
+
     // CONTROLLER
     void Start()
     {

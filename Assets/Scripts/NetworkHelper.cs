@@ -4,7 +4,7 @@ using System.Collections;
 
 public class NetworkHelper: MonoBehaviour
 {
-    public static GameObject SpawnNetworked(GameObject prefab, Vector3 position, Quaternion rotation, ulong? ownerClientId = null)
+    public static GameObject Spawn(GameObject prefab, Vector3 position, Quaternion rotation, ulong? ownerClientId = null)
     {
         GameObject instance = Object.Instantiate(prefab, position, rotation);
 
@@ -23,7 +23,7 @@ public class NetworkHelper: MonoBehaviour
         return instance;
     }
 
-    public static void DespawnNetworked(GameObject instance, float delay = 0)
+    public static void Despawn(GameObject instance, float delay = 0)
     {
         if (instance == null) return;
         NetworkObject netObj = instance.GetComponent<NetworkObject>();

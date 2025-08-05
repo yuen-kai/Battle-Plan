@@ -67,7 +67,7 @@ public class GameLoop : NetworkBehaviour
 
 
     // Game Settings
-    float planningTimePerUnit = 7f;
+    float planningTimePerUnit = 1f;
 
     // Game State
     List<GameObject> doneMovingUnits = new List<GameObject>();
@@ -89,7 +89,7 @@ public class GameLoop : NetworkBehaviour
     {
         NetworkHandler.StartGame += () => StartCoroutine(GameLoopTemp());
         NetworkManager.Singleton.StartHost();
-        if (!NetworkManager.Singleton.IsServer) return;
+        if (!IsServer) return;
         Instance = this;
         StartGame();
     }
@@ -136,7 +136,7 @@ public class GameLoop : NetworkBehaviour
 
             Destroy(oldUnitCard);
 
-            GameObject unit = NetworkHelper.SpawnNetworked(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
+            GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
             unit.transform.position += Helper.heightOffset(unit.transform);
             unit.tag = team;
             SetGroupLayer(unit, LayerMask.NameToLayer(team));
@@ -147,7 +147,7 @@ public class GameLoop : NetworkBehaviour
 
     IEnumerator GameLoopTemp()
     {
-        if(!NetworkManager.Singleton.IsServer) yield break;
+        if(!IsServer) yield break;
         yield return null;
         SetTeamIndicators();
 

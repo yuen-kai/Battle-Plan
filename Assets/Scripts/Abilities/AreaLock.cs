@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class AreaLock : MonoBehaviour, IAbility
+public class AreaLock : Ability
 {
     float abilityTime = 3;
     float rotationSpeed = 720f; // Degrees per second
@@ -15,7 +15,7 @@ public class AreaLock : MonoBehaviour, IAbility
     float initialWidth = 0.2f;
     float finalWidth = 0.5f;
 
-    public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
+    public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
 
         transform.GetComponent<Movement>().PauseMovement();

@@ -2,12 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Reroute : MonoBehaviour, IAbility
+public class Reroute : Ability
 {
     float planningTimePerUnit = 3;
     float abilityRange = 7;
 
-    public IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
+    public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         Time.timeScale = 0f;
 

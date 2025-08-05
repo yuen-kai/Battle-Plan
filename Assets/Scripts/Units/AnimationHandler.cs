@@ -17,7 +17,6 @@ public class AnimationHandler : MonoBehaviour
     {
         if (animator != null)
         {
-            Debug.Log($"Playing animation: {animationName}");
             foreach (var state in exclusiveStates)
             {
                 animator.SetBool(state, state == animationName);
