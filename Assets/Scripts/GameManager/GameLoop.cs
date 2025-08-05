@@ -68,7 +68,7 @@ public class GameLoop : MonoBehaviour
 
 
     // Game Settings
-    float planningTimePerUnit = 4f;
+    float planningTimePerUnit = 7f;
 
     // Game State
     List<GameObject> doneMovingUnits = new List<GameObject>();
