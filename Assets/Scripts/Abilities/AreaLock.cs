@@ -43,14 +43,6 @@ public class AreaLock : MonoBehaviour, IAbility
         }
     }
 
-    void OnDisable()
-    {
-        if (laserLine != null)
-        {
-            Destroy(laserLine?.gameObject);
-        }
-    }
-
     private void CreateLaserLine(Vector3 start, Vector3 end)
     {
         Vector3 direction = (end - start).normalized;
@@ -72,6 +64,7 @@ public class AreaLock : MonoBehaviour, IAbility
         laserLine.positionCount = 2;
         laserLine.SetPosition(0, start);
         laserLine.SetPosition(1, finalEnd);
+        laserObject.transform.parent = transform;
     }
 
     private bool CheckForCrossingTarget(Vector3 start, Vector3 end)

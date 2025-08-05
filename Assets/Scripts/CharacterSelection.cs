@@ -43,7 +43,6 @@ public class CharacterSelection : MonoBehaviour
         currentSelectionIndex++;
         if(currentSelectionIndex >= teamUnits.Count)
         {
-            Debug.Log("No more teams available for selection.");
             GameLoop.teamUnits = teamUnits;
             SceneManager.LoadScene("Game");
             return;

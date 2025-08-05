@@ -94,16 +94,16 @@ public class GameLoop : MonoBehaviour
 
     void StartGame()
     {
-        // Setup walls
-        Destroy(wallsParent);
-        wallsParent = new GameObject("Walls");
-        foreach (var pos in wallLayout)
-        {
-            Vector3 worldPos = gridCoordToWorld(pos);
-            GameObject wall = Instantiate(wallPrefab, worldPos, Quaternion.identity);
-            wall.transform.position += Helper.heightOffset(wall.transform);
-            wall.transform.SetParent(wallsParent.transform);
-        }
+        //// Setup walls
+        //Destroy(wallsParent);
+        //wallsParent = new GameObject("Walls");
+        //foreach (var pos in wallLayout)
+        //{
+        //    Vector3 worldPos = gridCoordToWorld(pos);
+        //    GameObject wall = Instantiate(wallPrefab, worldPos, Quaternion.identity);
+        //    wall.transform.position += Helper.heightOffset(wall.transform);
+        //    wall.transform.SetParent(wallsParent.transform);
+        //}
 
         //Setup teams
         for (int i = 0; i < teams.Count; i++)
