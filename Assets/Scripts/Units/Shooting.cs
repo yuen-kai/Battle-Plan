@@ -169,7 +169,7 @@ public class Shooting : NetworkBehaviour
         Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
         Bullet bulletScript = bullet.GetComponent<Bullet>();
 
-        bulletRb.velocity = shootDirection * bulletSpeed * GameLoop.cellSize;
+        bulletRb.linearVelocity = shootDirection * bulletSpeed * GameLoop.cellSize;
         bulletScript.damage = damage;
         bulletScript.backstabMultiplier = backstabMultiplier;
         bulletScript.range = range * GameLoop.cellSize;
