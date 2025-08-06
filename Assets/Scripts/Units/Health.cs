@@ -29,7 +29,7 @@ public class Health : NetworkBehaviour
     // Update is called once per frame
     void Update()
     {
-        if(!IsClient) return;
+        if (!IsClient) return;
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {

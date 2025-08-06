@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
-
+using Unity.Netcode;
 
 public class CharacterSelection : MonoBehaviour
 {
@@ -44,7 +44,7 @@ public class CharacterSelection : MonoBehaviour
         if(currentSelectionIndex >= teamUnits.Count)
         {
             GameLoop.allTeamUnits = teamUnits;
-            SceneManager.LoadScene("Game");
+            NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
             return;
         }
         InitializeCharacterSelection();

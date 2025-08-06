@@ -89,12 +89,6 @@ public class GameLoop : NetworkBehaviour
         get; private set;
     }
 
-    void Awake()
-    {
-        NetworkHandler.StartGame += () => StartCoroutine(GameLoopTemp());
-        NetworkManager.Singleton.StartHost();
-    }
-
     void Start()
     {
         if (!IsServer) return;
@@ -136,6 +130,7 @@ public class GameLoop : NetworkBehaviour
         {
             allSpawnedUnits.Add(SpawnUnitsForTeam(i));
         }
+
         SetupCardsClientRpc();
 
         //Setup outline effect for teams
@@ -210,6 +205,8 @@ public class GameLoop : NetworkBehaviour
     [ClientRpc]
     void SetupCardsClientRpc()
     {
+        Debug.Log("creating cards");
+
         ulong clientId = NetworkManager.Singleton.LocalClientId;
         int teamIndex = GetTeamIndexForClient(clientId);
 
