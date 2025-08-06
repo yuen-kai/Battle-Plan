@@ -15,6 +15,8 @@ MonoBehaviour:
   unitName: PogoRider
   unitDescription: Boing
   unitSprite: {fileID: 21300000, guid: c6d3a60f7c31a854d99982aaaa7d832b, type: 3}
+  abilityName: Pogo
+  abilitySprite: {fileID: 21300000, guid: c6d3a60f7c31a854d99982aaaa7d832b, type: 3}
   moveDist: 8
   moveSpeed: 2
   diveSpeed: 4

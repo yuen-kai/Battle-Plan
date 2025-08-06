@@ -19,7 +19,7 @@ public class Movement : NetworkBehaviour
     private AnimationHandler animator;
 
     // CONTROLLER
-    void Start()
+    public override void OnNetworkSpawn()
     {
         if (!IsServer)
         {

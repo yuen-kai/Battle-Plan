@@ -14,6 +14,13 @@ public class UnitData : ScriptableObject
     [Tooltip("Sprite representing the unit")]
     public Sprite unitSprite;
 
+    [Header("=== ABILITY CARD PARAMETERS ===")]
+    [Tooltip("Name of the ability")]
+    public string abilityName = "New Ability";
+
+    [Tooltip("Sprite representing the ability")]
+    public Sprite abilitySprite;
+
     [Header("=== MOVEMENT PARAMETERS ===")]
     [Tooltip("Maximum distance the unit can move in cells")]
     public int moveDist = 3;

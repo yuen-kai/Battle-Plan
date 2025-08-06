@@ -16,7 +16,7 @@ public class Bullet : NetworkBehaviour
     private float maxLifetime = 8f;
     private float timeElapsed = 0f;
 
-    void Start()
+    public override void OnNetworkSpawn()
     {
         if (!IsServer)
         {
@@ -30,7 +30,7 @@ public class Bullet : NetworkBehaviour
     {
         if (Vector3.Distance(startPosition, transform.position) > range || timeElapsed > maxLifetime)
         {
-            Destroy(gameObject);
+            NetworkHelper.Despawn(gameObject);
         }
         timeElapsed += Time.deltaTime;
     }
@@ -45,7 +45,6 @@ public class Bullet : NetworkBehaviour
         }
 
         NetworkHelper.Despawn(gameObject);
-        Destroy(gameObject);
     }
 
     private bool CheckBackstab(GameObject hitObject)

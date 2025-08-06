@@ -13,8 +13,8 @@ public class Health : NetworkBehaviour
 
     private float typicalMaxHealth = 100f;
 
-    // Start is called before the first frame update
-    void Start()
+
+    public override void OnNetworkSpawn()
     {
         healthBar = transform.Find("UnitCanvas").Find("HealthBar");
         healthFill = healthBar.Find("HealthFill");

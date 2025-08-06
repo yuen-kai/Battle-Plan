@@ -37,7 +37,6 @@ public class GameLoop : NetworkBehaviour
             new int[] { 0, 1, 2 }, // Blue Team Units
             new int[] { 2, 3, 4 }  // Red Team Units
         };
-    public static List<GameObject[]> allSpawnedUnits = new List<GameObject[]>();
 
     // Level Layout (col, row) from bottom left corner
     HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
@@ -89,7 +88,7 @@ public class GameLoop : NetworkBehaviour
         get; private set;
     }
 
-    void Start()
+    public override void OnNetworkSpawn()
     {
         if (!IsServer) return;
         Instance = this;
@@ -126,9 +125,11 @@ public class GameLoop : NetworkBehaviour
         //}
 
         InitializeClientTeamMapping();
+
+        List<GameObject> allSpawnedUnits = new List<GameObject>();
         for (int i = 0; i < teams.Count; i++)
         {
-            allSpawnedUnits.Add(SpawnUnitsForTeam(i));
+            allSpawnedUnits.AddRange(SpawnUnitsForTeam(i));
         }
 
         SetupCardsClientRpc();
@@ -180,14 +181,14 @@ public class GameLoop : NetworkBehaviour
         return index >= 0 && index < teams.Count ? index : 0;
     }
 
-    private GameObject[] SpawnUnitsForTeam(int teamIndex)
+    private List<GameObject> SpawnUnitsForTeam(int teamIndex)
     {
         int[] teamUnits = allTeamUnits[teamIndex];
         HashSet<Vector2Int> spawnPositions = spawns[teamIndex];
         Quaternion rotation = Quaternion.Euler(0, 180 * teamIndex, 0);
         string team = teams[teamIndex];
 
-        GameObject[] spawnedUnits = new GameObject[teamUnits.Length];
+        List<GameObject> spawnedUnits = new List<GameObject>();
 
         for (int i = 0; i < teamUnits.Length; i++)
         {
@@ -196,7 +197,7 @@ public class GameLoop : NetworkBehaviour
             unit.tag = team;
             SetGroupLayer(unit, LayerMask.NameToLayer(team));
 
-            spawnedUnits[i] = unit;
+            spawnedUnits.Add(unit);
         }
 
         return spawnedUnits;
@@ -205,8 +206,6 @@ public class GameLoop : NetworkBehaviour
     [ClientRpc]
     void SetupCardsClientRpc()
     {
-        Debug.Log("creating cards");
-
         ulong clientId = NetworkManager.Singleton.LocalClientId;
         int teamIndex = GetTeamIndexForClient(clientId);
 
@@ -214,6 +213,7 @@ public class GameLoop : NetworkBehaviour
         GameObject unitCardTeamContainer = unitCardsContainer;
         string team = teams[teamIndex];
 
+        GameObject[] spawnedUnits = GameObject.FindGameObjectsWithTag(team);
         // Setup cards and link to spawned units
         for (int i = 0; i < teamUnits.Length; i++)
         {
@@ -222,7 +222,7 @@ public class GameLoop : NetworkBehaviour
 
             Destroy(oldUnitCard);
 
-            newUnitCard.GetComponent<ActivateAbility>().unit = allSpawnedUnits[teamIndex][i];
+            newUnitCard.GetComponent<ActivateAbility>().unit = spawnedUnits[i];
         }
     }
 

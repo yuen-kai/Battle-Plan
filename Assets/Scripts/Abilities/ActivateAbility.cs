@@ -2,8 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using Unity.Netcode;
 
-public class ActivateAbility : MonoBehaviour
+public class ActivateAbility : NetworkBehaviour
 {
     public GameObject unit;
 
@@ -17,14 +18,14 @@ public class ActivateAbility : MonoBehaviour
     GameObject abilityRangeOverlay;
     LineRenderer laserLine;
 
-    void Start()
+    public override void OnNetworkSpawn()
     {
         uses = unitData.uses;
         GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
         GameLoop.disableUnitCard += disableUnitCard;
     }
 
-    void OnDestroy()
+    public override void OnDestroy()
     {
         GameLoop.setUnitCardsInteractable -= setUnitCardInteractable;
         GameLoop.disableUnitCard -= disableUnitCard;
