@@ -28,18 +28,14 @@ public class Shooting : NetworkBehaviour
 
     private Coroutine shootingCoroutine;
 
-    public override void OnNetworkSpawn()
-    {
-        if (!IsServer)
-        {
-            enabled = false; // disables Update(), Start(), etc.
-            return;
-        }
-    }
-
     // CONTROLLER
     void Start()
     {
+        if (!IsServer)
+        {
+            enabled = false;
+            return;
+        }
         GameLoop.OrderAllowShooting += (toggle) => allowShooting = toggle;
         GameLoop.OrderStillShooting += (toggle) => stillShooting = toggle;
         GameLoop.OrderContinueShooting += ContinueShooting;

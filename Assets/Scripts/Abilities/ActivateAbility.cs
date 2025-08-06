@@ -24,6 +24,12 @@ public class ActivateAbility : MonoBehaviour
         GameLoop.disableUnitCard += disableUnitCard;
     }
 
+    void OnDestroy()
+    {
+        GameLoop.setUnitCardsInteractable -= setUnitCardInteractable;
+        GameLoop.disableUnitCard -= disableUnitCard;
+    }
+
     public void setUnitCardInteractable(bool interactable)
     {
         if (uses <= 0 || !unit.activeInHierarchy)
@@ -96,7 +102,7 @@ public class ActivateAbility : MonoBehaviour
         Destroy(abilityIndicator);
         Destroy(AOEindicator);
         Destroy(abilityRangeOverlay);
-        NetworkHelper.Despawn(laserLine?.gameObject);
+        Destroy(laserLine?.gameObject);
 
         PlanMovement.Instance.timerTextUI.text = "";
 

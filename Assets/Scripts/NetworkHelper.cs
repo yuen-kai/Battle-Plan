@@ -11,13 +11,16 @@ public class NetworkHelper: MonoBehaviour
         if (NetworkManager.Singleton.IsServer)
         {
             NetworkObject netObj = instance.GetComponent<NetworkObject>();
-            if (netObj != null)
+            if (netObj == null)
             {
-                if (ownerClientId.HasValue)
-                    netObj.SpawnWithOwnership(ownerClientId.Value);
-                else
-                    netObj.Spawn();
+                Debug.LogWarning($"NetworkObject component missing on {prefab.name}. Adding it dynamically.");
+                netObj = instance.AddComponent<NetworkObject>();
             }
+            
+            if (ownerClientId.HasValue)
+                netObj.SpawnWithOwnership(ownerClientId.Value);
+            else
+                netObj.Spawn();
         }
 
         return instance;
@@ -27,6 +30,7 @@ public class NetworkHelper: MonoBehaviour
     {
         if (instance == null) return;
         NetworkObject netObj = instance.GetComponent<NetworkObject>();
+        if (netObj == null) Debug.Log(instance.name + " has no net obj");
         if (netObj != null && netObj.IsSpawned && NetworkManager.Singleton.IsServer)
         {
             DespawnDelay(netObj, delay);
@@ -37,5 +41,6 @@ public class NetworkHelper: MonoBehaviour
     {
         yield return new WaitForSeconds(delay);
         netObj.Despawn();
+        Debug.Log($"Despawned {netObj.name} after {delay} seconds");
     }
 }

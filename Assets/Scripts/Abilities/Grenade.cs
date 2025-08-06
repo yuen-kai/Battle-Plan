@@ -13,7 +13,7 @@ public class Grenade : Ability
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3)
     {
         // Instantiate the grenade at the current position
-        GameObject grenade = Instantiate(grenadePrefab, transform.position, Quaternion.identity);
+        GameObject grenade = NetworkHelper.Spawn(grenadePrefab, transform.position, Quaternion.identity);
         Vector3 startPosition = grenade.transform.position;
         Vector3 targetPosition = abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0);
 

@@ -1,27 +1,35 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class Health : MonoBehaviour
+public class Health : NetworkBehaviour
 {
     public UnitData unitData;
 
     private float currentHealth;
+    private Transform healthBar;
     private Transform healthFill;
+
+    private float typicalMaxHealth = 100f;
 
     // Start is called before the first frame update
     void Start()
     {
-        Transform healthBar = transform.Find("UnitCanvas").Find("HealthBar");
-        healthBar.localScale = new Vector3(unitData.maxHealth/100f, 1f, 1f);
-
+        healthBar = transform.Find("UnitCanvas").Find("HealthBar");
         healthFill = healthBar.Find("HealthFill");
-        SetHealth(unitData.maxHealth);
+
+        if (IsServer)
+        {
+            SetHealthBarClientRpc(unitData.maxHealth);
+            SetHealthClientRpc(unitData.maxHealth);
+        }
     }
 
     // Update is called once per frame
     void Update()
     {
+        if(!IsClient) return;
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
@@ -32,7 +40,7 @@ public class Health : MonoBehaviour
 
     public void TakeDamage(float damage)
     {
-        SetHealth(currentHealth - damage);
+        SetHealthClientRpc(currentHealth - damage);
 
         if (currentHealth <= 0)
         {
@@ -41,9 +49,16 @@ public class Health : MonoBehaviour
         }
     }
 
-    public void SetHealth(float health)
+    [ClientRpc]
+    private void SetHealthClientRpc(float health)
     {
         currentHealth = health;
         healthFill.localScale = new Vector3(Mathf.Clamp(currentHealth / unitData.maxHealth, 0f, 1f), 1f, 1f);
+    }
+
+    [ClientRpc]
+    private void SetHealthBarClientRpc(float maxHealth)
+    {
+        healthBar.localScale = new Vector3(Mathf.Clamp(maxHealth / typicalMaxHealth, 0f, 1f), 1f, 1f);
     }
 }

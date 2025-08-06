@@ -1,8 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class Bullet : MonoBehaviour
+public class Bullet : NetworkBehaviour
 {
     public float damage = 10f;
     public float backstabMultiplier = 1f;
@@ -17,6 +18,11 @@ public class Bullet : MonoBehaviour
 
     void Start()
     {
+        if (!IsServer)
+        {
+            enabled = false;
+            return;
+        }
         startPosition = transform.position;
     }
 

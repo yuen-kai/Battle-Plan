@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 705507994}
-  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
+  m_IndirectSpecularColor: {r: 0.7683002, g: 0.7871271, b: 0.79778594, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -1823,6 +1823,10 @@ PrefabInstance:
     - target: {fileID: 5730507131329954583, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
       propertyPath: m_TagString
       value: RedTeam
+      objectReference: {fileID: 0}
+    - target: {fileID: 7189407427407129810, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 1009248441
       objectReference: {fileID: 0}
     - target: {fileID: 9197875742513436210, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
       propertyPath: m_Layer
@@ -8007,6 +8011,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 7
       objectReference: {fileID: 0}
+    - target: {fileID: 1523534899777574304, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2059357730
+      objectReference: {fileID: 0}
     - target: {fileID: 3737266704590393277, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
       propertyPath: m_Layer
       value: 7
@@ -11488,7 +11496,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1150195444
 RectTransform:
   m_ObjectHideFlags: 0
@@ -12401,6 +12409,10 @@ PrefabInstance:
     - target: {fileID: 1433919399294883390, guid: 5cd209f94c39d564196aa6fd31e9f689, type: 3}
       propertyPath: m_TagString
       value: Untagged
+      objectReference: {fileID: 0}
+    - target: {fileID: 1523534899777574304, guid: 5cd209f94c39d564196aa6fd31e9f689, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 1091573079
       objectReference: {fileID: 0}
     - target: {fileID: 3381112852907784867, guid: 5cd209f94c39d564196aa6fd31e9f689, type: 3}
       propertyPath: m_Camera
@@ -16306,6 +16318,7 @@ MonoBehaviour:
   unitCards:
   - {fileID: 1381940050}
   - {fileID: 1150195443}
+  unitCardsContainer: {fileID: 1381940050}
 --- !u!114 &1620178445
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16584,7 +16597,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
       propertyPath: m_SizeDelta.x
@@ -16624,11 +16637,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 49.4
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -69.5
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 223c98262d0dcc643b5a2afb2daf1205, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -17436,7 +17449,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 3decdbbdc4454b2449c9d5bab7bcc07e, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 3decdbbdc4454b2449c9d5bab7bcc07e, type: 3}
       propertyPath: m_SizeDelta.x
@@ -17476,11 +17489,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 3decdbbdc4454b2449c9d5bab7bcc07e, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 49.4
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 3decdbbdc4454b2449c9d5bab7bcc07e, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -218.5
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 3decdbbdc4454b2449c9d5bab7bcc07e, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -17801,6 +17814,10 @@ PrefabInstance:
       propertyPath: m_Camera
       value: 
       objectReference: {fileID: 963194227}
+    - target: {fileID: 7189407427407129810, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 4066441379
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -17817,6 +17834,10 @@ PrefabInstance:
     - target: {fileID: 667696427194724160, guid: 9b67c3ffd1e9c1f4d810e0a404dd6666, type: 3}
       propertyPath: m_Layer
       value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 1523534899777574304, guid: 9b67c3ffd1e9c1f4d810e0a404dd6666, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 443620608
       objectReference: {fileID: 0}
     - target: {fileID: 3737266704590393277, guid: 9b67c3ffd1e9c1f4d810e0a404dd6666, type: 3}
       propertyPath: m_Layer
@@ -20007,7 +20028,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 278f4e8231de08d4697c0e20de4b3bbe, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 278f4e8231de08d4697c0e20de4b3bbe, type: 3}
       propertyPath: m_SizeDelta.x
@@ -20047,11 +20068,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 278f4e8231de08d4697c0e20de4b3bbe, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 49.4
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 278f4e8231de08d4697c0e20de4b3bbe, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -367.5
       objectReference: {fileID: 0}
     - target: {fileID: 7338503733335566282, guid: 278f4e8231de08d4697c0e20de4b3bbe, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -22671,6 +22692,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1237306512}
     m_Modifications:
+    - target: {fileID: 1523534899777574304, guid: ec80aa1b1ead1554e81103453b6830e3, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 1309565188
+      objectReference: {fileID: 0}
     - target: {fileID: 3381112852907784867, guid: ec80aa1b1ead1554e81103453b6830e3, type: 3}
       propertyPath: m_Camera
       value: 

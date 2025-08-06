@@ -43,7 +43,7 @@ public class CharacterSelection : MonoBehaviour
         currentSelectionIndex++;
         if(currentSelectionIndex >= teamUnits.Count)
         {
-            GameLoop.teamUnits = teamUnits;
+            GameLoop.allTeamUnits = teamUnits;
             SceneManager.LoadScene("Game");
             return;
         }

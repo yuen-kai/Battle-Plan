@@ -30,11 +30,14 @@ public class GameLoop : NetworkBehaviour
     // Team Configuration
     public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
     [SerializeField] private List<GameObject> unitCards;
-    public static List<int[]> teamUnits = new List<int[]>()
+    [SerializeField] private GameObject unitCardsContainer;
+
+    public static List<int[]> allTeamUnits = new List<int[]>()
         {
             new int[] { 0, 1, 2 }, // Blue Team Units
             new int[] { 2, 3, 4 }  // Red Team Units
         };
+    public static List<GameObject[]> allSpawnedUnits = new List<GameObject[]>();
 
     // Level Layout (col, row) from bottom left corner
     HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
@@ -72,6 +75,7 @@ public class GameLoop : NetworkBehaviour
     // Game State
     List<GameObject> doneMovingUnits = new List<GameObject>();
     List<GameObject> doneShootingUnits = new List<GameObject>();
+    private Dictionary<ulong, int> clientIdToTeamIndex = new Dictionary<ulong, int>();
 
     // Actions
     public static System.Action<bool> setUnitCardsInteractable;
@@ -89,9 +93,14 @@ public class GameLoop : NetworkBehaviour
     {
         NetworkHandler.StartGame += () => StartCoroutine(GameLoopTemp());
         NetworkManager.Singleton.StartHost();
+    }
+
+    void Start()
+    {
         if (!IsServer) return;
         Instance = this;
         StartGame();
+        StartCoroutine(GameLoopTemp());
     }
 
     void StartGame()
@@ -117,10 +126,17 @@ public class GameLoop : NetworkBehaviour
         }
 
         //Setup teams
+        //for (int i = 0; i < teams.Count; i++)
+        //{
+        //    SetupUnitsAndCards(teamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
+        //}
+
+        InitializeClientTeamMapping();
         for (int i = 0; i < teams.Count; i++)
         {
-            SetupUnitsAndCards(teamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
+            allSpawnedUnits.Add(SpawnUnitsForTeam(i));
         }
+        SetupCardsClientRpc();
 
         //Setup outline effect for teams
         Camera.main.GetComponent<OutlineEffect>().lineColor0 = GetTeamColor(teams[0]);
@@ -145,9 +161,77 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
+    private void InitializeClientTeamMapping()
+    {
+        // For now, map first two clients to teams 0 and 1
+        // This can be expanded to support more teams/clients
+        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds;
+        for (int i = 0; i < connectedClients.Count && i < teams.Count; i++)
+        {
+            clientIdToTeamIndex[connectedClients[i]] = i;
+        }
+    }
+
+    private int GetTeamIndexForClient(ulong clientId)
+    {
+        if (clientIdToTeamIndex.ContainsKey(clientId))
+        {
+            return clientIdToTeamIndex[clientId];
+        }
+
+        // Fallback: assign based on client order if not in mapping
+        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds.ToList();
+        int index = connectedClients.IndexOf(clientId);
+        return index >= 0 && index < teams.Count ? index : 0;
+    }
+
+    private GameObject[] SpawnUnitsForTeam(int teamIndex)
+    {
+        int[] teamUnits = allTeamUnits[teamIndex];
+        HashSet<Vector2Int> spawnPositions = spawns[teamIndex];
+        Quaternion rotation = Quaternion.Euler(0, 180 * teamIndex, 0);
+        string team = teams[teamIndex];
+
+        GameObject[] spawnedUnits = new GameObject[teamUnits.Length];
+
+        for (int i = 0; i < teamUnits.Length; i++)
+        {
+            GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
+            unit.transform.position += Helper.heightOffset(unit.transform);
+            unit.tag = team;
+            SetGroupLayer(unit, LayerMask.NameToLayer(team));
+
+            spawnedUnits[i] = unit;
+        }
+
+        return spawnedUnits;
+    }
+
+    [ClientRpc]
+    void SetupCardsClientRpc()
+    {
+        ulong clientId = NetworkManager.Singleton.LocalClientId;
+        int teamIndex = GetTeamIndexForClient(clientId);
+
+        int[] teamUnits = allTeamUnits[teamIndex];
+        GameObject unitCardTeamContainer = unitCardsContainer;
+        string team = teams[teamIndex];
+
+        // Setup cards and link to spawned units
+        for (int i = 0; i < teamUnits.Length; i++)
+        {
+            GameObject oldUnitCard = unitCardTeamContainer.transform.GetChild(i).gameObject;
+            GameObject newUnitCard = Instantiate(unitCardPrefabs[teamUnits[i]], oldUnitCard.transform.position, oldUnitCard.transform.rotation, unitCardTeamContainer.transform);
+
+            Destroy(oldUnitCard);
+
+            newUnitCard.GetComponent<ActivateAbility>().unit = allSpawnedUnits[teamIndex][i];
+        }
+    }
+
     IEnumerator GameLoopTemp()
     {
-        if(!IsServer) yield break;
+        if (!IsServer) yield break;
         yield return null;
         SetTeamIndicators();
 
@@ -161,7 +245,7 @@ public class GameLoop : NetworkBehaviour
             };
 
             setUnitCardsInteractable?.Invoke(false);
-            OrderStillShooting(true);
+            OrderStillShooting?.Invoke(true);
 
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
             foreach (var team in teams)
