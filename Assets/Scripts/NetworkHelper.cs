@@ -1,8 +1,8 @@
 using UnityEngine;
-using Unity.Netcode;  
+using Unity.Netcode;
 using System.Collections;
 
-public class NetworkHelper: NetworkBehaviour
+public class NetworkHelper : NetworkBehaviour
 {
     public static NetworkHelper Instance
     {
@@ -13,7 +13,7 @@ public class NetworkHelper: NetworkBehaviour
     {
         if (!IsServer)
         {
-            enabled = false; 
+            enabled = false;
             return;
         }
         Instance = this;
@@ -36,12 +36,12 @@ public class NetworkHelper: NetworkBehaviour
                 Debug.LogWarning($"NetworkObject component missing on {prefab.name}. Adding it dynamically.");
                 netObj = instance.AddComponent<NetworkObject>();
             }
-            
+
             if (ownerClientId.HasValue)
                 netObj.SpawnWithOwnership(ownerClientId.Value);
             else
                 netObj.Spawn();
-                
+
             // Set parent after network spawn to ensure proper parenting across network
             if (parent != null)
             {
@@ -135,32 +135,44 @@ public class NetworkHelper: NetworkBehaviour
     public void SetActive(GameObject gameObject, bool active)
     {
         if (!IsServer) return;
-        
+
         if (gameObject == null) return;
-        
-        NetworkObject netObj = gameObject.GetComponent<NetworkObject>();
-        if (netObj == null)
-        {
-            Debug.LogWarning($"GameObject {gameObject.name} has no NetworkObject component. Cannot sync SetActive across network.");
-            gameObject.SetActive(active);
-            return;
-        }
-        
+
         // Set active locally on server
         gameObject.SetActive(active);
-        
+
         // Notify all clients
-        SetActiveClientRpc(netObj.NetworkObjectId, active);
+        SetActiveClientRpc(gameObject.GetComponent<NetworkObject>(), active);
     }
 
     [ClientRpc]
-    private void SetActiveClientRpc(ulong networkObjectId, bool active)
+    private void SetActiveClientRpc(NetworkObjectReference objRef, bool active)
     {
-        if (IsServer) return; // Server already handled it
-        
-        if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(networkObjectId, out NetworkObject netObj))
+        if (objRef.TryGet(out NetworkObject networkObject))
         {
-            netObj.gameObject.SetActive(active);
+            networkObject.gameObject.SetActive(active);
+        }
+    }
+
+    public void SetTag(GameObject gameObject, string tag)
+    {
+        if (!IsServer) return;
+
+        if (gameObject == null) return;
+
+        // Set active locally on server
+        gameObject.tag = tag;
+
+        // Notify all clients
+        SetTagClientRpc(gameObject.GetComponent<NetworkObject>(), tag);
+    }
+
+    [ClientRpc]
+    public void SetTagClientRpc(NetworkObjectReference objRef, string tag)
+    {
+        if (objRef.TryGet(out NetworkObject networkObject))
+        {
+            networkObject.tag = tag;
         }
     }
 

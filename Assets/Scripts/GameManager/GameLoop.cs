@@ -69,7 +69,7 @@ public class GameLoop : NetworkBehaviour
 
 
     // Game Settings
-    float planningTimePerUnit = 1f;
+    float planningTimePerUnit = 5f;
 
     // Game State
     List<GameObject> doneMovingUnits = new List<GameObject>();
@@ -82,6 +82,8 @@ public class GameLoop : NetworkBehaviour
     public static System.Action<bool> OrderAllowShooting;
     public static System.Action<bool> OrderStillShooting;
     public static System.Action OrderContinueShooting;
+
+    List<PathsDict> pathsList = new List<PathsDict>();
 
     public static GameLoop Instance
     {
@@ -135,10 +137,10 @@ public class GameLoop : NetworkBehaviour
 
         for (int i = 0; i < teamUnits.Length; i++)
         {
-            GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
+            GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation, GetClientForTeamIndex(teams.IndexOf(team)));
             unit.transform.position += Helper.heightOffset(unit.transform);
-            unit.tag = team;
-            SetGroupLayer(unit, LayerMask.NameToLayer(team));
+            NetworkHelper.Instance.SetTag(unit, team);
+            SetGroupLayerClientRpc(unit.GetComponent<NetworkObject>(), LayerMask.NameToLayer(team));
 
             GameObject newUnitCard = NetworkHelper.Spawn(unitCardPrefabs[teamUnits[i]], unitCardTeamContainer.transform, GetClientForTeamIndex(teams.IndexOf(team)));
 
@@ -195,32 +197,38 @@ public class GameLoop : NetworkBehaviour
 
         while (teams.All(team => teamSize(team) > 0))
         {
-            List<PathsDict> pathsList = new List<PathsDict>();
-
-            System.Action<PathsDict> addPaths = (PathsDict paths) =>
-            {
-                pathsList.Add(new PathsDict(paths));
-            };
+            pathsList = new List<PathsDict>();
 
             setUnitCardsInteractable?.Invoke(false);
             OrderStillShooting?.Invoke(true);
 
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
-            foreach (var team in teams)
-            {
-                setOverlayUITextClientRpc($"Planning: {team}", team);
+            double endTime = NetworkManager.Singleton.ServerTime.Time + timerLength;
 
-                yield return StartCoroutine(transform.GetComponent<PlanMovement>().ChoosePaths(team, addPaths, timerLength));
+            setOverlayUITextClientRpc($"Planning", teams[0]);
+            StartPlanningClientRpc(endTime);
+
+
+            while (pathsList.Count < teams.Count && NetworkManager.Singleton.ServerTime.Time < endTime + 1)
+            {
+                yield return null;
             }
 
             setUnitCardsInteractable?.Invoke(true);
             setOverlayUITextClientRpc("Executing Moves", "neutral");
 
-            foreach (var paths in pathsList)
+            
+            // Flatten pathsList into a single PathsDict
+            PathsDict paths = new PathsDict();
+            foreach (PathsDict teamPaths in pathsList)
             {
-                ExecuteMoves(paths);
-
+                foreach (var kvp in teamPaths)
+                {
+                    paths[kvp.Key] = kvp.Value;
+                }
             }
+
+            ExecuteMoves(paths);
 
             while (CheckStillShooting())
             {
@@ -243,13 +251,53 @@ public class GameLoop : NetworkBehaviour
         SceneManager.LoadScene("HomeScreen");
     }
 
+    [ClientRpc]
+    void StartPlanningClientRpc(double endTime)
+    {
+        StartCoroutine(transform.GetComponent<PlanMovement>().StartPlanning(SendPathsToServerRpc, endTime));
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    void SendPathsToServerRpc(PathsDict paths)
+    {
+        pathsList.Add(paths);
+    }
+
+
+
     void ExecuteMoves(PathsDict paths)
     {
-        foreach (var pair in paths)
+        // Get all units from all teams
+        foreach (var team in teams)
         {
-            GameObject unit = pair.Key;
-            List<Vector3> movementPath = pair.Value;
-            unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath)); // C# passes parameters by reference, so we need to create a new list
+            foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
+            {
+                List<Vector3> movementPath = new List<Vector3>();
+
+                // Check if this unit has a path in the dictionary
+                if (paths.ContainsKey(unit))
+                {
+                    movementPath = new List<Vector3>(paths[unit]); // Create a new list copy
+                }
+
+                // Start movement with either the actual path or empty list
+                unit.GetComponent<Movement>().StartMovement(movementPath);
+            }
+        }
+    }
+
+    //public void SetGroupLayer(NetworkObjectReference objRef, int layer)
+    //{
+
+    //    SetGroupLayerClientRpc(NetworkObjectReference objRef, int layer);
+    //}
+
+    [ClientRpc]
+    public void SetGroupLayerClientRpc(NetworkObjectReference objRef, int layer)
+    {
+        if (objRef.TryGet(out NetworkObject networkObject))
+        {
+            SetGroupLayer(networkObject.gameObject, layer);
         }
     }
 

@@ -5,17 +5,71 @@ using TMPro;
 using System.Linq;
 using cakeslice;
 using Outline = cakeslice.Outline;
+using Unity.Netcode;
 
 /// <summary>
 /// A simple reference to a dictionary that maps GameObjects (units) to their movement paths (list of Vector3 positions).
 /// </summary>
-public class PathsDict : Dictionary<GameObject, List<Vector3>>
+public class PathsDict : Dictionary<GameObject, List<Vector3>>, INetworkSerializable
 {
     public PathsDict() : base()
     {
     }
 
     public PathsDict(PathsDict dict) : base(dict) { }
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+    {
+        int count = Count;
+
+        if (serializer.IsWriter)
+        {
+            serializer.SerializeValue(ref count);
+
+            foreach (var kvp in this)
+            {
+                NetworkObjectReference netRef = kvp.Key.GetComponent<NetworkObject>();
+                serializer.SerializeValue(ref netRef);
+
+                var path = kvp.Value;
+                int pathCount = path.Count;
+                serializer.SerializeValue(ref pathCount);
+
+                for (int i = 0; i < pathCount; i++)
+                {
+                    Vector3 pos = path[i];
+                    serializer.SerializeValue(ref pos);
+                }
+            }
+        }
+        else
+        {
+            Clear();
+            serializer.SerializeValue(ref count);
+
+            for (int i = 0; i < count; i++)
+            {
+                NetworkObjectReference netRef = default;
+                serializer.SerializeValue(ref netRef);
+
+                int pathCount = 0;
+                serializer.SerializeValue(ref pathCount);
+
+                List<Vector3> path = new();
+                for (int j = 0; j < pathCount; j++)
+                {
+                    Vector3 pos = default;
+                    serializer.SerializeValue(ref pos);
+                    path.Add(pos);
+                }
+
+                if (netRef.TryGet(out NetworkObject netObj))
+                {
+                    this[netObj.gameObject] = path;
+                }
+            }
+        }
+    }
 }
 
 /// <summary>
@@ -25,7 +79,7 @@ public class PathsDict : Dictionary<GameObject, List<Vector3>>
 /// </summary>
 public class PlanMovement : MonoBehaviour
 {
-    private string team;
+    private string team = "BlueTeam";
     private List<GameObject> teamCharacters = new List<GameObject>();
     private GameObject selectedUnit;
 
@@ -65,6 +119,57 @@ public class PlanMovement : MonoBehaviour
     void Awake()
     {
         Instance = this;
+    }
+
+    
+
+    public IEnumerator StartPlanning(System.Action<PathsDict> callback, double endTime, List<GameObject> dashUnits = null, int dashDist = -1)
+    {
+        if(dashUnits!=null) this.teamCharacters = dashUnits;
+
+        movementPaths = new PathsDict();
+
+        AddCharacterOutlines();
+
+        visualPathsParent = new GameObject("VisualPaths");
+
+
+        //Path selection loop
+        float timer;
+        while ((timer = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0)
+        {
+            timerTextUI.text = (Mathf.CeilToInt(timer)).ToString();
+            if (Input.GetMouseButtonDown(0))
+            {
+                selectedUnit = GetCharacterUnderMouse();
+                //DisplayAttackRange();
+                StartPath(dashUnits);
+            }
+            else if (Input.GetMouseButton(0) && isDragging)
+            {
+                ExtendPath(dashDist);
+            }
+            else if (Input.GetMouseButtonUp(0))
+            {
+                EndPath();
+            }
+
+            timer -= Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        //Cleanup
+        if (isDragging) // Finalize any in-progress path
+        {
+            EndPath();
+        }
+
+        RemoveCharacterOutlines();
+        Destroy(visualPathsParent);
+        Destroy(moveOverlay);
+        Destroy(attackOverlay);
+        timerTextUI.text = "";
+        callback(movementPaths);
     }
 
 
@@ -124,11 +229,11 @@ public class PlanMovement : MonoBehaviour
 
     void StartPath(List<GameObject> dashUnits = null)
     {
-        bool isValidUnitSelected = selectedUnit?.tag == team && (dashUnits == null || dashUnits.Contains(selectedUnit));
+        bool isValidUnitSelected = selectedUnit?.GetComponent<NetworkObject>().OwnerClientId == NetworkManager.Singleton.LocalClientId && (dashUnits == null || dashUnits.Contains(selectedUnit));
         if (isValidUnitSelected)
         {
             //Reset movement path
-            movementPaths[selectedUnit].Clear();
+            movementPaths[selectedUnit] = new List<Vector3>();
             currentMovementPath = movementPaths[selectedUnit];
             currentMovementPath.Add(GetGridCellUnderCharacter(selectedUnit));
 
