@@ -43,7 +43,6 @@ public class Shooting : NetworkBehaviour
         targetLaser = gameObject.AddComponent<LineRenderer>();
         targetLaser.enabled = false;
 
-        Debug.Log(transform.tag);
         enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
     }
 

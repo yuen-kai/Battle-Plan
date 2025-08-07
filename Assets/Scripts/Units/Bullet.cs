@@ -30,13 +30,18 @@ public class Bullet : NetworkBehaviour
     {
         if (Vector3.Distance(startPosition, transform.position) > range || timeElapsed > maxLifetime)
         {
-            NetworkHelper.Despawn(gameObject);
+            NetworkHelper.Instance.Despawn(gameObject);
         }
         timeElapsed += Time.deltaTime;
     }
 
     private void OnCollisionEnter(Collision other) // built-in function
     {
+        if (!IsServer)
+        {
+            enabled = false;
+            return;
+        }
         GameObject hitObject = other.gameObject;
         if (hitObject.CompareTag(enemyTeam))
         {
@@ -44,7 +49,7 @@ public class Bullet : NetworkBehaviour
             hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
         }
 
-        NetworkHelper.Despawn(gameObject);
+        NetworkHelper.Instance.Despawn(gameObject);
     }
 
     private bool CheckBackstab(GameObject hitObject)

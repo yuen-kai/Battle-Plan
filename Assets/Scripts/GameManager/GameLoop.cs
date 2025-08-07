@@ -91,6 +91,7 @@ public class GameLoop : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         if (!IsServer) return;
+        InitializeClientTeamMapping();
         Instance = this;
         StartGame();
         StartCoroutine(GameLoopTemp());
@@ -119,20 +120,10 @@ public class GameLoop : NetworkBehaviour
         }
 
         //Setup teams
-        //for (int i = 0; i < teams.Count; i++)
-        //{
-        //    SetupUnitsAndCards(teamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
-        //}
-
-        InitializeClientTeamMapping();
-
-        List<GameObject> allSpawnedUnits = new List<GameObject>();
         for (int i = 0; i < teams.Count; i++)
         {
-            allSpawnedUnits.AddRange(SpawnUnitsForTeam(i));
+            SetupUnitsAndCards(allTeamUnits[i], unitCards[0], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
         }
-
-        SetupCardsClientRpc();
 
         //Setup outline effect for teams
         Camera.main.GetComponent<OutlineEffect>().lineColor0 = GetTeamColor(teams[0]);
@@ -141,19 +132,17 @@ public class GameLoop : NetworkBehaviour
 
     void SetupUnitsAndCards(int[] teamUnits, GameObject unitCardTeamContainer, HashSet<Vector2Int> spawnPositions, Quaternion rotation, string team)
     {
+
         for (int i = 0; i < teamUnits.Length; i++)
         {
-            GameObject oldUnitCard = unitCardTeamContainer.transform.GetChild(i).gameObject;
-            GameObject newUnitCard = Instantiate(unitCardPrefabs[teamUnits[i]], oldUnitCard.transform.position, oldUnitCard.transform.rotation, unitCardTeamContainer.transform);
-
-            Destroy(oldUnitCard);
-
             GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
             unit.transform.position += Helper.heightOffset(unit.transform);
             unit.tag = team;
             SetGroupLayer(unit, LayerMask.NameToLayer(team));
 
-            newUnitCard.GetComponent<ActivateAbility>().unit = unit;
+            GameObject newUnitCard = NetworkHelper.Spawn(unitCardPrefabs[teamUnits[i]], unitCardTeamContainer.transform, GetClientForTeamIndex(teams.IndexOf(team)));
+
+            newUnitCard.GetComponent<ActivateAbility>().unit = unit; //no need to sync cause activate ability should only be handled by the server
         }
     }
 
@@ -176,54 +165,26 @@ public class GameLoop : NetworkBehaviour
         }
 
         // Fallback: assign based on client order if not in mapping
+        Debug.LogWarning("No team index found for client " + clientId);
         var connectedClients = NetworkManager.Singleton.ConnectedClientsIds.ToList();
         int index = connectedClients.IndexOf(clientId);
         return index >= 0 && index < teams.Count ? index : 0;
     }
 
-    private List<GameObject> SpawnUnitsForTeam(int teamIndex)
+    private ulong GetClientForTeamIndex(int teamIndex)
     {
-        int[] teamUnits = allTeamUnits[teamIndex];
-        HashSet<Vector2Int> spawnPositions = spawns[teamIndex];
-        Quaternion rotation = Quaternion.Euler(0, 180 * teamIndex, 0);
-        string team = teams[teamIndex];
-
-        List<GameObject> spawnedUnits = new List<GameObject>();
-
-        for (int i = 0; i < teamUnits.Length; i++)
+        foreach (var kvp in clientIdToTeamIndex)
         {
-            GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation);
-            unit.transform.position += Helper.heightOffset(unit.transform);
-            unit.tag = team;
-            SetGroupLayer(unit, LayerMask.NameToLayer(team));
-
-            spawnedUnits.Add(unit);
+            if (kvp.Value == teamIndex)
+            {
+                return kvp.Key;
+            }
         }
 
-        return spawnedUnits;
-    }
-
-    [ClientRpc]
-    void SetupCardsClientRpc()
-    {
-        ulong clientId = NetworkManager.Singleton.LocalClientId;
-        int teamIndex = GetTeamIndexForClient(clientId);
-
-        int[] teamUnits = allTeamUnits[teamIndex];
-        GameObject unitCardTeamContainer = unitCardsContainer;
-        string team = teams[teamIndex];
-
-        GameObject[] spawnedUnits = GameObject.FindGameObjectsWithTag(team);
-        // Setup cards and link to spawned units
-        for (int i = 0; i < teamUnits.Length; i++)
-        {
-            GameObject oldUnitCard = unitCardTeamContainer.transform.GetChild(i).gameObject;
-            GameObject newUnitCard = Instantiate(unitCardPrefabs[teamUnits[i]], oldUnitCard.transform.position, oldUnitCard.transform.rotation, unitCardTeamContainer.transform);
-
-            Destroy(oldUnitCard);
-
-            newUnitCard.GetComponent<ActivateAbility>().unit = spawnedUnits[i];
-        }
+        // Fallback: return first connected client if no mapping found
+        Debug.LogWarning("No client found for team Index " + teamIndex);
+        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds;
+        return connectedClients.Count > 0 ? connectedClients.First() : 0;
     }
 
     IEnumerator GameLoopTemp()

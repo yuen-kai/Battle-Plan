@@ -45,7 +45,7 @@ public class Health : NetworkBehaviour
         if (currentHealth <= 0)
         {
             GameLoop.disableUnitCard(gameObject);
-            gameObject.SetActive(false);
+            NetworkHelper.Instance.SetActive(gameObject, false);
         }
     }
 

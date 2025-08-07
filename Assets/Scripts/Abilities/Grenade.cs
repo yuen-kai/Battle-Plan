@@ -38,8 +38,8 @@ public class Grenade : Ability
         StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
         ExplodeGrenade(targetPosition, AreaRadius);
         GameObject explosionEffect = NetworkHelper.Spawn(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
-        NetworkHelper.Despawn(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
-        NetworkHelper.Despawn(grenade);
+        NetworkHelper.Instance.Despawn(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
+        NetworkHelper.Instance.Despawn(grenade);
     }
 
     private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)

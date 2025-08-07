@@ -20,6 +20,11 @@ public class ActivateAbility : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        if (!IsOwner)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
         uses = unitData.uses;
         GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
         GameLoop.disableUnitCard += disableUnitCard;
