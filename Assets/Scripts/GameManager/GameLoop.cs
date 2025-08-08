@@ -78,7 +78,7 @@ public class GameLoop : NetworkBehaviour
 
     // Actions
     public static System.Action<bool> setUnitCardsInteractable;
-    public static System.Action<GameObject> disableUnitCard;
+    public static System.Action<NetworkObjectReference> disableUnitCard;
     public static System.Action<bool> OrderAllowShooting;
     public static System.Action<bool> OrderStillShooting;
     public static System.Action OrderContinueShooting;
@@ -139,8 +139,8 @@ public class GameLoop : NetworkBehaviour
         {
             GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation, GetClientForTeamIndex(teams.IndexOf(team)));
             unit.transform.position += Helper.heightOffset(unit.transform);
-            NetworkHelper.Instance.SetTag(unit, team);
-            SetGroupLayerClientRpc(unit.GetComponent<NetworkObject>(), LayerMask.NameToLayer(team));
+            unit.tag = team;
+            SetGroupLayerGlobal(unit, LayerMask.NameToLayer(team));
 
             GameObject newUnitCard = NetworkHelper.Spawn(unitCardPrefabs[teamUnits[i]], unitCardTeamContainer.transform, GetClientForTeamIndex(teams.IndexOf(team)));
 
@@ -193,7 +193,6 @@ public class GameLoop : NetworkBehaviour
     {
         if (!IsServer) yield break;
         yield return null;
-        SetTeamIndicators();
 
         while (teams.All(team => teamSize(team) > 0))
         {
@@ -286,15 +285,16 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
-    //public void SetGroupLayer(NetworkObjectReference objRef, int layer)
-    //{
-
-    //    SetGroupLayerClientRpc(NetworkObjectReference objRef, int layer);
-    //}
+    public void SetGroupLayerGlobal(GameObject obj, int layer)
+    {
+        SetGroupLayer(obj, layer);
+        SetGroupLayerClientRpc(obj, layer);
+    }
 
     [ClientRpc]
     public void SetGroupLayerClientRpc(NetworkObjectReference objRef, int layer)
     {
+        if (IsServer) return;
         if (objRef.TryGet(out NetworkObject networkObject))
         {
             SetGroupLayer(networkObject.gameObject, layer);
@@ -308,38 +308,6 @@ public class GameLoop : NetworkBehaviour
         {
             SetGroupLayer(child.gameObject, layer);
         }
-    }
-
-    void SetTeamIndicators()
-    {
-        GameObject[] teamIndicators = GameObject.FindGameObjectsWithTag("TeamIndicatorProp");
-        foreach (GameObject indicator in teamIndicators)
-        {
-            string unitTeam = null;
-
-            //Loop through parents to find team tag
-            Transform current = indicator.transform;
-            while (current != null)
-            {
-                if (teams.Contains(current.tag))
-                {
-                    unitTeam = current.tag;
-                    break;
-                }
-                current = current.parent;
-            }
-
-            //Set material based on team tag
-            if (unitTeam != null)
-            {
-                Renderer renderer = indicator.GetComponent<Renderer>();
-                if (renderer != null)
-                {
-                    renderer.materials = new Material[] { GetTeamMaterial(unitTeam) };
-                }
-            }
-        }
-
     }
 
     bool CheckStillMoving()

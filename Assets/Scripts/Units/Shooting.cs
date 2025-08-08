@@ -21,6 +21,13 @@ public class Shooting : NetworkBehaviour
     private Color startAnimColor = Color.white;
     private Color endAnimColor = Color.red;
 
+    // Network variables for laser synchronization
+    private NetworkVariable<bool> isLaserEnabled = new NetworkVariable<bool>(false);
+    private NetworkVariable<Vector3> laserStartPos = new NetworkVariable<Vector3>();
+    private NetworkVariable<Vector3> laserEndPos = new NetworkVariable<Vector3>();
+    private NetworkVariable<float> laserWidth = new NetworkVariable<float>();
+    private NetworkVariable<Color> laserColor = new NetworkVariable<Color>();
+
     private List<GameObject> bullets = new List<GameObject>();
     private int currentAmmo;
     [HideInInspector] public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
@@ -31,25 +38,71 @@ public class Shooting : NetworkBehaviour
     // CONTROLLER
     void Start()
     {
+        // Initialize laser on all clients
+        targetLaser = gameObject.AddComponent<LineRenderer>();
+        targetLaser.enabled = false;
+
         if (!IsServer)
         {
             enabled = false;
             return;
         }
+
         GameLoop.OrderAllowShooting += (toggle) => allowShooting = toggle;
         GameLoop.OrderStillShooting += (toggle) => stillShooting = toggle;
         GameLoop.OrderContinueShooting += ContinueShooting;
 
-        targetLaser = gameObject.AddComponent<LineRenderer>();
-        targetLaser.enabled = false;
-
         enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        // Subscribe to network variable changes on all clients
+        isLaserEnabled.OnValueChanged += OnLaserEnabledChanged;
+        laserStartPos.OnValueChanged += OnLaserPositionChanged;
+        laserEndPos.OnValueChanged += OnLaserPositionChanged;
+        laserWidth.OnValueChanged += OnLaserWidthChanged;
+        laserColor.OnValueChanged += OnLaserColorChanged;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        // Unsubscribe from network variable changes
+        isLaserEnabled.OnValueChanged -= OnLaserEnabledChanged;
+        laserStartPos.OnValueChanged -= OnLaserPositionChanged;
+        laserEndPos.OnValueChanged -= OnLaserPositionChanged;
+        laserWidth.OnValueChanged -= OnLaserWidthChanged;
+        laserColor.OnValueChanged -= OnLaserColorChanged;
+
+        base.OnNetworkDespawn();
+    }
+
+    private void OnLaserEnabledChanged(bool previousValue, bool newValue)
+    {
+        targetLaser.enabled = newValue;
+    }
+
+    private void OnLaserPositionChanged(Vector3 previousValue, Vector3 newValue)
+    {
+        targetLaser.SetPositions(new Vector3[] { laserStartPos.Value, laserEndPos.Value });
+    }
+
+    private void OnLaserWidthChanged(float previousValue, float newValue)
+    {
+        targetLaser.startWidth = targetLaser.endWidth = newValue;
+    }
+
+    private void OnLaserColorChanged(Color previousValue, Color newValue)
+    {
+        targetLaser.startColor = targetLaser.endColor = newValue;
     }
 
     public void PauseShooting()
     {
         if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
-        targetLaser.enabled = false;
+        isLaserEnabled.Value = false;
 
         allowShooting = true;
         stillShooting = true;
@@ -96,7 +149,7 @@ public class Shooting : NetworkBehaviour
                 //Refind target
                 if (target == null || !lineOfSight(target))
                 {
-                    targetLaser.enabled = false;
+                    isLaserEnabled.Value = false;
                     target = FindNearestEnemy();
                     if (target)
                     {
@@ -114,17 +167,20 @@ public class Shooting : NetworkBehaviour
                 {
                     transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized); // Track target
 
-                    targetLaser.enabled = true;
-                    targetLaser.SetPositions(new Vector3[] { transform.position, target.transform.position });
-                    targetLaser.startWidth = targetLaser.endWidth = Mathf.Lerp(startAnimWidth, endAnimWidth, 1 - remainingTargetLockTime / unitData.targetLockDuration);
-                    targetLaser.startColor = targetLaser.endColor = Color.Lerp(startAnimColor, endAnimColor, 1 - remainingTargetLockTime / unitData.targetLockDuration);
+                    float lockProgress = 1 - remainingTargetLockTime / unitData.targetLockDuration;
+
+                    isLaserEnabled.Value = true;
+                    laserWidth.Value = Mathf.Lerp(startAnimWidth, endAnimWidth, lockProgress);
+                    laserColor.Value =  Color.Lerp(startAnimColor, endAnimColor, lockProgress);
+                    laserStartPos.Value = transform.position;
+                    laserEndPos.Value = target.transform.position;
 
                     remainingTargetLockTime -= Time.deltaTime;
 
                     yield return null;
                     continue;
                 }
-                targetLaser.enabled = false;
+                isLaserEnabled.Value = false;
 
                 transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized); // Track target
                 FireBullet();

@@ -154,28 +154,6 @@ public class NetworkHelper : NetworkBehaviour
         }
     }
 
-    public void SetTag(GameObject gameObject, string tag)
-    {
-        if (!IsServer) return;
-
-        if (gameObject == null) return;
-
-        // Set active locally on server
-        gameObject.tag = tag;
-
-        // Notify all clients
-        SetTagClientRpc(gameObject.GetComponent<NetworkObject>(), tag);
-    }
-
-    [ClientRpc]
-    public void SetTagClientRpc(NetworkObjectReference objRef, string tag)
-    {
-        if (objRef.TryGet(out NetworkObject networkObject))
-        {
-            networkObject.tag = tag;
-        }
-    }
-
     public IEnumerator DespawnDelay(NetworkObject netObj, float delay = 0)
     {
         yield return new WaitForSeconds(delay);

@@ -168,6 +168,7 @@ GameObject:
   - component: {fileID: 2188586334649481472}
   - component: {fileID: -4149958763578291957}
   - component: {fileID: 8708257098216051031}
+  - component: {fileID: 8292292578378300112}
   m_Layer: 6
   m_Name: Unit
   m_TagString: Untagged
@@ -395,6 +396,22 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!114 &8292292578378300112
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1013387072258837214}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b1c6a7d4f1e3634fbea2cc144d86d53, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
+  teamMaterials:
+  - {fileID: 2100000, guid: 8b24f4b922356ea4aa94816ac64a0b3f, type: 2}
+  - {fileID: 2100000, guid: 727707c55eb0d15409a100bb6a744124, type: 2}
 --- !u!1 &4482195103607676923
 GameObject:
   m_ObjectHideFlags: 0

@@ -13,7 +13,6 @@ public class Health : NetworkBehaviour
 
     private float typicalMaxHealth = 100f;
 
-
     public override void OnNetworkSpawn()
     {
         healthBar = transform.Find("UnitCanvas").Find("HealthBar");

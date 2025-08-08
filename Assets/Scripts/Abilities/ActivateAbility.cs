@@ -20,44 +20,58 @@ public class ActivateAbility : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        uses = unitData.uses;
+        GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
+        GameLoop.disableUnitCard += disableUnitCardClientRpc;
+
         if (!IsOwner)
         {
             gameObject.SetActive(false);
             return;
         }
-        uses = unitData.uses;
-        GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
-        GameLoop.disableUnitCard += disableUnitCard;
     }
 
     public override void OnDestroy()
     {
         GameLoop.setUnitCardsInteractable -= setUnitCardInteractable;
-        GameLoop.disableUnitCard -= disableUnitCard;
+        GameLoop.disableUnitCard -= disableUnitCardClientRpc;
     }
 
     public void setUnitCardInteractable(bool interactable)
     {
         if (uses <= 0 || !unit.activeInHierarchy)
         {
-            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+            interactable = false;
         }
-        else
-        {
-            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
-        }
+        setUnitCardInteractableClientRpc(interactable);
+    }
+
+    [ClientRpc]
+    public void setUnitCardInteractableClientRpc(bool interactable)
+    {
+        if (!IsOwner && !IsServer) return;
+        transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
     }
 
     public void disableUnitCard(GameObject disableUnit)
     {
-        if (unit == disableUnit)
+        if (unit != null && unit == disableUnit)
         {
-            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
-            return;
+            disableUnitCardClientRpc(disableUnit);
         }
     }
 
-    public void activateAbility()
+    [ClientRpc]
+    public void disableUnitCardClientRpc(NetworkObjectReference objRef)
+    {
+        if (objRef.TryGet(out NetworkObject networkObject))
+        {
+            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
+        }
+    }
+
+    [ServerRpc]
+    public void activateAbilityServerRpc()
     {
         uses--;
 
@@ -65,6 +79,13 @@ public class ActivateAbility : NetworkBehaviour
         Time.timeScale = 0f;
         GameLoop.setUnitCardsInteractable?.Invoke(false);
 
+        StartCoroutine(selectAbilitySquareFunc());
+    }
+
+    [ClientRpc]
+    void selectAbilitySquareFuncClientRpc()
+    {
+        if (!IsOwner) return;
         StartCoroutine(selectAbilitySquareFunc());
     }
 
@@ -87,7 +108,7 @@ public class ActivateAbility : NetworkBehaviour
         GameObject abilityIndicator = null;
         GameObject AOEindicator = null;
 
-        if(unitData.responseDistLine)
+        if (unitData.responseDistLine)
         {
             unit.transform.position = PlanMovement.GetNearestGridCell(unit.transform.position) + Helper.heightOffset(unit.transform); //snap to nearest cell
         }
@@ -130,7 +151,7 @@ public class ActivateAbility : NetworkBehaviour
         UpdateAbilityIndicators(mouseSquare, ref abilityIndicator, ref AOEindicator);
         UpdateEnemyAlerts(selectedSquare);
 
-        if(unitData.responseDistLine)
+        if (unitData.responseDistLine)
         {
             Destroy(laserLine?.gameObject);
             Vector3 targetPosition = selectedSquare + Helper.heightOffset(unit.transform);
@@ -151,7 +172,7 @@ public class ActivateAbility : NetworkBehaviour
 
         GameObject laserObject = new GameObject("LaserLinePreview");
         laserLine = laserObject.AddComponent<LineRenderer>();
-        
+
         Material laserMaterial = new Material(Shader.Find("Unlit/Color"));
         laserMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
         laserMaterial.color = Color.red;
@@ -200,7 +221,7 @@ public class ActivateAbility : NetworkBehaviour
     {
         //Response
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-        
+
         List<GameObject> enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
 
 
