@@ -18,23 +18,20 @@ public class ActivateAbility : NetworkBehaviour
     GameObject abilityRangeOverlay;
     LineRenderer laserLine;
 
+    List<GameObject> enemiesInRange = new List<GameObject>();
+    Vector3 selectedSquare;
+
     public override void OnNetworkSpawn()
     {
         uses = unitData.uses;
         GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
-        GameLoop.disableUnitCard += disableUnitCardClientRpc;
-
-        if (!IsOwner)
-        {
-            gameObject.SetActive(false);
-            return;
-        }
+        GameLoop.disableUnitCard += disableUnitCard;
     }
 
     public override void OnDestroy()
     {
         GameLoop.setUnitCardsInteractable -= setUnitCardInteractable;
-        GameLoop.disableUnitCard -= disableUnitCardClientRpc;
+        GameLoop.disableUnitCard -= disableUnitCard;
     }
 
     public void setUnitCardInteractable(bool interactable)
@@ -57,17 +54,14 @@ public class ActivateAbility : NetworkBehaviour
     {
         if (unit != null && unit == disableUnit)
         {
-            disableUnitCardClientRpc(disableUnit);
+            disableUnitCardClientRpc();
         }
     }
 
     [ClientRpc]
-    public void disableUnitCardClientRpc(NetworkObjectReference objRef)
+    public void disableUnitCardClientRpc()
     {
-        if (objRef.TryGet(out NetworkObject networkObject))
-        {
-            transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
-        }
+        transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
     }
 
     [ServerRpc]
@@ -79,31 +73,57 @@ public class ActivateAbility : NetworkBehaviour
         Time.timeScale = 0f;
         GameLoop.setUnitCardsInteractable?.Invoke(false);
 
-        StartCoroutine(selectAbilitySquareFunc());
+        double endTime = NetworkManager.ServerTime.Time + unitData.selectTime;
+        selectAbilitySquareFuncClientRpc(endTime, unit);
     }
 
     [ClientRpc]
-    void selectAbilitySquareFuncClientRpc()
+    void selectAbilitySquareFuncClientRpc(double endTime, NetworkObjectReference unitRef)
     {
-        if (!IsOwner) return;
-        StartCoroutine(selectAbilitySquareFunc());
+        if (IsOwner)
+        {
+            Debug.Log("Owner ability");
+            StartCoroutine(selectAbilitySquareFunc(endTime, unitRef));
+        }
+        else
+        {
+            Debug.Log("Not owner");
+            StartCoroutine(CountDown(endTime));
+        }
+
     }
 
-    IEnumerator selectAbilitySquareFunc()
+    IEnumerator CountDown(double endTime)
     {
+        float timeRemaining;
+        while ((timeRemaining = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0f)
+        {
+            PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
+            yield return null;
+        }
+        PlanMovement.Instance.timerTextUI.text = "";
+    }
+
+    IEnumerator selectAbilitySquareFunc(double endTime, NetworkObjectReference unitRef)
+    {
+        if (!unitRef.TryGet(out NetworkObject unitNetObj))
+        {
+            Debug.LogWarning("noooooo");
+            yield break;
+        }
+        GameObject unit = unitNetObj.gameObject;
         if (!unitData.selectAbilitySquare)
         {
-            planEnemyResponse(unit.transform.position);
+            planEnemyResponseServerRpc(unit.transform.position);
             yield break;
         }
 
-        GameLoop.Instance.setOverlayUITextClientRpc($"{unit.name}:\nSelect ability target square", unit.tag);
+        //GameLoop.Instance.setOverlayUITextClientRpc($"{unit.name}:\nSelect ability target square", GameLoop.teams[0]);
 
         Destroy(abilityRangeOverlay);
         Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
         abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, unitData.abilitySquareRange, abilityRangeOverlayPrefab);
 
-        float timeRemaining = unitData.selectTime;
         Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
         GameObject abilityIndicator = null;
         GameObject AOEindicator = null;
@@ -113,7 +133,8 @@ public class ActivateAbility : NetworkBehaviour
             unit.transform.position = PlanMovement.GetNearestGridCell(unit.transform.position) + Helper.heightOffset(unit.transform); //snap to nearest cell
         }
 
-        while (timeRemaining > 0f)
+        float timeRemaining;
+        while ((timeRemaining = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0f)
         {
             PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
 
@@ -122,7 +143,6 @@ public class ActivateAbility : NetworkBehaviour
                 HandleMouseClick(nearestCell, ref selectedSquare, ref abilityIndicator, ref AOEindicator);
             }
 
-            timeRemaining -= Time.unscaledDeltaTime;
             yield return null;
         }
 
@@ -133,7 +153,73 @@ public class ActivateAbility : NetworkBehaviour
 
         PlanMovement.Instance.timerTextUI.text = "";
 
-        planEnemyResponse(selectedSquare);
+        planEnemyResponseServerRpc(selectedSquare);
+    }
+
+    [ServerRpc]
+    void planEnemyResponseServerRpc(Vector3 abilitySquare)
+    {
+        selectedSquare = abilitySquare;
+        //Response
+        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
+
+        enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
+
+        GameLoop.Instance.setOverlayUITextClientRpc($"Dodging: {enemyTeam}", enemyTeam);
+        double endTime = NetworkManager.ServerTime.Time + unitData.timeDivePerUnit * enemiesInRange.Count;
+        NetworkObjectReference[] enemiesInRangeArray = new NetworkObjectReference[enemiesInRange.Count];
+        for (int i = 0; i < enemiesInRangeArray.Length; i++)
+        {
+            GameObject enemy = enemiesInRange[i];
+            if (enemy.TryGetComponent<NetworkObject>(out NetworkObject networkObject))
+            {
+                enemiesInRangeArray[i] = networkObject;
+            }
+        }
+        planEnemyResponseClientRpc(endTime, enemiesInRangeArray, unitData.diveRange, GameLoop.Instance.GetClient(enemyTeam));
+    }
+
+    [ClientRpc]
+    void planEnemyResponseClientRpc(double endTime, NetworkObjectReference[] enemiesInRange, int dashDist, ulong selectionTeam)
+    {
+        if (NetworkManager.Singleton.LocalClientId != selectionTeam) return;
+        List<GameObject> dashUnits = new List<GameObject>();
+        foreach (NetworkObjectReference objRef in enemiesInRange)
+        {
+            if (objRef.TryGet(out NetworkObject networkObject))
+            {
+                dashUnits.Add(networkObject.gameObject);
+            }
+        }
+        StartCoroutine(PlanMovement.Instance.StartPlanning(enemyResponseCallbackServerRpc, endTime, dashUnits, unitData.diveRange));
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    void enemyResponseCallbackServerRpc(PathsDict paths)
+    {
+        GameLoop.Instance.setOverlayUITextClientRpc("Executing Moves", "neutral");
+
+        //continue time
+        Time.timeScale = 1f;
+        GameLoop.setUnitCardsInteractable(true);
+
+        foreach (GameObject enemy in enemiesInRange)
+        {
+            enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+        }
+
+        //execute dive
+        foreach (var pair in paths)
+        {
+            GameObject unit = pair.Key;
+            List<Vector3> movementPath = pair.Value;
+            if (movementPath.Count == 0) continue; //skip if no path
+            unit.GetComponent<Shooting>().PauseShooting();
+            unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath), true);
+        }
+
+        //activate ability
+        StartCoroutine(unit.GetComponent<Ability>().ExecuteAbility(selectedSquare, unitData.abilityRadius));
     }
 
     private void HandleMouseClick(Vector3 nearestCell, ref Vector3 selectedSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
@@ -215,44 +301,6 @@ public class ActivateAbility : NetworkBehaviour
         {
             enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
         }
-    }
-
-    void planEnemyResponse(Vector3 abilitySquare)
-    {
-        //Response
-        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-
-        List<GameObject> enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
-
-
-        GameLoop.Instance.setOverlayUITextClientRpc($"Dodging: {enemyTeam}", enemyTeam);
-
-        StartCoroutine(PlanMovement.Instance.ChoosePaths(enemyTeam, (PathsDict paths) =>
-        {
-            GameLoop.Instance.setOverlayUITextClientRpc("Executing Moves", "neutral");
-
-            //continue time
-            Time.timeScale = 1f;
-            GameLoop.setUnitCardsInteractable(true);
-
-            foreach (GameObject enemy in enemiesInRange)
-            {
-                enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
-            }
-
-            //execute dive
-            foreach (var pair in paths)
-            {
-                GameObject unit = pair.Key;
-                List<Vector3> movementPath = pair.Value;
-                if (movementPath.Count == 0) continue; //skip if no path
-                unit.GetComponent<Shooting>().PauseShooting();
-                unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath), true);
-            }
-
-            //activate ability
-            StartCoroutine(unit.GetComponent<Ability>().ExecuteAbility(abilitySquare, unitData.abilityRadius));
-        }, unitData.timeDivePerUnit * enemiesInRange.Count, enemiesInRange, unitData.diveRange));
     }
 
     public static List<GameObject> GetUnitsInRange(Vector3 abilitySquare, string team, float range)

@@ -30,7 +30,6 @@ public class GameLoop : NetworkBehaviour
     // Team Configuration
     public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
     [SerializeField] private List<GameObject> unitCards;
-    [SerializeField] private GameObject unitCardsContainer;
 
     public static List<int[]> allTeamUnits = new List<int[]>()
         {
@@ -78,7 +77,7 @@ public class GameLoop : NetworkBehaviour
 
     // Actions
     public static System.Action<bool> setUnitCardsInteractable;
-    public static System.Action<NetworkObjectReference> disableUnitCard;
+    public static System.Action<GameObject> disableUnitCard;
     public static System.Action<bool> OrderAllowShooting;
     public static System.Action<bool> OrderStillShooting;
     public static System.Action OrderContinueShooting;
@@ -124,7 +123,7 @@ public class GameLoop : NetworkBehaviour
         //Setup teams
         for (int i = 0; i < teams.Count; i++)
         {
-            SetupUnitsAndCards(allTeamUnits[i], unitCards[0], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
+            SetupUnitsAndCards(allTeamUnits[i], unitCards[i], spawns[i], Quaternion.Euler(0, 180 * i, 0), teams[i]);
         }
 
         //Setup outline effect for teams
@@ -137,14 +136,24 @@ public class GameLoop : NetworkBehaviour
 
         for (int i = 0; i < teamUnits.Length; i++)
         {
-            GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation, GetClientForTeamIndex(teams.IndexOf(team)));
+            GameObject unit = NetworkHelper.Spawn(allUnits[teamUnits[i]], gridCoordToWorld(spawnPositions.ElementAt(i)), rotation, GetClient(team));
             unit.transform.position += Helper.heightOffset(unit.transform);
             unit.tag = team;
             SetGroupLayerGlobal(unit, LayerMask.NameToLayer(team));
 
-            GameObject newUnitCard = NetworkHelper.Spawn(unitCardPrefabs[teamUnits[i]], unitCardTeamContainer.transform, GetClientForTeamIndex(teams.IndexOf(team)));
+            GameObject newUnitCard = NetworkHelper.Spawn(unitCardPrefabs[teamUnits[i]], unitCardTeamContainer.transform, GetClient(team));
 
             newUnitCard.GetComponent<ActivateAbility>().unit = unit; //no need to sync cause activate ability should only be handled by the server
+        }
+        DisabledCardClientRpc(unitCardTeamContainer);
+    }
+
+    [ClientRpc]
+    void DisabledCardClientRpc(NetworkObjectReference objRef)
+    {
+        if (objRef.TryGet(out NetworkObject networkObject))
+        {
+            networkObject.GetComponent<UnitCard>().DisableUI();
         }
     }
 
@@ -173,7 +182,12 @@ public class GameLoop : NetworkBehaviour
         return index >= 0 && index < teams.Count ? index : 0;
     }
 
-    private ulong GetClientForTeamIndex(int teamIndex)
+    public ulong GetClient(string team)
+    {
+        return GetClient(teams.IndexOf(team));
+    }
+
+    private ulong GetClient(int teamIndex)
     {
         foreach (var kvp in clientIdToTeamIndex)
         {
@@ -284,6 +298,8 @@ public class GameLoop : NetworkBehaviour
             }
         }
     }
+
+    
 
     public void SetGroupLayerGlobal(GameObject obj, int layer)
     {

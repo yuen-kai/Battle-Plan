@@ -121,7 +121,6 @@ public class PlanMovement : MonoBehaviour
         Instance = this;
     }
 
-    
 
     public IEnumerator StartPlanning(System.Action<PathsDict> callback, double endTime, List<GameObject> dashUnits = null, int dashDist = -1)
     {
