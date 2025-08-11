@@ -1124,6 +1124,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2026756925}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 1107764568
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (8)
@@ -2435,6 +2447,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 877669472}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 51473765
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (2)
@@ -7532,6 +7556,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 877669472}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2243320144
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (9)
@@ -7817,6 +7853,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2026756925}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2830589463
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (3)
@@ -8793,6 +8841,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2026756925}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3882526726
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (5)
@@ -11779,6 +11839,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2026756925}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 1937248711
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (4)
@@ -15703,6 +15775,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 877669472}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 218409343
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (7)
@@ -16496,7 +16580,6 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 8b24f4b922356ea4aa94816ac64a0b3f, type: 2}
   - {fileID: 2100000, guid: 727707c55eb0d15409a100bb6a744124, type: 2}
   wallPrefab: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
-  wallsParent: {fileID: 1961413151}
   allUnits:
   - {fileID: 4136433947033533029, guid: 9b67c3ffd1e9c1f4d810e0a404dd6666, type: 3}
   - {fileID: 4136433947033533029, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
@@ -18497,6 +18580,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 877669472}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2653004460
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (1)
@@ -18563,6 +18658,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 877669472}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3838982296
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (3)
@@ -18847,6 +18954,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2026756925}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 1187956408
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (6)
@@ -19022,6 +19141,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2026756925}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 517836545
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall (1)
@@ -20953,13 +21084,14 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1961413152}
+  - component: {fileID: 1961413153}
   m_Layer: 9
   m_Name: Walls
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1961413152
 Transform:
   m_ObjectHideFlags: 0
@@ -20977,6 +21109,31 @@ Transform:
   - {fileID: 2026756925}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1961413153
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1961413151}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GlobalObjectIdHash: 2766500693
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
 --- !u!1 &1965016567
 GameObject:
   m_ObjectHideFlags: 0
@@ -22630,6 +22787,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 877669472}
     m_Modifications:
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2110825264
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2915818234542854692, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2213094949
+      objectReference: {fileID: 0}
     - target: {fileID: 7573182248121812521, guid: f32e3b338cc42f24ba6b311ce98c983e, type: 3}
       propertyPath: m_Name
       value: Wall

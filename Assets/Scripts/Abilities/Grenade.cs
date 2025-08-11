@@ -1,8 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class Grenade : Ability
+public partial class Grenade : Ability
 {
     float abilityTime = 1;
     float throwHeight = 5f;
@@ -35,7 +36,7 @@ public class Grenade : Ability
         grenade.transform.position = targetPosition;
 
         // Explode and damage enemies
-        StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
+        ShakeCameraClientRpc();
         ExplodeGrenade(targetPosition, AreaRadius);
         GameObject explosionEffect = NetworkHelper.Spawn(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
         NetworkHelper.Instance.Despawn(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
@@ -62,6 +63,23 @@ public class Grenade : Ability
             }
 
             enemy.transform.GetComponent<Health>()?.TakeDamage(damage);
+        }
+    }
+}
+
+public partial class Grenade : Ability
+{
+    [ClientRpc]
+    private void ShakeCameraClientRpc()
+    {
+        var cam = Camera.main;
+        if (cam != null)
+        {
+            var eff = cam.GetComponent<CameraEffects>();
+            if (eff != null)
+            {
+                StartCoroutine(eff.CameraShake());
+            }
         }
     }
 }

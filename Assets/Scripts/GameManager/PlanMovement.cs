@@ -344,7 +344,8 @@ public class PlanMovement : MonoBehaviour
 
     void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
     {
-        Vector3 heightOffset = Helper.heightOffset(pathNodePrefab.transform);
+        // Use consistent height offset calculation for path nodes and edges
+        Vector3 heightOffset = GetPathVisualHeightOffset();
 
         GameObject node = Instantiate(pathNodePrefab, cell, Quaternion.identity);
         node.transform.parent = currentPathNodes.transform;
@@ -358,6 +359,18 @@ public class PlanMovement : MonoBehaviour
         {
             node.transform.GetComponent<Renderer>().material.color = Color.green;
         }
+    }
+
+    /// <summary>
+    /// Gets a consistent height offset for path visual elements across all clients
+    /// This ensures path nodes and edges have the same height offset as walls and units
+    /// </summary>
+    private Vector3 GetPathVisualHeightOffset()
+    {
+        // Use a fixed height offset that matches the expected grid positioning
+        // This ensures consistency across all clients regardless of prefab state
+        // Path visuals don't need to match unit heights exactly - they just need to be visible above the grid
+        return new Vector3(0, 0.1f, 0); // Small offset to prevent z-fighting with grid
     }
 
     void AddCharacterOutlines()

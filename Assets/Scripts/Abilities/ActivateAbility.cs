@@ -1,8 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
+using System.Linq;
 using TMPro;
 using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.UI;
 
 public class ActivateAbility : NetworkBehaviour
 {
@@ -11,32 +13,78 @@ public class ActivateAbility : NetworkBehaviour
     public UnitData unitData;
     public int uses;
 
-    [SerializeField] private GameObject abilityRangeOverlayPrefab;
-    [SerializeField] private GameObject abilitySquareIndicatorPrefab;
-    [SerializeField] private GameObject abilityAOEIndicatorPrefab;
+    [SerializeField]
+    private GameObject abilityRangeOverlayPrefab;
+
+    [SerializeField]
+    private GameObject abilitySquareIndicatorPrefab;
+
+    [SerializeField]
+    private GameObject abilityAOEIndicatorPrefab;
 
     GameObject abilityRangeOverlay;
     LineRenderer laserLine;
 
     List<GameObject> enemiesInRange = new List<GameObject>();
     Vector3 selectedSquare;
+    private ulong allowedDodgerClientId;
+    private NetworkVariable<NetworkObjectReference> unitNetRef =
+        new NetworkVariable<NetworkObjectReference>();
+
+    // Global indicator references per-client
+    private GameObject globalAbilityIndicator;
+    private GameObject globalAOEIndicator;
+    private LineRenderer globalAbilityLaser;
 
     public override void OnNetworkSpawn()
     {
         uses = unitData.uses;
         GameLoop.setUnitCardsInteractable += setUnitCardInteractable;
         GameLoop.disableUnitCard += disableUnitCard;
+
+        // keep clients updated with the linked unit
+        unitNetRef.OnValueChanged += OnUnitRefChanged;
+        if (IsServer && unit != null)
+        {
+            var no = unit.GetComponent<NetworkObject>();
+            if (no != null)
+            {
+                unitNetRef.Value = no;
+            }
+        }
     }
 
     public override void OnDestroy()
     {
         GameLoop.setUnitCardsInteractable -= setUnitCardInteractable;
         GameLoop.disableUnitCard -= disableUnitCard;
+        unitNetRef.OnValueChanged -= OnUnitRefChanged;
+    }
+
+    private void OnUnitRefChanged(NetworkObjectReference prev, NetworkObjectReference next)
+    {
+        if (next.TryGet(out NetworkObject netObj))
+        {
+            unit = netObj.gameObject;
+        }
+    }
+
+    // Called by server during setup to bind this card to its unit and sync to clients
+    public void SetUnitServer(GameObject targetUnit)
+    {
+        if (!IsServer || targetUnit == null)
+            return;
+        unit = targetUnit;
+        var no = targetUnit.GetComponent<NetworkObject>();
+        if (no != null)
+        {
+            unitNetRef.Value = no;
+        }
     }
 
     public void setUnitCardInteractable(bool interactable)
     {
-        if (uses <= 0 || !unit.activeInHierarchy)
+        if (uses <= 0 || unit == null || !unit.activeInHierarchy)
         {
             interactable = false;
         }
@@ -46,8 +94,10 @@ public class ActivateAbility : NetworkBehaviour
     [ClientRpc]
     public void setUnitCardInteractableClientRpc(bool interactable)
     {
-        if (!IsOwner && !IsServer) return;
-        transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = interactable;
+        if (!IsOwner && !IsServer)
+            return;
+        transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable =
+            interactable;
     }
 
     public void disableUnitCard(GameObject disableUnit)
@@ -64,9 +114,26 @@ public class ActivateAbility : NetworkBehaviour
         transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
     }
 
-    [ServerRpc]
-    public void activateAbilityServerRpc()
+    // Expose a parameterless method for Unity UI Button OnClick
+    public void OnAbilityPressed()
     {
+        activateAbilityServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void activateAbilityServerRpc(ServerRpcParams rpcParams = default)
+    {
+        // Only allow the owner of the unit to trigger its ability
+        if (unit == null)
+            return;
+        var netObj = unit.GetComponent<NetworkObject>();
+        if (netObj == null || !netObj.IsSpawned)
+            return;
+        if (netObj.OwnerClientId != rpcParams.Receive.SenderClientId)
+            return;
+        if (uses <= 0)
+            return;
+
         uses--;
 
         //pause time
@@ -74,6 +141,11 @@ public class ActivateAbility : NetworkBehaviour
         GameLoop.setUnitCardsInteractable?.Invoke(false);
 
         double endTime = NetworkManager.ServerTime.Time + unitData.selectTime;
+        // Server broadcasts overlay UI message
+        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
+            $"{unit.name}:\nSelect ability target square",
+            MessagePerspective.Friendly
+        );
         selectAbilitySquareFuncClientRpc(endTime, unit);
     }
 
@@ -82,15 +154,12 @@ public class ActivateAbility : NetworkBehaviour
     {
         if (IsOwner)
         {
-            Debug.Log("Owner ability");
             StartCoroutine(selectAbilitySquareFunc(endTime, unitRef));
         }
         else
         {
-            Debug.Log("Not owner");
             StartCoroutine(CountDown(endTime));
         }
-
     }
 
     IEnumerator CountDown(double endTime)
@@ -108,7 +177,6 @@ public class ActivateAbility : NetworkBehaviour
     {
         if (!unitRef.TryGet(out NetworkObject unitNetObj))
         {
-            Debug.LogWarning("noooooo");
             yield break;
         }
         GameObject unit = unitNetObj.gameObject;
@@ -118,19 +186,23 @@ public class ActivateAbility : NetworkBehaviour
             yield break;
         }
 
-        //GameLoop.Instance.setOverlayUITextClientRpc($"{unit.name}:\nSelect ability target square", GameLoop.teams[0]);
+        // Overlay text is broadcast by server already
 
         Destroy(abilityRangeOverlay);
         Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
-        abilityRangeOverlay = Helper.DisplayGridRange(nearestCell, unitData.abilitySquareRange, abilityRangeOverlayPrefab);
+        abilityRangeOverlay = Helper.DisplayGridRange(
+            nearestCell,
+            unitData.abilitySquareRange,
+            abilityRangeOverlayPrefab
+        );
 
-        Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); //TODO: change default selection
-        GameObject abilityIndicator = null;
-        GameObject AOEindicator = null;
+        Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); // default selection
 
         if (unitData.responseDistLine)
         {
-            unit.transform.position = PlanMovement.GetNearestGridCell(unit.transform.position) + Helper.heightOffset(unit.transform); //snap to nearest cell
+            unit.transform.position =
+                PlanMovement.GetNearestGridCell(unit.transform.position)
+                + Helper.heightOffset(unit.transform); //snap to nearest cell
         }
 
         float timeRemaining;
@@ -140,34 +212,48 @@ public class ActivateAbility : NetworkBehaviour
 
             if (Input.GetMouseButtonDown(0))
             {
-                HandleMouseClick(nearestCell, ref selectedSquare, ref abilityIndicator, ref AOEindicator);
+                HandleMouseClick(nearestCell, ref selectedSquare);
             }
 
             yield return null;
         }
 
-        Destroy(abilityIndicator);
-        Destroy(AOEindicator);
         Destroy(abilityRangeOverlay);
-        Destroy(laserLine?.gameObject);
+
+        // Clear global indicators on all clients
+        ClearAbilityIndicatorsServerRpc();
 
         PlanMovement.Instance.timerTextUI.text = "";
 
         planEnemyResponseServerRpc(selectedSquare);
     }
 
-    [ServerRpc]
-    void planEnemyResponseServerRpc(Vector3 abilitySquare)
+    [ServerRpc(RequireOwnership = false)]
+    void planEnemyResponseServerRpc(Vector3 abilitySquare, ServerRpcParams rpcParams = default)
     {
+        // Ensure only the owning client of the unit can submit the ability target
+        if (unit == null)
+            return;
+        var netObj = unit.GetComponent<NetworkObject>();
+        if (netObj == null || !netObj.IsSpawned)
+            return;
+        if (netObj.OwnerClientId != rpcParams.Receive.SenderClientId)
+            return;
+
         selectedSquare = abilitySquare;
         //Response
         string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
 
-        enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
+        enemiesInRange = !unitData.responseDistLine
+            ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange)
+            : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
 
-        GameLoop.Instance.setOverlayUITextClientRpc($"Dodging: {enemyTeam}", enemyTeam);
-        double endTime = NetworkManager.ServerTime.Time + unitData.timeDivePerUnit * enemiesInRange.Count;
-        NetworkObjectReference[] enemiesInRangeArray = new NetworkObjectReference[enemiesInRange.Count];
+        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc("Dodging", MessagePerspective.Enemy);
+        double endTime =
+            NetworkManager.ServerTime.Time + unitData.timeDivePerUnit * enemiesInRange.Count;
+        NetworkObjectReference[] enemiesInRangeArray = new NetworkObjectReference[
+            enemiesInRange.Count
+        ];
         for (int i = 0; i < enemiesInRangeArray.Length; i++)
         {
             GameObject enemy = enemiesInRange[i];
@@ -176,13 +262,25 @@ public class ActivateAbility : NetworkBehaviour
                 enemiesInRangeArray[i] = networkObject;
             }
         }
-        planEnemyResponseClientRpc(endTime, enemiesInRangeArray, unitData.diveRange, GameLoop.Instance.GetClient(enemyTeam));
+        allowedDodgerClientId = GameLoop.Instance.GetClient(enemyTeam);
+        planEnemyResponseClientRpc(
+            endTime,
+            enemiesInRangeArray,
+            unitData.diveRange,
+            allowedDodgerClientId
+        );
     }
 
     [ClientRpc]
-    void planEnemyResponseClientRpc(double endTime, NetworkObjectReference[] enemiesInRange, int dashDist, ulong selectionTeam)
+    void planEnemyResponseClientRpc(
+        double endTime,
+        NetworkObjectReference[] enemiesInRange,
+        int dashDist,
+        ulong selectionTeam
+    )
     {
-        if (NetworkManager.Singleton.LocalClientId != selectionTeam) return;
+        if (NetworkManager.Singleton.LocalClientId != selectionTeam)
+            return;
         List<GameObject> dashUnits = new List<GameObject>();
         foreach (NetworkObjectReference objRef in enemiesInRange)
         {
@@ -191,13 +289,27 @@ public class ActivateAbility : NetworkBehaviour
                 dashUnits.Add(networkObject.gameObject);
             }
         }
-        StartCoroutine(PlanMovement.Instance.StartPlanning(enemyResponseCallbackServerRpc, endTime, dashUnits, unitData.diveRange));
+        StartCoroutine(
+            PlanMovement.Instance.StartPlanning(
+                paths => enemyResponseCallbackServerRpc(paths),
+                endTime,
+                dashUnits,
+                unitData.diveRange
+            )
+        );
     }
 
     [ServerRpc(RequireOwnership = false)]
-    void enemyResponseCallbackServerRpc(PathsDict paths)
+    void enemyResponseCallbackServerRpc(PathsDict paths, ServerRpcParams rpcParams = default)
     {
-        GameLoop.Instance.setOverlayUITextClientRpc("Executing Moves", "neutral");
+        // Only accept responses from the selected enemy team client
+        if (rpcParams.Receive.SenderClientId != allowedDodgerClientId)
+            return;
+
+        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
+            "Executing Moves",
+            MessagePerspective.Neutral
+        );
 
         //continue time
         Time.timeScale = 1f;
@@ -208,41 +320,84 @@ public class ActivateAbility : NetworkBehaviour
             enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
         }
 
-        //execute dive
+        // Sanitize and execute dive moves
         foreach (var pair in paths)
         {
             GameObject unit = pair.Key;
             List<Vector3> movementPath = pair.Value;
-            if (movementPath.Count == 0) continue; //skip if no path
+            if (unit == null || movementPath == null || movementPath.Count == 0)
+                continue;
+
+            var unitNet = unit.GetComponent<NetworkObject>();
+            if (unitNet == null || !unitNet.IsSpawned)
+                continue;
+
+            // Ensure this unit is one of the allowed dodging enemies
+            if (!enemiesInRange.Contains(unit))
+                continue;
+
+            // Apply server-side sanitization similar to planning phase: limit to dive range and adjacency
+            var moveComp = unit.GetComponent<Movement>();
+            if (moveComp == null || moveComp.unitData == null)
+                continue;
+            int maxSteps = Mathf.Max(0, unitData.diveRange);
+
+            List<Vector3> clean = new List<Vector3>();
+            Vector3 start = PlanMovement.GetGridCellUnderCharacter(unit);
+            clean.Add(start);
+
+            int stepsAdded = 0;
+            Vector3 last = start;
+            foreach (var p in movementPath)
+            {
+                if (stepsAdded >= maxSteps)
+                    break;
+                Vector3 snapped = PlanMovement.GetNearestGridCell(p);
+                float dist = Mathf.Abs(snapped.x - last.x) + Mathf.Abs(snapped.z - last.z);
+                bool isAdjacent = Mathf.Abs(dist - GameLoop.cellSize) <= 0.1f;
+                if (!isAdjacent)
+                    continue;
+                if (clean.Contains(snapped))
+                    continue;
+                if (!GameLoop.gridBounds.Contains(new Vector2(snapped.x, snapped.z)))
+                    continue;
+
+                clean.Add(snapped);
+                last = snapped;
+                stepsAdded++;
+            }
+
+            if (clean.Count <= 1)
+                continue;
             unit.GetComponent<Shooting>().PauseShooting();
-            unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath), true);
+            unit.GetComponent<Movement>().StartMovement(new List<Vector3>(clean), true);
         }
 
         //activate ability
-        StartCoroutine(unit.GetComponent<Ability>().ExecuteAbility(selectedSquare, unitData.abilityRadius));
+        StartCoroutine(
+            unit.GetComponent<Ability>().ExecuteAbility(selectedSquare, unitData.abilityRadius)
+        );
     }
 
-    private void HandleMouseClick(Vector3 nearestCell, ref Vector3 selectedSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
+    private void HandleMouseClick(Vector3 nearestCell, ref Vector3 selectedSquare)
     {
         Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
-        if (!potentialSquare.HasValue) return;
+        if (!potentialSquare.HasValue)
+            return;
 
         Vector3 mouseSquare = potentialSquare.Value;
         float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
         float verticalDistance = Mathf.Abs(nearestCell.z - mouseSquare.z);
 
-        if (horizontalDistance + verticalDistance > (unitData.abilitySquareRange + 0.1f) * GameLoop.cellSize) return;
+        if (
+            horizontalDistance + verticalDistance
+            > (unitData.abilitySquareRange + 0.1f) * GameLoop.cellSize
+        )
+            return;
 
         selectedSquare = mouseSquare;
-        UpdateAbilityIndicators(mouseSquare, ref abilityIndicator, ref AOEindicator);
-        UpdateEnemyAlerts(selectedSquare);
-
-        if (unitData.responseDistLine)
-        {
-            Destroy(laserLine?.gameObject);
-            Vector3 targetPosition = selectedSquare + Helper.heightOffset(unit.transform);
-            CreateLaserLine(unit.transform.position, targetPosition);
-        }
+        // Notify server to update global indicators and alerts
+        NotifySelectedSquareServerRpc(selectedSquare);
     }
 
     private void CreateLaserLine(Vector3 start, Vector3 end)
@@ -251,55 +406,188 @@ public class ActivateAbility : NetworkBehaviour
         Vector3 finalEnd = end + direction * 50f;
 
         // Stop if there is a wall in the way
-        if (Physics.Raycast(start, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+        if (
+            Physics.Raycast(
+                start,
+                direction,
+                out RaycastHit hit,
+                Mathf.Infinity,
+                LayerMask.GetMask("Walls")
+            )
+        )
         {
             finalEnd = hit.point;
         }
 
-        GameObject laserObject = new GameObject("LaserLinePreview");
-        laserLine = laserObject.AddComponent<LineRenderer>();
+        GameObject laserObject = new GameObject("AbilityLinePreview");
+        globalAbilityLaser = laserObject.AddComponent<LineRenderer>();
 
         Material laserMaterial = new Material(Shader.Find("Unlit/Color"));
         laserMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
         laserMaterial.color = Color.red;
-        laserLine.material = laserMaterial;
+        globalAbilityLaser.material = laserMaterial;
 
-        laserLine.startColor = Color.red;
-        laserLine.endColor = Color.red;
-        laserLine.startWidth = laserLine.endWidth = 0.1f;
-        laserLine.positionCount = 2;
-        laserLine.SetPosition(0, start);
-        laserLine.SetPosition(1, finalEnd);
+        globalAbilityLaser.startColor = Color.red;
+        globalAbilityLaser.endColor = Color.red;
+        globalAbilityLaser.startWidth = globalAbilityLaser.endWidth = 0.1f;
+        globalAbilityLaser.positionCount = 2;
+        globalAbilityLaser.SetPosition(0, start);
+        globalAbilityLaser.SetPosition(1, finalEnd);
     }
 
-    private void UpdateAbilityIndicators(Vector3 mouseSquare, ref GameObject abilityIndicator, ref GameObject AOEindicator)
+    private void UpdateAbilityIndicatorsLocal(Vector3 mouseSquare)
     {
-        Destroy(abilityIndicator);
-        Destroy(AOEindicator);
+        if (globalAbilityIndicator != null)
+            Destroy(globalAbilityIndicator);
+        if (globalAOEIndicator != null)
+            Destroy(globalAOEIndicator);
 
-        abilityIndicator = Instantiate(abilitySquareIndicatorPrefab, mouseSquare, Quaternion.identity);
-        AOEindicator = Instantiate(abilityAOEIndicatorPrefab, mouseSquare, Quaternion.identity);
+        globalAbilityIndicator = Instantiate(
+            abilitySquareIndicatorPrefab,
+            mouseSquare,
+            Quaternion.identity
+        );
+        globalAOEIndicator = Instantiate(
+            abilityAOEIndicatorPrefab,
+            mouseSquare,
+            Quaternion.identity
+        );
 
         float diameter = 2 * unitData.abilityRadius * GameLoop.cellSize;
-        AOEindicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+        globalAOEIndicator.transform.localScale = new Vector3(diameter, 0.05f, diameter);
     }
 
-    private void UpdateEnemyAlerts(Vector3 selectedSquare)
+    [ServerRpc(RequireOwnership = false)]
+    private void NotifySelectedSquareServerRpc(Vector3 square, ServerRpcParams rpcParams = default)
     {
-        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-        GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+        if (unit == null)
+            return;
+        var netObj = unit.GetComponent<NetworkObject>();
+        if (netObj == null || !netObj.IsSpawned)
+            return;
+        if (netObj.OwnerClientId != rpcParams.Receive.SenderClientId)
+            return;
 
-        // Clear previous alerts
-        foreach (GameObject enemy in allEnemies)
+        // Broadcast global indicators
+        ShowAbilityIndicatorsClientRpc(square, unitData.abilityRadius);
+
+        if (unitData.responseDistLine)
         {
-            enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(false);
+            Vector3 start = unit.transform.position;
+            Vector3 targetPosition = square + Helper.heightOffset(unit.transform);
+            Vector3 direction = (targetPosition - start).normalized;
+            Vector3 end = targetPosition + direction * 50f;
+            if (
+                Physics.Raycast(
+                    start,
+                    direction,
+                    out RaycastHit hit,
+                    Mathf.Infinity,
+                    LayerMask.GetMask("Walls")
+                )
+            )
+            {
+                end = hit.point;
+            }
+            ShowAbilityLineClientRpc(start, end);
         }
 
-        // Set alerts for enemies in range
-        List<GameObject> enemiesInRange = !unitData.responseDistLine ? GetUnitsInRange(selectedSquare, enemyTeam, unitData.responseRange) : GetUnitsInRangeofLine(selectedSquare, enemyTeam, unitData.responseRange);
-        foreach (GameObject enemy in enemiesInRange)
+        // Update enemy alerts globally
+        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
+        var enemies = !unitData.responseDistLine
+            ? GetUnitsInRange(square, enemyTeam, unitData.responseRange)
+            : GetUnitsInRangeofLine(square, enemyTeam, unitData.responseRange);
+        List<NetworkObjectReference> refs = new List<NetworkObjectReference>();
+        foreach (var e in enemies)
         {
-            enemy.transform.Find("UnitCanvas").Find("Alert").gameObject.SetActive(true);
+            var eno = e.GetComponent<NetworkObject>();
+            if (eno != null)
+                refs.Add(eno);
+        }
+        UpdateEnemyAlertsClientRpc(refs.ToArray());
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void ClearAbilityIndicatorsServerRpc(ServerRpcParams rpcParams = default)
+    {
+        // Only owner can clear selection visuals from this card
+        if (unit == null)
+            return;
+        var netObj = unit.GetComponent<NetworkObject>();
+        if (netObj == null || !netObj.IsSpawned)
+            return;
+        if (IsServer == false && netObj.OwnerClientId != rpcParams.Receive.SenderClientId)
+            return;
+        HideAbilityIndicatorsClientRpc();
+        UpdateEnemyAlertsClientRpc(System.Array.Empty<NetworkObjectReference>());
+    }
+
+    [ClientRpc]
+    private void ShowAbilityIndicatorsClientRpc(Vector3 square, float radius)
+    {
+        UpdateAbilityIndicatorsLocal(square);
+    }
+
+    [ClientRpc]
+    private void ShowAbilityLineClientRpc(Vector3 start, Vector3 end)
+    {
+        if (globalAbilityLaser != null)
+        {
+            Destroy(globalAbilityLaser.gameObject);
+            globalAbilityLaser = null;
+        }
+        CreateLaserLine(start, end);
+    }
+
+    [ClientRpc]
+    private void HideAbilityIndicatorsClientRpc()
+    {
+        if (globalAbilityIndicator != null)
+            Destroy(globalAbilityIndicator);
+        if (globalAOEIndicator != null)
+            Destroy(globalAOEIndicator);
+        if (globalAbilityLaser != null)
+            Destroy(globalAbilityLaser.gameObject);
+        globalAbilityIndicator = null;
+        globalAOEIndicator = null;
+        globalAbilityLaser = null;
+    }
+
+    [ClientRpc]
+    private void UpdateEnemyAlertsClientRpc(NetworkObjectReference[] enemiesInRange)
+    {
+        if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
+            return;
+        ulong localClientId = NetworkManager.Singleton.LocalClientId;
+        HashSet<NetworkObject> inRange = new HashSet<NetworkObject>();
+        foreach (var r in enemiesInRange)
+        {
+            if (r.TryGet(out NetworkObject no))
+                inRange.Add(no);
+        }
+
+        // Disable all alerts on enemy-owned units
+        foreach (var no in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
+        {
+            if (no == null)
+                continue;
+            if (no.OwnerClientId == localClientId)
+                continue;
+            if (no.GetComponent<Movement>() == null)
+                continue;
+            var canvas = no.transform.Find("UnitCanvas");
+            var alert = canvas != null ? canvas.Find("Alert") : null;
+            if (alert != null)
+                alert.gameObject.SetActive(false);
+        }
+
+        // Enable on provided list
+        foreach (var no in inRange)
+        {
+            var canvas = no.transform.Find("UnitCanvas");
+            var alert = canvas != null ? canvas.Find("Alert") : null;
+            if (alert != null)
+                alert.gameObject.SetActive(true);
         }
     }
 
@@ -330,7 +618,15 @@ public class ActivateAbility : NetworkBehaviour
         Vector3 end = abilitySquare + direction * 50f;
 
         // Stop if there is a wall in the way
-        if (Physics.Raycast(start, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+        if (
+            Physics.Raycast(
+                start,
+                direction,
+                out RaycastHit hit,
+                Mathf.Infinity,
+                LayerMask.GetMask("Walls")
+            )
+        )
         {
             end = hit.point;
         }
@@ -379,5 +675,4 @@ public class ActivateAbility : NetworkBehaviour
             return Vector2.Distance(point2D, closestPointOnLine);
         }
     }
-
 }

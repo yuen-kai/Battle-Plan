@@ -2,11 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+using Unity.Netcode;
+
 public class AreaLock : Ability
 {
     float abilityTime = 3;
     float rotationSpeed = 720f; // Degrees per second
     private LineRenderer laserLine;
+    private LineRenderer clientLaserLine;
     public GameObject superBulletBlue;
     public GameObject superBulletRed;
     float damageMultiplier = 2f;
@@ -28,6 +31,7 @@ public class AreaLock : Ability
         Vector3 startPosition = transform.position = PlanMovement.GetNearestGridCell(transform.position) + Helper.heightOffset(transform); //snap to nearest cell
         Vector3 targetPosition = abilitySquare + Helper.heightOffset(transform);
         CreateLaserLine(startPosition, targetPosition);
+        ShowLaserClientRpc(startPosition, targetPosition);
 
         yield return StartCoroutine(transform.GetComponent<Movement>().RotateToFaceTarget(targetPosition, rotationSpeed));
 
@@ -67,6 +71,45 @@ public class AreaLock : Ability
         laserObject.transform.parent = transform;
     }
 
+    [ClientRpc]
+    private void ShowLaserClientRpc(Vector3 start, Vector3 end)
+    {
+        // Create a simple client-side line (no heavy animation)
+        Vector3 direction = (end - start).normalized;
+        Vector3 finalEnd = end + direction * 50f;
+        if (Physics.Raycast(start, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+        {
+            finalEnd = hit.point;
+        }
+
+        if (clientLaserLine != null)
+        {
+            Destroy(clientLaserLine.gameObject);
+            clientLaserLine = null;
+        }
+        GameObject laserObject = new GameObject("LaserLineClient");
+        clientLaserLine = laserObject.AddComponent<LineRenderer>();
+        clientLaserLine.material = new Material(Shader.Find("Sprites/Default"));
+        clientLaserLine.startColor = Color.red;
+        clientLaserLine.endColor = Color.red;
+        clientLaserLine.startWidth = 0.1f;
+        clientLaserLine.endWidth = 0.1f;
+        clientLaserLine.positionCount = 2;
+        clientLaserLine.SetPosition(0, start);
+        clientLaserLine.SetPosition(1, finalEnd);
+        laserObject.transform.parent = transform;
+    }
+
+    [ClientRpc]
+    private void HideLaserClientRpc()
+    {
+        if (clientLaserLine != null)
+        {
+            Destroy(clientLaserLine.gameObject);
+            clientLaserLine = null;
+        }
+    }
+
     private bool CheckForCrossingTarget(Vector3 start, Vector3 end)
     {
         string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
@@ -103,6 +146,7 @@ public class AreaLock : Ability
     IEnumerator cleanup()
     {
         Destroy(laserLine?.gameObject);
+        HideLaserClientRpc();
         transform.GetComponent<Shooting>().stillShooting = false;
         yield return new WaitForSeconds(1f); //moment to regain composure
         if (transform.GetComponent<Shooting>().allowShooting)
@@ -110,6 +154,7 @@ public class AreaLock : Ability
             transform.GetComponent<Shooting>().StartShooting();
         }
     }
+
 
     private IEnumerator AnimateLaserRush(float speed, GameObject target)
     {
@@ -125,17 +170,111 @@ public class AreaLock : Ability
         Vector3 startPos = transform.position;
         Vector3 endPos = target.transform.position;
 
+        // Tell clients to run the same rush animation locally
+        StartRushClientRpc(rushDuration, segments, startPos, endPos, initialWidth, finalWidth);
+
         // Execute rush animation
         yield return StartCoroutine(AnimateRushEffect(rushDuration, segments, startPos, endPos));
 
         StartCoroutine(CreateExplosionEffect(target.transform.position));
-        StartCoroutine(Camera.main.GetComponent<CameraEffects>().CameraShake());
+        ShakeCameraClientRpc();
 
         target.GetComponent<Health>()?.TakeDamage(transform.GetComponent<Shooting>().unitData.damage * damageMultiplier);
 
         // Execute cleanup animation
         yield return StartCoroutine(AnimateCleanupEffect(segments, endPos));
         StartCoroutine(cleanup());
+    }
+
+    [ClientRpc]
+    private void StartRushClientRpc(float rushDuration, int segments, Vector3 startPos, Vector3 endPos, float initWidth, float finWidth)
+    {
+        StartCoroutine(AnimateRushEffectClient(rushDuration, segments, startPos, endPos, initWidth, finWidth));
+    }
+
+    private IEnumerator AnimateRushEffectClient(float rushDuration, int segments, Vector3 startPos, Vector3 endPos, float initWidth, float finWidth)
+    {
+        if (clientLaserLine == null)
+        {
+            // Ensure a client line exists
+            Vector3 direction = (endPos - startPos).normalized;
+            Vector3 finalEnd = endPos + direction * 50f;
+            if (Physics.Raycast(startPos, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+            {
+                finalEnd = hit.point;
+            }
+
+            GameObject laserObject = new GameObject("LaserLineClient");
+            clientLaserLine = laserObject.AddComponent<LineRenderer>();
+            clientLaserLine.material = new Material(Shader.Find("Sprites/Default"));
+            clientLaserLine.startColor = Color.red;
+            clientLaserLine.endColor = Color.red;
+            clientLaserLine.startWidth = 0.1f;
+            clientLaserLine.endWidth = 0.1f;
+            clientLaserLine.positionCount = 2;
+            clientLaserLine.SetPosition(0, startPos);
+            clientLaserLine.SetPosition(1, finalEnd);
+            laserObject.transform.parent = transform;
+        }
+
+        clientLaserLine.positionCount = segments + 1;
+
+        float elapsed = 0f;
+        AnimationCurve rushCurve = new AnimationCurve(
+            new Keyframe(0f, 0f),
+            new Keyframe(0.1f, 1f),
+            new Keyframe(0.9f, 1f),
+            new Keyframe(1f, 0f)
+        );
+
+        while (elapsed < rushDuration && clientLaserLine != null)
+        {
+            float progress = elapsed / rushDuration;
+
+            // Update line positions
+            for (int i = 0; i <= segments; i++)
+            {
+                float segmentProgress = (float)i / segments;
+                Vector3 segmentPosition = Vector3.Lerp(startPos, endPos, segmentProgress);
+                clientLaserLine.SetPosition(i, segmentPosition);
+            }
+
+            // Update width curve along the line
+            AnimationCurve widthCurve = new AnimationCurve();
+            for (int i = 0; i <= segments; i++)
+            {
+                float segmentProgress = (float)i / segments;
+                float rushPosition = progress - segmentProgress;
+                float width = initWidth;
+                if (rushPosition >= -0.1f && rushPosition <= 0.1f)
+                {
+                    float curveValue = rushCurve.Evaluate(Mathf.Abs(rushPosition) * 10f);
+                    width = Mathf.Lerp(initWidth, finWidth, curveValue);
+                }
+                widthCurve.AddKey(segmentProgress, width);
+            }
+            clientLaserLine.widthCurve = widthCurve;
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // Cleanup effect on client
+        float cleanupDuration = 0.2f;
+        float cleanupElapsed = 0f;
+        while (cleanupElapsed < cleanupDuration && clientLaserLine != null)
+        {
+            float cleanupProgress = cleanupElapsed / cleanupDuration;
+            float currentWidth = Mathf.Lerp(finWidth, initWidth, cleanupProgress);
+            clientLaserLine.widthCurve = AnimationCurve.Linear(0f, currentWidth, 1f, currentWidth);
+            float alpha = Mathf.Lerp(1f, 0.5f, cleanupProgress);
+            Color cleanupColor = new Color(clientLaserLine.startColor.r, clientLaserLine.startColor.g, clientLaserLine.startColor.b, alpha);
+            clientLaserLine.startColor = cleanupColor;
+            clientLaserLine.endColor = cleanupColor;
+
+            cleanupElapsed += Time.deltaTime;
+            yield return null;
+        }
     }
 
     private IEnumerator AnimateRushEffect(float rushDuration, int segments, Vector3 startPos, Vector3 endPos)
@@ -280,6 +419,20 @@ public class AreaLock : Ability
         {
             if (particle != null)
                 Destroy(particle);
+        }
+    }
+
+    [ClientRpc]
+    private void ShakeCameraClientRpc()
+    {
+        var cam = Camera.main;
+        if (cam != null)
+        {
+            var eff = cam.GetComponent<CameraEffects>();
+            if (eff != null)
+            {
+                StartCoroutine(eff.CameraShake());
+            }
         }
     }
 }

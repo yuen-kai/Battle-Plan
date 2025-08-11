@@ -230,6 +230,7 @@ public class Shooting : NetworkBehaviour
         bulletScript.backstabMultiplier = backstabMultiplier;
         bulletScript.range = range * GameLoop.cellSize;
         bulletScript.backstabAngle = backstabAngle;
+        bulletScript.enemyTeam = enemyTeam;
 
         currentAmmo--;
     }
@@ -248,12 +249,38 @@ public class Shooting : NetworkBehaviour
 
     GameObject FindNearestEnemy()
     {
-        GameObject[] enemies = GameObject.FindGameObjectsWithTag(enemyTeam);
         GameObject nearestEnemy = null;
         float nearestDistance = Mathf.Infinity;
 
-        foreach (GameObject enemy in enemies)
+        if (IsServer)
         {
+            // Server: use tags or any authoritative lookup
+            GameObject[] enemies = GameObject.FindGameObjectsWithTag(enemyTeam);
+            foreach (GameObject enemy in enemies)
+            {
+                float distance = Vector3.Distance(transform.position, enemy.transform.position);
+                if (distance < nearestDistance && lineOfSight(enemy))
+                {
+                    nearestEnemy = enemy;
+                    nearestDistance = distance;
+                }
+            }
+            return nearestEnemy;
+        }
+
+        // Client: use ownership-based discovery to avoid tag usage
+        if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
+        {
+            return null;
+        }
+        ulong localClientId = NetworkManager.Singleton.LocalClientId;
+        foreach (var netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
+        {
+            if (netObj == null) continue;
+            if (netObj.OwnerClientId == localClientId) continue;
+            if (netObj.GetComponent<Health>() == null) continue;
+
+            GameObject enemy = netObj.gameObject;
             float distance = Vector3.Distance(transform.position, enemy.transform.position);
             if (distance < nearestDistance && lineOfSight(enemy))
             {

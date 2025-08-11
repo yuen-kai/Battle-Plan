@@ -1,8 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class Pogo : Ability
+public partial class Pogo : Ability
 {
     float abilityTime = 1;
     float jumpHeight = 5f;
@@ -36,5 +37,22 @@ public class Pogo : Ability
 
         transform.GetComponent<Collider>().enabled = true;
         transform.GetComponent<Movement>().transitionToShooting();
+    }
+}
+
+public partial class Pogo : Ability
+{
+    [ClientRpc]
+    private void ShakeCameraClientRpc()
+    {
+        var cam = Camera.main;
+        if (cam != null)
+        {
+            var eff = cam.GetComponent<CameraEffects>();
+            if (eff != null)
+            {
+                StartCoroutine(eff.CameraShake());
+            }
+        }
     }
 }

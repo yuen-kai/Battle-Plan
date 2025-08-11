@@ -14,27 +14,45 @@ public class Reroute : Ability
         //Response
         string team = gameObject.tag;
 
-        List<GameObject> alliesInRange = ActivateAbility.GetUnitsInRange(transform.position, team, abilityRange);
+        List<GameObject> alliesInRange = ActivateAbility.GetUnitsInRange(
+            transform.position,
+            team,
+            abilityRange
+        );
 
+        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
+            $"Rerouting: {team}",
+            GameLoop.Instance.GetTeamPerspective(team)
+        );
 
-        GameLoop.Instance.setOverlayUITextClientRpc($"Rerouting: {team}", team);
+        yield return StartCoroutine(
+            PlanMovement.Instance.ChoosePaths(
+                team,
+                (PathsDict paths) =>
+                {
+                    GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
+                        "Executing Moves",
+                        MessagePerspective.Neutral
+                    );
 
-        yield return StartCoroutine(PlanMovement.Instance.ChoosePaths(team, (PathsDict paths) =>
-        {
-            GameLoop.Instance.setOverlayUITextClientRpc("Executing Moves", "neutral");
-
-            //continue time
-            Time.timeScale = 1f;
-            GameLoop.setUnitCardsInteractable(true);
-            //execute dive
-            foreach (var pair in paths)
-            {
-                GameObject unit = pair.Key;
-                List<Vector3> movementPath = pair.Value;
-                if (movementPath.Count == 0) continue; //skip if no path
-                unit.GetComponent<Shooting>().PauseShooting();
-                unit.GetComponent<Movement>().StartMovement(new List<Vector3>(movementPath));
-            }
-        }, planningTimePerUnit * alliesInRange.Count, alliesInRange));
+                    //continue time
+                    Time.timeScale = 1f;
+                    GameLoop.setUnitCardsInteractable(true);
+                    //execute dive
+                    foreach (var pair in paths)
+                    {
+                        GameObject unit = pair.Key;
+                        List<Vector3> movementPath = pair.Value;
+                        if (movementPath.Count == 0)
+                            continue; //skip if no path
+                        unit.GetComponent<Shooting>().PauseShooting();
+                        unit.GetComponent<Movement>()
+                            .StartMovement(new List<Vector3>(movementPath));
+                    }
+                },
+                planningTimePerUnit * alliesInRange.Count,
+                alliesInRange
+            )
+        );
     }
 }

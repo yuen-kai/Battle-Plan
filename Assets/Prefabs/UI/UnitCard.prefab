@@ -457,7 +457,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 347597076770873492}
         m_TargetAssemblyTypeName: ActivateAbility, Assembly-CSharp
-        m_MethodName: activateAbilityServerRpc
+        m_MethodName: OnAbilityPressed
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
