@@ -67,6 +67,12 @@ public class ActivateAbility : NetworkBehaviour
         {
             unit = netObj.gameObject;
         }
+        else
+        {
+            Debug.LogWarning(
+                "[ActivateAbility] Failed to resolve unit NetworkObjectReference, unit reference will be null"
+            );
+        }
     }
 
     // Called by server during setup to bind this card to its unit and sync to clients
@@ -141,10 +147,11 @@ public class ActivateAbility : NetworkBehaviour
         GameLoop.setUnitCardsInteractable?.Invoke(false);
 
         double endTime = NetworkManager.ServerTime.Time + unitData.selectTime;
+        string team = unit.tag;
         // Server broadcasts overlay UI message
-        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
+        GameLoop.Instance.setOverlayUITextClientRpc(
             $"{unit.name}:\nSelect ability target square",
-            MessagePerspective.Friendly
+            team
         );
         selectAbilitySquareFuncClientRpc(endTime, unit);
     }
@@ -220,9 +227,6 @@ public class ActivateAbility : NetworkBehaviour
 
         Destroy(abilityRangeOverlay);
 
-        // Clear global indicators on all clients
-        ClearAbilityIndicatorsServerRpc();
-
         PlanMovement.Instance.timerTextUI.text = "";
 
         planEnemyResponseServerRpc(selectedSquare);
@@ -248,7 +252,7 @@ public class ActivateAbility : NetworkBehaviour
             ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange)
             : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
 
-        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc("Dodging", MessagePerspective.Enemy);
+        GameLoop.Instance.setOverlayUITextClientRpc("Dodging", enemyTeam);
         double endTime =
             NetworkManager.ServerTime.Time + unitData.timeDivePerUnit * enemiesInRange.Count;
         NetworkObjectReference[] enemiesInRangeArray = new NetworkObjectReference[
@@ -302,14 +306,13 @@ public class ActivateAbility : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void enemyResponseCallbackServerRpc(PathsDict paths, ServerRpcParams rpcParams = default)
     {
+        ClearAbilityIndicatorsServerRpc();
+
         // Only accept responses from the selected enemy team client
         if (rpcParams.Receive.SenderClientId != allowedDodgerClientId)
             return;
 
-        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
-            "Executing Moves",
-            MessagePerspective.Neutral
-        );
+        GameLoop.Instance.setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
 
         //continue time
         Time.timeScale = 1f;
@@ -383,7 +386,12 @@ public class ActivateAbility : NetworkBehaviour
     {
         Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
         if (!potentialSquare.HasValue)
+        {
+            Debug.LogWarning(
+                "[ActivateAbility] Could not get grid cell under mouse, keeping current selection"
+            );
             return;
+        }
 
         Vector3 mouseSquare = potentialSquare.Value;
         float horizontalDistance = Mathf.Abs(nearestCell.x - mouseSquare.x);
@@ -492,19 +500,7 @@ public class ActivateAbility : NetworkBehaviour
             ShowAbilityLineClientRpc(start, end);
         }
 
-        // Update enemy alerts globally
-        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
-        var enemies = !unitData.responseDistLine
-            ? GetUnitsInRange(square, enemyTeam, unitData.responseRange)
-            : GetUnitsInRangeofLine(square, enemyTeam, unitData.responseRange);
-        List<NetworkObjectReference> refs = new List<NetworkObjectReference>();
-        foreach (var e in enemies)
-        {
-            var eno = e.GetComponent<NetworkObject>();
-            if (eno != null)
-                refs.Add(eno);
-        }
-        UpdateEnemyAlertsClientRpc(refs.ToArray());
+        UpdateDodgeAlerts(square);
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -519,7 +515,7 @@ public class ActivateAbility : NetworkBehaviour
         if (IsServer == false && netObj.OwnerClientId != rpcParams.Receive.SenderClientId)
             return;
         HideAbilityIndicatorsClientRpc();
-        UpdateEnemyAlertsClientRpc(System.Array.Empty<NetworkObjectReference>());
+        SetDodgeAlerts(GameObject.FindGameObjectsWithTag(GameLoop.GetEnemyTeam(unit.tag)), false);
     }
 
     [ClientRpc]
@@ -553,41 +549,35 @@ public class ActivateAbility : NetworkBehaviour
         globalAbilityLaser = null;
     }
 
-    [ClientRpc]
-    private void UpdateEnemyAlertsClientRpc(NetworkObjectReference[] enemiesInRange)
+    private void UpdateDodgeAlerts(Vector3 selectedSquare)
     {
-        if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
-            return;
-        ulong localClientId = NetworkManager.Singleton.LocalClientId;
-        HashSet<NetworkObject> inRange = new HashSet<NetworkObject>();
-        foreach (var r in enemiesInRange)
-        {
-            if (r.TryGet(out NetworkObject no))
-                inRange.Add(no);
-        }
+        string enemyTeam = GameLoop.GetEnemyTeam(unit.tag);
+        GameObject[] allEnemies = GameObject.FindGameObjectsWithTag(enemyTeam);
 
-        // Disable all alerts on enemy-owned units
-        foreach (var no in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
-        {
-            if (no == null)
-                continue;
-            if (no.OwnerClientId == localClientId)
-                continue;
-            if (no.GetComponent<Movement>() == null)
-                continue;
-            var canvas = no.transform.Find("UnitCanvas");
-            var alert = canvas != null ? canvas.Find("Alert") : null;
-            if (alert != null)
-                alert.gameObject.SetActive(false);
-        }
+        // Clear previous alerts
+        SetDodgeAlerts(allEnemies, false);
 
-        // Enable on provided list
-        foreach (var no in inRange)
+        // Set alerts for enemies in range
+        List<GameObject> enemiesInRange = !unitData.responseDistLine
+            ? GetUnitsInRange(selectedSquare, enemyTeam, unitData.responseRange)
+            : GetUnitsInRangeofLine(selectedSquare, enemyTeam, unitData.responseRange);
+        SetDodgeAlerts(enemiesInRange.ToArray(), true);
+    }
+
+    private void SetDodgeAlerts(GameObject[] unitsInRange, bool active)
+    {
+        foreach (GameObject unit in unitsInRange)
         {
-            var canvas = no.transform.Find("UnitCanvas");
-            var alert = canvas != null ? canvas.Find("Alert") : null;
-            if (alert != null)
-                alert.gameObject.SetActive(true);
+            var netObj = unit.GetComponent<NetworkObject>();
+            if (netObj != null)
+            {
+                // Use NetworkHelper to set child object active/inactive across the network
+                NetworkHelper.Instance.SetActiveClientRpc(netObj, "UnitCanvas/Alert", active);
+            }
+            else
+            {
+                Debug.LogWarning($"[ActivateAbility] No NetworkObject found on unit {unit.name}");
+            }
         }
     }
 
@@ -595,6 +585,13 @@ public class ActivateAbility : NetworkBehaviour
     {
         List<GameObject> unitsInRange = new List<GameObject>();
         GameObject[] allUnits = GameObject.FindGameObjectsWithTag(team);
+
+        if (allUnits.Length == 0)
+        {
+            Debug.LogWarning(
+                $"[ActivateAbility] No units found with tag '{team}' for range calculation"
+            );
+        }
 
         foreach (GameObject unit in allUnits)
         {
@@ -605,6 +602,13 @@ public class ActivateAbility : NetworkBehaviour
             }
         }
 
+        if (unitsInRange.Count == 0 && allUnits.Length > 0)
+        {
+            Debug.LogWarning(
+                $"[ActivateAbility] No units of team '{team}' found within range {range} of ability square {abilitySquare}"
+            );
+        }
+
         return unitsInRange;
     }
 
@@ -612,6 +616,13 @@ public class ActivateAbility : NetworkBehaviour
     {
         List<GameObject> unitsInRange = new List<GameObject>();
         GameObject[] allUnits = GameObject.FindGameObjectsWithTag(team);
+
+        if (allUnits.Length == 0)
+        {
+            Debug.LogWarning(
+                $"[ActivateAbility] No units found with tag '{team}' for line range calculation"
+            );
+        }
 
         Vector3 start = unit.transform.position;
         Vector3 direction = (abilitySquare - start).normalized;
@@ -639,6 +650,13 @@ public class ActivateAbility : NetworkBehaviour
             {
                 unitsInRange.Add(targetUnit);
             }
+        }
+
+        if (unitsInRange.Count == 0 && allUnits.Length > 0)
+        {
+            Debug.LogWarning(
+                $"[ActivateAbility] No units of team '{team}' found within line range {range} of ability square {abilitySquare}"
+            );
         }
 
         return unitsInRange;

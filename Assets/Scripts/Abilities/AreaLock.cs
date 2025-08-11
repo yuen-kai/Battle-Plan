@@ -61,6 +61,10 @@ public class AreaLock : Ability
         GameObject laserObject = new GameObject("LaserLine");
         laserLine = laserObject.AddComponent<LineRenderer>();
         laserLine.material = new Material(Shader.Find("Sprites/Default"));
+        if (laserLine.material.shader == null)
+        {
+            Debug.LogWarning("[AreaLock] Could not find 'Sprites/Default' shader, falling back to default material");
+        }
         laserLine.startColor = Color.red;
         laserLine.endColor = Color.red;
         laserLine.startWidth = 0.1f;
@@ -90,6 +94,10 @@ public class AreaLock : Ability
         GameObject laserObject = new GameObject("LaserLineClient");
         clientLaserLine = laserObject.AddComponent<LineRenderer>();
         clientLaserLine.material = new Material(Shader.Find("Sprites/Default"));
+        if (clientLaserLine.material.shader == null)
+        {
+            Debug.LogWarning("[AreaLock] Could not find 'Sprites/Default' shader for client laser, falling back to default material");
+        }
         clientLaserLine.startColor = Color.red;
         clientLaserLine.endColor = Color.red;
         clientLaserLine.startWidth = 0.1f;
@@ -197,6 +205,7 @@ public class AreaLock : Ability
         if (clientLaserLine == null)
         {
             // Ensure a client line exists
+            Debug.LogWarning("[AreaLock] Client laser line was null, creating fallback laser line");
             Vector3 direction = (endPos - startPos).normalized;
             Vector3 finalEnd = endPos + direction * 50f;
             if (Physics.Raycast(startPos, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))

@@ -20,17 +20,13 @@ public class Reroute : Ability
             abilityRange
         );
 
-        GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
-            $"Rerouting: {team}",
-            GameLoop.Instance.GetTeamPerspective(team)
-        );
+        GameLoop.Instance.setOverlayUITextClientRpc($"Rerouting: {team}", team);
 
         yield return StartCoroutine(
-            PlanMovement.Instance.ChoosePaths(
-                team,
+            PlanMovement.Instance.StartPlanning(
                 (PathsDict paths) =>
                 {
-                    GameLoop.Instance.setOverlayUITextPerspectiveClientRpc(
+                    GameLoop.Instance.setOverlayUITextClientRpc(
                         "Executing Moves",
                         MessagePerspective.Neutral
                     );

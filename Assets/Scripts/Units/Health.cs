@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 public class Health : NetworkBehaviour
 {
@@ -28,7 +28,8 @@ public class Health : NetworkBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (!IsClient) return;
+        if (!IsClient)
+            return;
         Camera mainCamera = Camera.main;
         if (mainCamera != null)
         {
@@ -52,12 +53,20 @@ public class Health : NetworkBehaviour
     private void SetHealthClientRpc(float health)
     {
         currentHealth = health;
-        healthFill.localScale = new Vector3(Mathf.Clamp(currentHealth / unitData.maxHealth, 0f, 1f), 1f, 1f);
+        healthFill.localScale = new Vector3(
+            Mathf.Clamp(currentHealth / unitData.maxHealth, 0f, 1f),
+            1f,
+            1f
+        );
     }
 
     [ClientRpc]
     private void SetHealthBarClientRpc(float maxHealth)
     {
-        healthBar.localScale = new Vector3(Mathf.Clamp(maxHealth / typicalMaxHealth, 0f, 1f), 1f, 1f);
+        healthBar.localScale = new Vector3(
+            Mathf.Clamp(maxHealth / typicalMaxHealth, 0f, 1f),
+            1f,
+            1f
+        );
     }
 }

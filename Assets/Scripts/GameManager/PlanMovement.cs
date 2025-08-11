@@ -1,24 +1,25 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using TMPro;
 using System.Linq;
 using cakeslice;
-using Outline = cakeslice.Outline;
+using TMPro;
 using Unity.Netcode;
+using UnityEngine;
+using Outline = cakeslice.Outline;
 
 /// <summary>
 /// A simple reference to a dictionary that maps GameObjects (units) to their movement paths (list of Vector3 positions).
 /// </summary>
 public class PathsDict : Dictionary<GameObject, List<Vector3>>, INetworkSerializable
 {
-    public PathsDict() : base()
-    {
-    }
+    public PathsDict()
+        : base() { }
 
-    public PathsDict(PathsDict dict) : base(dict) { }
+    public PathsDict(PathsDict dict)
+        : base(dict) { }
 
-    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
     {
         int count = Count;
 
@@ -67,13 +68,19 @@ public class PathsDict : Dictionary<GameObject, List<Vector3>>, INetworkSerializ
                 {
                     this[netObj.gameObject] = path;
                 }
+                else
+                {
+                    Debug.LogWarning(
+                        "[PlanMovement] Failed to resolve NetworkObjectReference during deserialization, skipping unit path"
+                    );
+                }
             }
         }
     }
 }
 
 /// <summary>
-/// Manages interactive path planning on a grid for team units. 
+/// Manages interactive path planning on a grid for team units.
 /// Handles mouse-driven path creation, visual feedback, range displays, and movement validation.
 /// Supports both normal movement and dash mechanics with configurable distances.
 /// </summary>
@@ -88,21 +95,28 @@ public class PlanMovement : MonoBehaviour
 
     // Visual representation of paths
     private GameObject visualPathsParent;
-    private Dictionary<GameObject, GameObject> visualPaths = new Dictionary<GameObject, GameObject>();
+    private Dictionary<GameObject, GameObject> visualPaths =
+        new Dictionary<GameObject, GameObject>();
 
     private GameObject currentVisualPath;
     private GameObject currentPathNodes;
     private GameObject currentPathEdges;
 
-    [SerializeField] private GameObject pathNodePrefab;
-    [SerializeField] private GameObject pathEdgePrefab;
+    [SerializeField]
+    private GameObject pathNodePrefab;
+
+    [SerializeField]
+    private GameObject pathEdgePrefab;
 
     // Range overlays
     private GameObject moveOverlay;
     private GameObject attackOverlay;
-    [SerializeField] private GameObject moveOverlayCellPrefab;
-    [SerializeField] private GameObject attackOverlayPrefab;
 
+    [SerializeField]
+    private GameObject moveOverlayCellPrefab;
+
+    [SerializeField]
+    private GameObject attackOverlayPrefab;
 
     public TMP_Text timerTextUI;
 
@@ -110,28 +124,26 @@ public class PlanMovement : MonoBehaviour
 
     private bool isDragging = false;
 
-
-    public static PlanMovement Instance
-    {
-        get; private set;
-    }
+    public static PlanMovement Instance { get; private set; }
 
     void Awake()
     {
         Instance = this;
     }
 
-
-    public IEnumerator StartPlanning(System.Action<PathsDict> callback, double endTime, List<GameObject> dashUnits = null, int dashDist = -1)
+    public IEnumerator StartPlanning(
+        System.Action<PathsDict> callback,
+        double endTime,
+        List<GameObject> dashUnits = null,
+        int dashDist = -1
+    )
     {
-        if(dashUnits!=null) this.teamCharacters = dashUnits;
-
+        this.teamCharacters = dashUnits ?? PopulateTeamCharacters(); // Populate with local client's team units
         movementPaths = new PathsDict();
 
         AddCharacterOutlines();
 
         visualPathsParent = new GameObject("VisualPaths");
-
 
         //Path selection loop
         float timer;
@@ -171,64 +183,46 @@ public class PlanMovement : MonoBehaviour
         callback(movementPaths);
     }
 
-
-    public IEnumerator ChoosePaths(string team, System.Action<PathsDict> callback, float timer, List<GameObject> dashUnits = null, int dashDist = -1)
+    /// <summary>
+    /// Populates the teamCharacters list with units belonging to the local client's team
+    /// </summary>
+    private List<GameObject> PopulateTeamCharacters()
     {
-        //Initialize
-        this.team = team;
-        this.teamCharacters = dashUnits ?? GameObject.FindGameObjectsWithTag(team).ToList();
+        List<GameObject> localTeamCharacters = new List<GameObject>();
 
-        movementPaths = new PathsDict();
-        foreach (GameObject character in teamCharacters)
+        if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
         {
-            movementPaths[character] = new List<Vector3>();
+            Debug.LogWarning(
+                "[PlanMovement] NetworkManager not available, cannot populate team characters"
+            );
+            return localTeamCharacters;
         }
 
-        AddCharacterOutlines();
+        // Get the local client's ID
+        ulong localClientId = NetworkManager.Singleton.LocalClientId;
 
-        visualPathsParent = new GameObject("VisualPaths");
-
-
-        //Path selection loop
-        while (timer > 0)
+        // Find all units owned by the local client
+        foreach (var netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
         {
-            timerTextUI.text = (Mathf.CeilToInt(timer)).ToString();
-            if (Input.GetMouseButtonDown(0))
-            {
-                selectedUnit = GetCharacterUnderMouse();
-                //DisplayAttackRange();
-                StartPath(dashUnits);
-            }
-            else if (Input.GetMouseButton(0) && isDragging)
-            {
-                ExtendPath(dashDist);
-            }
-            else if (Input.GetMouseButtonUp(0))
-            {
-                EndPath();
-            }
+            if (netObj == null)
+                continue;
 
-            timer -= Time.unscaledDeltaTime;
-            yield return null;
+            // Check if this is a unit (has Movement component) and is owned by the local client
+            if (netObj.GetComponent<Movement>() != null && netObj.OwnerClientId == localClientId)
+            {
+                localTeamCharacters.Add(netObj.gameObject);
+            }
         }
 
-        //Cleanup
-        if (isDragging) // Finalize any in-progress path
-        {
-            EndPath();
-        }
-
-        RemoveCharacterOutlines();
-        Destroy(visualPathsParent);
-        Destroy(moveOverlay);
-        Destroy(attackOverlay);
-        timerTextUI.text = "";
-        callback(movementPaths);
+        return localTeamCharacters;
     }
 
     void StartPath(List<GameObject> dashUnits = null)
     {
-        bool isValidUnitSelected = selectedUnit?.GetComponent<NetworkObject>().OwnerClientId == NetworkManager.Singleton.LocalClientId && (dashUnits == null || dashUnits.Contains(selectedUnit));
+        bool isValidUnitSelected =
+            selectedUnit?.GetComponent<NetworkObject>().OwnerClientId
+                == NetworkManager.Singleton.LocalClientId
+            && (dashUnits == null || dashUnits.Contains(selectedUnit));
         if (isValidUnitSelected)
         {
             //Reset movement path
@@ -237,7 +231,8 @@ public class PlanMovement : MonoBehaviour
             currentMovementPath.Add(GetGridCellUnderCharacter(selectedUnit));
 
             //Reset visual path
-            if (visualPaths.ContainsKey(selectedUnit)) Destroy(visualPaths[selectedUnit]);
+            if (visualPaths.ContainsKey(selectedUnit))
+                Destroy(visualPaths[selectedUnit]);
             currentVisualPath = new GameObject("VisualPath");
             currentVisualPath.transform.parent = visualPathsParent.transform;
             visualPaths[selectedUnit] = currentVisualPath;
@@ -248,13 +243,13 @@ public class PlanMovement : MonoBehaviour
             currentPathEdges = new GameObject("PathEdges");
             currentPathEdges.transform.parent = currentVisualPath.transform;
 
-
             isDragging = true;
         }
         else
         {
             GameObject node = GetNodeUnderMouse();
-            if (node == null) return;
+            if (node == null)
+                return;
 
             //Set up path info from node
             currentVisualPath = node.transform.parent.parent.gameObject;
@@ -272,7 +267,8 @@ public class PlanMovement : MonoBehaviour
                 Destroy(currentPathEdges.transform.GetChild(i).gameObject);
             }
 
-            movementPaths[selectedUnit].RemoveRange(index + 2, movementPaths[selectedUnit].Count - (index + 2)); //movement path includes start but visual does not
+            movementPaths[selectedUnit]
+                .RemoveRange(index + 2, movementPaths[selectedUnit].Count - (index + 2)); //movement path includes start but visual does not
 
             currentMovementPath = movementPaths[selectedUnit];
         }
@@ -284,7 +280,8 @@ public class PlanMovement : MonoBehaviour
     void ExtendPath(int dashDist = -1)
     {
         Vector3? selectedTile = GetGridCellUnderMouse();
-        if (selectedTile == null) return;
+        if (selectedTile == null)
+            return;
 
         Vector3 currentTile = selectedTile.Value;
 
@@ -299,10 +296,13 @@ public class PlanMovement : MonoBehaviour
 
         //Add to movementPath
         Vector3 last = currentMovementPath[^1];
-        int moveDist = dashDist == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : dashDist;
-        if (currentMovementPath.Count - 1 < moveDist //Cause move dist excludes start tile
+        int moveDist =
+            dashDist == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : dashDist;
+        if (
+            currentMovementPath.Count - 1 < moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
-            && !currentMovementPath.Contains(currentTile))
+            && !currentMovementPath.Contains(currentTile)
+        )
         {
             currentMovementPath.Add(currentTile);
             AddPathSectionVisual(currentTile, last, currentMovementPath.Count - 1, moveDist);
@@ -315,32 +315,45 @@ public class PlanMovement : MonoBehaviour
         selectedUnit = null;
     }
 
-
     void DisplayMoveRange()
     {
         Destroy(moveOverlay);
-        if (selectedUnit == null) return;
+        if (selectedUnit == null)
+            return;
 
-        moveOverlay = Helper.DisplayGridRange(GetGridCellUnderCharacter(selectedUnit), selectedUnit.GetComponent<Movement>().unitData.moveDist, moveOverlayCellPrefab);
+        moveOverlay = Helper.DisplayGridRange(
+            GetGridCellUnderCharacter(selectedUnit),
+            selectedUnit.GetComponent<Movement>().unitData.moveDist,
+            moveOverlayCellPrefab
+        );
     }
 
     void DisplayAttackRange()
     {
         //TODO: update attack range on path change
         //TODO: check line of sight
-        if (attackOverlay) Destroy(attackOverlay);
+        if (attackOverlay)
+            Destroy(attackOverlay);
 
-        if (selectedUnit == null) return;
+        if (selectedUnit == null)
+            return;
 
         Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
         //TODO: put at end of path
 
-        attackOverlay = Instantiate(attackOverlayPrefab, currentPos + new Vector3(0, 0.1f, 0), Quaternion.identity);
+        attackOverlay = Instantiate(
+            attackOverlayPrefab,
+            currentPos + new Vector3(0, 0.1f, 0),
+            Quaternion.identity
+        );
         float diameter = 2 * selectedUnit.GetComponent<Shooting>().unitData.targetRange * cellSize;
 
-        attackOverlay.transform.localScale = new Vector3(diameter, attackOverlay.transform.localScale.y, diameter);
+        attackOverlay.transform.localScale = new Vector3(
+            diameter,
+            attackOverlay.transform.localScale.y,
+            diameter
+        );
     }
-
 
     void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
     {
@@ -384,7 +397,7 @@ public class PlanMovement : MonoBehaviour
                 if (go.GetComponent<Outline>() == null)
                 {
                     go.AddComponent<Outline>();
-                    go.GetComponent<Outline>().color = GameLoop.GetTeamIndex(team);
+                    go.GetComponent<Outline>().color = 0;
                 }
 
                 go.GetComponent<Outline>().enabled = true;
@@ -405,12 +418,18 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-
     public static GameObject GetCharacterUnderMouse()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask(GameLoop.teams.ToArray())))
+        if (
+            Physics.Raycast(
+                ray,
+                out hit,
+                Mathf.Infinity,
+                LayerMask.GetMask(GameLoop.teams.ToArray())
+            )
+        )
         {
             return hit.collider.gameObject; // Return the GameObject that was hit
         }
@@ -460,12 +479,10 @@ public class PlanMovement : MonoBehaviour
         return new Vector2Int(x, z);
     }
 
-
     public static GameObject LastChild(GameObject parent, int index = 1)
     {
         return parent.transform.GetChild(parent.transform.childCount - index).gameObject;
     }
-
 
     public static void PrintPaths(PathsDict paths)
     {
@@ -474,5 +491,4 @@ public class PlanMovement : MonoBehaviour
             Debug.Log($"Unit: {pair.Key.name}, Path: {string.Join(", ", pair.Value)}");
         }
     }
-
 }

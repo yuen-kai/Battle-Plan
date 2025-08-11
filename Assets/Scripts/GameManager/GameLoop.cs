@@ -14,6 +14,20 @@ public enum MessagePerspective
     Enemy,
 }
 
+[System.Serializable]
+public struct TeamMappingData : INetworkSerializable
+{
+    public ulong clientId;
+    public int teamIndex;
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref clientId);
+        serializer.SerializeValue(ref teamIndex);
+    }
+}
+
 public class GameLoop : NetworkBehaviour
 {
     // Grid Configuration
@@ -93,6 +107,9 @@ public class GameLoop : NetworkBehaviour
     List<GameObject> doneShootingUnits = new List<GameObject>();
     private Dictionary<ulong, int> clientIdToTeamIndex = new Dictionary<ulong, int>();
 
+    // Client-side team mapping synchronized from server
+    private Dictionary<ulong, int> clientTeamMapping = new Dictionary<ulong, int>();
+
     // Actions
     public static System.Action<bool> setUnitCardsInteractable;
     public static System.Action<GameObject> disableUnitCard;
@@ -106,12 +123,32 @@ public class GameLoop : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (!IsServer)
-            return;
-        InitializeClientTeamMapping();
         Instance = this;
-        StartGame();
-        StartCoroutine(GameLoopTemp());
+
+        if (IsServer)
+        {
+            InitializeClientTeamMapping();
+            StartGame();
+            StartCoroutine(GameLoopTemp());
+        }
+        else
+        {
+            // Client initialization - set up local team mapping
+            InitializeLocalClientTeamMapping();
+        }
+    }
+
+    private void InitializeLocalClientTeamMapping()
+    {
+        if (IsServer)
+            return; // Only clients should call this
+
+        // Initialize with default mapping based on client order
+        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds;
+        for (int i = 0; i < connectedClients.Count && i < teams.Count; i++)
+        {
+            clientTeamMapping[connectedClients[i]] = i;
+        }
     }
 
     void StartGame()
@@ -211,6 +248,31 @@ public class GameLoop : NetworkBehaviour
         {
             clientIdToTeamIndex[connectedClients[i]] = i;
         }
+
+        // Create team mapping data for synchronization
+        var teamMappings = new TeamMappingData[clientIdToTeamIndex.Count];
+        int index = 0;
+        foreach (var kvp in clientIdToTeamIndex)
+        {
+            teamMappings[index] = new TeamMappingData { clientId = kvp.Key, teamIndex = kvp.Value };
+            index++;
+        }
+
+        // Synchronize team mapping to all clients
+        SyncTeamMappingToClientsClientRpc(teamMappings);
+    }
+
+    [ClientRpc]
+    private void SyncTeamMappingToClientsClientRpc(TeamMappingData[] teamMappings)
+    {
+        // Clear existing mapping
+        clientTeamMapping.Clear();
+
+        // Apply the team mappings received from server
+        foreach (var mapping in teamMappings)
+        {
+            clientTeamMapping[mapping.clientId] = mapping.teamIndex;
+        }
     }
 
     private int GetTeamIndexForClient(ulong clientId)
@@ -221,7 +283,9 @@ public class GameLoop : NetworkBehaviour
         }
 
         // Fallback: assign based on client order if not in mapping
-        Debug.LogWarning("No team index found for client " + clientId);
+        Debug.LogWarning(
+            $"[GameLoop] No team index found for client {clientId}, falling back to client order assignment"
+        );
         var connectedClients = NetworkManager.Singleton.ConnectedClientsIds.ToList();
         int index = connectedClients.IndexOf(clientId);
         return index >= 0 && index < teams.Count ? index : 0;
@@ -243,7 +307,9 @@ public class GameLoop : NetworkBehaviour
         }
 
         // Fallback: return first connected client if no mapping found
-        Debug.LogWarning("No client found for team Index " + teamIndex);
+        Debug.LogWarning(
+            $"[GameLoop] No client found for team index {teamIndex}, falling back to first connected client"
+        );
         var connectedClients = NetworkManager.Singleton.ConnectedClientsIds;
         return connectedClients.Count > 0 ? connectedClients.First() : 0;
     }
@@ -264,7 +330,7 @@ public class GameLoop : NetworkBehaviour
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
             double endTime = NetworkManager.Singleton.ServerTime.Time + timerLength;
 
-            setOverlayUITextPerspectiveClientRpc($"Planning", MessagePerspective.Friendly);
+            setOverlayUITextClientRpc($"Planning", MessagePerspective.Friendly);
             StartPlanningClientRpc(endTime);
 
             while (
@@ -276,7 +342,7 @@ public class GameLoop : NetworkBehaviour
             }
 
             setUnitCardsInteractable?.Invoke(true);
-            setOverlayUITextPerspectiveClientRpc("Executing Moves", MessagePerspective.Neutral);
+            setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
 
             // Flatten pathsList into a single PathsDict
             PathsDict paths = new PathsDict();
@@ -487,14 +553,11 @@ public class GameLoop : NetworkBehaviour
 
             if (localTeam == team)
             {
-                // Friendly team - use their own team color
-                overlayUIText.color = GetTeamColor(team);
+                overlayUIText.color = teamColors[0];
             }
             else
             {
-                // Enemy team - use the enemy team color (opposite team)
-                string enemyTeam = GetEnemyTeam(localTeam);
-                overlayUIText.color = GetTeamColor(enemyTeam);
+                overlayUIText.color = teamColors[1];
             }
         }
     }
@@ -503,32 +566,20 @@ public class GameLoop : NetworkBehaviour
     /// Wrapper function that accepts "friendly", "enemy", or "neutral" instead of specific team names
     /// </summary>
     [ClientRpc]
-    public void setOverlayUITextPerspectiveClientRpc(string message, MessagePerspective perspective)
+    public void setOverlayUITextClientRpc(string message, MessagePerspective perspective)
     {
         overlayUIText.text = message;
 
-        if (perspective == MessagePerspective.Neutral)
+        if (perspective == MessagePerspective.Friendly)
         {
-            overlayUIText.color = executingMoves;
-        }
-        else if (perspective == MessagePerspective.Friendly)
-        {
-            // Show in the local client's team color
-            ulong localClientId = NetworkManager.Singleton.LocalClientId;
-            string localTeam = GetLocalClientTeam(localClientId);
-            overlayUIText.color = GetTeamColor(localTeam);
+            overlayUIText.color = teamColors[0];
         }
         else if (perspective == MessagePerspective.Enemy)
         {
-            // Show in the enemy team's color
-            ulong localClientId = NetworkManager.Singleton.LocalClientId;
-            string localTeam = GetLocalClientTeam(localClientId);
-            string enemyTeam = GetEnemyTeam(localTeam);
-            overlayUIText.color = GetTeamColor(enemyTeam);
+            overlayUIText.color = teamColors[1];
         }
         else
         {
-            // Fallback to neutral color
             overlayUIText.color = executingMoves;
         }
     }
@@ -536,18 +587,18 @@ public class GameLoop : NetworkBehaviour
     /// <summary>
     /// Gets the team that the local client belongs to
     /// </summary>
-    private string GetLocalClientTeam(ulong clientId)
+    public string GetLocalClientTeam(ulong clientId)
     {
-        // Find which team this client belongs to
-        foreach (var kvp in clientIdToTeamIndex)
+        // Use client-side mapping if available
+        if (clientTeamMapping.ContainsKey(clientId))
         {
-            if (kvp.Key == clientId)
-            {
-                return teams[kvp.Value];
-            }
+            return teams[clientTeamMapping[clientId]];
         }
 
         // Fallback: if no mapping found, assume first team
+        Debug.LogWarning(
+            $"[GameLoop] No team mapping found for client {clientId}, falling back to first team"
+        );
         return teams.Count > 0 ? teams[0] : "BlueTeam";
     }
 
@@ -577,21 +628,36 @@ public class GameLoop : NetworkBehaviour
     public Color GetTeamColor(string team)
     {
         if (!teams.Contains(team))
+        {
+            Debug.LogWarning(
+                $"[GameLoop] Team '{team}' not found in teams list, falling back to executingMoves color"
+            );
             return executingMoves;
+        }
         return teamColors[teams.IndexOf(team)];
     }
 
     public Material GetTeamMaterial(string team)
     {
         if (!teams.Contains(team))
+        {
+            Debug.LogWarning(
+                $"[GameLoop] Team '{team}' not found in teams list, falling back to null material"
+            );
             return null;
+        }
         return teamMaterials[teams.IndexOf(team)];
     }
 
     public static string GetEnemyTeam(string team)
     {
         if (!teams.Contains(team))
+        {
+            Debug.LogWarning(
+                $"[GameLoop] Team '{team}' not found in teams list, cannot determine enemy team, falling back to null"
+            );
             return null;
+        }
         return teams.FirstOrDefault(t => t != team);
     }
 

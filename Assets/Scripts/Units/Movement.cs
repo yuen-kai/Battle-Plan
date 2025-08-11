@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 /// <summary>
 /// Movement system on a grid, handling movement and rotation. Transitions to shooting mode after movement.
@@ -10,7 +10,8 @@ public class Movement : NetworkBehaviour
 {
     public UnitData unitData;
 
-    [HideInInspector] public bool moving = true;
+    [HideInInspector]
+    public bool moving = true;
 
     private Coroutine moveListRoutine;
     private Coroutine moveRoutine;
@@ -31,9 +32,12 @@ public class Movement : NetworkBehaviour
 
     public void PauseMovement()
     {
-        if (moveListRoutine != null) StopCoroutine(moveListRoutine);
-        if (moveRoutine != null) StopCoroutine(moveRoutine);
-        if (rotateRoutine != null) StopCoroutine(rotateRoutine);
+        if (moveListRoutine != null)
+            StopCoroutine(moveListRoutine);
+        if (moveRoutine != null)
+            StopCoroutine(moveRoutine);
+        if (rotateRoutine != null)
+            StopCoroutine(rotateRoutine);
     }
 
     public void StartMovement(List<Vector3> cells, bool dive = false)
@@ -54,7 +58,6 @@ public class Movement : NetworkBehaviour
 
         transform.GetComponent<Shooting>().StartShooting();
     }
-
 
     // MOVEMENT
     public IEnumerator MoveToCells(List<Vector3> cells, bool dive = false)
@@ -77,13 +80,20 @@ public class Movement : NetworkBehaviour
     {
         Vector3 targetPosition = cell + Helper.heightOffset(transform);
 
-        if (rotateRoutine != null) StopCoroutine(rotateRoutine);
+        if (rotateRoutine != null)
+            StopCoroutine(rotateRoutine);
         rotateRoutine = StartCoroutine(RotateToFaceTarget(targetPosition, unitData.rotationSpeed));
 
         while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
         {
             yield return null;
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, (dive ? unitData.diveSpeed : unitData.moveSpeed) * GameLoop.cellSize * Time.deltaTime);
+            transform.position = Vector3.MoveTowards(
+                transform.position,
+                targetPosition,
+                (dive ? unitData.diveSpeed : unitData.moveSpeed)
+                    * GameLoop.cellSize
+                    * Time.deltaTime
+            );
         }
 
         transform.position = targetPosition;
@@ -92,13 +102,18 @@ public class Movement : NetworkBehaviour
     public IEnumerator RotateToFaceTarget(Vector3 targetPosition, float rotationSpeed)
     {
         Vector3 direction = targetPosition - transform.position;
-        if (direction.magnitude < 0.01f) yield break;
+        if (direction.magnitude < 0.01f)
+            yield break;
 
         Quaternion targetRotation = Quaternion.LookRotation(direction.normalized);
         while (Quaternion.Angle(transform.rotation, targetRotation) > 1f)
         {
             yield return null;
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation,
+                targetRotation,
+                rotationSpeed * Time.deltaTime
+            );
         }
 
         transform.rotation = targetRotation;

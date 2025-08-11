@@ -1,17 +1,15 @@
-using UnityEngine;
-using Unity.Netcode;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
+using UnityEngine;
 
 public class NetworkHelper : NetworkBehaviour
 {
-    public static NetworkHelper Instance
-    {
-        get; private set;
-    }
+    public static NetworkHelper Instance { get; private set; }
 
     // Queue for height sync requests when instance isn't ready
-    private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs = new Queue<(GameObject, Vector3)>();
+    private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs =
+        new Queue<(GameObject, Vector3)>();
 
     public override void OnNetworkSpawn()
     {
@@ -21,7 +19,7 @@ public class NetworkHelper : NetworkBehaviour
             return;
         }
         Instance = this;
-        
+
         // Process any pending height syncs
         ProcessPendingHeightSyncs();
     }
@@ -41,7 +39,10 @@ public class NetworkHelper : NetworkBehaviour
     /// <summary>
     /// Static method to sync height-adjusted position, queues if instance isn't ready
     /// </summary>
-    public static void SyncHeightAdjustedPositionStatic(GameObject obj, Vector3 heightAdjustedPosition)
+    public static void SyncHeightAdjustedPositionStatic(
+        GameObject obj,
+        Vector3 heightAdjustedPosition
+    )
     {
         if (Instance != null)
         {
@@ -49,12 +50,18 @@ public class NetworkHelper : NetworkBehaviour
         }
         else
         {
-            // Queue the request for when instance becomes available
             pendingHeightSyncs.Enqueue((obj, heightAdjustedPosition));
         }
     }
 
-    public static GameObject Spawn(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent = null, ulong? ownerClientId = null, Vector3? scale = null)
+    public static GameObject Spawn(
+        GameObject prefab,
+        Vector3 position,
+        Quaternion rotation,
+        Transform parent = null,
+        ulong? ownerClientId = null,
+        Vector3? scale = null
+    )
     {
         GameObject instance = Instantiate(prefab, position, rotation);
         if (scale != null)
@@ -67,7 +74,9 @@ public class NetworkHelper : NetworkBehaviour
             NetworkObject netObj = instance.GetComponent<NetworkObject>();
             if (netObj == null)
             {
-                Debug.LogWarning($"NetworkObject component missing on {prefab.name}. Adding it dynamically.");
+                Debug.LogWarning(
+                    $"[NetworkHelper] NetworkObject component missing on {prefab.name}, adding it dynamically. This may cause network issues."
+                );
                 netObj = instance.AddComponent<NetworkObject>();
             }
 
@@ -86,7 +95,9 @@ public class NetworkHelper : NetworkBehaviour
         {
             // For non-server instances, set parent immediately
             instance.transform.SetParent(parent, false);
-            Debug.LogWarning("Spawn run on non-server!");
+            Debug.LogWarning(
+                "[NetworkHelper] Spawn run on non-server! This may cause network synchronization issues."
+            );
         }
 
         return instance;
@@ -103,7 +114,11 @@ public class NetworkHelper : NetworkBehaviour
         return Spawn(prefab, Vector3.zero, Quaternion.identity, parent, null, null);
     }
 
-    public static GameObject Spawn(GameObject prefab, Transform parent, bool instantiateInWorldSpace)
+    public static GameObject Spawn(
+        GameObject prefab,
+        Transform parent,
+        bool instantiateInWorldSpace
+    )
     {
         if (instantiateInWorldSpace)
             return Spawn(prefab, Vector3.zero, Quaternion.identity, parent, null, null);
@@ -116,12 +131,22 @@ public class NetworkHelper : NetworkBehaviour
         return Spawn(prefab, position, rotation, null, null, null);
     }
 
-    public static GameObject Spawn(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale)
+    public static GameObject Spawn(
+        GameObject prefab,
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 scale
+    )
     {
         return Spawn(prefab, position, rotation, null, null, scale);
     }
 
-    public static GameObject Spawn(GameObject prefab, Vector3 position, Quaternion rotation, ulong ownerClientId)
+    public static GameObject Spawn(
+        GameObject prefab,
+        Vector3 position,
+        Quaternion rotation,
+        ulong ownerClientId
+    )
     {
         return Spawn(prefab, position, rotation, null, ownerClientId, null);
     }
@@ -146,14 +171,20 @@ public class NetworkHelper : NetworkBehaviour
         return Spawn(prefab, Vector3.zero, Quaternion.identity, parent, null, scale);
     }
 
-    public static GameObject Spawn(GameObject prefab, Transform parent, ulong ownerClientId, Vector3 scale)
+    public static GameObject Spawn(
+        GameObject prefab,
+        Transform parent,
+        ulong ownerClientId,
+        Vector3 scale
+    )
     {
         return Spawn(prefab, Vector3.zero, Quaternion.identity, parent, ownerClientId, scale);
     }
 
     public void Despawn(GameObject instance, float delay = 0)
     {
-        if (instance == null) return;
+        if (instance == null)
+            return;
         NetworkObject netObj = instance.GetComponent<NetworkObject>();
         if (netObj == null)
         {
@@ -166,26 +197,42 @@ public class NetworkHelper : NetworkBehaviour
         }
     }
 
-    public void SetActive(GameObject gameObject, bool active)
+    public void SetActive(GameObject obj, bool active)
     {
-        if (!IsServer) return;
-
-        if (gameObject == null) return;
-
-        // Set active locally on server
-        gameObject.SetActive(active);
-
-        // Notify all clients
-        SetActiveClientRpc(gameObject.GetComponent<NetworkObject>(), active);
+        SetActiveClientRpc(obj, "", active);
     }
 
-    [ClientRpc]
-    private void SetActiveClientRpc(NetworkObjectReference objRef, bool active)
+    public void SetActive(GameObject obj, string childPath, bool active)
     {
-        if (IsServer) return;
-        if (objRef.TryGet(out NetworkObject networkObject))
+        SetActiveClientRpc(obj, childPath, active);
+    }
+
+    /// <summary>
+    /// Sets a child object active/inactive across the network using ClientRpc
+    /// </summary>
+    [ClientRpc]
+    public void SetActiveClientRpc(NetworkObjectReference unitRef, string childPath, bool active)
+    {
+        if (unitRef.TryGet(out NetworkObject netObj))
         {
-            networkObject.gameObject.SetActive(active);
+            var child = netObj.transform.Find(childPath);
+
+            if (child != null)
+            {
+                child.gameObject.SetActive(active);
+            }
+            else
+            {
+                Debug.LogWarning(
+                    $"[NetworkHelper] Could not find child at path '{childPath}' on {netObj.gameObject.name}"
+                );
+            }
+        }
+        else
+        {
+            Debug.LogWarning(
+                "[NetworkHelper] Failed to resolve NetworkObjectReference for SetActiveOnChild"
+            );
         }
     }
 
@@ -194,8 +241,9 @@ public class NetworkHelper : NetworkBehaviour
     /// </summary>
     public void SyncHeightAdjustedPosition(GameObject obj, Vector3 heightAdjustedPosition)
     {
-        if (!IsServer) return;
-        
+        if (!IsServer)
+            return;
+
         var netObj = obj.GetComponent<NetworkObject>();
         if (netObj != null)
         {
@@ -204,9 +252,13 @@ public class NetworkHelper : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void SyncHeightAdjustedPositionClientRpc(NetworkObjectReference objRef, Vector3 heightAdjustedPosition)
+    private void SyncHeightAdjustedPositionClientRpc(
+        NetworkObjectReference objRef,
+        Vector3 heightAdjustedPosition
+    )
     {
-        if (IsServer) return;
+        if (IsServer)
+            return;
         if (objRef.TryGet(out NetworkObject networkObject))
         {
             networkObject.transform.position = heightAdjustedPosition;

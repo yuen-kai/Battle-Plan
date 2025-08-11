@@ -34,8 +34,10 @@ public class Helper : MonoBehaviour
         }
         if (transform.TryGetComponent<Renderer>(out Renderer renderer))
         {
+            Debug.LogWarning($"[Helper] No Collider found on {transform.name}, falling back to Renderer bounds for height offset");
             return new Vector3(0, renderer.bounds.size.y / 2, 0);
         }
+        Debug.LogWarning($"[Helper] No Collider or Renderer found on {transform.name}, falling back to zero height offset");
         return Vector3.zero;
     }
 }
