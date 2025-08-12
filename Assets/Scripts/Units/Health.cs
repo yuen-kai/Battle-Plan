@@ -30,11 +30,11 @@ public class Health : NetworkBehaviour
     {
         if (!IsClient)
             return;
-        Camera mainCamera = Camera.main;
-        if (mainCamera != null)
+
+        if (GameLoop.Instance?.teamCamera != null)
         {
             Transform UnitCanvas = transform.Find("UnitCanvas");
-            UnitCanvas.forward = Camera.main.transform.forward;
+            UnitCanvas.forward = GameLoop.Instance.teamCamera.transform.forward;
         }
     }
 

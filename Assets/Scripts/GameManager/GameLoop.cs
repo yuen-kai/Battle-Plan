@@ -67,7 +67,7 @@ public class GameLoop : NetworkBehaviour
     };
 
     // Level Layout (col, row) from bottom left corner
-    HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
+    public static HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
     {
         new Vector2Int(3, 2),
         new Vector2Int(5, 2),
@@ -93,10 +93,20 @@ public class GameLoop : NetworkBehaviour
         },
         new HashSet<Vector2Int>() //Red Team Spawn Positions
         {
-            new Vector2Int(0, 9),
-            new Vector2Int(4, 9),
             new Vector2Int(8, 9),
+            new Vector2Int(4, 9),
+            new Vector2Int(0, 9),
         },
+    };
+
+    // Store camera positions and rotations as a list of (Vector3 position, Quaternion rotation) tuples
+    private List<(Vector3 position, Quaternion rotation)> cameraPositions = new List<(
+        Vector3,
+        Quaternion
+    )>()
+    {
+        (new Vector3(11.93f, 24.4f, 3.4f), new Quaternion(0.59543306f, 0f, 0f, 0.8034049f)),
+        (new Vector3(11.93f, 24.4f, 21.0f), new Quaternion(0f, 0.80340505f, -0.5954329f, 0f)),
     };
 
     // Game Settings
@@ -119,6 +129,9 @@ public class GameLoop : NetworkBehaviour
 
     List<PathsDict> pathsList = new List<PathsDict>();
 
+    public GameObject teamCameraParent;
+    public Camera teamCamera => teamCameraParent.GetComponent<Camera>();
+
     public static GameLoop Instance { get; private set; }
 
     public override void OnNetworkSpawn()
@@ -135,6 +148,27 @@ public class GameLoop : NetworkBehaviour
         {
             // Client initialization - set up local team mapping
             InitializeLocalClientTeamMapping();
+        }
+
+        InitializeCameraPosition();
+    }
+
+    private void InitializeCameraPosition()
+    {
+        if (!IsClient)
+            return;
+
+        ulong localClientId = NetworkManager.Singleton.LocalClientId;
+        string localTeam = GetLocalClientTeam(localClientId);
+        int teamIndex = GetTeamIndex(localTeam);
+
+        if (teamIndex >= 0 && teamIndex < spawns.Count && teamIndex < cameraPositions.Count)
+        {
+            if (teamCameraParent != null)
+            {
+                teamCameraParent.transform.position = cameraPositions[teamIndex].position;
+                teamCameraParent.transform.rotation = cameraPositions[teamIndex].rotation;
+            }
         }
     }
 
@@ -184,10 +218,6 @@ public class GameLoop : NetworkBehaviour
                 teams[i]
             );
         }
-
-        //Setup outline effect for teams
-        Camera.main.GetComponent<OutlineEffect>().lineColor0 = GetTeamColor(teams[0]);
-        Camera.main.GetComponent<OutlineEffect>().lineColor1 = GetTeamColor(teams[1]);
     }
 
     void SetupUnitsAndCards(

@@ -45,14 +45,9 @@ public partial class Pogo : Ability
     [ClientRpc]
     private void ShakeCameraClientRpc()
     {
-        var cam = Camera.main;
-        if (cam != null)
+        if (CameraEffects.Instance != null)
         {
-            var eff = cam.GetComponent<CameraEffects>();
-            if (eff != null)
-            {
-                StartCoroutine(eff.CameraShake());
-            }
+            StartCoroutine(CameraEffects.Instance.CameraShake());
         }
     }
 }

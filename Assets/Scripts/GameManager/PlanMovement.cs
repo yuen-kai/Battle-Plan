@@ -86,7 +86,6 @@ public class PathsDict : Dictionary<GameObject, List<Vector3>>, INetworkSerializ
 /// </summary>
 public class PlanMovement : MonoBehaviour
 {
-    private string team = "BlueTeam";
     private List<GameObject> teamCharacters = new List<GameObject>();
     private GameObject selectedUnit;
 
@@ -301,6 +300,7 @@ public class PlanMovement : MonoBehaviour
         if (
             currentMovementPath.Count - 1 < moveDist //Cause move dist excludes start tile
             && Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f //Exactly one tile away, no diagonal
+            && !GameLoop.wallLayout.Contains(ConvertToGridCoords(currentTile)) //make sure not in wall
             && !currentMovementPath.Contains(currentTile)
         )
         {
@@ -420,7 +420,11 @@ public class PlanMovement : MonoBehaviour
 
     public static GameObject GetCharacterUnderMouse()
     {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
+        Camera teamCamera = GameLoop.Instance.teamCamera;
+        if (teamCamera == null)
+            return null;
+
+        Ray ray = teamCamera.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
         if (
             Physics.Raycast(
@@ -438,7 +442,11 @@ public class PlanMovement : MonoBehaviour
 
     public static GameObject GetNodeUnderMouse()
     {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
+        Camera teamCamera = GameLoop.Instance.teamCamera;
+        if (teamCamera == null)
+            return null;
+
+        Ray ray = teamCamera.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("PathNode")))
         {
@@ -449,7 +457,11 @@ public class PlanMovement : MonoBehaviour
 
     public static Vector3? GetGridCellUnderMouse()
     {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
+        Camera teamCamera = GameLoop.Instance.teamCamera;
+        if (teamCamera == null)
+            return null;
+
+        Ray ray = teamCamera.ScreenPointToRay(Input.mousePosition); // Create a ray from the camera to the mouse position
         RaycastHit hit; // Variable to store raycast hit information
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, LayerMask.GetMask("Grid")))
         {

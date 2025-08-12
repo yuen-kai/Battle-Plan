@@ -120,7 +120,7 @@ public class ActivateAbility : NetworkBehaviour
         transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = false;
     }
 
-    // Expose a parameterless method for Unity UI Button OnClick
+    // Pressed on client
     public void OnAbilityPressed()
     {
         activateAbilityServerRpc();
@@ -129,7 +129,6 @@ public class ActivateAbility : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void activateAbilityServerRpc(ServerRpcParams rpcParams = default)
     {
-        // Only allow the owner of the unit to trigger its ability
         if (unit == null)
             return;
         var netObj = unit.GetComponent<NetworkObject>();
@@ -169,6 +168,7 @@ public class ActivateAbility : NetworkBehaviour
         }
     }
 
+    //On client
     IEnumerator CountDown(double endTime)
     {
         float timeRemaining;
@@ -180,6 +180,7 @@ public class ActivateAbility : NetworkBehaviour
         PlanMovement.Instance.timerTextUI.text = "";
     }
 
+    //On client
     IEnumerator selectAbilitySquareFunc(double endTime, NetworkObjectReference unitRef)
     {
         if (!unitRef.TryGet(out NetworkObject unitNetObj))
@@ -235,7 +236,6 @@ public class ActivateAbility : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void planEnemyResponseServerRpc(Vector3 abilitySquare, ServerRpcParams rpcParams = default)
     {
-        // Ensure only the owning client of the unit can submit the ability target
         if (unit == null)
             return;
         var netObj = unit.GetComponent<NetworkObject>();
@@ -255,6 +255,8 @@ public class ActivateAbility : NetworkBehaviour
         GameLoop.Instance.setOverlayUITextClientRpc("Dodging", enemyTeam);
         double endTime =
             NetworkManager.ServerTime.Time + unitData.timeDivePerUnit * enemiesInRange.Count;
+
+        //convert from List<GameObject> to NetworkObjectReference[]
         NetworkObjectReference[] enemiesInRangeArray = new NetworkObjectReference[
             enemiesInRange.Count
         ];
@@ -266,8 +268,9 @@ public class ActivateAbility : NetworkBehaviour
                 enemiesInRangeArray[i] = networkObject;
             }
         }
+
         allowedDodgerClientId = GameLoop.Instance.GetClient(enemyTeam);
-        planEnemyResponseClientRpc(
+        planEnemyResponseOptionsClientRpc(
             endTime,
             enemiesInRangeArray,
             unitData.diveRange,
@@ -276,15 +279,31 @@ public class ActivateAbility : NetworkBehaviour
     }
 
     [ClientRpc]
-    void planEnemyResponseClientRpc(
+    void planEnemyResponseOptionsClientRpc(
         double endTime,
         NetworkObjectReference[] enemiesInRange,
         int dashDist,
         ulong selectionTeam
     )
     {
-        if (NetworkManager.Singleton.LocalClientId != selectionTeam)
-            return;
+        if (NetworkManager.Singleton.LocalClientId == selectionTeam)
+        {
+            planEnemyResponse(endTime, enemiesInRange, dashDist, selectionTeam);
+        }
+        else
+        {
+            StartCoroutine(CountDown(endTime));
+        }
+    }
+
+    void planEnemyResponse(
+        double endTime,
+        NetworkObjectReference[] enemiesInRange,
+        int dashDist,
+        ulong selectionTeam
+    )
+    {
+        //convert from NetworkObjectReference[] to List<GameObject>
         List<GameObject> dashUnits = new List<GameObject>();
         foreach (NetworkObjectReference objRef in enemiesInRange)
         {
@@ -293,6 +312,7 @@ public class ActivateAbility : NetworkBehaviour
                 dashUnits.Add(networkObject.gameObject);
             }
         }
+
         StartCoroutine(
             PlanMovement.Instance.StartPlanning(
                 paths => enemyResponseCallbackServerRpc(paths),
@@ -306,7 +326,7 @@ public class ActivateAbility : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void enemyResponseCallbackServerRpc(PathsDict paths, ServerRpcParams rpcParams = default)
     {
-        ClearAbilityIndicatorsServerRpc();
+        ClearAbilityIndicators();
 
         // Only accept responses from the selected enemy team client
         if (rpcParams.Receive.SenderClientId != allowedDodgerClientId)
@@ -503,17 +523,28 @@ public class ActivateAbility : NetworkBehaviour
         UpdateDodgeAlerts(square);
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    private void ClearAbilityIndicatorsServerRpc(ServerRpcParams rpcParams = default)
+    private void ClearAbilityIndicators()
     {
-        // Only owner can clear selection visuals from this card
         if (unit == null)
+        {
+            Debug.LogWarning("[ActivateAbility] ClearAbilityIndicatorsServerRpc: unit is null.");
             return;
+        }
         var netObj = unit.GetComponent<NetworkObject>();
-        if (netObj == null || !netObj.IsSpawned)
+        if (netObj == null)
+        {
+            Debug.LogWarning(
+                "[ActivateAbility] ClearAbilityIndicatorsServerRpc: NetworkObject component is missing on unit."
+            );
             return;
-        if (IsServer == false && netObj.OwnerClientId != rpcParams.Receive.SenderClientId)
+        }
+        if (!netObj.IsSpawned)
+        {
+            Debug.LogWarning(
+                "[ActivateAbility] ClearAbilityIndicatorsServerRpc: NetworkObject is not spawned."
+            );
             return;
+        }
         HideAbilityIndicatorsClientRpc();
         SetDodgeAlerts(GameObject.FindGameObjectsWithTag(GameLoop.GetEnemyTeam(unit.tag)), false);
     }
@@ -540,10 +571,24 @@ public class ActivateAbility : NetworkBehaviour
     {
         if (globalAbilityIndicator != null)
             Destroy(globalAbilityIndicator);
+        else
+            Debug.LogWarning(
+                "[ActivateAbility] Tried to destroy globalAbilityIndicator, but it was null."
+            );
+
         if (globalAOEIndicator != null)
             Destroy(globalAOEIndicator);
+        else
+            Debug.LogWarning(
+                "[ActivateAbility] Tried to destroy globalAOEIndicator, but it was null."
+            );
+
         if (globalAbilityLaser != null)
             Destroy(globalAbilityLaser.gameObject);
+        else
+            Debug.LogWarning(
+                "[ActivateAbility] Tried to destroy globalAbilityLaser, but it was null."
+            );
         globalAbilityIndicator = null;
         globalAOEIndicator = null;
         globalAbilityLaser = null;
@@ -602,13 +647,6 @@ public class ActivateAbility : NetworkBehaviour
             }
         }
 
-        if (unitsInRange.Count == 0 && allUnits.Length > 0)
-        {
-            Debug.LogWarning(
-                $"[ActivateAbility] No units of team '{team}' found within range {range} of ability square {abilitySquare}"
-            );
-        }
-
         return unitsInRange;
     }
 
@@ -650,13 +688,6 @@ public class ActivateAbility : NetworkBehaviour
             {
                 unitsInRange.Add(targetUnit);
             }
-        }
-
-        if (unitsInRange.Count == 0 && allUnits.Length > 0)
-        {
-            Debug.LogWarning(
-                $"[ActivateAbility] No units of team '{team}' found within line range {range} of ability square {abilitySquare}"
-            );
         }
 
         return unitsInRange;
