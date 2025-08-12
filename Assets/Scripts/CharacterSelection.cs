@@ -1,9 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.SceneManagement;
 using Unity.Netcode;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class CharacterSelection : MonoBehaviour
 {
@@ -20,10 +20,10 @@ public class CharacterSelection : MonoBehaviour
     public GameObject confirmButton;
 
     public static List<int[]> teamUnits = new List<int[]>()
-        {
-            new int[] { -1, -1, -1 }, // Blue Team Units
-            new int[] { -1, -1, -1 }  // Red Team Units
-        };
+    {
+        new int[] { -1, -1, -1 }, // Blue Team Units
+        new int[] { -1, -1, -1 }, // Red Team Units
+    };
 
     int[] team => teamUnits[currentSelectionIndex];
 
@@ -33,7 +33,7 @@ public class CharacterSelection : MonoBehaviour
         teamUnits = new List<int[]>()
         {
             new int[] { -1, -1, -1 }, // Blue Team Units
-            new int[] { -1, -1, -1 }  // Red Team Units
+            new int[] { -1, -1, -1 }, // Red Team Units
         };
         InitializeCharacterSelection();
     }
@@ -41,7 +41,7 @@ public class CharacterSelection : MonoBehaviour
     public void nextSelection()
     {
         currentSelectionIndex++;
-        if(currentSelectionIndex >= teamUnits.Count)
+        if (currentSelectionIndex >= teamUnits.Count)
         {
             GameLoop.allTeamUnits = teamUnits;
             NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
@@ -68,13 +68,15 @@ public class CharacterSelection : MonoBehaviour
         //Create options
         foreach (var unit in unitOptions)
         {
-            var option = Instantiate(characterOptionPrefab, CharacterSelectionOptionsParent.transform);
+            var option = Instantiate(
+                characterOptionPrefab,
+                CharacterSelectionOptionsParent.transform
+            );
 
             CardHandler cardHandler = option.GetComponent<CardHandler>();
             cardHandler.setImage(unit.unitSprite);
             cardHandler.setText(unit.unitName);
             cardHandler.setButtonListener(() => SelectUnit(unit));
-
         }
     }
 
@@ -104,7 +106,10 @@ public class CharacterSelection : MonoBehaviour
         for (int i = 0; i < team.Length; i++)
         {
             int unit = team[i];
-            GameObject option = Instantiate(characterOptionPrefab, characterSelectedParent.transform);
+            GameObject option = Instantiate(
+                characterOptionPrefab,
+                characterSelectedParent.transform
+            );
 
             SetSelectedUnit(option, unit);
         }
@@ -123,5 +128,4 @@ public class CharacterSelection : MonoBehaviour
         selectedUnit.GetComponent<CardHandler>().setImage(unit.unitSprite);
         selectedUnit.GetComponent<CardHandler>().setText(unit.unitName);
     }
-
 }
