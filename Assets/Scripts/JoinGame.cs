@@ -5,16 +5,8 @@ public class JoinGame : MonoBehaviour
 {
     public TMP_InputField gameCodeInput;
 
-    public void JoinGame()
+    public async void JoinGameFunction()
     {
-        bool success = RelayService.Instance.JoinRelay(gameCodeInput.text);
-        if (success)
-        {
-            Debug.Log("Joined game successfully");
-        }
-        else
-        {
-            Debug.Log("Failed to join game");
-        }
+        await RelayService.Instance.JoinRelay(gameCodeInput.text);
     }
 }

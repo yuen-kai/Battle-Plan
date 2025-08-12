@@ -5,9 +5,8 @@ public class CreateGame : MonoBehaviour
 {
     public TMP_Text gameCodeText;
 
-    public void CreateGame()
+    public async void CreateGameFunction()
     {
-        string joinCode = RelayService.Instance.CreateRelay();
-        gameCodeText.text = joinCode;
+        gameCodeText.text = await RelayService.Instance.CreateRelay() ?? "Failed to create game";
     }
 }
