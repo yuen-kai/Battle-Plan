@@ -4,13 +4,23 @@ using UnityEngine;
 
 public class JoinGameUIHandler : MonoBehaviour
 {
-    public GameObject optionsPanel;
-    public GameObject createPanel;
-    public GameObject joinPanel;
+    [SerializeField]
+    private GameObject optionsPanel;
 
-    public TMP_Text createdGameCodeText;
-    public TMP_InputField gameCodeInput;
-    public TMP_Text gameCodeErrorText;
+    [SerializeField]
+    private GameObject createPanel;
+
+    [SerializeField]
+    private GameObject joinPanel;
+
+    [SerializeField]
+    private TMP_Text createdGameCodeText;
+
+    [SerializeField]
+    private TMP_InputField gameCodeInput;
+
+    [SerializeField]
+    private TMP_Text gameCodeErrorText;
 
     public void togglePanels(GameObject panel)
     {
@@ -35,6 +45,10 @@ public class JoinGameUIHandler : MonoBehaviour
         if (!success)
         {
             gameCodeErrorText.text = "Failed to join game";
+        }
+        else
+        {
+            gameCodeErrorText.text = "Joining game...";
         }
     }
 }

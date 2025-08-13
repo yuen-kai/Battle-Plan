@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class CharacterSelection : MonoBehaviour
+public class CharacterSelection : NetworkBehaviour
 {
     public List<Color> teamColors;
 
@@ -15,44 +15,48 @@ public class CharacterSelection : MonoBehaviour
     public UnitData[] unitOptions;
     public GameObject characterOptionPrefab;
 
-    int currentSelectionIndex = 0;
-
     public GameObject confirmButton;
 
-    public static List<int[]> teamUnits = new List<int[]>()
-    {
-        new int[] { -1, -1, -1 }, // Blue Team Units
-        new int[] { -1, -1, -1 }, // Red Team Units
-    };
-
-    int[] team => teamUnits[currentSelectionIndex];
+    public Dictionary<ulong, int[]> teamUnits = new Dictionary<ulong, int[]>();
+    int[] team = new int[3];
 
     void Start()
     {
-        confirmButton.GetComponent<Button>().onClick.AddListener(() => nextSelection());
-        teamUnits = new List<int[]>()
-        {
-            new int[] { -1, -1, -1 }, // Blue Team Units
-            new int[] { -1, -1, -1 }, // Red Team Units
-        };
+        confirmButton.GetComponent<Button>().onClick.AddListener(() => confirmSelection());
         InitializeCharacterSelection();
     }
 
-    public void nextSelection()
+    void confirmSelection()
     {
-        currentSelectionIndex++;
-        if (currentSelectionIndex >= teamUnits.Count)
+        Debug.Log("Confirm selection button clicked");
+        if (System.Array.Exists(team, x => x == -1))
+        {
+            Debug.Log("Not all units selected");
+            return;
+        }
+        confirmSelectionServerRpc(team);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void confirmSelectionServerRpc(int[] selectedUnits, ServerRpcParams rpcParams = default)
+    {
+        Debug.Log("Confirming selection");
+        teamUnits[rpcParams.Receive.SenderClientId] = selectedUnits;
+        if (teamUnits.Count == GameLoop.teams.Count)
         {
             GameLoop.allTeamUnits = teamUnits;
             NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
             return;
         }
-        InitializeCharacterSelection();
+        Debug.Log("Not all units selected");
     }
 
     void InitializeCharacterSelection()
     {
-        GetComponent<Image>().color = teamColors[currentSelectionIndex];
+        for (int i = 0; i < team.Length; i++)
+        {
+            team[i] = -1;
+        }
         InitializeOptions();
         InitializeSelected();
     }

@@ -5,6 +5,7 @@ using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using OutlineEffect = cakeslice.OutlineEffect;
 
 public enum MessagePerspective
@@ -60,11 +61,7 @@ public class GameLoop : NetworkBehaviour
     [SerializeField]
     private List<GameObject> unitCards;
 
-    public static List<int[]> allTeamUnits = new List<int[]>()
-    {
-        new int[] { 0, 1, 2 }, // Blue Team Units
-        new int[] { 2, 3, 4 }, // Red Team Units
-    };
+    public static Dictionary<ulong, int[]> allTeamUnits = new Dictionary<ulong, int[]>();
 
     // Level Layout (col, row) from bottom left corner
     public static HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
@@ -132,7 +129,22 @@ public class GameLoop : NetworkBehaviour
     public GameObject teamCameraParent;
     public Camera teamCamera => teamCameraParent.GetComponent<Camera>();
 
+    //End Game UI
+    public GameObject endGameUI;
+    public GameObject endGameStatusText;
+    public GameObject playAgainButton;
+    public GameObject mainMenuButton;
+    private bool[] playAgain = new bool[teams.Count];
+
     public static GameLoop Instance { get; private set; }
+
+    void Awake()
+    {
+        for (int i = 0; i < playAgain.Length; i++)
+        {
+            playAgain[i] = false;
+        }
+    }
 
     public override void OnNetworkSpawn()
     {
@@ -211,7 +223,7 @@ public class GameLoop : NetworkBehaviour
         for (int i = 0; i < teams.Count; i++)
         {
             SetupUnitsAndCards(
-                allTeamUnits[i],
+                allTeamUnits[GetClient(i)],
                 unitCards[i],
                 spawns[i],
                 Quaternion.Euler(0, 180 * i, 0),
@@ -404,7 +416,65 @@ public class GameLoop : NetworkBehaviour
                 yield return null;
             }
         }
-        SceneManager.LoadScene("HomeScreen");
+
+        EndGame();
+    }
+
+    void EndGame()
+    {
+        ulong? winner = getWinner();
+        // Serialize nullable ulong as two parameters: hasWinner (bool) and winnerValue (ulong)
+        bool hasWinner = winner.HasValue;
+        ulong winnerValue = winner.GetValueOrDefault();
+        Debug.Log("Winner: " + winnerValue);
+        EndGameClientRpc(hasWinner, winnerValue);
+    }
+
+    [ClientRpc]
+    void EndGameClientRpc(bool hasWinner, ulong winnerValue)
+    {
+        Debug.Log("Ending game");
+        endGameStatusText.GetComponent<TMP_Text>().text = !hasWinner
+            ? "No winner"
+            : (winnerValue == NetworkManager.Singleton.LocalClientId ? "You win!" : "You lose!");
+        playAgainButton.GetComponent<Button>().onClick.AddListener(() => PlayAgain());
+        mainMenuButton
+            .GetComponent<Button>()
+            .onClick.AddListener(() =>
+            {
+                NetworkManager.Singleton.Shutdown();
+                SceneManager.LoadScene("JoinGame");
+            });
+        endGameUI.SetActive(true);
+    }
+
+    void PlayAgain()
+    {
+        playAgainButton.GetComponent<Button>().interactable = false;
+        mainMenuButton.GetComponent<Button>().interactable = false;
+        PlayAgainServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    void PlayAgainServerRpc(ServerRpcParams rpcParams = default)
+    {
+        playAgain[GetTeamIndexForClient(rpcParams.Receive.SenderClientId)] = true;
+        if (playAgain.All(x => x))
+        {
+            NetworkManager.Singleton.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
+        }
+    }
+
+    ulong? getWinner()
+    {
+        foreach (var team in teams)
+        {
+            if (teamSize(team) > 0)
+            {
+                return GetClient(team);
+            }
+        }
+        return null;
     }
 
     [ClientRpc]
