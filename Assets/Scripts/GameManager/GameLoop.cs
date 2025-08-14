@@ -6,7 +6,6 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using OutlineEffect = cakeslice.OutlineEffect;
 
 public enum MessagePerspective
 {
