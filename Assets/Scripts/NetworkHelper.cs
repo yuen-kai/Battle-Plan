@@ -10,6 +10,10 @@ public class NetworkHelper : NetworkBehaviour
     // Queue for height sync requests when instance isn't ready
     private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs =
         new Queue<(GameObject, Vector3)>();
+    
+    // Queue for parenting operations when instance isn't ready
+    private static Queue<(GameObject instance, Transform parent)> pendingParentingOperations =
+        new Queue<(GameObject, Transform)>();
 
     public override void OnNetworkSpawn()
     {
@@ -22,6 +26,9 @@ public class NetworkHelper : NetworkBehaviour
 
         // Process any pending height syncs
         ProcessPendingHeightSyncs();
+        
+        // Process any pending parenting operations
+        ProcessPendingParentingOperations();
     }
 
     private void ProcessPendingHeightSyncs()
@@ -32,6 +39,18 @@ public class NetworkHelper : NetworkBehaviour
             if (obj != null)
             {
                 SyncHeightAdjustedPosition(obj, position);
+            }
+        }
+    }
+
+    private void ProcessPendingParentingOperations()
+    {
+        while (pendingParentingOperations.Count > 0)
+        {
+            var (instance, parent) = pendingParentingOperations.Dequeue();
+            if (instance != null && parent != null)
+            {
+                StartCoroutine(SetParentWhenSpawned(instance, parent));
             }
         }
     }
@@ -88,7 +107,15 @@ public class NetworkHelper : NetworkBehaviour
             // Set parent after network spawn to ensure proper parenting across network
             if (parent != null)
             {
-                instance.transform.SetParent(parent, false);
+                if (Instance != null)
+                {
+                    Instance.StartCoroutine(Instance.SetParentWhenSpawned(instance, parent));
+                }
+                else
+                {
+                    // Queue the parenting operation if NetworkHelper instance isn't ready yet
+                    pendingParentingOperations.Enqueue((instance, parent));
+                }
             }
         }
         else if (parent != null)
@@ -101,6 +128,15 @@ public class NetworkHelper : NetworkBehaviour
         }
 
         return instance;
+    }
+
+    IEnumerator SetParentWhenSpawned(GameObject instance, Transform parent)
+    {
+        while (!parent.GetComponent<NetworkObject>().IsSpawned)
+        {
+            yield return null;
+        }
+        instance.transform.SetParent(parent, false);
     }
 
     //Overloaded versions of Spawn for convenience
