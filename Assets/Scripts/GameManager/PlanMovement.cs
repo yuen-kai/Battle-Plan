@@ -1,9 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using cakeslice;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using Outline = cakeslice.Outline;
 
 /// <summary>
 /// A simple reference to a dictionary that maps GameObjects (units) to their movement paths (list of Vector3 positions).
@@ -391,7 +393,14 @@ public class PlanMovement : MonoBehaviour
             Renderer[] renderers = character.GetComponentsInChildren<Renderer>();
             foreach (Renderer rend in renderers)
             {
-                rend.gameObject.GetComponent<Renderer>().renderingLayerMask = 1 << 1;
+                GameObject go = rend.gameObject;
+                if (go.GetComponent<Outline>() == null)
+                {
+                    go.AddComponent<Outline>();
+                    go.GetComponent<Outline>().color = 0;
+                }
+
+                go.GetComponent<Outline>().enabled = true;
             }
         }
     }
@@ -403,7 +412,8 @@ public class PlanMovement : MonoBehaviour
             Renderer[] renderers = character.GetComponentsInChildren<Renderer>();
             foreach (Renderer rend in renderers)
             {
-                rend.gameObject.GetComponent<Renderer>().renderingLayerMask = 1 << 0;
+                GameObject go = rend.gameObject;
+                go.GetComponent<Outline>().enabled = false;
             }
         }
     }

@@ -6,6 +6,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using OutlineEffect = cakeslice.OutlineEffect;
 
 public enum MessagePerspective
 {
@@ -425,12 +426,14 @@ public class GameLoop : NetworkBehaviour
         // Serialize nullable ulong as two parameters: hasWinner (bool) and winnerValue (ulong)
         bool hasWinner = winner.HasValue;
         ulong winnerValue = winner.GetValueOrDefault();
+        Debug.Log("Winner: " + winnerValue);
         EndGameClientRpc(hasWinner, winnerValue);
     }
 
     [ClientRpc]
     void EndGameClientRpc(bool hasWinner, ulong winnerValue)
     {
+        Debug.Log("Ending game");
         endGameStatusText.GetComponent<TMP_Text>().text = !hasWinner
             ? "No winner"
             : (winnerValue == NetworkManager.Singleton.LocalClientId ? "You win!" : "You lose!");
@@ -440,7 +443,7 @@ public class GameLoop : NetworkBehaviour
             .onClick.AddListener(() =>
             {
                 NetworkManager.Singleton.Shutdown();
-                SceneManager.LoadScene("Title Screen");
+                SceneManager.LoadScene("JoinGame");
             });
         endGameUI.SetActive(true);
     }
