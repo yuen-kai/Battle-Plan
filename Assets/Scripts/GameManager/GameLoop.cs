@@ -268,6 +268,14 @@ public class GameLoop : NetworkBehaviour
                 ability.SetUnitServer(unit);
             }
         }
+
+        StartCoroutine(disableUnitCardCoroutine(unitCardTeamContainer));
+    }
+
+    IEnumerator disableUnitCardCoroutine(GameObject unitCardTeamContainer)
+    {
+        while (!unitCardTeamContainer.GetComponent<NetworkObject>().IsSpawned)
+            yield return null;
         DisabledCardClientRpc(unitCardTeamContainer);
     }
 

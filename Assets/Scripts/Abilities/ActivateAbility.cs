@@ -169,7 +169,7 @@ public class ActivateAbility : NetworkBehaviour
     }
 
     //On client
-    IEnumerator CountDown(double endTime)
+    public IEnumerator CountDown(double endTime)
     {
         float timeRemaining;
         while ((timeRemaining = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0f)
