@@ -1,12 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
 public class TitleScreen : MonoBehaviour
 {
     public GameObject CreditsPanel;
     public GameObject SettingsPanel;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -17,26 +19,30 @@ public class TitleScreen : MonoBehaviour
     //Starts the game when the play button is clicked
     public void StartGame()
     {
-        SceneManager.LoadScene("HomeScreen");
+        SceneManager.LoadScene("JoinGame");
     }
+
     //Quits the game when in the editor or in a build
     public void QuitGame()
     {
         //Check to see if you are inside of the unity editor
         //If so, Exit Play mode
-        #if UNITY_EDITOR
-        UnityEditor. EditorApplication.isPlaying = false;
-        #endif
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
         Application.Quit();
     }
+
     public void OpenSettings()
     {
         SettingsPanel.SetActive(true);
     }
+
     public void CloseSettings()
     {
         SettingsPanel.SetActive(false);
     }
+
     public void OpenCredits()
     {
         CreditsPanel.SetActive(true);
@@ -46,5 +52,4 @@ public class TitleScreen : MonoBehaviour
     {
         CreditsPanel.SetActive(false);
     }
-
 }

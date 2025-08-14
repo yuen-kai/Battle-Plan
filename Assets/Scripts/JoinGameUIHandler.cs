@@ -40,7 +40,7 @@ public class JoinGameUIHandler : MonoBehaviour
 
     public async void OnJoinGame()
     {
-        gameCodeErrorText.text = "";
+        gameCodeErrorText.text = "Attempting to join game...";
         bool success = await RelayManager.Instance.JoinClient(gameCodeInput.text);
         if (!success)
         {
