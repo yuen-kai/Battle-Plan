@@ -28,10 +28,9 @@ public class CharacterSelection : NetworkBehaviour
 
     void confirmSelection()
     {
-        Debug.Log("Confirm selection button clicked");
         if (System.Array.Exists(team, x => x == -1))
         {
-            Debug.Log("Not all units selected");
+            Debug.LogWarning("Not all units selected");
             return;
         }
         confirmSelectionServerRpc(team);
@@ -40,7 +39,6 @@ public class CharacterSelection : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void confirmSelectionServerRpc(int[] selectedUnits, ServerRpcParams rpcParams = default)
     {
-        Debug.Log("Confirming selection");
         teamUnits[rpcParams.Receive.SenderClientId] = selectedUnits;
         if (teamUnits.Count == GameLoop.teams.Count)
         {
@@ -48,7 +46,7 @@ public class CharacterSelection : NetworkBehaviour
             NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
             return;
         }
-        Debug.Log("Not all units selected");
+        Debug.LogWarning("Not all teams have selected");
     }
 
     void InitializeCharacterSelection()
