@@ -89,8 +89,7 @@ public class CharacterSelection : NetworkBehaviour
         {
             if (team[i] == -1) // If the slot is empty
             {
-                team[i] = System.Array.IndexOf(unitOptions, unit); // Store the index of the selected unit
-                SetSelectedUnit(characterSelectedParent.transform.GetChild(i).gameObject, team[i]);
+                SetSelectedUnit(i, System.Array.IndexOf(unitOptions, unit));
                 return; // Exit after selecting a unit
             }
         }
@@ -113,12 +112,30 @@ public class CharacterSelection : NetworkBehaviour
                 characterSelectedParent.transform
             );
 
-            SetSelectedUnit(option, unit);
+            SetSelectedUnit(i, unit);
+            CardHandler cardHandler = option.GetComponent<CardHandler>();
+
+            int currentIndex = i; // Capture the current index in a local variable or else if I use i, it will be the last index
+            cardHandler.setButtonListener(() => SetSelectedUnit(currentIndex, -1));
         }
     }
 
-    void SetSelectedUnit(GameObject selectedUnit, int unitIndex)
+    void SetSelectedUnit(int spotToChange, int unitIndex)
     {
+        Debug.Log(
+            "SetSelectedUnit: "
+                + spotToChange
+                + " "
+                + unitIndex
+                + " "
+                + team.Length
+                + " "
+                + characterSelectedParent.transform.childCount
+        );
+        team[spotToChange] = unitIndex;
+        GameObject selectedUnit = characterSelectedParent
+            .transform.GetChild(spotToChange)
+            .gameObject;
         if (unitIndex == -1)
         {
             selectedUnit.GetComponent<CardHandler>().setImage(null); // Set to null or a default sprite if no unit is selected

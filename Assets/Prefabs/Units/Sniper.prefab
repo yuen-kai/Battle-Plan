@@ -2114,7 +2114,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -6733177361254619370, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_TagString
-      value: Untagged
+      value: TeamIndicatorProp
       objectReference: {fileID: 0}
     - target: {fileID: -516098083770646512, guid: 97a963df5748bdb4eb8a6237a6a4cf26, type: 3}
       propertyPath: m_TagString
