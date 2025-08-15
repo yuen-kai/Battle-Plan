@@ -31,7 +31,8 @@ public class RelayManager : MonoBehaviour
         var allocation = await RelayService.Instance.CreateAllocationAsync(maxConnections);
         NetworkManager
             .Singleton.GetComponent<UnityTransport>()
-            .SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "udp"));
+            .SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "wss"));
+        NetworkManager.Singleton.GetComponent<UnityTransport>().UseWebSockets = true;
         var joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
         return NetworkManager.Singleton.StartHost() ? joinCode : null;
     }
@@ -47,7 +48,8 @@ public class RelayManager : MonoBehaviour
         var allocation = await RelayService.Instance.JoinAllocationAsync(joinCode: joinCode);
         NetworkManager
             .Singleton.GetComponent<UnityTransport>()
-            .SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "udp"));
+            .SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, "wss"));
+        NetworkManager.Singleton.GetComponent<UnityTransport>().UseWebSockets = true;
         return !string.IsNullOrEmpty(joinCode) && NetworkManager.Singleton.StartClient();
     }
 }
