@@ -27,9 +27,25 @@ public class NetworkHandler : NetworkBehaviour
 
     void OnClientConnected(ulong clientId)
     {
-        Debug.Log(NetworkManager.Singleton.ConnectedClients.Count);
         if (NetworkManager.Singleton.ConnectedClients.Count == 2)
         {
+            if (GameLoop.TESTING)
+            {
+                List<int[]> unitAssignments = new List<int[]>
+                {
+                    new int[] { 0, 1, 2 },
+                    new int[] { 2, 3, 4 },
+                };
+
+                int index = 0;
+                foreach (ulong id in NetworkManager.Singleton.ConnectedClients.Keys)
+                {
+                    GameLoop.allTeamUnits[id] = unitAssignments[index];
+                    index++;
+                }
+                NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+                return;
+            }
             NetworkManager.Singleton.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
         }
     }

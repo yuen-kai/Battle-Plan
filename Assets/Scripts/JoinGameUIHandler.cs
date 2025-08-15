@@ -32,13 +32,28 @@ public class JoinGameUIHandler : MonoBehaviour
 
     public async void CreateGame()
     {
+        if (GameLoop.TESTING)
+        {
+            NetworkManager.Singleton.StartHost();
+            return;
+        }
         togglePanels(createPanel);
         createdGameCodeText.text = "Loading...";
         createdGameCodeText.text =
             await RelayManager.Instance.StartHost(2) ?? "Failed to create game";
     }
 
-    public async void OnJoinGame()
+    public void JoinGame()
+    {
+        if (GameLoop.TESTING)
+        {
+            NetworkManager.Singleton.StartClient();
+            return;
+        }
+        togglePanels(joinPanel);
+    }
+
+    public async void AttemptJoinGame()
     {
         gameCodeErrorText.text = "Attempting to join game...";
         bool success = await RelayManager.Instance.JoinClient(gameCodeInput.text);

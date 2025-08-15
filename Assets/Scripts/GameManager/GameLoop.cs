@@ -79,21 +79,37 @@ public class GameLoop : NetworkBehaviour
         new Vector2Int(8, 5),
     };
 
-    List<HashSet<Vector2Int>> spawns = new List<HashSet<Vector2Int>>()
-    {
-        new HashSet<Vector2Int>() //Blue Team Spawn Positions
+    List<HashSet<Vector2Int>> spawns = !TESTING
+        ? new List<HashSet<Vector2Int>>()
         {
-            new Vector2Int(0, 0),
-            new Vector2Int(4, 0),
-            new Vector2Int(8, 0),
-        },
-        new HashSet<Vector2Int>() //Red Team Spawn Positions
+            new HashSet<Vector2Int>() //Blue Team Spawn Positions
+            {
+                new Vector2Int(0, 0),
+                new Vector2Int(4, 0),
+                new Vector2Int(8, 0),
+            },
+            new HashSet<Vector2Int>() //Red Team Spawn Positions
+            {
+                new Vector2Int(8, 9),
+                new Vector2Int(4, 9),
+                new Vector2Int(0, 9),
+            },
+        }
+        : new List<HashSet<Vector2Int>>()
         {
-            new Vector2Int(8, 9),
-            new Vector2Int(4, 9),
-            new Vector2Int(0, 9),
-        },
-    };
+            new HashSet<Vector2Int>() //Blue Team Spawn Positions
+            {
+                new Vector2Int(1, 3),
+                new Vector2Int(4, 2),
+                new Vector2Int(7, 3),
+            },
+            new HashSet<Vector2Int>() //Red Team Spawn Positions
+            {
+                new Vector2Int(1, 6),
+                new Vector2Int(4, 7),
+                new Vector2Int(7, 6),
+            },
+        };
 
     // Store camera positions and rotations as a list of (Vector3 position, Quaternion rotation) tuples
     private List<(Vector3 position, Quaternion rotation)> cameraPositions = new List<(
@@ -134,6 +150,8 @@ public class GameLoop : NetworkBehaviour
     public GameObject playAgainButton;
     public GameObject mainMenuButton;
     private bool[] playAgain = new bool[teams.Count];
+
+    public const bool TESTING = true;
 
     public static GameLoop Instance { get; private set; }
 
