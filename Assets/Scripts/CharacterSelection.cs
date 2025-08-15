@@ -122,16 +122,6 @@ public class CharacterSelection : NetworkBehaviour
 
     void SetSelectedUnit(int spotToChange, int unitIndex)
     {
-        Debug.Log(
-            "SetSelectedUnit: "
-                + spotToChange
-                + " "
-                + unitIndex
-                + " "
-                + team.Length
-                + " "
-                + characterSelectedParent.transform.childCount
-        );
         team[spotToChange] = unitIndex;
         GameObject selectedUnit = characterSelectedParent
             .transform.GetChild(spotToChange)
