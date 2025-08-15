@@ -218,7 +218,7 @@ public class AreaLock : Ability
         yield return StartCoroutine(AnimateRushEffect(rushDuration, segments, startPos, endPos));
 
         StartCoroutine(CreateExplosionEffect(target.transform.position));
-        ShakeCameraClientRpc();
+        CameraEffects.Instance?.CameraShakeClientRpc();
 
         target
             .GetComponent<Health>()
@@ -506,15 +506,6 @@ public class AreaLock : Ability
         {
             if (particle != null)
                 Destroy(particle);
-        }
-    }
-
-    [ClientRpc]
-    private void ShakeCameraClientRpc()
-    {
-        if (CameraEffects.Instance != null)
-        {
-            StartCoroutine(CameraEffects.Instance.CameraShake());
         }
     }
 }

@@ -44,8 +44,7 @@ public class GameLoop : NetworkBehaviour
     // Visual Properties
     public List<Color> teamColors;
 
-    [SerializeField]
-    private Color executingMoves;
+    public Color executingMoves;
     public List<Material> teamMaterials;
 
     // Game Setup: Objects and Prefabs
@@ -397,6 +396,7 @@ public class GameLoop : NetworkBehaviour
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
             double endTime = NetworkManager.Singleton.ServerTime.Time + timerLength;
 
+            CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Friendly);
             setOverlayUITextClientRpc($"Planning", MessagePerspective.Friendly);
             StartPlanningClientRpc(endTime);
 
@@ -408,6 +408,8 @@ public class GameLoop : NetworkBehaviour
                 yield return null;
             }
 
+
+            CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Neutral);
             setUnitCardsInteractable?.Invoke(true);
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
 

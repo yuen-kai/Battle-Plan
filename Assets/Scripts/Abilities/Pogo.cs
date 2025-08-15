@@ -39,15 +39,3 @@ public partial class Pogo : Ability
         transform.GetComponent<Movement>().transitionToShooting();
     }
 }
-
-public partial class Pogo : Ability
-{
-    [ClientRpc]
-    private void ShakeCameraClientRpc()
-    {
-        if (CameraEffects.Instance != null)
-        {
-            StartCoroutine(CameraEffects.Instance.CameraShake());
-        }
-    }
-}
