@@ -15,9 +15,9 @@ MonoBehaviour:
   unitName: Sniper
   unitDescription: Nothing escapes his view. High damage, high accuracy, great for
     area control
-  unitSprite: {fileID: 21300000, guid: 72b30d120b85f4a47a016d94739236e3, type: 3}
+  unitSprite: {fileID: 21300000, guid: 2e12e9c06f772ba41a327ff4570a621d, type: 3}
   abilityName: Area Lock
-  abilitySprite: {fileID: 21300000, guid: 72b30d120b85f4a47a016d94739236e3, type: 3}
+  abilitySprite: {fileID: 21300000, guid: 2e12e9c06f772ba41a327ff4570a621d, type: 3}
   moveDist: 3
   moveSpeed: 1
   diveSpeed: 4
