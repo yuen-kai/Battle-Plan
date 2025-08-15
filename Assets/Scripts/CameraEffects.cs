@@ -1,10 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UI;
 
-public class CameraEffects : MonoBehaviour
+public class CameraEffects : NetworkBehaviour
 {
     public static CameraEffects Instance { get; private set; }
+    public GameObject flash;
 
     private void Awake()
     {
@@ -17,6 +20,12 @@ public class CameraEffects : MonoBehaviour
             Debug.LogWarning("[CameraEffects] Multiple instances detected, destroying duplicate");
             Destroy(gameObject);
         }
+    }
+
+    [ClientRpc]
+    public void CameraShakeClientRpc(float shakeDuration = 0.5f, float shakeIntensity = 0.1f)
+    {
+        StartCoroutine(CameraShake(shakeDuration, shakeIntensity));
     }
 
     /// <summary>
@@ -48,5 +57,58 @@ public class CameraEffects : MonoBehaviour
         }
 
         teamCamera.transform.position = originalPosition;
+    }
+
+    [ClientRpc]
+    public void FlashClientRpc(string team = "neutral", float flashDuration = 0.2f)
+    {
+        Color color = Color.white;
+        if (team == "neutral")
+        {
+            color = (Color)(GameLoop.Instance?.executingMoves ?? Color.white);
+        }
+        else
+        {
+            // Determine if this message is about the client's own team or enemy team
+            ulong localClientId = NetworkManager.Singleton.LocalClientId;
+            string localTeam = GameLoop.Instance?.GetLocalClientTeam(localClientId) ?? "neutral";
+            if (localTeam == team)
+            {
+                color = (Color)(GameLoop.Instance?.teamColors[0] ?? Color.white);
+            }
+            else
+            {
+                color = (Color)(GameLoop.Instance?.teamColors[1] ?? Color.white);
+            }
+        }
+
+        StartCoroutine(Flash(color, flashDuration));
+    }
+
+    [ClientRpc]
+    public void FlashClientRpc(MessagePerspective perspective, float flashDuration = 0.2f)
+    {
+        Color color =
+            perspective == MessagePerspective.Friendly
+                ? (Color)(GameLoop.Instance?.teamColors[0] ?? Color.white)
+                : (
+                    perspective == MessagePerspective.Enemy
+                        ? (Color)(GameLoop.Instance?.teamColors[1] ?? Color.white)
+                        : (Color)(GameLoop.Instance?.executingMoves ?? Color.white)
+                );
+        StartCoroutine(Flash(color, flashDuration));
+    }
+
+    public IEnumerator Flash(Color color = default, float flashDuration = 0.2f)
+    {
+        var image = flash.GetComponent<Image>();
+        float originalAlpha = image.color.a;
+        Color newColor = color;
+        newColor.a = originalAlpha;
+        image.color = newColor;
+
+        flash.SetActive(true);
+        yield return new WaitForSecondsRealtime(flashDuration);
+        flash.SetActive(false);
     }
 }
