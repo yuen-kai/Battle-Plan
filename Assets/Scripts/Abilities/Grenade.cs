@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 public partial class Grenade : Ability
 {
@@ -14,9 +14,14 @@ public partial class Grenade : Ability
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3)
     {
         // Instantiate the grenade at the current position
-        GameObject grenade = NetworkHelper.Spawn(grenadePrefab, transform.position, Quaternion.identity);
+        GameObject grenade = NetworkHelper.Spawn(
+            grenadePrefab,
+            transform.position,
+            Quaternion.identity
+        );
         Vector3 startPosition = grenade.transform.position;
-        Vector3 targetPosition = abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0);
+        Vector3 targetPosition =
+            abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0);
 
         float elapsed = 0f;
 
@@ -24,22 +29,29 @@ public partial class Grenade : Ability
         {
             elapsed += Time.deltaTime;
             float progress = elapsed / abilityTime;
-            
+
             // Interpolate between start and target positions
             Vector3 currentPos = Vector3.Lerp(startPosition, targetPosition, progress);
             currentPos.y += throwHeight * 2 * progress * (1 - progress);
 
             grenade.transform.position = currentPos;
-            
+
             yield return null; // Wait for next frame
         }
         grenade.transform.position = targetPosition;
 
         // Explode and damage enemies
-        ShakeCameraClientRpc();
+        CameraEffects.Instance.CameraShakeClientRpc();
         ExplodeGrenade(targetPosition, AreaRadius);
-        GameObject explosionEffect = NetworkHelper.Spawn(grenadeExplosionPrefab, targetPosition, Quaternion.identity);
-        NetworkHelper.Instance.Despawn(explosionEffect, explosionEffect.GetComponent<ParticleSystem>().main.duration);
+        GameObject explosionEffect = NetworkHelper.Spawn(
+            grenadeExplosionPrefab,
+            targetPosition,
+            Quaternion.identity
+        );
+        NetworkHelper.Instance.Despawn(
+            explosionEffect,
+            explosionEffect.GetComponent<ParticleSystem>().main.duration
+        );
         NetworkHelper.Instance.Despawn(grenade);
     }
 
@@ -48,14 +60,26 @@ public partial class Grenade : Ability
         string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
 
         // Find all enemies within explosion range
-        Collider[] enemiesInRange = Physics.OverlapSphere(explosionPosition, AreaRadius * GameLoop.cellSize, LayerMask.GetMask(enemyTeam));
-        
+        Collider[] enemiesInRange = Physics.OverlapSphere(
+            explosionPosition,
+            AreaRadius * GameLoop.cellSize,
+            LayerMask.GetMask(enemyTeam)
+        );
+
         foreach (Collider enemy in enemiesInRange)
         {
             // Check line of sight from explosion to enemy
             Vector3 directionToEnemy = (enemy.transform.position - explosionPosition).normalized;
             float distanceToEnemy = Vector3.Distance(explosionPosition, enemy.transform.position);
-            if (Physics.Raycast(explosionPosition, directionToEnemy, out RaycastHit hit, distanceToEnemy, LayerMask.GetMask("Walls", enemyTeam)))
+            if (
+                Physics.Raycast(
+                    explosionPosition,
+                    directionToEnemy,
+                    out RaycastHit hit,
+                    distanceToEnemy,
+                    LayerMask.GetMask("Walls", enemyTeam)
+                )
+            )
             {
                 // If raycast hits an obstacle before reaching the enemy, skip damage
                 if (hit.collider != enemy)
@@ -63,18 +87,6 @@ public partial class Grenade : Ability
             }
 
             enemy.transform.GetComponent<Health>()?.TakeDamage(damage);
-        }
-    }
-}
-
-public partial class Grenade : Ability
-{
-    [ClientRpc]
-    private void ShakeCameraClientRpc()
-    {
-        if (CameraEffects.Instance != null)
-        {
-            StartCoroutine(CameraEffects.Instance.CameraShake());
         }
     }
 }

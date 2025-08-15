@@ -147,8 +147,9 @@ public class ActivateAbility : NetworkBehaviour
 
         double endTime = NetworkManager.ServerTime.Time + unitData.selectTime;
         string team = unit.tag;
-        // Server broadcasts overlay UI message
-        GameLoop.Instance.setOverlayUITextClientRpc(
+
+        CameraEffects.Instance?.FlashClientRpc(team);
+        GameLoop.Instance?.setOverlayUITextClientRpc(
             $"{unit.name}:\nSelect ability target square",
             team
         );
@@ -252,7 +253,8 @@ public class ActivateAbility : NetworkBehaviour
             ? GetUnitsInRange(abilitySquare, enemyTeam, unitData.responseRange)
             : GetUnitsInRangeofLine(abilitySquare, enemyTeam, unitData.responseRange);
 
-        GameLoop.Instance.setOverlayUITextClientRpc("Dodging", enemyTeam);
+        CameraEffects.Instance?.FlashClientRpc(enemyTeam);
+        GameLoop.Instance?.setOverlayUITextClientRpc("Dodging", enemyTeam);
         double endTime =
             NetworkManager.ServerTime.Time + unitData.timeDivePerUnit * enemiesInRange.Count;
 
