@@ -30,6 +30,8 @@ public struct TeamMappingData : INetworkSerializable
 
 public class GameLoop : NetworkBehaviour
 {
+    public const bool TESTING = false;
+
     // Grid Configuration
     public static float cellSize = 2.7f;
     public static Rect gridBounds = new Rect(
@@ -150,7 +152,6 @@ public class GameLoop : NetworkBehaviour
     public GameObject mainMenuButton;
     private bool[] playAgain = new bool[teams.Count];
 
-    public const bool TESTING = true;
 
     public static GameLoop Instance { get; private set; }
 
