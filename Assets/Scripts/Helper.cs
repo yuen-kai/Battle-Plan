@@ -4,7 +4,11 @@ using UnityEngine;
 
 public class Helper : MonoBehaviour
 {
-    public static GameObject DisplayGridRange(Vector3 currentPos, int dist, GameObject overlayPrefab)
+    public static GameObject DisplayGridRange(
+        Vector3 currentPos,
+        int dist,
+        GameObject overlayPrefab
+    )
     {
         GameObject overlay = new GameObject("MoveOverlay");
 
@@ -14,10 +18,17 @@ public class Helper : MonoBehaviour
             for (int j = -horizontalDist; j <= horizontalDist; j++)
             {
                 float cellSize = GameLoop.cellSize;
-                Vector2 overlayCellPos = new Vector2(currentPos.x + j * cellSize, currentPos.z + i * cellSize);
+                Vector2 overlayCellPos = new Vector2(
+                    currentPos.x + j * cellSize,
+                    currentPos.z + i * cellSize
+                );
                 if (GameLoop.gridBounds.Contains(overlayCellPos))
                 {
-                    GameObject overlayCell = Instantiate(overlayPrefab, new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y), Quaternion.identity);
+                    GameObject overlayCell = Instantiate(
+                        overlayPrefab,
+                        new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y),
+                        Quaternion.identity
+                    );
                     overlayCell.transform.parent = overlay.transform;
                 }
             }
@@ -34,10 +45,14 @@ public class Helper : MonoBehaviour
         }
         if (transform.TryGetComponent<Renderer>(out Renderer renderer))
         {
-            Debug.LogWarning($"[Helper] No Collider found on {transform.name}, falling back to Renderer bounds for height offset");
+            Debug.LogWarning(
+                $"[Helper] No Collider found on {transform.name}, falling back to Renderer bounds for height offset"
+            );
             return new Vector3(0, renderer.bounds.size.y / 2, 0);
         }
-        Debug.LogWarning($"[Helper] No Collider or Renderer found on {transform.name}, falling back to zero height offset");
+        Debug.LogWarning(
+            $"[Helper] No Collider or Renderer found on {transform.name}, falling back to zero height offset"
+        );
         return Vector3.zero;
     }
 }
