@@ -8,12 +8,14 @@ public class TitleScreen : MonoBehaviour
 {
     public GameObject CreditsPanel;
     public GameObject SettingsPanel;
+    public GameObject ControlsPanel;
 
     // Start is called before the first frame update
     void Start()
     {
         CreditsPanel.SetActive(false);
         SettingsPanel.SetActive(false);
+        ControlsPanel.SetActive(false);
     }
 
     //Starts the game when the play button is clicked
@@ -51,5 +53,13 @@ public class TitleScreen : MonoBehaviour
     public void CloseCredits()
     {
         CreditsPanel.SetActive(false);
+    }
+    public void OpenControls()
+    {
+        ControlsPanel.SetActive(true);
+    }
+    public void CloseControls()
+    {
+        ControlsPanel.SetActive(false);
     }
 }
