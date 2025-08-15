@@ -48,11 +48,6 @@ public class Movement : NetworkBehaviour
 
     public void transitionToShooting()
     {
-        if (animator != null)
-        {
-            animator.PlayAnimationExclusive("Idle");
-        }
-
         PauseMovement();
         moving = false;
 
@@ -64,7 +59,7 @@ public class Movement : NetworkBehaviour
     {
         if (animator != null)
         {
-            animator.PlayAnimationExclusive("Moving");
+            animator.PlayAnimation("Moving");
         }
 
         moving = true;

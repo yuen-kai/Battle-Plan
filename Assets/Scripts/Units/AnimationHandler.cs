@@ -11,17 +11,43 @@ public class AnimationHandler : MonoBehaviour
         animator = GetComponent<Animator>();
     }
 
-    string[] exclusiveStates = { "Moving", "Aiming" };
-
-    public void PlayAnimationExclusive(string animationName)
+    public void PlayAnimation(string animationName)
     {
-        if (animator != null)
+        if (animator == null)
+            return;
+        if (animationName == "Moving")
         {
-            foreach (var state in exclusiveStates)
-            {
-                animator.SetBool(state, state == animationName);
-            }
-            //animator.Play(animationName); 
+            animator.Play("Person Walking");
+            animator.Play("Gun Still", 1);
         }
+        else if (animationName == "Aiming")
+        {
+            animator.Play("Person Aiming");
+            animator.Play("Gun Still", 1);
+        }
+        else if (animationName == "Idle")
+        {
+            animator.Play("Person Idle");
+            animator.Play("Gun Idle", 1);
+        }
+    }
+
+    public void TriggerAnimation(string animationName, float delay = 1f)
+    {
+        if (animator == null)
+            return;
+        if (animationName == "Shoot")
+        {
+            animator.Play("Person Shoot");
+            animator.Play("Gun Shoot", 1);
+            Debug.Log("Shoot");
+        }
+        StartCoroutine(PlayAnimationWithDelay("Idle", delay));
+    }
+
+    IEnumerator PlayAnimationWithDelay(string animationName, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        PlayAnimation(animationName);
     }
 }

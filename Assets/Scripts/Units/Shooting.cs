@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 /// <summary>
 /// Manages combat mechanics for units including enemy detection, targeting systems, ammunition management, and projectile firing.
@@ -30,8 +30,12 @@ public class Shooting : NetworkBehaviour
 
     private List<GameObject> bullets = new List<GameObject>();
     private int currentAmmo;
-    [HideInInspector] public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
-    [HideInInspector] public bool stillShooting = true;
+
+    [HideInInspector]
+    public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
+
+    [HideInInspector]
+    public bool stillShooting = true;
 
     private Coroutine shootingCoroutine;
 
@@ -101,7 +105,8 @@ public class Shooting : NetworkBehaviour
 
     public void PauseShooting()
     {
-        if (shootingCoroutine != null) StopCoroutine(shootingCoroutine);
+        if (shootingCoroutine != null)
+            StopCoroutine(shootingCoroutine);
         isLaserEnabled.Value = false;
 
         allowShooting = true;
@@ -126,13 +131,21 @@ public class Shooting : NetworkBehaviour
 
     private IEnumerator RotateToFaceTarget(GameObject target)
     {
-        yield return StartCoroutine(transform.GetComponent<Movement>().RotateToFaceTarget(target.transform.position, unitData.rotationSpeed));
+        yield return StartCoroutine(
+            transform
+                .GetComponent<Movement>()
+                .RotateToFaceTarget(target.transform.position, unitData.rotationSpeed)
+        );
     }
-
 
     // SHOOTING
     public IEnumerator InitiateShooting()
     {
+        if (GetComponent<AnimationHandler>() != null)
+        {
+            GetComponent<AnimationHandler>().PlayAnimation("Aiming");
+        }
+
         currentAmmo = unitData.magazineSize;
 
         float remainingTargetLockTime = unitData.targetLockDuration;
@@ -140,7 +153,8 @@ public class Shooting : NetworkBehaviour
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
-            if (target) yield return StartCoroutine(RotateToFaceTarget(target));
+            if (target)
+                yield return StartCoroutine(RotateToFaceTarget(target));
 
             remainingTargetLockTime = unitData.targetLockDuration;
 
@@ -156,7 +170,8 @@ public class Shooting : NetworkBehaviour
                         remainingTargetLockTime = unitData.targetLockDuration;
                         yield return StartCoroutine(RotateToFaceTarget(target));
                     }
-                    if (!allowShooting) break;
+                    if (!allowShooting)
+                        break;
 
                     yield return null;
                     continue;
@@ -165,13 +180,15 @@ public class Shooting : NetworkBehaviour
                 //Target lock
                 if (remainingTargetLockTime > 0f)
                 {
-                    transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized); // Track target
+                    transform.rotation = Quaternion.LookRotation(
+                        (target.transform.position - transform.position).normalized
+                    ); // Track target
 
                     float lockProgress = 1 - remainingTargetLockTime / unitData.targetLockDuration;
 
                     isLaserEnabled.Value = true;
                     laserWidth.Value = Mathf.Lerp(startAnimWidth, endAnimWidth, lockProgress);
-                    laserColor.Value =  Color.Lerp(startAnimColor, endAnimColor, lockProgress);
+                    laserColor.Value = Color.Lerp(startAnimColor, endAnimColor, lockProgress);
                     laserStartPos.Value = transform.position;
                     laserEndPos.Value = target.transform.position;
 
@@ -182,7 +199,9 @@ public class Shooting : NetworkBehaviour
                 }
                 isLaserEnabled.Value = false;
 
-                transform.rotation = Quaternion.LookRotation((target.transform.position - transform.position).normalized); // Track target
+                transform.rotation = Quaternion.LookRotation(
+                    (target.transform.position - transform.position).normalized
+                ); // Track target
                 FireBullet();
 
                 yield return new WaitForSeconds(unitData.timeBetweenShots);
@@ -192,6 +211,11 @@ public class Shooting : NetworkBehaviour
             {
                 yield return StartCoroutine(Reload());
             }
+        }
+
+        if (GetComponent<AnimationHandler>() != null)
+        {
+            GetComponent<AnimationHandler>().PlayAnimation("Idle");
         }
 
         // Wait for all bullets to be destroyed
@@ -204,22 +228,37 @@ public class Shooting : NetworkBehaviour
         stillShooting = false;
     }
 
-    public void FireBullet(float spread = -1, float bulletSpeed = -1, float damage = -1, float backstabMultiplier = -1, float range = -1, float backstabAngle = -1, GameObject bulletPrefab = null)
+    public void FireBullet(
+        float spread = -1,
+        float bulletSpeed = -1,
+        float damage = -1,
+        float backstabMultiplier = -1,
+        float range = -1,
+        float backstabAngle = -1,
+        GameObject bulletPrefab = null
+    )
     {
         spread = spread == -1 ? unitData.bulletSpread : spread;
         bulletSpeed = bulletSpeed == -1 ? unitData.bulletSpeed : bulletSpeed;
         damage = damage == -1 ? unitData.damage : damage;
-        backstabMultiplier = backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
+        backstabMultiplier =
+            backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
         range = range == -1 ? unitData.bulletRange : range;
         backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
-        bulletPrefab = bulletPrefab ?? (transform.tag == "BlueTeam" ? unitData.blueBulletPrefab : unitData.redBulletPrefab);
+        bulletPrefab =
+            bulletPrefab
+            ?? (transform.tag == "BlueTeam" ? unitData.blueBulletPrefab : unitData.redBulletPrefab);
 
         // Fire bullet with spread
         Vector3 baseDirection = transform.forward;
         float spreadAngle = Random.Range(-spread, spread);
         Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
 
-        GameObject bullet = NetworkHelper.Spawn(bulletPrefab, transform.position, Quaternion.LookRotation(shootDirection));
+        GameObject bullet = NetworkHelper.Spawn(
+            bulletPrefab,
+            transform.position,
+            Quaternion.LookRotation(shootDirection)
+        );
         bullets.Add(bullet);
 
         Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
@@ -233,6 +272,11 @@ public class Shooting : NetworkBehaviour
         bulletScript.enemyTeam = enemyTeam;
 
         currentAmmo--;
+
+        if (GetComponent<AnimationHandler>() != null)
+        {
+            GetComponent<AnimationHandler>().TriggerAnimation("Shoot");
+        }
     }
 
     private int GetActiveBulletCount()
@@ -276,9 +320,12 @@ public class Shooting : NetworkBehaviour
         ulong localClientId = NetworkManager.Singleton.LocalClientId;
         foreach (var netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
         {
-            if (netObj == null) continue;
-            if (netObj.OwnerClientId == localClientId) continue;
-            if (netObj.GetComponent<Health>() == null) continue;
+            if (netObj == null)
+                continue;
+            if (netObj.OwnerClientId == localClientId)
+                continue;
+            if (netObj.GetComponent<Health>() == null)
+                continue;
 
             GameObject enemy = netObj.gameObject;
             float distance = Vector3.Distance(transform.position, enemy.transform.position);
@@ -295,7 +342,15 @@ public class Shooting : NetworkBehaviour
     {
         // Check for clear line of sight within range
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
-        if (Physics.Raycast(transform.position, directionToEnemy, out RaycastHit hit, unitData.targetRange * GameLoop.cellSize, LayerMask.GetMask("Walls", enemyTeam)))
+        if (
+            Physics.Raycast(
+                transform.position,
+                directionToEnemy,
+                out RaycastHit hit,
+                unitData.targetRange * GameLoop.cellSize,
+                LayerMask.GetMask("Walls", enemyTeam)
+            )
+        )
         {
             if (hit.collider.gameObject == enemy)
             {

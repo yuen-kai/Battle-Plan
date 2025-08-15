@@ -216,11 +216,12 @@ public class PlanMovement : MonoBehaviour
 
     void StartPath(List<GameObject> dashUnits = null)
     {
-        bool isValidUnitSelected =
-            selectedUnit?.GetComponent<NetworkObject>().OwnerClientId
+        if (
+            selectedUnit != null
+            && selectedUnit.GetComponent<NetworkObject>().OwnerClientId
                 == NetworkManager.Singleton.LocalClientId
-            && (dashUnits == null || dashUnits.Contains(selectedUnit));
-        if (isValidUnitSelected)
+            && (dashUnits == null || dashUnits.Contains(selectedUnit))
+        )
         {
             //Reset movement path
             movementPaths[selectedUnit] = new List<Vector3>();
@@ -242,7 +243,7 @@ public class PlanMovement : MonoBehaviour
 
             isDragging = true;
         }
-        else
+        else if (selectedUnit == null)
         {
             GameObject node = GetNodeUnderMouse();
             if (node == null)
@@ -268,10 +269,10 @@ public class PlanMovement : MonoBehaviour
                 .RemoveRange(index + 2, movementPaths[selectedUnit].Count - (index + 2)); //movement path includes start but visual does not
 
             currentMovementPath = movementPaths[selectedUnit];
+            isDragging = true;
         }
 
         DisplayMoveRange();
-        isDragging = true;
     }
 
     void ExtendPath(int dashDist = -1)
