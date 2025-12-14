@@ -119,13 +119,19 @@ public class PlanMovement : MonoBehaviour
 
     private static float cellSize => GameLoop.cellSize; //shortened reference to GameLoop.cellSize
 
-    private bool isDragging = false;
-
     public static PlanMovement Instance { get; private set; }
 
     void Awake()
     {
         Instance = this;
+    }
+
+    public void SwitchToNextUnit()
+    {
+        DisplayMoveRange();
+        movementPaths[selectedUnit] = new List<Vector3>();
+        currentMovementPath = movementPaths[selectedUnit];
+        // DisplayAttackRange();
     }
 
     public IEnumerator StartPlanning(
@@ -135,7 +141,7 @@ public class PlanMovement : MonoBehaviour
         int dashDist = -1
     )
     {
-        this.teamCharacters = dashUnits ?? PopulateTeamCharacters(); // Populate with local client's team units
+        teamCharacters = dashUnits ?? PopulateTeamCharacters(); // Populate with local client's team units
         movementPaths = new PathsDict();
 
         AddCharacterOutlines();
@@ -144,32 +150,46 @@ public class PlanMovement : MonoBehaviour
 
         //Path selection loop
         float timer;
+        float allowedTime = (float)(endTime - NetworkManager.Singleton.ServerTime.Time);
+        float unitSwitchInterval = 15f;
+        int currentUnitIndex = 0;
+        float nextSwitchTime = allowedTime - unitSwitchInterval;
+
+        selectedUnit = teamCharacters[0];
+        SwitchToNextUnit();
+
         while ((timer = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0)
         {
-            timerTextUI.text = (Mathf.CeilToInt(timer)).ToString();
-            if (Input.GetMouseButtonDown(0))
+            if (GameLoop.TESTING)
             {
-                selectedUnit = GetCharacterUnderMouse();
-                //DisplayAttackRange();
-                StartPath(dashUnits);
+                // Switch to next unit every unitSwitchInterval seconds
+                if (teamCharacters.Count > 1 && timer < nextSwitchTime)
+                {
+                    currentUnitIndex = (currentUnitIndex + 1) % teamCharacters.Count;
+                    selectedUnit = teamCharacters[currentUnitIndex];
+                    SwitchToNextUnit();
+                    nextSwitchTime -= unitSwitchInterval;
+                }
             }
-            else if (Input.GetMouseButton(0) && isDragging)
+            timerTextUI.text = Mathf.CeilToInt(timer).ToString();
+            if (selectedUnit != null && selectedUnit.GetComponent<Movement>().selectMovement)
             {
-                ExtendPath(dashDist);
+                //movement selection
+                if (Input.GetMouseButtonDown(0))
+                {
+                    StartPath();
+                }
+                else if (Input.GetMouseButton(0))
+                {
+                    ExtendPath(dashDist);
+                }
             }
-            else if (Input.GetMouseButtonUp(0))
+            else
             {
-                EndPath();
-            }
 
+            }
             timer -= Time.unscaledDeltaTime;
             yield return null;
-        }
-
-        //Cleanup
-        if (isDragging) // Finalize any in-progress path
-        {
-            EndPath();
         }
 
         RemoveCharacterOutlines();
@@ -214,14 +234,9 @@ public class PlanMovement : MonoBehaviour
         return localTeamCharacters;
     }
 
-    void StartPath(List<GameObject> dashUnits = null)
+    void StartPath()
     {
-        if (
-            selectedUnit != null
-            && selectedUnit.GetComponent<NetworkObject>().OwnerClientId
-                == NetworkManager.Singleton.LocalClientId
-            && (dashUnits == null || dashUnits.Contains(selectedUnit))
-        )
+        if (GetGridCellUnderMouse() == GetGridCellUnderCharacter(selectedUnit))
         {
             //Reset movement path
             movementPaths[selectedUnit] = new List<Vector3>();
@@ -240,21 +255,16 @@ public class PlanMovement : MonoBehaviour
 
             currentPathEdges = new GameObject("PathEdges");
             currentPathEdges.transform.parent = currentVisualPath.transform;
-
-            isDragging = true;
         }
-        else if (selectedUnit == null)
+        else
         {
             GameObject node = GetNodeUnderMouse();
-            if (node == null)
+            if (!visualPaths.ContainsKey(selectedUnit) || node?.transform.parent?.parent?.gameObject != visualPaths[selectedUnit])
                 return;
-
             //Set up path info from node
             currentVisualPath = node.transform.parent.parent.gameObject;
             currentPathNodes = currentVisualPath.transform.Find("PathNodes").gameObject;
             currentPathEdges = currentVisualPath.transform.Find("PathEdges").gameObject;
-
-            selectedUnit = visualPaths.FirstOrDefault(x => x.Value == currentVisualPath).Key;
 
             //Remove all nodes after it
             int index = node.transform.GetSiblingIndex();
@@ -265,14 +275,9 @@ public class PlanMovement : MonoBehaviour
                 Destroy(currentPathEdges.transform.GetChild(i).gameObject);
             }
 
-            movementPaths[selectedUnit]
-                .RemoveRange(index + 2, movementPaths[selectedUnit].Count - (index + 2)); //movement path includes start but visual does not
-
-            currentMovementPath = movementPaths[selectedUnit];
-            isDragging = true;
+            currentMovementPath
+                .RemoveRange(index + 2, currentMovementPath.Count - (index + 2)); //movement path includes start but visual does not
         }
-
-        DisplayMoveRange();
     }
 
     void ExtendPath(int dashDist = -1)
@@ -293,6 +298,7 @@ public class PlanMovement : MonoBehaviour
         }
 
         //Add to movementPath
+        if (currentMovementPath.Count == 0) return;
         Vector3 last = currentMovementPath[^1];
         int moveDist =
             dashDist == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : dashDist;
@@ -306,12 +312,6 @@ public class PlanMovement : MonoBehaviour
             currentMovementPath.Add(currentTile);
             AddPathSectionVisual(currentTile, last, currentMovementPath.Count - 1, moveDist);
         }
-    }
-
-    void EndPath()
-    {
-        isDragging = false;
-        selectedUnit = null;
     }
 
     void DisplayMoveRange()

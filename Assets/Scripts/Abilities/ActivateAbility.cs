@@ -217,7 +217,7 @@ public class ActivateAbility : NetworkBehaviour
         float timeRemaining;
         while ((timeRemaining = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0f)
         {
-            PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
+            PlanMovement.Instance.timerTextUI.text = Mathf.CeilToInt(timeRemaining).ToString();
 
             if (Input.GetMouseButtonDown(0))
             {

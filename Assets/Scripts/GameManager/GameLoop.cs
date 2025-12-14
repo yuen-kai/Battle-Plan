@@ -30,7 +30,7 @@ public struct TeamMappingData : INetworkSerializable
 
 public class GameLoop : NetworkBehaviour
 {
-    public const bool TESTING = false;
+    public const bool TESTING = true;
 
     // Grid Configuration
     public static float cellSize = 2.7f;
@@ -123,7 +123,7 @@ public class GameLoop : NetworkBehaviour
     };
 
     // Game Settings
-    float planningTimePerUnit = 5f;
+    float planningTimePerUnit = TESTING ? 15f : 5f;
 
     // Game State
     List<GameObject> doneMovingUnits = new List<GameObject>();

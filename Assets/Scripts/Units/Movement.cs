@@ -11,6 +11,9 @@ public class Movement : NetworkBehaviour
     public UnitData unitData;
 
     [HideInInspector]
+    public bool selectMovement = true;
+
+    [HideInInspector]
     public bool moving = true;
 
     private Coroutine moveListRoutine;
