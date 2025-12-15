@@ -391,7 +391,7 @@ public class GameLoop : NetworkBehaviour
         {
             pathsList = new List<PathsDict>();
 
-            setUnitCardsInteractable?.Invoke(false);
+            setUnitCardsInteractable?.Invoke(true);
             OrderStillShooting?.Invoke(true);
 
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
@@ -411,7 +411,7 @@ public class GameLoop : NetworkBehaviour
 
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Neutral);
-            setUnitCardsInteractable?.Invoke(true);
+            setUnitCardsInteractable?.Invoke(false);
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
 
             // Flatten pathsList into a single PathsDict

@@ -85,7 +85,7 @@ public class PathsDict : Dictionary<GameObject, List<Vector3>>, INetworkSerializ
 public class PlanMovement : MonoBehaviour
 {
     private List<GameObject> teamCharacters = new List<GameObject>();
-    private GameObject selectedUnit;
+    public GameObject selectedUnit;
 
     public PathsDict movementPaths = new PathsDict();
     private List<Vector3> currentMovementPath = new List<Vector3>();
@@ -126,11 +126,25 @@ public class PlanMovement : MonoBehaviour
         Instance = this;
     }
 
-    public void SwitchToNextUnit()
+    public void SwitchToUnit(GameObject newSelectedUnit)
     {
+        selectedUnit = newSelectedUnit;
         DisplayMoveRange();
-        movementPaths[selectedUnit] = new List<Vector3>();
+        if (!movementPaths.ContainsKey(selectedUnit))
+        {
+            movementPaths[selectedUnit] = new List<Vector3>();
+        }
         currentMovementPath = movementPaths[selectedUnit];
+        if (!visualPaths.ContainsKey(selectedUnit))
+        {
+            ResetVisualPath();
+        }
+        else
+        {
+            currentVisualPath = visualPaths[selectedUnit];
+            currentPathNodes = currentVisualPath.transform.Find("PathNodes").gameObject;
+            currentPathEdges = currentVisualPath.transform.Find("PathEdges").gameObject;
+        }
         // DisplayAttackRange();
     }
 
@@ -143,6 +157,7 @@ public class PlanMovement : MonoBehaviour
     {
         teamCharacters = dashUnits ?? PopulateTeamCharacters(); // Populate with local client's team units
         movementPaths = new PathsDict();
+        visualPaths = new Dictionary<GameObject, GameObject>();
 
         AddCharacterOutlines();
 
@@ -150,27 +165,10 @@ public class PlanMovement : MonoBehaviour
 
         //Path selection loop
         float timer;
-        float allowedTime = (float)(endTime - NetworkManager.Singleton.ServerTime.Time);
-        float unitSwitchInterval = 15f;
-        int currentUnitIndex = 0;
-        float nextSwitchTime = allowedTime - unitSwitchInterval;
-
-        selectedUnit = teamCharacters[0];
-        SwitchToNextUnit();
+        SwitchToUnit(teamCharacters[0]);
 
         while ((timer = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0)
         {
-            if (GameLoop.TESTING)
-            {
-                // Switch to next unit every unitSwitchInterval seconds
-                if (teamCharacters.Count > 1 && timer < nextSwitchTime)
-                {
-                    currentUnitIndex = (currentUnitIndex + 1) % teamCharacters.Count;
-                    selectedUnit = teamCharacters[currentUnitIndex];
-                    SwitchToNextUnit();
-                    nextSwitchTime -= unitSwitchInterval;
-                }
-            }
             timerTextUI.text = Mathf.CeilToInt(timer).ToString();
             if (selectedUnit != null && selectedUnit.GetComponent<Movement>().selectMovement)
             {
@@ -234,6 +232,21 @@ public class PlanMovement : MonoBehaviour
         return localTeamCharacters;
     }
 
+    void ResetVisualPath()
+    {
+        if (visualPaths.ContainsKey(selectedUnit))
+            Destroy(visualPaths[selectedUnit]);
+        currentVisualPath = new GameObject("VisualPath");
+        currentVisualPath.transform.parent = visualPathsParent.transform;
+        visualPaths[selectedUnit] = currentVisualPath;
+
+        currentPathNodes = new GameObject("PathNodes");
+        currentPathNodes.transform.parent = currentVisualPath.transform;
+
+        currentPathEdges = new GameObject("PathEdges");
+        currentPathEdges.transform.parent = currentVisualPath.transform;
+    }
+
     void StartPath()
     {
         if (GetGridCellUnderMouse() == GetGridCellUnderCharacter(selectedUnit))
@@ -242,19 +255,7 @@ public class PlanMovement : MonoBehaviour
             movementPaths[selectedUnit] = new List<Vector3>();
             currentMovementPath = movementPaths[selectedUnit];
             currentMovementPath.Add(GetGridCellUnderCharacter(selectedUnit));
-
-            //Reset visual path
-            if (visualPaths.ContainsKey(selectedUnit))
-                Destroy(visualPaths[selectedUnit]);
-            currentVisualPath = new GameObject("VisualPath");
-            currentVisualPath.transform.parent = visualPathsParent.transform;
-            visualPaths[selectedUnit] = currentVisualPath;
-
-            currentPathNodes = new GameObject("PathNodes");
-            currentPathNodes.transform.parent = currentVisualPath.transform;
-
-            currentPathEdges = new GameObject("PathEdges");
-            currentPathEdges.transform.parent = currentVisualPath.transform;
+            ResetVisualPath();
         }
         else
         {
@@ -262,7 +263,6 @@ public class PlanMovement : MonoBehaviour
             if (!visualPaths.ContainsKey(selectedUnit) || node?.transform.parent?.parent?.gameObject != visualPaths[selectedUnit])
                 return;
             //Set up path info from node
-            currentVisualPath = node.transform.parent.parent.gameObject;
             currentPathNodes = currentVisualPath.transform.Find("PathNodes").gameObject;
             currentPathEdges = currentVisualPath.transform.Find("PathEdges").gameObject;
 

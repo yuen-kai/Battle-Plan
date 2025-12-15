@@ -123,7 +123,8 @@ public class ActivateAbility : NetworkBehaviour
     // Pressed on client
     public void OnAbilityPressed()
     {
-        activateAbilityServerRpc();
+        PlanMovement.Instance.SwitchToUnit(unit);
+        // activateAbilityServerRpc();
     }
 
     [ServerRpc(RequireOwnership = false)]
