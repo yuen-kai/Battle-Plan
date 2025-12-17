@@ -57,10 +57,10 @@ public class GameLoop : NetworkBehaviour
     // Team Configuration
     public static List<string> teams = new() { "BlueTeam", "RedTeam" };
 
-    [SerializeField]
-    private GameObject unitCards;
+    public GameObject unitCards;
 
     public static Dictionary<ulong, int[]> allTeamUnits = new();
+    public static Dictionary<ulong, GameObject[]> allTeamUnitObjects = new();
 
     // Level Layout (col, row) from bottom left corner
     public static HashSet<Vector2Int> wallLayout = new()
@@ -100,14 +100,14 @@ public class GameLoop : NetworkBehaviour
             new() //Blue Team Spawn Positions
             {
                 new Vector2Int(1, 3),
-                new Vector2Int(4, 2),
+                new Vector2Int(4, 5),
                 new Vector2Int(7, 3),
             },
             new() //Red Team Spawn Positions
             {
-                new Vector2Int(1, 6),
-                new Vector2Int(4, 7),
-                new Vector2Int(7, 6),
+                new Vector2Int(3, 6),
+                new Vector2Int(4, 6),
+                new Vector2Int(5, 6),
             },
         };
 
@@ -119,7 +119,7 @@ public class GameLoop : NetworkBehaviour
     };
 
     // Game Settings
-    float planningTimePerUnit = TESTING ? 15f : 5f;
+    float planningTimePerUnit = TESTING ? 3f : 5f;
 
     // Game State
     List<GameObject> doneMovingUnits = new();
@@ -130,8 +130,6 @@ public class GameLoop : NetworkBehaviour
     private Dictionary<ulong, int> clientTeamMapping = new();
 
     // Actions
-    public static System.Action<bool> setUnitCardsInteractable;
-    public static System.Action<GameObject> disableUnitCard;
     public static System.Action<bool> OrderAllowShooting;
     public static System.Action<bool> OrderStillShooting;
     public static System.Action OrderContinueShooting;
@@ -253,6 +251,7 @@ public class GameLoop : NetworkBehaviour
         string team
     )
     {
+        allTeamUnitObjects[GetClient(teamIndex)] = new GameObject[teamUnits.Length];
         for (int i = 0; i < teamUnits.Length; i++)
         {
             GameObject unit = NetworkHelper.Spawn(
@@ -261,6 +260,7 @@ public class GameLoop : NetworkBehaviour
                 rotation,
                 GetClient(team)
             );
+            allTeamUnitObjects[GetClient(teamIndex)][i] = unit;
             Vector3 heightOffset = Helper.heightOffset(unit.transform);
             unit.transform.position += heightOffset;
             NetworkHelper.SyncHeightAdjustedPositionStatic(unit, unit.transform.position);
@@ -370,7 +370,7 @@ public class GameLoop : NetworkBehaviour
         {
             pathsList = new List<PathsDict>();
 
-            setUnitCardsInteractable?.Invoke(true);
+            unitCards.GetComponent<UnitCardContainer>().SetUnitCardsInteractable(true);
             OrderStillShooting?.Invoke(true);
 
             float timerLength = planningTimePerUnit * teams.Max(teamSize);
@@ -390,7 +390,8 @@ public class GameLoop : NetworkBehaviour
 
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Neutral);
-            setUnitCardsInteractable?.Invoke(false);
+            unitCards.GetComponent<UnitCardContainer>().SetUnitCardsInteractable(false);
+
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
 
             // Flatten pathsList into a single PathsDict

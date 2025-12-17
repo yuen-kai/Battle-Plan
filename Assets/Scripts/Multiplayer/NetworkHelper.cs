@@ -7,6 +7,13 @@ public class NetworkHelper : NetworkBehaviour
 {
     public static NetworkHelper Instance { get; private set; }
 
+    public static ClientRpcParams ToClient(ulong clientId) =>
+    new ClientRpcParams {
+        Send = new ClientRpcSendParams {
+            TargetClientIds = new[] { clientId }
+        }
+    };
+
     // Queue for height sync requests when instance isn't ready
     private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs =
         new();

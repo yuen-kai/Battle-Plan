@@ -76,7 +76,7 @@ public class Reroute : Ability
 
         //continue time
         Time.timeScale = 1f;
-        GameLoop.setUnitCardsInteractable(true);
+        GameLoop.Instance.unitCards.GetComponent<UnitCardContainer>().SetUnitCardsInteractable(true);
         //execute dive
         foreach (var pair in paths)
         {

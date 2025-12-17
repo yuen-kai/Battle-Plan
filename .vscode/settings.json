@@ -52,5 +52,5 @@
         "Temp/": true
     },
     "dotnet.preferCSharpExtension": true,
-    "dotnet.defaultSolution": "Battle-Plan.sln"
+    "dotnet.defaultSolution": "Battle-Plan.slnx"
 }
