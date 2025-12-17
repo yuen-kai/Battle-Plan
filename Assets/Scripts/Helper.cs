@@ -34,4 +34,28 @@ public class Helper : MonoBehaviour
         obj.transform.SetParent(parent != null ? parent.transform : null);
         return obj;
     }
+
+    public static List<GameObject> GetObjectsInRange(Vector3 position, string tag, float range)
+    {
+        List<GameObject> objectsInRange = new();
+        GameObject[] allObjectsWithTag = GameObject.FindGameObjectsWithTag(tag);
+
+        if (allObjectsWithTag.Length == 0)
+        {
+            Debug.LogWarning(
+                $"[Helper] No units found with tag '{tag}' for range calculation"
+            );
+        }
+
+        foreach (GameObject unit in allObjectsWithTag)
+        {
+            float distance = Vector3.Distance(position, unit.transform.position);
+            if (distance <= range * GameLoop.cellSize)
+            {
+                objectsInRange.Add(unit);
+            }
+        }
+
+        return objectsInRange;
+    }
 }

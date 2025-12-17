@@ -15,7 +15,7 @@ public class Reroute : Ability
         //Response
         string team = gameObject.tag;
 
-        List<GameObject> alliesInRange = ActivateAbility.GetUnitsInRange(
+        List<GameObject> alliesInRange = Helper.GetObjectsInRange(
             transform.position,
             team,
             abilityRange

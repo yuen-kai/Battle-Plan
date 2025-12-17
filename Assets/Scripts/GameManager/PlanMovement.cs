@@ -136,7 +136,6 @@ public class PlanMovement : MonoBehaviour
     )
     {
         teamCharacters = units ?? PopulateTeamCharacters();
-        range = range == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : range;
 
         InitializeVisuals();
         SwitchToUnit(teamCharacters[0], range);
@@ -172,6 +171,7 @@ public class PlanMovement : MonoBehaviour
 
     void MovementSelection(int moveDist)
     {
+        moveDist = moveDist == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : moveDist;
         if (Input.GetMouseButtonDown(0))
         {
             StartPath();
@@ -215,6 +215,11 @@ public class PlanMovement : MonoBehaviour
         }
 
         return localTeamCharacters;
+    }
+
+    public void SwitchToUnit(int unitIndex)
+    {
+        SwitchToUnit(teamCharacters[unitIndex]);
     }
 
     public void SwitchToUnit(GameObject newSelectedUnit, int range=-1)

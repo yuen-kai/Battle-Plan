@@ -224,7 +224,7 @@ GameObject:
   - component: {fileID: 1754829301995240987}
   - component: {fileID: 4973187200100100688}
   - component: {fileID: -375620079018468532}
-  - component: {fileID: 347597076770873492}
+  - component: {fileID: 7696315528950938176}
   m_Layer: 5
   m_Name: UnitCard
   m_TagString: Untagged
@@ -302,7 +302,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 409836967
+  GlobalObjectIdHash: 3721697112
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -315,7 +315,7 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
---- !u!114 &347597076770873492
+--- !u!114 &7696315528950938176
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -324,16 +324,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 6877355979647964550}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c48aafb755316264aa2e14923392ec64, type: 3}
+  m_Script: {fileID: 11500000, guid: 3854901c5f1d146a9a69adc07ce0dd7e, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Assembly-CSharp::UnitCard
   ShowTopMostFoldoutHeaderGroup: 1
-  unit: {fileID: 0}
-  unitData: {fileID: 0}
-  uses: 1
-  abilityRangeOverlayPrefab: {fileID: 5853487972985149831, guid: 8a1a42420f7e9da4ea3bac7019b72d1e, type: 3}
-  abilitySquareIndicatorPrefab: {fileID: 3326808074419072509, guid: 19764b8f6b5db2c4c8736d1e35f41184, type: 3}
-  abilityAOEIndicatorPrefab: {fileID: 103789117567813075, guid: a601eda5ed58e484cbb8dfcac8cf1640, type: 3}
+  uses: 0
 --- !u!1 &8861979398241179818
 GameObject:
   m_ObjectHideFlags: 0
@@ -345,7 +340,6 @@ GameObject:
   - component: {fileID: 5040157693871653981}
   - component: {fileID: 7048157729592682756}
   - component: {fileID: 1515498787099759118}
-  - component: {fileID: 8006350342021435993}
   m_Layer: 5
   m_Name: TouchArea
   m_TagString: Untagged
@@ -412,59 +406,3 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &8006350342021435993
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8861979398241179818}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_Navigation:
-    m_Mode: 3
-    m_WrapAround: 0
-    m_SelectOnUp: {fileID: 0}
-    m_SelectOnDown: {fileID: 0}
-    m_SelectOnLeft: {fileID: 0}
-    m_SelectOnRight: {fileID: 0}
-  m_Transition: 1
-  m_Colors:
-    m_NormalColor: {r: 1, g: 1, b: 1, a: 1}
-    m_HighlightedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
-    m_PressedColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 1}
-    m_SelectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
-    m_DisabledColor: {r: 0.2830189, g: 0.2830189, b: 0.2830189, a: 0.84313726}
-    m_ColorMultiplier: 1
-    m_FadeDuration: 0.1
-  m_SpriteState:
-    m_HighlightedSprite: {fileID: 0}
-    m_PressedSprite: {fileID: 0}
-    m_SelectedSprite: {fileID: 0}
-    m_DisabledSprite: {fileID: 0}
-  m_AnimationTriggers:
-    m_NormalTrigger: Normal
-    m_HighlightedTrigger: Highlighted
-    m_PressedTrigger: Pressed
-    m_SelectedTrigger: Selected
-    m_DisabledTrigger: Disabled
-  m_Interactable: 1
-  m_TargetGraphic: {fileID: 1515498787099759118}
-  m_OnClick:
-    m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 347597076770873492}
-        m_TargetAssemblyTypeName: ActivateAbility, Assembly-CSharp
-        m_MethodName: OnAbilityPressed
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2

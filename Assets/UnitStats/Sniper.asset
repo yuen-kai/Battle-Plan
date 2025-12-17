@@ -12,12 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
   m_Name: Sniper
   m_EditorClassIdentifier: 
+  unitModel: {fileID: 4136433947033533029, guid: ec80aa1b1ead1554e81103453b6830e3, type: 3}
   unitName: Sniper
   unitDescription: Nothing escapes his view. High damage, high accuracy, great for
     area control
   unitSprite: {fileID: 21300000, guid: 2e12e9c06f772ba41a327ff4570a621d, type: 3}
   abilityName: Area Lock
-  abilitySprite: {fileID: 21300000, guid: 2e12e9c06f772ba41a327ff4570a621d, type: 3}
+  abilitySprite: {fileID: 21300000, guid: 72b30d120b85f4a47a016d94739236e3, type: 3}
   moveDist: 3
   moveSpeed: 1
   diveSpeed: 4
@@ -38,6 +39,7 @@ MonoBehaviour:
   targetLockDuration: 2
   aimRotationSpeed: 270
   maxHealth: 50
+  abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1
   abilitySquareRange: 99
   abilityRadius: 0

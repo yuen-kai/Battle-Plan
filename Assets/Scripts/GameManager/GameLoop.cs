@@ -52,14 +52,13 @@ public class GameLoop : NetworkBehaviour
     // Game Setup: Objects and Prefabs
     [SerializeField]
     private GameObject wallPrefab;
-    public List<GameObject> allUnits;
-    public List<GameObject> unitCardPrefabs;
+    public UnitDatabase allUnits;
 
     // Team Configuration
     public static List<string> teams = new() { "BlueTeam", "RedTeam" };
 
     [SerializeField]
-    private List<GameObject> unitCards;
+    private GameObject unitCards;
 
     public static Dictionary<ulong, int[]> allTeamUnits = new();
 
@@ -236,19 +235,19 @@ public class GameLoop : NetworkBehaviour
         //Setup teams
         for (int i = 0; i < teams.Count; i++)
         {
-            SetupUnitsAndCards(
+            SetupUnitsAndCards(i,
                 allTeamUnits[GetClient(i)],
-                unitCards[i],
                 spawns[i],
                 Quaternion.Euler(0, 180 * i, 0),
                 teams[i]
             );
         }
+        // yield return new WaitForSeconds(1f);
     }
 
     void SetupUnitsAndCards(
+        int teamIndex,
         int[] teamUnits,
-        GameObject unitCardTeamContainer,
         HashSet<Vector2Int> spawnPositions,
         Quaternion rotation,
         string team
@@ -257,49 +256,32 @@ public class GameLoop : NetworkBehaviour
         for (int i = 0; i < teamUnits.Length; i++)
         {
             GameObject unit = NetworkHelper.Spawn(
-                allUnits[teamUnits[i]],
+                allUnits.units[teamUnits[i]].unitModel,
                 gridCoordToWorld(spawnPositions.ElementAt(i)),
                 rotation,
                 GetClient(team)
             );
             Vector3 heightOffset = Helper.heightOffset(unit.transform);
             unit.transform.position += heightOffset;
+            NetworkHelper.SyncHeightAdjustedPositionStatic(unit, unit.transform.position);
+
             unit.tag = team;
             SetGroupLayerGlobal(unit, LayerMask.NameToLayer(team));
 
-            // Sync the height-adjusted position to all clients
-            NetworkHelper.SyncHeightAdjustedPositionStatic(unit, unit.transform.position);
-
-            GameObject newUnitCard = NetworkHelper.Spawn(
-                unitCardPrefabs[teamUnits[i]],
-                unitCardTeamContainer.transform,
-                GetClient(team)
-            );
-
-            // Bind the unit to the card and sync to clients
-            var ability = newUnitCard.GetComponent<ActivateAbility>();
-            if (ability != null)
-            {
-                ability.SetUnitServer(unit);
-            }
+            SetUnitCardClientRpc(teamIndex, i, teamUnits[i]);
         }
-
-        StartCoroutine(disableUnitCardCoroutine(unitCardTeamContainer));
-    }
-
-    IEnumerator disableUnitCardCoroutine(GameObject unitCardTeamContainer)
-    {
-        while (!unitCardTeamContainer.GetComponent<NetworkObject>().IsSpawned)
-            yield return null;
-        DisabledCardClientRpc(unitCardTeamContainer);
     }
 
     [ClientRpc]
-    void DisabledCardClientRpc(NetworkObjectReference objRef)
+    void SetUnitCardClientRpc(int teamIndex, int cardIndex, int unitIndex)
     {
-        if (objRef.TryGet(out NetworkObject networkObject))
+        ulong selfClientId = NetworkManager.Singleton.LocalClientId;
+        if (GetTeamIndexForClient(selfClientId) == teamIndex)
         {
-            networkObject.GetComponent<UnitCard>().DisableUI();
+            UnitCard card = unitCards.transform.GetChild(cardIndex).GetComponent<UnitCard>();
+            UnitData unitData = allUnits.units[unitIndex];
+            card.uses = unitData.uses;
+            card.SetUnitCard(unitData.abilitySprite, unitData.abilityName);
         }
     }
 

@@ -5,33 +5,33 @@ using UnityEngine;
 public class GridSystem : MonoBehaviour
 {
     [SerializeField] private GameObject cellPrefab; // Public variable for the GameObject prefab
-    public static float cellSize {  get; private set; } // Size of each grid cell
+    public static float CellSize => GameLoop.cellSize; // Size of each grid cell
     [SerializeField] private int gridWidth = 10; // Width of the grid
     [SerializeField] private int gridHeight = 10; // Height of the grid
     GameObject[,] gridArray; // 2D array to hold grid cells
 
     // Start is called before the first frame update
-    void Start()
-    {
-        cellSize = cellPrefab.GetComponent<Renderer>().bounds.size.x; // Set cellSize to the width of the cellPrefab
-        CreateGrid();
-    }
+    // void Start()
+    // {
+    //     cellSize = cellPrefab.GetComponent<Renderer>().bounds.size.x; // Set cellSize to the width of the cellPrefab
+    //     CreateGrid();
+    // }
 
-    void CreateGrid()
-    {
-        gridArray = new GameObject[gridWidth, gridHeight];
-        GameObject gridParent = new("GridCells"); // Create a parent GameObject for the grid cells
-        for (int x = 0; x < gridWidth; x++)
-        {
-            for (int z = 0; z < gridHeight; z++)
-            {
-                Vector3 position = new(x * cellSize, 0, z * cellSize);
-                GameObject cell = Instantiate(cellPrefab, position, Quaternion.identity); // Instantiate the prefab
-                cell.transform.parent = gridParent.transform; // Set the parent of the cell to the gridParent
-                gridArray[x, z] = cell; // Store the cell in the grid array
-            }
-        }
-    }
+    // void CreateGrid()
+    // {
+    //     gridArray = new GameObject[gridWidth, gridHeight];
+    //     GameObject gridParent = new("GridCells"); // Create a parent GameObject for the grid cells
+    //     for (int x = 0; x < gridWidth; x++)
+    //     {
+    //         for (int z = 0; z < gridHeight; z++)
+    //         {
+    //             Vector3 position = new(x * cellSize, 0, z * cellSize);
+    //             GameObject cell = Instantiate(cellPrefab, position, Quaternion.identity); // Instantiate the prefab
+    //             cell.transform.parent = gridParent.transform; // Set the parent of the cell to the gridParent
+    //             gridArray[x, z] = cell; // Store the cell in the grid array
+    //         }
+    //     }
+    // }
 
     public static GameObject DisplayGridRange(
         Vector3 currentPos,
@@ -62,7 +62,6 @@ public class GridSystem : MonoBehaviour
                 }
             }
         }
-
         return overlay;
     }
 
@@ -74,16 +73,16 @@ public class GridSystem : MonoBehaviour
 
     public static Vector3 GetNearestGridCell(Vector3 position)
     {
-        float x = Mathf.Round(position.x / cellSize) * cellSize;
-        float z = Mathf.Round(position.z / cellSize) * cellSize;
+        float x = Mathf.Round(position.x / CellSize) * CellSize;
+        float z = Mathf.Round(position.z / CellSize) * CellSize;
         return new Vector3(x, 0, z);
     }
 
     public static Vector2Int ConvertToGridCoords(Vector3 position)
     {
         //Assuming grid's bottom left corner is at (0,0) and the grid is aligned with the world axes
-        int x = Mathf.RoundToInt(position.x / cellSize);
-        int z = Mathf.RoundToInt(position.z / cellSize);
+        int x = Mathf.RoundToInt(position.x / CellSize);
+        int z = Mathf.RoundToInt(position.z / CellSize);
         return new Vector2Int(x, z);
     }
 }

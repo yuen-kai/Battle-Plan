@@ -1,28 +1,27 @@
 using Unity.Netcode;
 using UnityEngine;
 using System.Collections;
+using UnityEngine.UI;
+using TMPro;
 
 public class UnitCard : NetworkBehaviour
 {
-    public void DisableUI()
+    public int uses;
+
+    public void SetUnitCard(Sprite abilityCardSprite, string abilityName)
     {
-        StartCoroutine(DisableUIAfterDelay());
+        transform.Find("TouchArea").Find("UnitImage").GetComponent<Image>().sprite = abilityCardSprite;
+        transform.Find("TouchArea").Find("AbilityText").GetComponent<TMP_Text>().text = abilityName;
     }
 
-    IEnumerator DisableUIAfterDelay()
+    public void setUnitCardInteractable(bool interactable)
     {
-        while (transform.childCount == 0)
-            yield return null;
+        bool unavailable = uses <= 0; //|| unit dead
+        transform.Find("TouchArea").GetComponent<UnityEngine.UI.Button>().interactable = !unavailable && interactable;
+    }
 
-        if (!transform.GetChild(0).GetComponent<NetworkObject>().IsOwner)
-        {
-            CanvasGroup cg = gameObject.GetComponent<CanvasGroup>();
-            if (cg == null)
-                cg = gameObject.AddComponent<CanvasGroup>();
-
-            cg.alpha = 0f; // Makes UI invisible
-            cg.interactable = false; // Blocks input (buttons, etc.)
-            cg.blocksRaycasts = false; // Prevents UI from blocking clicks behind it
-        }
+    public void OnAbilityPressed()
+    {
+        PlanMovement.Instance.SwitchToUnit(transform.GetSiblingIndex());
     }
 }
