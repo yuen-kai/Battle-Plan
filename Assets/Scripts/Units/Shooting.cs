@@ -22,13 +22,13 @@ public class Shooting : NetworkBehaviour
     private Color endAnimColor = Color.red;
 
     // Network variables for laser synchronization
-    private NetworkVariable<bool> isLaserEnabled = new NetworkVariable<bool>(false);
-    private NetworkVariable<Vector3> laserStartPos = new NetworkVariable<Vector3>();
-    private NetworkVariable<Vector3> laserEndPos = new NetworkVariable<Vector3>();
-    private NetworkVariable<float> laserWidth = new NetworkVariable<float>();
-    private NetworkVariable<Color> laserColor = new NetworkVariable<Color>();
+    private NetworkVariable<bool> isLaserEnabled = new(false);
+    private NetworkVariable<Vector3> laserStartPos = new();
+    private NetworkVariable<Vector3> laserEndPos = new();
+    private NetworkVariable<float> laserWidth = new();
+    private NetworkVariable<Color> laserColor = new();
 
-    private List<GameObject> bullets = new List<GameObject>();
+    private List<GameObject> bullets = new();
     private int currentAmmo;
 
     [HideInInspector]

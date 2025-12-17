@@ -682,14 +682,14 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 653993801}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
   m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
-  m_CookieSize: 10
+  m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
     m_Type: 2
     m_Resolution: -1
@@ -943,6 +943,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -1675,6 +1676,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -1995,7 +1997,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1195467863}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb6895772954f50498d7b85dddd40681, type: 3}
+  m_Script: {fileID: 11500000, guid: 44133e75c1a2f400ab4e909fe48cfa3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   CreditsPanel: {fileID: 1418232751}
@@ -2025,11 +2027,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4282ac436f5b9f1419861825fa3e0da9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  qualityLevels:
-  - {fileID: 11400000, guid: 481cfa4b724032f488d43d1135e7c8da, type: 2}
-  - {fileID: 11400000, guid: e89b64350816b3d4eb6bf593dc8e5f84, type: 2}
-  - {fileID: 11400000, guid: 8d819eb889e436d4d898aa1b94151a5f, type: 2}
-  dropdown: {fileID: 1722257539}
 --- !u!1 &1232920585
 GameObject:
   m_ObjectHideFlags: 0
@@ -2125,6 +2122,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -3028,17 +3026,6 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 2190104239855893072, guid: aa071300ebf6faa4b91b61155556b946, type: 3}
   m_PrefabInstance: {fileID: 8057779776016619910}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1722257539 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 8604121082691204863, guid: aa071300ebf6faa4b91b61155556b946, type: 3}
-  m_PrefabInstance: {fileID: 8057779776016619910}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1937174502}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7b743370ac3e4ec2a1668f5455a8ef8a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &1749056092
 GameObject:
   m_ObjectHideFlags: 0
@@ -3134,6 +3121,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -3270,6 +3258,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -3406,6 +3395,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -3542,6 +3532,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -3678,6 +3669,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -3848,6 +3840,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -3984,6 +3977,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -4120,6 +4114,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0

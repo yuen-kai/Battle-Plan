@@ -34,7 +34,7 @@ public class GameLoop : NetworkBehaviour
 
     // Grid Configuration
     public static float cellSize = 2.7f;
-    public static Rect gridBounds = new Rect(
+    public static Rect gridBounds = new(
         new Vector2(0, 0),
         new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f)
     );
@@ -56,15 +56,15 @@ public class GameLoop : NetworkBehaviour
     public List<GameObject> unitCardPrefabs;
 
     // Team Configuration
-    public static List<string> teams = new List<string>() { "BlueTeam", "RedTeam" };
+    public static List<string> teams = new() { "BlueTeam", "RedTeam" };
 
     [SerializeField]
     private List<GameObject> unitCards;
 
-    public static Dictionary<ulong, int[]> allTeamUnits = new Dictionary<ulong, int[]>();
+    public static Dictionary<ulong, int[]> allTeamUnits = new();
 
     // Level Layout (col, row) from bottom left corner
-    public static HashSet<Vector2Int> wallLayout = new HashSet<Vector2Int>()
+    public static HashSet<Vector2Int> wallLayout = new()
     {
         new Vector2Int(3, 2),
         new Vector2Int(5, 2),
@@ -83,13 +83,13 @@ public class GameLoop : NetworkBehaviour
     List<HashSet<Vector2Int>> spawns = !TESTING
         ? new List<HashSet<Vector2Int>>()
         {
-            new HashSet<Vector2Int>() //Blue Team Spawn Positions
+            new() //Blue Team Spawn Positions
             {
                 new Vector2Int(0, 0),
                 new Vector2Int(4, 0),
                 new Vector2Int(8, 0),
             },
-            new HashSet<Vector2Int>() //Red Team Spawn Positions
+            new() //Red Team Spawn Positions
             {
                 new Vector2Int(8, 9),
                 new Vector2Int(4, 9),
@@ -98,13 +98,13 @@ public class GameLoop : NetworkBehaviour
         }
         : new List<HashSet<Vector2Int>>()
         {
-            new HashSet<Vector2Int>() //Blue Team Spawn Positions
+            new() //Blue Team Spawn Positions
             {
                 new Vector2Int(1, 3),
                 new Vector2Int(4, 2),
                 new Vector2Int(7, 3),
             },
-            new HashSet<Vector2Int>() //Red Team Spawn Positions
+            new() //Red Team Spawn Positions
             {
                 new Vector2Int(1, 6),
                 new Vector2Int(4, 7),
@@ -113,10 +113,7 @@ public class GameLoop : NetworkBehaviour
         };
 
     // Store camera positions and rotations as a list of (Vector3 position, Quaternion rotation) tuples
-    private List<(Vector3 position, Quaternion rotation)> cameraPositions = new List<(
-        Vector3,
-        Quaternion
-    )>()
+    private List<(Vector3 position, Quaternion rotation)> cameraPositions = new()
     {
         (new Vector3(11.93f, 24.4f, 3.4f), new Quaternion(0.59543306f, 0f, 0f, 0.8034049f)),
         (new Vector3(11.93f, 24.4f, 21.0f), new Quaternion(0f, 0.80340505f, -0.5954329f, 0f)),
@@ -126,12 +123,12 @@ public class GameLoop : NetworkBehaviour
     float planningTimePerUnit = TESTING ? 15f : 5f;
 
     // Game State
-    List<GameObject> doneMovingUnits = new List<GameObject>();
-    List<GameObject> doneShootingUnits = new List<GameObject>();
-    private Dictionary<ulong, int> clientIdToTeamIndex = new Dictionary<ulong, int>();
+    List<GameObject> doneMovingUnits = new();
+    List<GameObject> doneShootingUnits = new();
+    private Dictionary<ulong, int> clientIdToTeamIndex = new();
 
     // Client-side team mapping synchronized from server
-    private Dictionary<ulong, int> clientTeamMapping = new Dictionary<ulong, int>();
+    private Dictionary<ulong, int> clientTeamMapping = new();
 
     // Actions
     public static System.Action<bool> setUnitCardsInteractable;
@@ -140,7 +137,7 @@ public class GameLoop : NetworkBehaviour
     public static System.Action<bool> OrderStillShooting;
     public static System.Action OrderContinueShooting;
 
-    List<PathsDict> pathsList = new List<PathsDict>();
+    List<PathsDict> pathsList = new();
 
     public GameObject teamCameraParent;
     public Camera teamCamera => teamCameraParent.GetComponent<Camera>();
@@ -415,7 +412,7 @@ public class GameLoop : NetworkBehaviour
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
 
             // Flatten pathsList into a single PathsDict
-            PathsDict paths = new PathsDict();
+            PathsDict paths = new();
             foreach (PathsDict teamPaths in pathsList)
             {
                 foreach (var kvp in teamPaths)
@@ -519,7 +516,7 @@ public class GameLoop : NetworkBehaviour
         // Validate and sanitize client-submitted paths on the server
         ulong senderClientId = rpcParams.Receive.SenderClientId;
 
-        PathsDict sanitized = new PathsDict();
+        PathsDict sanitized = new();
 
         foreach (var kvp in paths)
         {
@@ -543,8 +540,8 @@ public class GameLoop : NetworkBehaviour
             List<Vector3> submitted = kvp.Value ?? new List<Vector3>();
 
             // Build a sanitized path: start at current cell, then step by step adjacents, up to maxSteps
-            List<Vector3> clean = new List<Vector3>();
-            Vector3 start = PlanMovement.GetGridCellUnderCharacter(unit);
+            List<Vector3> clean = new();
+            Vector3 start = GridSystem.GetNearestGridCell(unit);
             clean.Add(start);
 
             int stepsAdded = 0;
@@ -555,7 +552,7 @@ public class GameLoop : NetworkBehaviour
                     break;
 
                 // snap to grid
-                Vector3 snapped = PlanMovement.GetNearestGridCell(point);
+                Vector3 snapped = GridSystem.GetNearestGridCell(point);
 
                 // must be exactly one cell away (no diagonals) and not already in path
                 float dist = Mathf.Abs(snapped.x - last.x) + Mathf.Abs(snapped.z - last.z);
@@ -587,7 +584,7 @@ public class GameLoop : NetworkBehaviour
         {
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
-                List<Vector3> movementPath = new List<Vector3>();
+                List<Vector3> movementPath = new();
 
                 // Check if this unit has a path in the dictionary
                 if (paths.ContainsKey(unit))

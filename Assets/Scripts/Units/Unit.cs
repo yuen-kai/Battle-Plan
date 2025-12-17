@@ -8,6 +8,9 @@ public class Unit : NetworkBehaviour
 {
     public List<Material> teamMaterials;
 
+    [HideInInspector]
+    public bool selectMovement = true;
+
     public override void OnNetworkSpawn()
     {
         SetTeamIndicators();

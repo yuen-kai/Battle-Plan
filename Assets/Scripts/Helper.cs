@@ -4,39 +4,6 @@ using UnityEngine;
 
 public class Helper : MonoBehaviour
 {
-    public static GameObject DisplayGridRange(
-        Vector3 currentPos,
-        int dist,
-        GameObject overlayPrefab
-    )
-    {
-        GameObject overlay = new GameObject("MoveOverlay");
-
-        for (int i = -dist; i <= dist; i++)
-        {
-            int horizontalDist = dist - Mathf.Abs(i);
-            for (int j = -horizontalDist; j <= horizontalDist; j++)
-            {
-                float cellSize = GameLoop.cellSize;
-                Vector2 overlayCellPos = new Vector2(
-                    currentPos.x + j * cellSize,
-                    currentPos.z + i * cellSize
-                );
-                if (GameLoop.gridBounds.Contains(overlayCellPos))
-                {
-                    GameObject overlayCell = Instantiate(
-                        overlayPrefab,
-                        new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y),
-                        Quaternion.identity
-                    );
-                    overlayCell.transform.parent = overlay.transform;
-                }
-            }
-        }
-
-        return overlay;
-    }
-
     public static Vector3 heightOffset(Transform transform)
     {
         if (transform.TryGetComponent<Collider>(out Collider collider))
@@ -54,5 +21,17 @@ public class Helper : MonoBehaviour
             $"[Helper] No Collider or Renderer found on {transform.name}, falling back to zero height offset"
         );
         return Vector3.zero;
+    }
+
+
+
+    /// <summary>
+    /// Helper to create a GameObject with a given name and parent.
+    /// </summary>
+    public static GameObject CreateGameObject(string name, GameObject parent)
+    {
+        var obj = new GameObject(name);
+        obj.transform.SetParent(parent != null ? parent.transform : null);
+        return obj;
     }
 }

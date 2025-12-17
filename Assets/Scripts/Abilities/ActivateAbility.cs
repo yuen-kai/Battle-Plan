@@ -25,11 +25,11 @@ public class ActivateAbility : NetworkBehaviour
     GameObject abilityRangeOverlay;
     LineRenderer laserLine;
 
-    List<GameObject> enemiesInRange = new List<GameObject>();
+    List<GameObject> enemiesInRange = new();
     Vector3 selectedSquare;
     private ulong allowedDodgerClientId;
     private NetworkVariable<NetworkObjectReference> unitNetRef =
-        new NetworkVariable<NetworkObjectReference>();
+        new();
 
     // Global indicator references per-client
     private GameObject globalAbilityIndicator;
@@ -199,19 +199,19 @@ public class ActivateAbility : NetworkBehaviour
         // Overlay text is broadcast by server already
 
         Destroy(abilityRangeOverlay);
-        Vector3 nearestCell = PlanMovement.GetGridCellUnderCharacter(unit);
-        abilityRangeOverlay = Helper.DisplayGridRange(
+        Vector3 nearestCell = GridSystem.GetNearestGridCell(unit);
+        abilityRangeOverlay = GridSystem.DisplayGridRange(
             nearestCell,
             unitData.abilitySquareRange,
             abilityRangeOverlayPrefab
         );
 
-        Vector3 selectedSquare = PlanMovement.GetGridCellUnderCharacter(unit); // default selection
+        Vector3 selectedSquare = GridSystem.GetNearestGridCell(unit); // default selection
 
         if (unitData.responseDistLine)
         {
             unit.transform.position =
-                PlanMovement.GetNearestGridCell(unit.transform.position)
+                GridSystem.GetNearestGridCell(unit.transform.position)
                 + Helper.heightOffset(unit.transform); //snap to nearest cell
         }
 
@@ -307,7 +307,7 @@ public class ActivateAbility : NetworkBehaviour
     )
     {
         //convert from NetworkObjectReference[] to List<GameObject>
-        List<GameObject> dashUnits = new List<GameObject>();
+        List<GameObject> dashUnits = new();
         foreach (NetworkObjectReference objRef in enemiesInRange)
         {
             if (objRef.TryGet(out NetworkObject networkObject))
@@ -368,8 +368,8 @@ public class ActivateAbility : NetworkBehaviour
                 continue;
             int maxSteps = Mathf.Max(0, unitData.diveRange);
 
-            List<Vector3> clean = new List<Vector3>();
-            Vector3 start = PlanMovement.GetGridCellUnderCharacter(unit);
+            List<Vector3> clean = new();
+            Vector3 start = GridSystem.GetNearestGridCell(unit);
             clean.Add(start);
 
             int stepsAdded = 0;
@@ -378,7 +378,7 @@ public class ActivateAbility : NetworkBehaviour
             {
                 if (stepsAdded >= maxSteps)
                     break;
-                Vector3 snapped = PlanMovement.GetNearestGridCell(p);
+                Vector3 snapped = GridSystem.GetNearestGridCell(p);
                 float dist = Mathf.Abs(snapped.x - last.x) + Mathf.Abs(snapped.z - last.z);
                 bool isAdjacent = Mathf.Abs(dist - GameLoop.cellSize) <= 0.1f;
                 if (!isAdjacent)
@@ -407,7 +407,7 @@ public class ActivateAbility : NetworkBehaviour
 
     private void HandleMouseClick(Vector3 nearestCell, ref Vector3 selectedSquare)
     {
-        Vector3? potentialSquare = PlanMovement.GetGridCellUnderMouse();
+        Vector3? potentialSquare = Mouse.GetGridCellUnderMouse();
         if (!potentialSquare.HasValue)
         {
             Debug.LogWarning(
@@ -450,10 +450,10 @@ public class ActivateAbility : NetworkBehaviour
             finalEnd = hit.point;
         }
 
-        GameObject laserObject = new GameObject("AbilityLinePreview");
+        GameObject laserObject = new("AbilityLinePreview");
         globalAbilityLaser = laserObject.AddComponent<LineRenderer>();
 
-        Material laserMaterial = new Material(Shader.Find("Unlit/Color"));
+        Material laserMaterial = new(Shader.Find("Unlit/Color"));
         laserMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
         laserMaterial.color = Color.red;
         globalAbilityLaser.material = laserMaterial;
@@ -631,7 +631,7 @@ public class ActivateAbility : NetworkBehaviour
 
     public static List<GameObject> GetUnitsInRange(Vector3 abilitySquare, string team, float range)
     {
-        List<GameObject> unitsInRange = new List<GameObject>();
+        List<GameObject> unitsInRange = new();
         GameObject[] allUnits = GameObject.FindGameObjectsWithTag(team);
 
         if (allUnits.Length == 0)
@@ -655,7 +655,7 @@ public class ActivateAbility : NetworkBehaviour
 
     public List<GameObject> GetUnitsInRangeofLine(Vector3 abilitySquare, string team, float range)
     {
-        List<GameObject> unitsInRange = new List<GameObject>();
+        List<GameObject> unitsInRange = new();
         GameObject[] allUnits = GameObject.FindGameObjectsWithTag(team);
 
         if (allUnits.Length == 0)
@@ -699,9 +699,9 @@ public class ActivateAbility : NetworkBehaviour
     private float DistancePointToLineSegment(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
     {
         // Ignore Y values for 2D calculation
-        Vector2 point2D = new Vector2(point.x, point.z);
-        Vector2 lineStart2D = new Vector2(lineStart.x, lineStart.z);
-        Vector2 lineEnd2D = new Vector2(lineEnd.x, lineEnd.z);
+        Vector2 point2D = new(point.x, point.z);
+        Vector2 lineStart2D = new(lineStart.x, lineStart.z);
+        Vector2 lineEnd2D = new(lineEnd.x, lineEnd.z);
 
         Vector2 lineDirection = lineEnd2D - lineStart2D;
         float lineLength = lineDirection.magnitude;

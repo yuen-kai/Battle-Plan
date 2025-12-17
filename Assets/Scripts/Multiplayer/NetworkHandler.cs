@@ -31,7 +31,7 @@ public class NetworkHandler : NetworkBehaviour
         {
             if (GameLoop.TESTING)
             {
-                List<int[]> unitAssignments = new List<int[]>
+                List<int[]> unitAssignments = new()
                 {
                     new int[] { 0, 1, 2 },
                     new int[] { 2, 3, 4 },

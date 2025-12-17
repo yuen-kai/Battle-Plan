@@ -9,11 +9,11 @@ public class NetworkHelper : NetworkBehaviour
 
     // Queue for height sync requests when instance isn't ready
     private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs =
-        new Queue<(GameObject, Vector3)>();
+        new();
     
     // Queue for parenting operations when instance isn't ready
     private static Queue<(GameObject instance, Transform parent)> pendingParentingOperations =
-        new Queue<(GameObject, Transform)>();
+        new();
 
     public override void OnNetworkSpawn()
     {

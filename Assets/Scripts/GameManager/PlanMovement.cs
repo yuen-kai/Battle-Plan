@@ -84,16 +84,16 @@ public class PathsDict : Dictionary<GameObject, List<Vector3>>, INetworkSerializ
 /// </summary>
 public class PlanMovement : MonoBehaviour
 {
-    private List<GameObject> teamCharacters = new List<GameObject>();
+    private List<GameObject> teamCharacters = new();
     public GameObject selectedUnit;
 
-    public PathsDict movementPaths = new PathsDict();
-    private List<Vector3> currentMovementPath = new List<Vector3>();
+    public PathsDict movementPaths = new();
+    private List<Vector3> currentMovementPath = new();
 
     // Visual representation of paths
-    private GameObject visualPathsParent;
-    private Dictionary<GameObject, GameObject> visualPaths =
-        new Dictionary<GameObject, GameObject>();
+    private GameObject planVisualsFolder;
+    private Dictionary<GameObject, GameObject> planVisuals =
+        new();
 
     private GameObject currentVisualPath;
     private GameObject currentPathNodes;
@@ -121,52 +121,12 @@ public class PlanMovement : MonoBehaviour
 
     public static PlanMovement Instance { get; private set; }
 
-    const Vector3 visualPathHeightOffset = new Vector3(0, 0.1f, 0);
+    Vector3 visualPathHeightOffset = new(0, 0.1f, 0);
 
     void Awake()
     {
         Instance = this;
     }
-
-    public void SwitchToUnit(GameObject newSelectedUnit, int range)
-    {
-        selectedUnit = newSelectedUnit;
-        DisplayMoveRange(range);
-        if (!movementPaths.ContainsKey(selectedUnit) || !visualPaths.ContainsKey(selectedUnit))
-        {
-            ResetPath();
-        }
-        else
-        {
-            SetCurrentPath();
-        }
-        // DisplayAttackRange();
-    }
-
-    void SetCurrentPath()
-    {
-        currentMovementPath = movementPaths[selectedUnit];
-        currentVisualPath = visualPaths[selectedUnit];
-        currentPathNodes = currentVisualPath.transform.Find("PathNodes").gameObject;
-        currentPathEdges = currentVisualPath.transform.Find("PathEdges").gameObject;
-    }
-
-    void InitializeVisuals()
-    {
-        movementPaths = new PathsDict();
-        visualPaths = new Dictionary<GameObject, GameObject>();
-        AddCharacterOutlines();
-        visualPathsParent = new GameObject("VisualPaths");
-    }
-
-    void ClearVisuals()
-    {
-        RemoveCharacterOutlines();
-        Destroy(visualPathsParent);
-        Destroy(moveOverlay);
-        Destroy(attackOverlay);
-    }
-
 
     public IEnumerator StartPlanning(
         System.Action<PathsDict> callback,
@@ -191,7 +151,7 @@ public class PlanMovement : MonoBehaviour
             }
             else
             {
-                if (selectedUnit.GetComponent<Movement>().selectMovement)
+                if (selectedUnit.GetComponent<Unit>().selectMovement)
                 {
                     MovementSelection(range);
                 }
@@ -208,6 +168,7 @@ public class PlanMovement : MonoBehaviour
         timerTextUI.text = "";
         callback(movementPaths);
     }
+
 
     void MovementSelection(int moveDist)
     {
@@ -231,7 +192,7 @@ public class PlanMovement : MonoBehaviour
     /// </summary>
     private List<GameObject> PopulateTeamCharacters()
     {
-        List<GameObject> localTeamCharacters = new List<GameObject>();
+        List<GameObject> localTeamCharacters = new();
 
         if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
         {
@@ -247,8 +208,7 @@ public class PlanMovement : MonoBehaviour
             if (netObj == null)
                 continue;
 
-            // Check if this is a unit (has Movement component)
-            if (netObj.GetComponent<Movement>() != null && netObj.OwnerClientId == localClientId)
+            if (netObj.GetComponent<Unit>() != null && netObj.OwnerClientId == localClientId)
             {
                 localTeamCharacters.Add(netObj.gameObject);
             }
@@ -257,99 +217,36 @@ public class PlanMovement : MonoBehaviour
         return localTeamCharacters;
     }
 
-    void ResetPath()
+    public void SwitchToUnit(GameObject newSelectedUnit, int range=-1)
     {
-        movementPaths[selectedUnit] = new List<Vector3> { characterCell };
-        currentMovementPath = movementPaths[selectedUnit];
-
-        if (visualPaths.ContainsKey(selectedUnit))
-            Destroy(visualPaths[selectedUnit]);
-
-        currentVisualPath = CreateGameObject("VisualPath", visualPathsParent);
-        currentPathNodes = CreateGameObject("PathNodes", currentVisualPath);
-        currentPathEdges = CreateGameObject("PathEdges", currentVisualPath);
-
-        visualPaths[selectedUnit] = currentVisualPath;
-    }
-
-    void ResetPath(int index)
-    {
-        for (int i = currentPathNodes.transform.childCount - 1; i > index; i--)
-        {
-            Destroy(currentPathNodes.transform.GetChild(i).gameObject);
-            Destroy(currentPathEdges.transform.GetChild(i).gameObject);
-        }
-
-        currentMovementPath
-            .RemoveRange(index + 2, currentMovementPath.Count - (index + 2)); //movement path includes start but visual does not
-    }
-
-    void ResetPath(GameObject node)
-    {
-        currentPathNodes = currentVisualPath.transform.Find("PathNodes").gameObject;
-        currentPathEdges = currentVisualPath.transform.Find("PathEdges").gameObject;
-        ResetPath(node.transform.GetSiblingIndex());
-    }
-
-    /// <summary>
-    /// Helper to create a GameObject with a given name and parent.
-    /// </summary>
-    GameObject CreateGameObject(string name, GameObject parent)
-    {
-        var obj = new GameObject(name);
-        obj.transform.SetParent(parent?.transform);
-        return obj;
-    }
-
-    void StartPath()
-    {
-        Vector3 characterCell = GetGridCellUnderCharacter(selectedUnit);
-        if (GetGridCellUnderMouse() == characterCell)
+        selectedUnit = newSelectedUnit;
+        DisplayMoveRange(range == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : range);
+        if (!movementPaths.ContainsKey(selectedUnit))
         {
             ResetPath();
         }
         else
         {
-            GameObject node = GetObjectUnderMouse("PathNode");
-            if (!visualPaths.ContainsKey(selectedUnit) || node?.transform.parent?.parent?.gameObject != currentVisualPath)
-                return;
-            ResetPath(node);
+            SetCurrentPath();
         }
-
+        // DisplayAttackRange();
     }
 
-    void ExtendPath(int moveDist)
+    //================
+    void InitializeVisuals()
     {
-        if (currentMovementPath.Count == 0) return;
-
-        Vector3? selectedTile = GetGridCellUnderMouse();
-        if (selectedTile == null)
-            return;
-        Vector3 currentTile = selectedTile.Value;
-
-        //Undo movementPath
-        if (currentMovementPath.Count >= 2 && currentMovementPath[^2] == currentTile)
-        {
-            ResetPath(currentPathNodes.transform.childCount - 2);
-            return;
-        }
-
-        Vector3 last = currentMovementPath[^1];
-        if (ValidMove(last, currentTile, moveDist))
-        {
-            currentMovementPath.Add(currentTile);
-            AddPathSectionVisual(currentTile, last, currentMovementPath.Count - 1, moveDist);
-        }
+        movementPaths = new PathsDict();
+        planVisuals = new Dictionary<GameObject, GameObject>();
+        AddCharacterOutlines();
+        planVisualsFolder = new GameObject("VisualPaths");
     }
 
-    bool ValidMove(Vector3 last, Vector3 currentTile, int moveDist)
+    void ClearVisuals()
     {
-        bool withinMoveDistance = currentMovementPath.Count - 1 < moveDist;
-        bool exactlyOneTileAway = Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f;
-        bool notInWall = !GameLoop.wallLayout.Contains(ConvertToGridCoords(currentTile));
-        bool notAlreadyInPath = !currentMovementPath.Contains(currentTile);
-
-        return withinMoveDistance && exactlyOneTileAway && notInWall && notAlreadyInPath;
+        RemoveCharacterOutlines();
+        Destroy(planVisualsFolder);
+        Destroy(moveOverlay);
+        Destroy(attackOverlay);
     }
 
     void DisplayMoveRange(int range)
@@ -358,8 +255,8 @@ public class PlanMovement : MonoBehaviour
         if (selectedUnit == null)
             return;
 
-        moveOverlay = Helper.DisplayGridRange(
-            GetGridCellUnderCharacter(selectedUnit),
+        moveOverlay = GridSystem.DisplayGridRange(
+            GridSystem.GetNearestGridCell(selectedUnit),
             range,
             moveOverlayCellPrefab
         );
@@ -375,7 +272,7 @@ public class PlanMovement : MonoBehaviour
         if (selectedUnit == null)
             return;
 
-        Vector3 currentPos = GetGridCellUnderCharacter(selectedUnit);
+        Vector3 currentPos = GridSystem.GetNearestGridCell(selectedUnit);
         //TODO: put at end of path
 
         attackOverlay = Instantiate(
@@ -390,22 +287,6 @@ public class PlanMovement : MonoBehaviour
             attackOverlay.transform.localScale.y,
             diameter
         );
-    }
-
-    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
-    {
-        GameObject node = Instantiate(pathNodePrefab, cell, Quaternion.identity);
-        node.transform.parent = currentPathNodes.transform;
-        node.transform.position += visualPathHeightOffset;
-
-        GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2, Quaternion.identity);
-        edge.transform.parent = currentPathEdges.transform;
-        edge.transform.position += visualPathHeightOffset;
-
-        if (length == moveDist)
-        {
-            node.transform.GetComponent<Renderer>().material.color = Color.green;
-        }
     }
 
     void AddCharacterOutlines()
@@ -432,68 +313,123 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-    public static RaycastHit? GetHitObjectUnderMouse(int layerMask)
-    {
-        Camera teamCamera = GameLoop.Instance.teamCamera;
-        if (teamCamera == null)
-            return null;
+    //================
 
-        Ray ray = teamCamera.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, layerMask))
+
+
+    void ResetPath()
+    {
+        movementPaths[selectedUnit] = new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit) };
+        currentMovementPath = movementPaths[selectedUnit];
+
+        if (planVisuals.ContainsKey(selectedUnit))
+            Destroy(planVisuals[selectedUnit]);
+
+        currentVisualPath = Helper.CreateGameObject("VisualPath", planVisualsFolder);
+        currentPathNodes = Helper.CreateGameObject("PathNodes", currentVisualPath);
+        currentPathEdges = Helper.CreateGameObject("PathEdges", currentVisualPath);
+
+        planVisuals[selectedUnit] = currentVisualPath;
+    }
+
+    void ResetPath(int index)
+    {
+        for (int i = currentPathNodes.transform.childCount - 1; i > index; i--)
         {
-            return hit;
+            Destroy(currentPathNodes.transform.GetChild(i).gameObject);
+            Destroy(currentPathEdges.transform.GetChild(i).gameObject);
         }
-        return null;
+
+        currentMovementPath
+            .RemoveRange(index + 2, currentMovementPath.Count - (index + 2)); //movement path includes start but visual does not
     }
 
-    public static GameObject GetObjectUnderMouse(int layerMask)
+    void ResetPath(GameObject node)
     {
-        return GetHitObjectUnderMouse(layerMask)?.collider.gameObject;
-    }
-    public static GameObject GetObjectUnderMouse(string layerMaskName)
-    {
-        return GetObjectUnderMouse(LayerMask.GetMask(layerMaskName));
+        currentPathNodes = currentVisualPath.transform.Find("PathNodes").gameObject;
+        currentPathEdges = currentVisualPath.transform.Find("PathEdges").gameObject;
+        ResetPath(node.transform.GetSiblingIndex());
     }
 
-    public static Vector3? GetGridCellUnderMouse()
+    void SetCurrentPath()
     {
-        RaycastHit? hit = GetHitObjectUnderMouse(LayerMask.GetMask("Grid"));
-        if (hit == null)
+        currentMovementPath = movementPaths[selectedUnit];
+        currentVisualPath = planVisuals[selectedUnit];
+        currentPathNodes = currentVisualPath.transform.Find("PathNodes").gameObject;
+        currentPathEdges = currentVisualPath.transform.Find("PathEdges").gameObject;
+    }
+
+    void StartPath()
+    {
+        Vector3 characterCell = GridSystem.GetNearestGridCell(selectedUnit);
+        if (Mouse.GetGridCellUnderMouse() == characterCell)
         {
-            return null;
+            ResetPath();
         }
-        return GetNearestGridCell(hit.Value.point);
+        else
+        {
+            GameObject node = Mouse.GetObjectUnderMouse("PathNode");
+            if (!planVisuals.ContainsKey(selectedUnit) || node?.transform.parent?.parent?.gameObject != currentVisualPath)
+                return;
+            ResetPath(node);
+        }
+
     }
 
-    public static Vector3 GetGridCellUnderCharacter(GameObject character)
+    void ExtendPath(int moveDist)
     {
-        Vector3 position = character.transform.position; // Get the position of the character
-        return GetNearestGridCell(position); // Return the nearest grid cell position
+        if (currentMovementPath.Count == 0) return;
+
+        Vector3? selectedTile = Mouse.GetGridCellUnderMouse();
+        if (selectedTile == null)
+            return;
+        Vector3 currentTile = selectedTile.Value;
+
+        //Undo movementPath
+        if (currentMovementPath.Count >= 2 && currentMovementPath[^2] == currentTile)
+        {
+            ResetPath(currentPathNodes.transform.childCount - 2);
+            return;
+        }
+
+        Vector3 last = currentMovementPath[^1];
+        if (ValidMove(last, currentTile, moveDist))
+        {
+            currentMovementPath.Add(currentTile);
+            AddPathSectionVisual(currentTile, last, currentMovementPath.Count - 1, moveDist);
+        }
     }
 
-    public static Vector3 GetNearestGridCell(Vector3 position)
+    bool ValidMove(Vector3 last, Vector3 currentTile, int moveDist)
     {
-        float x = Mathf.Round(position.x / cellSize) * cellSize;
-        float z = Mathf.Round(position.z / cellSize) * cellSize;
-        return new Vector3(x, 0, z);
+        bool withinMoveDistance = currentMovementPath.Count - 1 < moveDist;
+        bool exactlyOneTileAway = Mathf.Abs(Vector3.Distance(last, currentTile) - cellSize) <= 0.1f;
+        bool notInWall = !GameLoop.wallLayout.Contains(GridSystem.ConvertToGridCoords(currentTile));
+        bool notAlreadyInPath = !currentMovementPath.Contains(currentTile);
+
+        return withinMoveDistance && exactlyOneTileAway && notInWall && notAlreadyInPath;
     }
 
-    public static Vector2Int ConvertToGridCoords(Vector3 position)
+    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
     {
-        //Assuming grid's bottom left corner is at (0,0) and the grid is aligned with the world axes
-        int x = Mathf.RoundToInt(position.x / cellSize);
-        int z = Mathf.RoundToInt(position.z / cellSize);
-        return new Vector2Int(x, z);
+        GameObject node = Instantiate(pathNodePrefab, cell, Quaternion.identity);
+        node.transform.parent = currentPathNodes.transform;
+        node.transform.position += visualPathHeightOffset;
+
+        GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2, Quaternion.identity);
+        edge.transform.parent = currentPathEdges.transform;
+        edge.transform.position += visualPathHeightOffset;
+
+        if (length == moveDist)
+        {
+            node.transform.GetComponent<Renderer>().material.color = Color.green;
+        }
     }
 
-    public static GameObject LastChild(GameObject parent, int index = 1)
+    //-------------------
+    public static void PrintActions(PathsDict actions)
     {
-        return parent.transform.GetChild(parent.transform.childCount - index).gameObject;
-    }
-
-    public static void PrintPaths(PathsDict paths)
-    {
-        foreach (var pair in paths)
+        foreach (var pair in actions)
         {
             Debug.Log($"Unit: {pair.Key.name}, Path: {string.Join(", ", pair.Value)}");
         }

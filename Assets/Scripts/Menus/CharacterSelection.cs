@@ -17,7 +17,7 @@ public class CharacterSelection : NetworkBehaviour
 
     public GameObject confirmButton;
 
-    public Dictionary<ulong, int[]> teamUnits = new Dictionary<ulong, int[]>();
+    public Dictionary<ulong, int[]> teamUnits = new();
     int[] team = new int[3];
 
     void Start()

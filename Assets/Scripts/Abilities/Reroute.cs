@@ -46,7 +46,7 @@ public class Reroute : Ability
     {
         if (IsOwner)
         {
-            List<GameObject> alliesInRange = new List<GameObject>();
+            List<GameObject> alliesInRange = new();
             foreach (var ally in alliesInRangeArray)
             {
                 if (ally.TryGet(out NetworkObject netObj))

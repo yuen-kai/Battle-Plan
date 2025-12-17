@@ -27,7 +27,7 @@ public class AreaLock : Ability
         yield return new WaitForSeconds(delayForDodge);
 
         Vector3 startPosition = transform.position =
-            PlanMovement.GetNearestGridCell(transform.position) + Helper.heightOffset(transform); //snap to nearest cell
+            GridSystem.GetNearestGridCell(transform.position) + Helper.heightOffset(transform); //snap to nearest cell
         Vector3 targetPosition = abilitySquare + Helper.heightOffset(transform);
         CreateLaserLine(startPosition, targetPosition);
         ShowLaserClientRpc(startPosition, targetPosition);
@@ -67,7 +67,7 @@ public class AreaLock : Ability
             finalEnd = hit.point;
         }
 
-        GameObject laserObject = new GameObject("LaserLine");
+        GameObject laserObject = new("LaserLine");
         laserLine = laserObject.AddComponent<LineRenderer>();
         laserLine.material = new Material(Shader.Find("Sprites/Default"));
         if (laserLine.material.shader == null)
@@ -110,7 +110,7 @@ public class AreaLock : Ability
             Destroy(clientLaserLine.gameObject);
             clientLaserLine = null;
         }
-        GameObject laserObject = new GameObject("LaserLineClient");
+        GameObject laserObject = new("LaserLineClient");
         clientLaserLine = laserObject.AddComponent<LineRenderer>();
         clientLaserLine.material = new Material(Shader.Find("Sprites/Default"));
         if (clientLaserLine.material.shader == null)
@@ -272,7 +272,7 @@ public class AreaLock : Ability
                 finalEnd = hit.point;
             }
 
-            GameObject laserObject = new GameObject("LaserLineClient");
+            GameObject laserObject = new("LaserLineClient");
             clientLaserLine = laserObject.AddComponent<LineRenderer>();
             clientLaserLine.material = new Material(Shader.Find("Sprites/Default"));
             clientLaserLine.startColor = Color.red;
@@ -288,7 +288,7 @@ public class AreaLock : Ability
         clientLaserLine.positionCount = segments + 1;
 
         float elapsed = 0f;
-        AnimationCurve rushCurve = new AnimationCurve(
+        AnimationCurve rushCurve = new(
             new Keyframe(0f, 0f),
             new Keyframe(0.1f, 1f),
             new Keyframe(0.9f, 1f),
@@ -308,7 +308,7 @@ public class AreaLock : Ability
             }
 
             // Update width curve along the line
-            AnimationCurve widthCurve = new AnimationCurve();
+            AnimationCurve widthCurve = new();
             for (int i = 0; i <= segments; i++)
             {
                 float segmentProgress = (float)i / segments;
@@ -336,7 +336,7 @@ public class AreaLock : Ability
             float currentWidth = Mathf.Lerp(finWidth, initWidth, cleanupProgress);
             clientLaserLine.widthCurve = AnimationCurve.Linear(0f, currentWidth, 1f, currentWidth);
             float alpha = Mathf.Lerp(1f, 0.5f, cleanupProgress);
-            Color cleanupColor = new Color(
+            Color cleanupColor = new(
                 clientLaserLine.startColor.r,
                 clientLaserLine.startColor.g,
                 clientLaserLine.startColor.b,
@@ -360,7 +360,7 @@ public class AreaLock : Ability
         float elapsed = 0f;
 
         // Create animation curve for rush effect (peaks at middle, tapers at ends)
-        AnimationCurve rushCurve = new AnimationCurve(
+        AnimationCurve rushCurve = new(
             new Keyframe(0f, 0f),
             new Keyframe(0.1f, 1f),
             new Keyframe(0.9f, 1f),
@@ -380,7 +380,7 @@ public class AreaLock : Ability
             }
 
             // Create rush effect by modifying width based on progress
-            AnimationCurve widthCurve = new AnimationCurve();
+            AnimationCurve widthCurve = new();
             for (int i = 0; i <= segments; i++)
             {
                 float segmentProgress = (float)i / segments;
@@ -419,7 +419,7 @@ public class AreaLock : Ability
 
             // Fade out color
             float alpha = Mathf.Lerp(1f, 0.5f, cleanupProgress);
-            Color cleanupColor = new Color(
+            Color cleanupColor = new(
                 laserLine.startColor.r,
                 laserLine.startColor.g,
                 laserLine.startColor.b,
@@ -442,8 +442,8 @@ public class AreaLock : Ability
         int particleCount = 12;
 
         // Create explosion particles
-        List<GameObject> particles = new List<GameObject>();
-        List<Vector3> particleVelocities = new List<Vector3>();
+        List<GameObject> particles = new();
+        List<Vector3> particleVelocities = new();
 
         for (int i = 0; i < particleCount; i++)
         {
@@ -461,7 +461,7 @@ public class AreaLock : Ability
 
             // Calculate random velocity direction
             float angle = (360f / particleCount) * i + Random.Range(-15f, 15f);
-            Vector3 direction = new Vector3(
+            Vector3 direction = new(
                 Mathf.Cos(angle * Mathf.Deg2Rad),
                 0,
                 Mathf.Sin(angle * Mathf.Deg2Rad)
