@@ -6,7 +6,7 @@ public class Mouse : MonoBehaviour
 {
     public static RaycastHit? GetHitUnderMouse(int layerMask)
     {
-        Camera teamCamera = GameLoop.Instance.teamCamera;
+        Camera teamCamera = GameLoop.Instance.TeamCamera;
         if (teamCamera == null)
             return null;
 

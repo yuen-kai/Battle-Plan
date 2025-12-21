@@ -277,21 +277,13 @@ MonoBehaviour:
   m_GameObject: {fileID: 46814306}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7c6e9753d164f6343ba1d68ea39ae879, type: 3}
+  m_Script: {fileID: 11500000, guid: 0ddfcaeb69bd04b7c9ed6d79bf944a09, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
-  teamColors:
-  - {r: 0.3532396, g: 0.6610572, b: 0.9245283, a: 1}
-  - {r: 0.9245283, g: 0.37068352, b: 0.37068352, a: 1}
   CharacterSelectionOptionsParent: {fileID: 32599747}
   characterSelectedParent: {fileID: 1626600891}
-  unitOptions:
-  - {fileID: 11400000, guid: c0d4e931d5fccb44093ba82a6794cce6, type: 2}
-  - {fileID: 11400000, guid: c0f7a532341014043b1aebb55f7f3b3c, type: 2}
-  - {fileID: 11400000, guid: 91853e8d33926694ca6407f836c4f495, type: 2}
-  - {fileID: 11400000, guid: f240797633735c0479b137e3725e7652, type: 2}
-  - {fileID: 11400000, guid: 2cddb1e866200124caf84cf6885d6122, type: 2}
+  allUnits: {fileID: 11400000, guid: 666952f72f05444d48f3f4bd2a96dd5f, type: 2}
   characterOptionPrefab: {fileID: 6877355979647964550, guid: 1ad487e3941f7014192186c1755f02fb, type: 3}
   confirmButton: {fileID: 531875356}
 --- !u!114 &46814311
@@ -972,6 +964,7 @@ MonoBehaviour:
   m_VerticalAlignment: 512
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -1602,6 +1595,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -1974,6 +1968,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -2428,14 +2423,14 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2054306499}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 0.95686275, b: 0.8392157, a: 1}
   m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
-  m_CookieSize: 10
+  m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
     m_Type: 2
     m_Resolution: -1

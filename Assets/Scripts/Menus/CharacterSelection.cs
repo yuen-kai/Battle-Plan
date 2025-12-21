@@ -7,12 +7,11 @@ using UnityEngine.UI;
 
 public class CharacterSelection : NetworkBehaviour
 {
-    public List<Color> teamColors;
-
     public GameObject CharacterSelectionOptionsParent;
     public GameObject characterSelectedParent;
 
-    public UnitData[] unitOptions;
+    public UnitDatabase allUnits;
+
     public GameObject characterOptionPrefab;
 
     public GameObject confirmButton;
@@ -40,7 +39,7 @@ public class CharacterSelection : NetworkBehaviour
     public void confirmSelectionServerRpc(int[] selectedUnits, ServerRpcParams rpcParams = default)
     {
         teamUnits[rpcParams.Receive.SenderClientId] = selectedUnits;
-        if (teamUnits.Count == GameLoop.teams.Count)
+        if (teamUnits.Count == GameLoop.teamNames.Count)
         {
             GameLoop.allTeamUnits = teamUnits;
             NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
@@ -68,7 +67,7 @@ public class CharacterSelection : NetworkBehaviour
         }
 
         //Create options
-        foreach (var unit in unitOptions)
+        foreach (var unit in allUnits.units)
         {
             var option = Instantiate(
                 characterOptionPrefab,
@@ -89,7 +88,7 @@ public class CharacterSelection : NetworkBehaviour
         {
             if (team[i] == -1) // If the slot is empty
             {
-                SetSelectedUnit(i, System.Array.IndexOf(unitOptions, unit));
+                SetSelectedUnit(i, allUnits.units.IndexOf(unit));
                 return; // Exit after selecting a unit
             }
         }
@@ -133,7 +132,7 @@ public class CharacterSelection : NetworkBehaviour
             return;
         }
 
-        UnitData unit = unitOptions[unitIndex];
+        UnitData unit = allUnits.units[unitIndex];
         selectedUnit.GetComponent<CardHandler>().setImage(unit.unitSprite);
         selectedUnit.GetComponent<CardHandler>().setText(unit.unitName);
     }

@@ -32,37 +32,32 @@ public class GameLoop : NetworkBehaviour
 {
     public const bool TESTING = true;
 
-    // Grid Configuration
+    public UnitDatabase allUnits;
+
+    // UI Components
+    [SerializeField]
+    private TMP_Text overlayUIText;
+    public List<Color> teamColors;
+
+    public Color executingMoves;
+    public List<Material> teamMaterials;
+
+    public GameObject unitCards;
+
+    //Teams
+    public static List<string> teamNames = new() { "BlueTeam", "RedTeam" };
+    public static Dictionary<ulong, int[]> allTeamUnits = new();
+    public static Dictionary<ulong, GameObject[]> allTeamUnitObjects = new();
+
+    // Level Layout (col, row) from bottom left corner
     public static float cellSize = 2.7f;
     public static Rect gridBounds = new(
         new Vector2(0, 0),
         new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f)
     );
 
-    // UI Components
-    [SerializeField]
-    private TMP_Text overlayUIText;
-
-    // Visual Properties
-    public List<Color> teamColors;
-
-    public Color executingMoves;
-    public List<Material> teamMaterials;
-
-    // Game Setup: Objects and Prefabs
     [SerializeField]
     private GameObject wallPrefab;
-    public UnitDatabase allUnits;
-
-    // Team Configuration
-    public static List<string> teams = new() { "BlueTeam", "RedTeam" };
-
-    public GameObject unitCards;
-
-    public static Dictionary<ulong, int[]> allTeamUnits = new();
-    public static Dictionary<ulong, GameObject[]> allTeamUnitObjects = new();
-
-    // Level Layout (col, row) from bottom left corner
     public static HashSet<Vector2Int> wallLayout = new()
     {
         new Vector2Int(3, 2),
@@ -121,11 +116,6 @@ public class GameLoop : NetworkBehaviour
     // Game Settings
     float planningTimePerUnit = TESTING ? 3f : 5f;
 
-    // Game State
-    List<GameObject> doneMovingUnits = new();
-    List<GameObject> doneShootingUnits = new();
-    private Dictionary<ulong, int> clientIdToTeamIndex = new();
-
     // Client-side team mapping synchronized from server
     private Dictionary<ulong, int> clientTeamMapping = new();
 
@@ -137,25 +127,17 @@ public class GameLoop : NetworkBehaviour
     List<PathsDict> pathsList = new();
 
     public GameObject teamCameraParent;
-    public Camera teamCamera => teamCameraParent.GetComponent<Camera>();
+    public Camera TeamCamera => teamCameraParent.GetComponent<Camera>();
 
     //End Game UI
     public GameObject endGameUI;
     public GameObject endGameStatusText;
     public GameObject playAgainButton;
     public GameObject mainMenuButton;
-    private bool[] playAgain = new bool[teams.Count];
+    private List<ulong> playAgain = new();
 
 
     public static GameLoop Instance { get; private set; }
-
-    void Awake()
-    {
-        for (int i = 0; i < playAgain.Length; i++)
-        {
-            playAgain[i] = false;
-        }
-    }
 
     public override void OnNetworkSpawn()
     {
@@ -163,16 +145,9 @@ public class GameLoop : NetworkBehaviour
 
         if (IsServer)
         {
-            InitializeClientTeamMapping();
             StartGame();
             StartCoroutine(GameLoopTemp());
         }
-        else
-        {
-            // Client initialization - set up local team mapping
-            InitializeLocalClientTeamMapping();
-        }
-
         InitializeCameraPosition();
     }
 
@@ -194,20 +169,6 @@ public class GameLoop : NetworkBehaviour
             }
         }
     }
-
-    private void InitializeLocalClientTeamMapping()
-    {
-        if (IsServer)
-            return; // Only clients should call this
-
-        // Initialize with default mapping based on client order
-        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds;
-        for (int i = 0; i < connectedClients.Count && i < teams.Count; i++)
-        {
-            clientTeamMapping[connectedClients[i]] = i;
-        }
-    }
-
     void StartGame()
     {
         foreach (var pos in wallLayout)
@@ -222,7 +183,7 @@ public class GameLoop : NetworkBehaviour
         }
 
         //Destroy all units
-        foreach (string team in teams)
+        foreach (string team in teamNames)
         {
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
@@ -231,36 +192,37 @@ public class GameLoop : NetworkBehaviour
         }
 
         //Setup teams
-        for (int i = 0; i < teams.Count; i++)
+        for (int i = 0; i < teamNames.Count; i++)
         {
-            SetupUnitsAndCards(i,
-                allTeamUnits[GetClient(i)],
+            SetupUnitsAndCards(
+                allTeamUnits.ElementAt(i).Key,
+                allTeamUnits.ElementAt(i).Value,
                 spawns[i],
                 Quaternion.Euler(0, 180 * i, 0),
-                teams[i]
+                teamNames[i]
             );
         }
         // yield return new WaitForSeconds(1f);
     }
 
     void SetupUnitsAndCards(
-        int teamIndex,
+        ulong clientId,
         int[] teamUnits,
         HashSet<Vector2Int> spawnPositions,
         Quaternion rotation,
         string team
     )
     {
-        allTeamUnitObjects[GetClient(teamIndex)] = new GameObject[teamUnits.Length];
+        allTeamUnitObjects[clientId] = new GameObject[teamUnits.Length];
         for (int i = 0; i < teamUnits.Length; i++)
         {
             GameObject unit = NetworkHelper.Spawn(
                 allUnits.units[teamUnits[i]].unitModel,
                 gridCoordToWorld(spawnPositions.ElementAt(i)),
                 rotation,
-                GetClient(team)
+                clientId
             );
-            allTeamUnitObjects[GetClient(teamIndex)][i] = unit;
+            allTeamUnitObjects[clientId][i] = unit;
             Vector3 heightOffset = Helper.heightOffset(unit.transform);
             unit.transform.position += heightOffset;
             NetworkHelper.SyncHeightAdjustedPositionStatic(unit, unit.transform.position);
@@ -268,96 +230,18 @@ public class GameLoop : NetworkBehaviour
             unit.tag = team;
             SetGroupLayerGlobal(unit, LayerMask.NameToLayer(team));
 
-            SetUnitCardClientRpc(teamIndex, i, teamUnits[i]);
+            SetUnitCardClientRpc(i, teamUnits[i], NetworkHelper.ToClient(clientId));
         }
     }
 
     [ClientRpc]
-    void SetUnitCardClientRpc(int teamIndex, int cardIndex, int unitIndex)
+    void SetUnitCardClientRpc(int cardIndex, int unitIndex, ClientRpcParams clientRpcParams = default)
     {
-        ulong selfClientId = NetworkManager.Singleton.LocalClientId;
-        if (GetTeamIndexForClient(selfClientId) == teamIndex)
-        {
-            UnitCard card = unitCards.transform.GetChild(cardIndex).GetComponent<UnitCard>();
-            UnitData unitData = allUnits.units[unitIndex];
-            card.uses = unitData.uses;
-            card.SetUnitCard(unitData.abilitySprite, unitData.abilityName);
-        }
-    }
+        UnitCard card = unitCards.transform.GetChild(cardIndex).GetComponent<UnitCard>();
+        UnitData unitData = allUnits.units[unitIndex];
+        card.uses = unitData.uses;
+        card.SetUnitCard(unitData.abilitySprite, unitData.abilityName);
 
-    private void InitializeClientTeamMapping()
-    {
-        // For now, map first two clients to teams 0 and 1
-        // This can be expanded to support more teams/clients
-        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds;
-        for (int i = 0; i < connectedClients.Count && i < teams.Count; i++)
-        {
-            clientIdToTeamIndex[connectedClients[i]] = i;
-        }
-
-        // Create team mapping data for synchronization
-        var teamMappings = new TeamMappingData[clientIdToTeamIndex.Count];
-        int index = 0;
-        foreach (var kvp in clientIdToTeamIndex)
-        {
-            teamMappings[index] = new TeamMappingData { clientId = kvp.Key, teamIndex = kvp.Value };
-            index++;
-        }
-
-        // Synchronize team mapping to all clients
-        SyncTeamMappingToClientsClientRpc(teamMappings);
-    }
-
-    [ClientRpc]
-    private void SyncTeamMappingToClientsClientRpc(TeamMappingData[] teamMappings)
-    {
-        // Clear existing mapping
-        clientTeamMapping.Clear();
-
-        // Apply the team mappings received from server
-        foreach (var mapping in teamMappings)
-        {
-            clientTeamMapping[mapping.clientId] = mapping.teamIndex;
-        }
-    }
-
-    private int GetTeamIndexForClient(ulong clientId)
-    {
-        if (clientIdToTeamIndex.ContainsKey(clientId))
-        {
-            return clientIdToTeamIndex[clientId];
-        }
-
-        // Fallback: assign based on client order if not in mapping
-        Debug.LogWarning(
-            $"[GameLoop] No team index found for client {clientId}, falling back to client order assignment"
-        );
-        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds.ToList();
-        int index = connectedClients.IndexOf(clientId);
-        return index >= 0 && index < teams.Count ? index : 0;
-    }
-
-    public ulong GetClient(string team)
-    {
-        return GetClient(teams.IndexOf(team));
-    }
-
-    private ulong GetClient(int teamIndex)
-    {
-        foreach (var kvp in clientIdToTeamIndex)
-        {
-            if (kvp.Value == teamIndex)
-            {
-                return kvp.Key;
-            }
-        }
-
-        // Fallback: return first connected client if no mapping found
-        Debug.LogWarning(
-            $"[GameLoop] No client found for team index {teamIndex}, falling back to first connected client"
-        );
-        var connectedClients = NetworkManager.Singleton.ConnectedClientsIds;
-        return connectedClients.Count > 0 ? connectedClients.First() : 0;
     }
 
     IEnumerator GameLoopTemp()
@@ -366,14 +250,14 @@ public class GameLoop : NetworkBehaviour
             yield break;
         yield return null;
 
-        while (teams.All(team => teamSize(team) > 0))
+        while (teamNames.All(team => teamSize(team) > 0))
         {
             pathsList = new List<PathsDict>();
 
             unitCards.GetComponent<UnitCardContainer>().SetUnitCardsInteractable(true);
             OrderStillShooting?.Invoke(true);
 
-            float timerLength = planningTimePerUnit * teams.Max(teamSize);
+            float timerLength = planningTimePerUnit * teamNames.Max(teamSize);
             double endTime = NetworkManager.Singleton.ServerTime.Time + timerLength;
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Friendly);
@@ -381,7 +265,7 @@ public class GameLoop : NetworkBehaviour
             StartPlanningClientRpc(endTime);
 
             while (
-                pathsList.Count < teams.Count
+                pathsList.Count < teamNames.Count
                 && NetworkManager.Singleton.ServerTime.Time < endTime + 1
             )
             {
@@ -431,7 +315,6 @@ public class GameLoop : NetworkBehaviour
     void EndGame()
     {
         ulong? winner = getWinner();
-        // Serialize nullable ulong as two parameters: hasWinner (bool) and winnerValue (ulong)
         bool hasWinner = winner.HasValue;
         ulong winnerValue = winner.GetValueOrDefault();
         EndGameClientRpc(hasWinner, winnerValue);
@@ -446,11 +329,7 @@ public class GameLoop : NetworkBehaviour
         playAgainButton.GetComponent<Button>().onClick.AddListener(() => PlayAgain());
         mainMenuButton
             .GetComponent<Button>()
-            .onClick.AddListener(() =>
-            {
-                NetworkManager.Singleton.Shutdown();
-                SceneManager.LoadScene("Title Screen");
-            });
+            .onClick.AddListener(() => ExitToMainMenu());
         endGameUI.SetActive(true);
     }
 
@@ -464,20 +343,54 @@ public class GameLoop : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void PlayAgainServerRpc(ServerRpcParams rpcParams = default)
     {
-        playAgain[GetTeamIndexForClient(rpcParams.Receive.SenderClientId)] = true;
-        if (playAgain.All(x => x))
+        playAgain.Add(rpcParams.Receive.SenderClientId);
+        if (playAgain.Count == allTeamUnits.Count)
         {
+            playAgain.Clear();
+            NetworkHelper.CleanupAllNetworkObjects();
             NetworkManager.Singleton.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
         }
     }
 
+    void ExitToMainMenu(){
+        playAgainButton.GetComponent<Button>().interactable = false;
+        mainMenuButton.GetComponent<Button>().interactable = false;
+        if(NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            ExitServerRpc(NetworkManager.Singleton.LocalClientId);
+        }
+        SceneManager.LoadScene("Title Screen");
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    void ExitServerRpc(ulong id)
+    {
+        DisablePlayAgainButtonClientRpc();
+        if (id == NetworkManager.ServerClientId)
+        {
+            NetworkHelper.CleanupAllNetworkObjects();
+            NetworkManager.Singleton.Shutdown();
+        }
+        else
+        {
+            NetworkManager.Singleton.DisconnectClient(id);
+        }
+    }
+
+    [ClientRpc]
+    void DisablePlayAgainButtonClientRpc()
+    {
+        playAgainButton.GetComponent<Button>().interactable = false;
+        mainMenuButton.GetComponent<Button>().interactable = true;
+    }
+
     ulong? getWinner()
     {
-        foreach (var team in teams)
+        foreach (var team in teamNames)
         {
             if (teamSize(team) > 0)
             {
-                return GetClient(team);
+                return allTeamUnits.ElementAt(teamNames.IndexOf(team)).Key;
             }
         }
         return null;
@@ -563,7 +476,7 @@ public class GameLoop : NetworkBehaviour
     void ExecuteMoves(PathsDict paths)
     {
         // Get all units from all teams
-        foreach (var team in teams)
+        foreach (var team in teamNames)
         {
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
@@ -614,7 +527,7 @@ public class GameLoop : NetworkBehaviour
 
     bool CheckStillMoving()
     {
-        foreach (var team in teams)
+        foreach (var team in teamNames)
         {
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
@@ -630,7 +543,7 @@ public class GameLoop : NetworkBehaviour
 
     bool CheckStillShooting()
     {
-        foreach (var team in teams)
+        foreach (var team in teamNames)
         {
             foreach (GameObject unit in GameObject.FindGameObjectsWithTag(team))
             {
@@ -698,14 +611,14 @@ public class GameLoop : NetworkBehaviour
         // Use client-side mapping if available
         if (clientTeamMapping.ContainsKey(clientId))
         {
-            return teams[clientTeamMapping[clientId]];
+            return teamNames[clientTeamMapping[clientId]];
         }
 
         // Fallback: if no mapping found, assume first team
         Debug.LogWarning(
             $"[GameLoop] No team mapping found for client {clientId}, falling back to first team"
         );
-        return teams.Count > 0 ? teams[0] : "BlueTeam";
+        return teamNames.Count > 0 ? teamNames[0] : "BlueTeam";
     }
 
     /// <summary>
@@ -726,45 +639,45 @@ public class GameLoop : NetworkBehaviour
 
     public static int GetTeamIndex(string team)
     {
-        if (!teams.Contains(team))
+        if (!teamNames.Contains(team))
             return -1;
-        return teams.IndexOf(team);
+        return teamNames.IndexOf(team);
     }
 
     public Color GetTeamColor(string team)
     {
-        if (!teams.Contains(team))
+        if (!teamNames.Contains(team))
         {
             Debug.LogWarning(
                 $"[GameLoop] Team '{team}' not found in teams list, falling back to executingMoves color"
             );
             return executingMoves;
         }
-        return teamColors[teams.IndexOf(team)];
+        return teamColors[teamNames.IndexOf(team)];
     }
 
     public Material GetTeamMaterial(string team)
     {
-        if (!teams.Contains(team))
+        if (!teamNames.Contains(team))
         {
             Debug.LogWarning(
                 $"[GameLoop] Team '{team}' not found in teams list, falling back to null material"
             );
             return null;
         }
-        return teamMaterials[teams.IndexOf(team)];
+        return teamMaterials[teamNames.IndexOf(team)];
     }
 
     public static string GetEnemyTeam(string team)
     {
-        if (!teams.Contains(team))
+        if (!teamNames.Contains(team))
         {
             Debug.LogWarning(
                 $"[GameLoop] Team '{team}' not found in teams list, cannot determine enemy team, falling back to null"
             );
             return null;
         }
-        return teams.FirstOrDefault(t => t != team);
+        return teamNames.FirstOrDefault(t => t != team);
     }
 
     public static int teamSize(string team)

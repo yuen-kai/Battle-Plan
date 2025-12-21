@@ -8,8 +8,10 @@ public class NetworkHelper : NetworkBehaviour
     public static NetworkHelper Instance { get; private set; }
 
     public static ClientRpcParams ToClient(ulong clientId) =>
-    new ClientRpcParams {
-        Send = new ClientRpcSendParams {
+    new ClientRpcParams
+    {
+        Send = new ClientRpcSendParams
+        {
             TargetClientIds = new[] { clientId }
         }
     };
@@ -17,7 +19,7 @@ public class NetworkHelper : NetworkBehaviour
     // Queue for height sync requests when instance isn't ready
     private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs =
         new();
-    
+
     // Queue for parenting operations when instance isn't ready
     private static Queue<(GameObject instance, Transform parent)> pendingParentingOperations =
         new();
@@ -33,7 +35,7 @@ public class NetworkHelper : NetworkBehaviour
 
         // Process any pending height syncs
         ProcessPendingHeightSyncs();
-        
+
         // Process any pending parenting operations
         ProcessPendingParentingOperations();
     }
@@ -226,18 +228,24 @@ public class NetworkHelper : NetworkBehaviour
 
     public void Despawn(GameObject instance, float delay = 0)
     {
+        StartCoroutine(DespawnDelay(instance, delay));
+    }
+
+    public IEnumerator DespawnDelay(GameObject instance, float delay = 0)
+    {
+        if (delay > 0) { yield return new WaitForSeconds(delay); }
+
         if (instance == null)
-            return;
+            yield break;
+
         NetworkObject netObj = instance.GetComponent<NetworkObject>();
         if (netObj == null)
         {
             Debug.LogWarning(instance.name + " has no net obj");
             Destroy(instance);
         }
-        if (netObj != null && netObj.IsSpawned && NetworkManager.Singleton.IsServer)
-        {
-            StartCoroutine(DespawnDelay(netObj, delay));
-        }
+
+        netObj.Despawn();
     }
 
     public void SetActive(GameObject obj, bool active)
@@ -308,9 +316,41 @@ public class NetworkHelper : NetworkBehaviour
         }
     }
 
-    public IEnumerator DespawnDelay(NetworkObject netObj, float delay = 0)
+    /// <summary>
+    /// Despawns all NetworkObjects (except persistent objects like NetworkManager)
+    /// Should be called from server-side before scene transitions
+    /// </summary>
+    public static void CleanupAllNetworkObjects()
     {
-        yield return new WaitForSeconds(delay);
-        netObj.Despawn();
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogWarning("[NetworkHelper] Cannot cleanup - NetworkManager is null or not server");
+            return;
+        }
+
+        if (NetworkManager.Singleton.SpawnManager == null)
+        {
+            Debug.LogWarning("[NetworkHelper] SpawnManager is null, skipping cleanup");
+            return;
+        }
+
+        // Create a list copy since we'll be modifying the collection during iteration
+        var spawnedObjects = new List<NetworkObject>(
+            NetworkManager.Singleton.SpawnManager.SpawnedObjectsList
+        );
+
+        // Despawn all NetworkObjects (except persistent objects like NetworkManager, GameLoop, and NetworkHelper)
+        foreach (var netObj in spawnedObjects)
+        {
+            if (netObj != null && netObj.IsSpawned)
+            {
+                // Skip GameLoop, and NetworkHelper as they're needed for cleanup/scene management
+                if (netObj.gameObject.GetComponent<GameLoop>() == null
+                    && netObj.gameObject.GetComponent<NetworkHelper>() == null)
+                {
+                    netObj.Despawn();
+                }
+            }
+        }
     }
 }

@@ -35,7 +35,7 @@ public class CameraEffects : NetworkBehaviour
     /// <param name="shakeIntensity">Intensity of the shake</param>
     public IEnumerator CameraShake(float shakeDuration = 0.5f, float shakeIntensity = 0.1f)
     {
-        Camera teamCamera = GameLoop.Instance.teamCamera;
+        Camera teamCamera = GameLoop.Instance.TeamCamera;
         if (teamCamera == null)
         {
             Debug.LogWarning("[CameraEffects] No camera found, shake effect skipped");

@@ -178,6 +178,7 @@ MonoBehaviour:
   m_VerticalAlignment: 256
   m_textAlignment: 65535
   m_characterSpacing: 0
+  m_characterHorizontalScale: 1
   m_wordSpacing: 0
   m_lineSpacing: 0
   m_lineSpacingMax: 0
@@ -297,7 +298,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 6877355979647964550}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4ae404f2d3ebda04fa4fd3a03d0c8434, type: 3}
+  m_Script: {fileID: 11500000, guid: 8953d56c5b6c1494dbfa7b51f739c79a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!1 &8861979398241179818

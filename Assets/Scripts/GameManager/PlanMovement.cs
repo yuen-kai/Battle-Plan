@@ -138,7 +138,7 @@ public class PlanMovement : MonoBehaviour
         teamCharacters = units ?? PopulateTeamCharacters();
 
         InitializeVisuals();
-        SwitchToUnit(teamCharacters[0], range);
+        SwitchToUnit(null, range);
 
         float timer;
         while ((timer = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0)
@@ -225,6 +225,8 @@ public class PlanMovement : MonoBehaviour
     public void SwitchToUnit(GameObject newSelectedUnit, int range=-1)
     {
         selectedUnit = newSelectedUnit;
+        if(selectedUnit == null) return;
+
         DisplayMoveRange(range == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : range);
         if (!movementPaths.ContainsKey(selectedUnit))
         {
