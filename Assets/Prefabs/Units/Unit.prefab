@@ -167,8 +167,8 @@ GameObject:
   - component: {fileID: -159396357692938789}
   - component: {fileID: 2188586334649481472}
   - component: {fileID: -4149958763578291957}
-  - component: {fileID: 8708257098216051031}
   - component: {fileID: 8292292578378300112}
+  - component: {fileID: 8708257098216051031}
   m_Layer: 6
   m_Name: Unit
   m_TagString: Untagged
@@ -220,6 +220,8 @@ MeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -241,9 +243,11 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!136 &5544866092058397612
 CapsuleCollider:
@@ -350,6 +354,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d4cc6ffea0ab02c4f948ee4e069b1195, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &8292292578378300112
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1013387072258837214}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b1c6a7d4f1e3634fbea2cc144d86d53, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
+  teamMaterials:
+  - {fileID: 2100000, guid: 8b24f4b922356ea4aa94816ac64a0b3f, type: 2}
+  - {fileID: 2100000, guid: 727707c55eb0d15409a100bb6a744124, type: 2}
+  selectMovement: 1
 --- !u!114 &8708257098216051031
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -396,22 +417,6 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &8292292578378300112
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1013387072258837214}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2b1c6a7d4f1e3634fbea2cc144d86d53, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ShowTopMostFoldoutHeaderGroup: 1
-  teamMaterials:
-  - {fileID: 2100000, guid: 8b24f4b922356ea4aa94816ac64a0b3f, type: 2}
-  - {fileID: 2100000, guid: 727707c55eb0d15409a100bb6a744124, type: 2}
 --- !u!1 &4482195103607676923
 GameObject:
   m_ObjectHideFlags: 0

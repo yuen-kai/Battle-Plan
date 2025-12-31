@@ -87,7 +87,7 @@ GameObject:
   - component: {fileID: 1121522412243405560}
   - component: {fileID: 8309046905029243863}
   m_Layer: 5
-  m_Name: AbilityText
+  m_Name: Text
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -224,7 +224,7 @@ GameObject:
   - component: {fileID: 1754829301995240987}
   - component: {fileID: 4973187200100100688}
   - component: {fileID: -375620079018468532}
-  - component: {fileID: 7696315528950938176}
+  - component: {fileID: 8028991835827737690}
   m_Layer: 5
   m_Name: UnitCard
   m_TagString: Untagged
@@ -315,7 +315,7 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
---- !u!114 &7696315528950938176
+--- !u!114 &8028991835827737690
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -324,11 +324,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 6877355979647964550}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3854901c5f1d146a9a69adc07ce0dd7e, type: 3}
+  m_Script: {fileID: 11500000, guid: 8953d56c5b6c1494dbfa7b51f739c79a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UnitCard
-  ShowTopMostFoldoutHeaderGroup: 1
-  uses: 0
+  m_EditorClassIdentifier: Assembly-CSharp::CardHandler
 --- !u!1 &8861979398241179818
 GameObject:
   m_ObjectHideFlags: 0
@@ -451,7 +449,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 7696315528950938176}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: UnitCard, Assembly-CSharp
         m_MethodName: OnAbilityPressed
         m_Mode: 1

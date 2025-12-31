@@ -14,20 +14,6 @@ public enum MessagePerspective
     Enemy,
 }
 
-[System.Serializable]
-public struct TeamMappingData : INetworkSerializable
-{
-    public ulong clientId;
-    public int teamIndex;
-
-    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
-        where T : IReaderWriter
-    {
-        serializer.SerializeValue(ref clientId);
-        serializer.SerializeValue(ref teamIndex);
-    }
-}
-
 public class GameLoop : NetworkBehaviour
 {
     public const bool TESTING = true;
@@ -100,9 +86,9 @@ public class GameLoop : NetworkBehaviour
             },
             new() //Red Team Spawn Positions
             {
-                new Vector2Int(3, 6),
-                new Vector2Int(4, 6),
                 new Vector2Int(5, 6),
+                new Vector2Int(4, 6),
+                new Vector2Int(3, 6),
             },
         };
 
@@ -116,9 +102,6 @@ public class GameLoop : NetworkBehaviour
     // Game Settings
     float planningTimePerUnit = TESTING ? 3f : 5f;
 
-    // Client-side team mapping synchronized from server
-    private Dictionary<ulong, int> clientTeamMapping = new();
-
     // Actions
     public static System.Action<bool> OrderAllowShooting;
     public static System.Action<bool> OrderStillShooting;
@@ -127,7 +110,7 @@ public class GameLoop : NetworkBehaviour
     List<PathsDict> pathsList = new();
 
     public GameObject teamCameraParent;
-    public Camera TeamCamera => teamCameraParent.GetComponent<Camera>();
+    public Camera TeamCamera;
 
     //End Game UI
     public GameObject endGameUI;
@@ -142,24 +125,29 @@ public class GameLoop : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         Instance = this;
+        TeamCamera = teamCameraParent.GetComponent<Camera>();
 
         if (IsServer)
         {
             StartGame();
             StartCoroutine(GameLoopTemp());
+            InitializeCameraPosition();
         }
-        InitializeCameraPosition();
     }
 
     private void InitializeCameraPosition()
     {
-        if (!IsClient)
-            return;
+        // For each client in allTeamUnits, initialize the client by calling InitializeCameraPositionClientRpc with their team index
+        for (int i = 0; i < allTeamUnits.Count; i++)
+        {
+            ulong clientId = allTeamUnits.ElementAt(i).Key;
+            InitializeCameraPositionClientRpc(i, NetworkHelper.ToClient(clientId));
+        }
+    }
 
-        ulong localClientId = NetworkManager.Singleton.LocalClientId;
-        string localTeam = GetLocalClientTeam(localClientId);
-        int teamIndex = GetTeamIndex(localTeam);
-
+    [ClientRpc]
+    private void InitializeCameraPositionClientRpc(int teamIndex, ClientRpcParams clientRpcParams = default)
+    {
         if (teamIndex >= 0 && teamIndex < spawns.Count && teamIndex < cameraPositions.Count)
         {
             if (teamCameraParent != null)
@@ -169,6 +157,7 @@ public class GameLoop : NetworkBehaviour
             }
         }
     }
+    
     void StartGame()
     {
         foreach (var pos in wallLayout)
@@ -237,11 +226,12 @@ public class GameLoop : NetworkBehaviour
     [ClientRpc]
     void SetUnitCardClientRpc(int cardIndex, int unitIndex, ClientRpcParams clientRpcParams = default)
     {
-        UnitCard card = unitCards.transform.GetChild(cardIndex).GetComponent<UnitCard>();
+        CardHandler card = unitCards.transform.GetChild(cardIndex).GetComponent<CardHandler>();
         UnitData unitData = allUnits.units[unitIndex];
         card.uses = unitData.uses;
-        card.SetUnitCard(unitData.abilitySprite, unitData.abilityName);
-
+        card.setImage(unitData.abilitySprite);
+        card.setText(unitData.abilityName);
+        card.setButtonListener(() => PlanMovement.Instance.SwitchToUnit(cardIndex));
     }
 
     IEnumerator GameLoopTemp()
@@ -352,10 +342,11 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
-    void ExitToMainMenu(){
+    void ExitToMainMenu()
+    {
         playAgainButton.GetComponent<Button>().interactable = false;
         mainMenuButton.GetComponent<Button>().interactable = false;
-        if(NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
             ExitServerRpc(NetworkManager.Singleton.LocalClientId);
         }
@@ -433,7 +424,7 @@ public class GameLoop : NetworkBehaviour
                 continue;
 
             int maxSteps = Mathf.Max(0, movement.unitData.moveDist);
-            List<Vector3> submitted = kvp.Value ?? new List<Vector3>();
+            List<Vector3> submitted = kvp.Value.Item2 ?? new List<Vector3>();
 
             // Build a sanitized path: start at current cell, then step by step adjacents, up to maxSteps
             List<Vector3> clean = new();
@@ -467,7 +458,7 @@ public class GameLoop : NetworkBehaviour
                 stepsAdded++;
             }
 
-            sanitized[unit] = clean;
+            sanitized[unit] = (kvp.Value.Item1, clean);
         }
 
         pathsList.Add(sanitized);
@@ -485,7 +476,7 @@ public class GameLoop : NetworkBehaviour
                 // Check if this unit has a path in the dictionary
                 if (paths.ContainsKey(unit))
                 {
-                    movementPath = new List<Vector3>(paths[unit]); // Create a new list copy
+                    movementPath = new List<Vector3>(paths[unit].Item2); // Create a new list copy
                 }
 
                 // Start movement with either the actual path or empty list
@@ -555,32 +546,6 @@ public class GameLoop : NetworkBehaviour
         return false;
     }
 
-    [ClientRpc]
-    public void setOverlayUITextClientRpc(string message, string team = "neutral")
-    {
-        overlayUIText.text = message;
-
-        if (team == "neutral")
-        {
-            overlayUIText.color = executingMoves;
-        }
-        else
-        {
-            // Determine if this message is about the client's own team or enemy team
-            ulong localClientId = NetworkManager.Singleton.LocalClientId;
-            string localTeam = GetLocalClientTeam(localClientId);
-
-            if (localTeam == team)
-            {
-                overlayUIText.color = teamColors[0];
-            }
-            else
-            {
-                overlayUIText.color = teamColors[1];
-            }
-        }
-    }
-
     /// <summary>
     /// Wrapper function that accepts "friendly", "enemy", or "neutral" instead of specific team names
     /// </summary>
@@ -601,47 +566,6 @@ public class GameLoop : NetworkBehaviour
         {
             overlayUIText.color = executingMoves;
         }
-    }
-
-    /// <summary>
-    /// Gets the team that the local client belongs to
-    /// </summary>
-    public string GetLocalClientTeam(ulong clientId)
-    {
-        // Use client-side mapping if available
-        if (clientTeamMapping.ContainsKey(clientId))
-        {
-            return teamNames[clientTeamMapping[clientId]];
-        }
-
-        // Fallback: if no mapping found, assume first team
-        Debug.LogWarning(
-            $"[GameLoop] No team mapping found for client {clientId}, falling back to first team"
-        );
-        return teamNames.Count > 0 ? teamNames[0] : "BlueTeam";
-    }
-
-    /// <summary>
-    /// Gets the perspective for a specific team relative to the local client
-    /// </summary>
-    public MessagePerspective GetTeamPerspective(string team)
-    {
-        ulong localClientId = NetworkManager.Singleton.LocalClientId;
-        string localTeam = GetLocalClientTeam(localClientId);
-
-        if (team == localTeam)
-            return MessagePerspective.Friendly;
-        else if (team == "neutral" || team == "")
-            return MessagePerspective.Neutral;
-        else
-            return MessagePerspective.Enemy;
-    }
-
-    public static int GetTeamIndex(string team)
-    {
-        if (!teamNames.Contains(team))
-            return -1;
-        return teamNames.IndexOf(team);
     }
 
     public Color GetTeamColor(string team)
@@ -693,4 +617,61 @@ public class GameLoop : NetworkBehaviour
             gridBounds.yMin + coords.y * cellSize
         );
     }
+
+    // [ClientRpc]
+    // public void setOverlayUITextClientRpc(string message, string team = "neutral")
+    // {
+    //     overlayUIText.text = message;
+
+    //     if (team == "neutral")
+    //     {
+    //         overlayUIText.color = executingMoves;
+    //     }
+    //     else
+    //     {
+    //         // Determine if this message is about the client's own team or enemy team
+    //         ulong localClientId = NetworkManager.Singleton.LocalClientId;
+    //         string localTeam = GetLocalClientTeam(localClientId);
+
+    //         if (localTeam == team)
+    //         {
+    //             overlayUIText.color = teamColors[0];
+    //         }
+    //         else
+    //         {
+    //             overlayUIText.color = teamColors[1];
+    //         }
+    //     }
+    // }
+
+    /// <summary>
+    /// Gets the perspective for a specific team relative to the local client
+    /// </summary>
+    // public MessagePerspective GetTeamPerspective(string team)
+    // {
+    //     ulong localClientId = NetworkManager.Singleton.LocalClientId;
+    //     string localTeam = getTeamName(localClientId);
+
+    //     if (team == localTeam)
+    //         return MessagePerspective.Friendly;
+    //     else if (team == "neutral" || team == "")
+    //         return MessagePerspective.Neutral;
+    //     else
+    //         return MessagePerspective.Enemy;
+    // }
+
+    // public string getTeamName(ulong clientId)
+    // {
+    //     var entry = allTeamUnits.Keys
+    //         .Select((key, idx) => new { key, idx })
+    //         .FirstOrDefault(pair => pair.key == clientId);
+    //     return entry != null ? teamNames[entry.idx] : null;
+    // }
+
+    // public static int GetTeamIndex(string team)
+    // {
+    //     if (!teamNames.Contains(team))
+    //         return -1;
+    //     return teamNames.IndexOf(team);
+    // }
 }

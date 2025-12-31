@@ -40,7 +40,6 @@ public class AnimationHandler : MonoBehaviour
         {
             animator.Play("Person Shoot");
             animator.Play("Gun Shoot", 1);
-            Debug.Log("Shoot");
         }
         StartCoroutine(PlayAnimationWithDelay("Idle", delay));
     }

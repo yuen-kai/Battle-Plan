@@ -16,7 +16,7 @@ public class UnitCardContainer : NetworkBehaviour
     {
         foreach (Transform child in transform)
         {
-            child.GetComponent<UnitCard>().setUnitCardInteractable(interactable);
+            child.GetComponent<CardHandler>().setUnitCardInteractable(interactable);
         }
     }
 
@@ -40,6 +40,6 @@ public class UnitCardContainer : NetworkBehaviour
     [ClientRpc]
     private void DisableUnitCardClientRpc(int unitIndex, ClientRpcParams clientRpcParams = default)
     {
-        transform.GetChild(unitIndex).GetComponent<UnitCard>().disabled = true;
+        transform.GetChild(unitIndex).GetComponent<CardHandler>().disabled = true;
     }
 }

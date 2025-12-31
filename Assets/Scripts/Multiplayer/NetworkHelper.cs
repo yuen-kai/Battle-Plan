@@ -344,7 +344,6 @@ public class NetworkHelper : NetworkBehaviour
         {
             if (netObj != null && netObj.IsSpawned)
             {
-                // Skip GameLoop, and NetworkHelper as they're needed for cleanup/scene management
                 if (netObj.gameObject.GetComponent<GameLoop>() == null
                     && netObj.gameObject.GetComponent<NetworkHelper>() == null)
                 {

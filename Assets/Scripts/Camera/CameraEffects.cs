@@ -59,31 +59,31 @@ public class CameraEffects : NetworkBehaviour
         teamCamera.transform.position = originalPosition;
     }
 
-    [ClientRpc]
-    public void FlashClientRpc(string team = "neutral", float flashDuration = 0.2f)
-    {
-        Color color = Color.white;
-        if (team == "neutral")
-        {
-            color = (Color)(GameLoop.Instance?.executingMoves ?? Color.white);
-        }
-        else
-        {
-            // Determine if this message is about the client's own team or enemy team
-            ulong localClientId = NetworkManager.Singleton.LocalClientId;
-            string localTeam = GameLoop.Instance?.GetLocalClientTeam(localClientId) ?? "neutral";
-            if (localTeam == team)
-            {
-                color = (Color)(GameLoop.Instance?.teamColors[0] ?? Color.white);
-            }
-            else
-            {
-                color = (Color)(GameLoop.Instance?.teamColors[1] ?? Color.white);
-            }
-        }
+    // [ClientRpc]
+    // public void FlashClientRpc(string team = "neutral", float flashDuration = 0.2f)
+    // {
+    //     Color color = Color.white;
+    //     if (team == "neutral")
+    //     {
+    //         color = (Color)(GameLoop.Instance?.executingMoves ?? Color.white);
+    //     }
+    //     else
+    //     {
+    //         // Determine if this message is about the client's own team or enemy team
+    //         ulong localClientId = NetworkManager.Singleton.LocalClientId;
+    //         string localTeam = GameLoop.Instance?.GetLocalClientTeam(localClientId) ?? "neutral";
+    //         if (localTeam == team)
+    //         {
+    //             color = (Color)(GameLoop.Instance?.teamColors[0] ?? Color.white);
+    //         }
+    //         else
+    //         {
+    //             color = (Color)(GameLoop.Instance?.teamColors[1] ?? Color.white);
+    //         }
+    //     }
 
-        StartCoroutine(Flash(color, flashDuration));
-    }
+    //     StartCoroutine(Flash(color, flashDuration));
+    // }
 
     [ClientRpc]
     public void FlashClientRpc(MessagePerspective perspective, float flashDuration = 0.2f)
