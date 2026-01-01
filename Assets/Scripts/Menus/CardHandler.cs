@@ -21,6 +21,11 @@ public class CardHandler : MonoBehaviour
         }
     }
 
+    public void SetCardColor(Color color)
+    {
+        transform.Find("TouchArea").GetComponent<Image>().color = color;
+    }
+
     public void setText(string text)
     {
         var textComponent = transform.Find("TouchArea").Find("Text").GetComponent<TMP_Text>();

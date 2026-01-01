@@ -147,12 +147,8 @@ public class PlanMovement : MonoBehaviour
             }
             else
             {
-                if (selectedUnit.GetComponent<Unit>().selectMovement)
+                if (!plans[selectedUnit].Item1)
                 {
-                    if (!PathSelection.Instance)
-                    {
-                        Debug.LogWarning("No PathSelection Instance!");
-                    }
                     PathSelection.Instance.MovementSelection(range);
                 }
                 else
@@ -208,22 +204,42 @@ public class PlanMovement : MonoBehaviour
         SwitchToUnit(teamCharacters[unitIndex]);
     }
 
-    public void SwitchToUnit(GameObject newSelectedUnit, int range=-1)
+    public void SwitchToUnit(GameObject newSelectedUnit, int range = -1)
     {
+        GameObject oldSelectedUnit = selectedUnit;
         selectedUnit = newSelectedUnit;
-        if(selectedUnit == null) return;
+        if (selectedUnit == null) return;
 
         DisplayMoveRange(range == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : range);
         if (!plans.ContainsKey(selectedUnit))
         {
-            InitializePlan();
+            plans[selectedUnit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit)});
+            ResetVisualPlan();
         }
-        else
+        else if (oldSelectedUnit != null && oldSelectedUnit == selectedUnit)
         {
-            currentPlan = plans[selectedUnit].Item2;
-            currentVisuals = planVisuals[selectedUnit];
+            plans[selectedUnit] = (!plans[selectedUnit].Item1, new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit)});
+
+            int unitIndex = teamCharacters.IndexOf(selectedUnit);
+            if (unitIndex != -1)
+            {
+                CardHandler cardHandler = GameLoop.Instance.unitCards.transform.GetChild(unitIndex).GetComponent<CardHandler>();
+                cardHandler.SetCardColor(plans[selectedUnit].Item1 ? Color.yellow : Color.white);
+            }
+            
+            ResetVisualPlan();
         }
+        currentPlan = plans[selectedUnit].Item2;
+        currentVisuals = planVisuals[selectedUnit];
         // DisplayAttackRange();
+    }
+
+    void ResetVisualPlan()
+    {
+        if (planVisuals.ContainsKey(selectedUnit))
+            Destroy(planVisuals[selectedUnit]);
+
+        planVisuals[selectedUnit] = Helper.CreateGameObject("PlanVisual", planVisualsFolder);
     }
 
     //================
@@ -307,20 +323,8 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-    void InitializePlan()
-    {
-        plans[selectedUnit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit) });
-        currentPlan = plans[selectedUnit].Item2;
-
-        if (planVisuals.ContainsKey(selectedUnit))
-            Destroy(planVisuals[selectedUnit]);
-
-        currentVisuals = Helper.CreateGameObject("PlanVisual", planVisualsFolder);
-        planVisuals[selectedUnit] = currentVisuals;
-    }
-    
     //-------------------
-    public static void PrintActions(PathsDict actions)
+    public static void PrintPlans(PathsDict actions)
     {
         foreach (var pair in actions)
         {
