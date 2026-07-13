@@ -1,6 +1,9 @@
+using System.Threading;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.Windows;
 
 public class JoinGameUIHandler : MonoBehaviour
 {
@@ -21,7 +24,6 @@ public class JoinGameUIHandler : MonoBehaviour
 
     [SerializeField]
     private TMP_Text gameCodeErrorText;
-
     public void togglePanels(GameObject panel)
     {
         optionsPanel.SetActive(false);
@@ -29,7 +31,17 @@ public class JoinGameUIHandler : MonoBehaviour
         joinPanel.SetActive(false);
         panel.SetActive(true);
     }
+    public void Backtotitle()
+    {
+        SceneManager.LoadScene("Title Screen");
+    }
+    public void BacktoOptions()
+    {
 
+        joinPanel.SetActive(false);
+        createPanel.SetActive(false);
+        optionsPanel.SetActive(true);
+    }
     public async void CreateGame()
     {
         if (GameLoop.TESTING)
