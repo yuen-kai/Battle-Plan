@@ -59,3 +59,53 @@ public class Helper : MonoBehaviour
         return objectsInRange;
     }
 }
+
+#if UNITY_EDITOR
+// TEMPORARY: bootstraps the MCP for Unity HTTP server + bridge once, using the same
+// public APIs the "Start Server" button calls. Safe to delete after the bridge connects.
+[UnityEditor.InitializeOnLoad]
+internal static class TempMcpBootstrap
+{
+    static TempMcpBootstrap()
+    {
+        UnityEditor.EditorApplication.delayCall += () => _ = Run();
+    }
+
+    private static async System.Threading.Tasks.Task Run()
+    {
+        try
+        {
+            if (MCPForUnity.Editor.Services.MCPServiceLocator.TransportManager.IsRunning(MCPForUnity.Editor.Services.Transport.TransportMode.Http))
+            {
+                Debug.Log("[TempMcpBootstrap] HTTP transport already running.");
+                return;
+            }
+
+            if (!MCPForUnity.Editor.Services.MCPServiceLocator.Server.IsLocalHttpServerReachable())
+            {
+                bool started = MCPForUnity.Editor.Services.MCPServiceLocator.Server.StartLocalHttpServer(quiet: true);
+                Debug.Log($"[TempMcpBootstrap] StartLocalHttpServer -> {started}");
+                if (!started)
+                {
+                    MCPForUnity.Editor.Services.MCPServiceLocator.Server.LogLocalHttpServerLaunchFailure();
+                    return;
+                }
+            }
+
+            for (int i = 0; i < 40; i++)
+            {
+                if (MCPForUnity.Editor.Services.MCPServiceLocator.Server.IsLocalHttpServerReachable()) break;
+                await System.Threading.Tasks.Task.Delay(500);
+            }
+
+            bool connected = await MCPForUnity.Editor.Services.MCPServiceLocator.Bridge.StartAsync();
+            Debug.Log($"[TempMcpBootstrap] Bridge.StartAsync -> {connected}");
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"[TempMcpBootstrap] Failed: {ex}");
+        }
+    }
+}
+#endif
+
