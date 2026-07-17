@@ -76,7 +76,7 @@
 
 //         //continue time
 //         Time.timeScale = 1f;
-//         GameLoop.Instance.unitCards.GetComponent<UnitCardContainer>().SetUnitCardsInteractable(true);
+//         GameHUDController.Instance?.SetCardsInteractable(true);
 //         //execute dive
 //         foreach (var pair in paths)
 //         {
@@ -94,9 +94,9 @@
 //         float timeRemaining;
 //         while ((timeRemaining = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0f)
 //         {
-//             PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
+//             GameHUDController.Instance?.SetTimer(timeRemaining);
 //             yield return null;
 //         }
-//         PlanMovement.Instance.timerTextUI.text = "";
+//         GameHUDController.Instance?.SetTimer(0f);
 //     }
 // }

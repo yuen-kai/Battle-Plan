@@ -1,0 +1,14 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Button name="unit-option-button" class="unit-option" tooltip="Add this unit to your fireteam">
+        <ui:VisualElement name="unit-option-portrait" class="unit-option__portrait" picking-mode="Ignore" />
+        <ui:VisualElement class="unit-option__copy" picking-mode="Ignore">
+            <ui:Label name="unit-option-name" text="Unit" class="unit-option__name" picking-mode="Ignore" />
+            <ui:Label name="unit-option-description" class="unit-option__description" picking-mode="Ignore" />
+            <ui:VisualElement class="unit-option__ability-row" picking-mode="Ignore">
+                <ui:VisualElement class="unit-option__ability-mark" picking-mode="Ignore" />
+                <ui:Label name="unit-option-ability" text="Ability" class="unit-option__ability" picking-mode="Ignore" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:Label name="unit-option-status" class="unit-option__status hidden" picking-mode="Ignore" />
+    </ui:Button>
+</ui:UXML>

@@ -5,6 +5,8 @@ using Unity.Netcode;
 
 public class Bullet : NetworkBehaviour
 {
+    private static readonly HashSet<Bullet> activeServerBullets = new();
+
     public float damage = 10f;
     public float backstabMultiplier = 1f;
     public float backstabAngle = 90f; // Angle in degrees from forward direction to consider a backstab
@@ -16,6 +18,14 @@ public class Bullet : NetworkBehaviour
     private float maxLifetime = 8f;
     private float timeElapsed = 0f;
 
+    public static int ActiveServerBulletCount => activeServerBullets.Count;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActiveBullets()
+    {
+        activeServerBullets.Clear();
+    }
+
     public override void OnNetworkSpawn()
     {
         if (!IsServer)
@@ -23,14 +33,33 @@ public class Bullet : NetworkBehaviour
             enabled = false;
             return;
         }
+        activeServerBullets.Add(this);
         startPosition = transform.position;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        activeServerBullets.Remove(this);
+        base.OnNetworkDespawn();
+    }
+
+    private void OnDestroy()
+    {
+        activeServerBullets.Remove(this);
     }
 
     void Update()
     {
+        if (IsPathBlockedBySmoke(transform.position))
+        {
+            NetworkHelper.Instance.Despawn(gameObject);
+            return;
+        }
+
         if (Vector3.Distance(startPosition, transform.position) > range || timeElapsed > maxLifetime)
         {
             NetworkHelper.Instance.Despawn(gameObject);
+            return;
         }
         timeElapsed += Time.deltaTime;
     }
@@ -43,13 +72,22 @@ public class Bullet : NetworkBehaviour
             return;
         }
         GameObject hitObject = other.gameObject;
-        if (hitObject.CompareTag(enemyTeam))
+        if (
+            hitObject.CompareTag(enemyTeam)
+            && !IsPathBlockedBySmoke(hitObject.transform.position)
+        )
         {
             float finalDamage = !CheckBackstab(hitObject) ? damage : damage * backstabMultiplier;
             hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
         }
 
         NetworkHelper.Instance.Despawn(gameObject);
+    }
+
+    private bool IsPathBlockedBySmoke(Vector3 destination)
+    {
+        return GameLoop.Instance != null
+            && GameLoop.Instance.DoesWorldSegmentCrossActiveSmoke(startPosition, destination);
     }
 
     private bool CheckBackstab(GameObject hitObject)

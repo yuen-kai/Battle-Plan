@@ -16,6 +16,13 @@ public class UnitData : ScriptableObject
     [Tooltip("Sprite representing the unit")]
     public Sprite unitSprite;
 
+    [Header("=== ROSTER PARAMETERS ===")]
+    [SerializeField]
+    [Tooltip("Opt out of player-selectable and externally configured fireteams")]
+    private bool unavailableForRoster = false;
+
+    public bool IsRosterEligible => !unavailableForRoster;
+
     [Header("=== ABILITY CARD PARAMETERS ===")]
     [Tooltip("Name of the ability")]
     public string abilityName = "New Ability";
@@ -84,6 +91,10 @@ public class UnitData : ScriptableObject
     [Tooltip("Rotation speed in degrees per second")]
     public float aimRotationSpeed = 270f;
 
+    [Header("=== VISION PARAMETERS ===")]
+    [Tooltip("Manhattan vision range in cells; must be at least targetRange")]
+    public int visionRange = 5;
+
     [Header("=== HEALTH PARAMETERS ===")]
     [Tooltip("Maximum health points for this unit")]
     public float maxHealth = 100f;
@@ -96,6 +107,12 @@ public class UnitData : ScriptableObject
 
     [Tooltip("Range in cells for ability target selection")]
     public int abilitySquareRange = 3;
+
+    [Tooltip("Restrict ability targeting to the eight adjacent compass directions")]
+    public bool selectAbilityDirection = false;
+
+    [Tooltip("Fixed travel distance in cells for a directional ability")]
+    public int abilityFixedDistance = 0;
 
     [Tooltip("Radius of ability area of effect in cells")]
     public float abilityRadius = 0f;

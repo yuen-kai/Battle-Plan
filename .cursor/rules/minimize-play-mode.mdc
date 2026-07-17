@@ -1,0 +1,29 @@
+---
+description: Minimize Unity Play-mode time when running/testing the game via unityMCP (Play mode slows the user's computer)
+alwaysApply: true
+---
+
+# Minimize Play-Mode Time
+
+Running the game slows the user's machine. Treat Play mode as a scarce resource.
+
+## Before entering Play
+- Do all code application and compile iteration OUTSIDE Play mode; reach zero console errors first.
+- Run everything that can run in edit mode there instead: pure grid/math assertions via `execute_code`, asset/prefab/scene serialized-value checks, `.asset` stat reads.
+- Script the entire runtime session in advance (what to run, what to assert, in what order) so you never idle in Play mode while deciding what to do next.
+
+## While in Play
+- Consolidate runtime verification into as FEW Play sessions as possible — ideally one. Restart matches via `DevInput` inside the session instead of exiting/re-entering Play.
+- Keep dev fast-forward high (`DevInput.SetSpeed`) to shorten wall-clock time.
+- NEVER edit scripts during Play mode — the domain reload wipes static state and wedges the session. Exit Play → batch ALL pending edits → compile once → re-enter once.
+- Stop (or pause via `manage_editor`) before thinking: if you need to analyze results, read files, or plan next steps, exit/pause Play first. Unity must not sit running while you deliberate.
+
+## Knowing when to stop (no fixed waits)
+Never sleep for a fixed duration and hope the game is done. Use the observable signals:
+- `GameLoop.currentPhase` — "planning" / "dodging" / "executing" / "idle" (poll via `execute_code`).
+- `DevInput.Dump()` — phase, unit cells/alive, network state, dodge-window membership.
+- `DevE2ETest.Report` / `[E2E]` console lines — the suite logs a final `RESULT:` line on completion.
+- Prefer self-stopping drivers: a dev-only, editor-guarded hook that sets a done flag / logs a sentinel / calls `UnityEditor.EditorApplication.isPlaying = false` when the last step completes.
+
+## After
+- Exit Play mode as soon as verification concludes; always leave the editor stopped.

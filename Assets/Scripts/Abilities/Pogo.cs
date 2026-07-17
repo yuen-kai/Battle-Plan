@@ -1,17 +1,26 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 public partial class Pogo : Ability
 {
     float abilityTime = 1;
     float jumpHeight = 5f;
 
+    public override void ResetForRespawn()
+    {
+        base.ResetForRespawn();
+        Collider unitCollider = GetComponent<Collider>();
+        if (unitCollider != null)
+            unitCollider.enabled = true;
+    }
+
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         Vector3 startPosition = transform.position;
-        Vector3 targetPosition = abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0); //Has to be before collider is disabled
+        Vector3 targetPosition =
+            abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0); //Has to be before collider is disabled
 
         transform.GetComponent<Movement>().PauseMovement();
         transform.GetComponent<Shooting>().PauseShooting();
@@ -35,7 +44,21 @@ public partial class Pogo : Ability
         }
         transform.position = targetPosition;
 
+        // Landing slam on every peer + a light shake to sell the weight
+        LandingFxClientRpc(targetPosition);
+        CameraEffects.Instance?.CameraShakeClientRpc();
+
         transform.GetComponent<Collider>().enabled = true;
         transform.GetComponent<Movement>().transitionToShooting();
+    }
+
+    [ClientRpc]
+    private void LandingFxClientRpc(Vector3 landingPosition)
+    {
+        Color teamColor =
+            GetComponent<Unit>()?.TeamIndex == GameLoop.HostTeamIndex
+                ? new Color(0.22f, 0.78f, 1f)
+                : new Color(1f, 0.23f, 0.33f);
+        ImpactShockwave.Spawn(landingPosition, teamColor, 1.8f, 0.4f);
     }
 }

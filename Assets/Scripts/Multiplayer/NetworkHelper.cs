@@ -8,17 +8,13 @@ public class NetworkHelper : NetworkBehaviour
     public static NetworkHelper Instance { get; private set; }
 
     public static ClientRpcParams ToClient(ulong clientId) =>
-    new ClientRpcParams
-    {
-        Send = new ClientRpcSendParams
+        new ClientRpcParams
         {
-            TargetClientIds = new[] { clientId }
-        }
-    };
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } },
+        };
 
     // Queue for height sync requests when instance isn't ready
-    private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs =
-        new();
+    private static Queue<(GameObject obj, Vector3 position)> pendingHeightSyncs = new();
 
     // Queue for parenting operations when instance isn't ready
     private static Queue<(GameObject instance, Transform parent)> pendingParentingOperations =
@@ -88,7 +84,8 @@ public class NetworkHelper : NetworkBehaviour
         Quaternion rotation,
         Transform parent = null,
         ulong? ownerClientId = null,
-        Vector3? scale = null
+        Vector3? scale = null,
+        NetworkObject.VisibilityDelegate visibility = null
     )
     {
         GameObject instance = Instantiate(prefab, position, rotation);
@@ -107,6 +104,8 @@ public class NetworkHelper : NetworkBehaviour
                 );
                 netObj = instance.AddComponent<NetworkObject>();
             }
+            if (visibility != null)
+                netObj.CheckObjectVisibility = visibility;
 
             if (ownerClientId.HasValue)
                 netObj.SpawnWithOwnership(ownerClientId.Value);
@@ -233,7 +232,10 @@ public class NetworkHelper : NetworkBehaviour
 
     public IEnumerator DespawnDelay(GameObject instance, float delay = 0)
     {
-        if (delay > 0) { yield return new WaitForSeconds(delay); }
+        if (delay > 0)
+        {
+            yield return new WaitForSeconds(delay);
+        }
 
         if (instance == null)
             yield break;
@@ -243,6 +245,7 @@ public class NetworkHelper : NetworkBehaviour
         {
             Debug.LogWarning(instance.name + " has no net obj");
             Destroy(instance);
+            yield break;
         }
 
         netObj.Despawn();
@@ -262,7 +265,12 @@ public class NetworkHelper : NetworkBehaviour
     /// Sets a child object active/inactive across the network using ClientRpc
     /// </summary>
     [ClientRpc]
-    public void SetActiveClientRpc(NetworkObjectReference unitRef, string childPath, bool active)
+    public void SetActiveClientRpc(
+        NetworkObjectReference unitRef,
+        string childPath,
+        bool active,
+        ClientRpcParams clientRpcParams = default
+    )
     {
         if (unitRef.TryGet(out NetworkObject netObj))
         {
@@ -324,7 +332,9 @@ public class NetworkHelper : NetworkBehaviour
     {
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
         {
-            Debug.LogWarning("[NetworkHelper] Cannot cleanup - NetworkManager is null or not server");
+            Debug.LogWarning(
+                "[NetworkHelper] Cannot cleanup - NetworkManager is null or not server"
+            );
             return;
         }
 
@@ -344,8 +354,10 @@ public class NetworkHelper : NetworkBehaviour
         {
             if (netObj != null && netObj.IsSpawned)
             {
-                if (netObj.gameObject.GetComponent<GameLoop>() == null
-                    && netObj.gameObject.GetComponent<NetworkHelper>() == null)
+                if (
+                    netObj.gameObject.GetComponent<GameLoop>() == null
+                    && netObj.gameObject.GetComponent<NetworkHelper>() == null
+                )
                 {
                     netObj.Despawn();
                 }

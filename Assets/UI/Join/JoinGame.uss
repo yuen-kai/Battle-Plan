@@ -1,0 +1,299 @@
+.join-screen {
+    background-color: rgb(5, 9, 15);
+}
+
+.join-layout {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+}
+
+.join-nav {
+    width: 330px;
+    padding: 36px 36px 28px 12px;
+}
+
+.join-intro {
+    margin-top: 12px;
+    margin-bottom: 34px;
+    white-space: normal;
+}
+
+.join-nav-button {
+    width: 100%;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.join-title-button {
+    margin-top: auto;
+}
+
+.join-content {
+    width: 68%;
+    max-width: 980px;
+    justify-content: flex-start;
+    padding-top: 36px;
+}
+
+.join-panel {
+    width: 100%;
+    min-height: 520px;
+    justify-content: flex-start;
+}
+
+.mode-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.mode-option {
+    width: 31%;
+    min-width: 190px;
+    min-height: 82px;
+    margin-right: 10px;
+    margin-bottom: 10px;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12px 14px;
+    white-space: normal;
+}
+
+.mode-option__name {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: rgb(235, 240, 244);
+    white-space: normal;
+}
+
+.mode-option__detail {
+    margin-top: 5px;
+    font-size: 11px;
+    color: rgb(215, 191, 145);
+    white-space: normal;
+}
+
+.mode-option__status {
+    margin-top: 6px;
+    font-size: 11px;
+    color: rgb(151, 166, 180);
+    letter-spacing: 1px;
+}
+
+.mode-option:disabled {
+    opacity: 1;
+}
+
+.mode-option:disabled .mode-option__name {
+    color: rgb(137, 151, 163);
+}
+
+.mode-option:disabled .mode-option__status {
+    color: rgb(151, 166, 180);
+}
+
+.option-label {
+    margin-top: 14px;
+}
+
+.opponent-row {
+    flex-direction: row;
+    margin-bottom: 18px;
+}
+
+.opponent-option {
+    width: 190px;
+    min-height: 70px;
+    margin-right: 10px;
+    align-items: flex-start;
+    justify-content: center;
+    padding-left: 15px;
+}
+
+.opponent-option__name {
+    font-size: 14px;
+    -unity-font-style: bold;
+}
+
+.opponent-option__detail {
+    margin-top: 4px;
+    font-size: 11px;
+    color: rgb(155, 169, 182);
+}
+
+.button--selected .opponent-option__detail {
+    color: rgb(224, 198, 149);
+}
+
+.local-multiplayer-row {
+    margin-bottom: 8px;
+    padding: 12px 14px;
+    background-color: rgb(13, 17, 20);
+    border-width: 1px;
+    border-color: rgb(111, 87, 49);
+    border-radius: 2px;
+}
+
+.local-multiplayer-toggle {
+    margin-bottom: 4px;
+}
+
+.local-multiplayer-detail {
+    padding-left: 32px;
+    font-size: 11px;
+    white-space: normal;
+}
+
+.fog-row {
+    margin-top: 10px;
+    margin-bottom: 8px;
+    padding: 12px 14px;
+    background-color: rgb(8, 15, 23);
+    border-width: 1px;
+    border-color: rgb(42, 58, 72);
+    border-radius: 2px;
+}
+
+.fog-toggle {
+    margin-bottom: 4px;
+}
+
+.fog-detail {
+    padding-left: 32px;
+    font-size: 11px;
+    white-space: normal;
+}
+
+.create-action {
+    width: 260px;
+    margin-top: 8px;
+}
+
+.relay-code-panel {
+    margin-top: 30px;
+    padding-top: 22px;
+    border-top-width: 1px;
+    border-top-color: rgb(50, 68, 84);
+}
+
+.relay-code {
+    margin-bottom: 8px;
+    font-size: 32px;
+    -unity-font-style: bold;
+    color: rgb(105, 195, 249);
+    letter-spacing: 5px;
+}
+
+.relay-status {
+    min-height: 20px;
+    margin-bottom: 8px;
+    white-space: normal;
+}
+
+.relay-cancel {
+    width: 260px;
+    margin-top: 8px;
+}
+
+.join-cancel {
+    width: 260px;
+    margin-top: 8px;
+}
+
+.join-code-input {
+    max-width: 420px;
+}
+
+.compact .join-nav {
+    width: 280px;
+    padding-right: 24px;
+}
+
+.compact .join-content {
+    width: 72%;
+}
+
+.compact .mode-option {
+    min-width: 170px;
+}
+
+.narrow .join-layout {
+    flex-direction: column;
+}
+
+.narrow .join-nav {
+    width: 100%;
+    padding: 0 0 18px 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.narrow .join-nav > .title-xl {
+    width: 100%;
+}
+
+.narrow .join-intro {
+    width: 100%;
+    margin-bottom: 14px;
+}
+
+.narrow .join-nav-button {
+    width: 48%;
+    margin-right: 2%;
+}
+
+.narrow .join-title-button {
+    width: 100%;
+    margin-top: 6px;
+}
+
+.narrow .join-content {
+    width: 100%;
+    padding-top: 0;
+}
+
+.narrow .join-panel {
+    min-height: 420px;
+}
+
+.phone .join-nav-button {
+    width: 100%;
+    margin-right: 0;
+}
+
+.phone .mode-option {
+    width: 100%;
+    min-width: 0;
+    margin-right: 0;
+}
+
+.phone .opponent-row {
+    flex-direction: column;
+}
+
+.phone .opponent-option {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 8px;
+}
+
+.phone .create-action {
+    width: 100%;
+}
+
+.phone .relay-cancel {
+    width: 100%;
+}
+
+.phone .join-cancel {
+    width: 100%;
+}
+
+.short .join-panel {
+    min-height: 0;
+}
+
+.short .mode-option {
+    min-height: 68px;
+}

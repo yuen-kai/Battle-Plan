@@ -8,7 +8,22 @@ public class AnimationHandler : MonoBehaviour
 
     void Start()
     {
-        animator = GetComponent<Animator>();
+        animator = ResolveAnimator();
+    }
+
+    // Each unit type's rig lives on its own imported model child (e.g. "Sniper (1)"), not on
+    // this shared component's GameObject, so search descendants too. Prefer an Animator that is
+    // both enabled and has a Controller assigned; units without finished animations yet may still
+    // carry a placeholder Animator (auto-added by the model import) with no Controller, and
+    // calling Play/SetTrigger on that would just spam console errors instead of safely no-oping.
+    private Animator ResolveAnimator()
+    {
+        foreach (Animator candidate in GetComponentsInChildren<Animator>(true))
+        {
+            if (candidate.enabled && candidate.runtimeAnimatorController != null)
+                return candidate;
+        }
+        return null;
     }
 
     public void PlayAnimation(string animationName)

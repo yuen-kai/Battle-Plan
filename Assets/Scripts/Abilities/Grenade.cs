@@ -7,7 +7,9 @@ public partial class Grenade : Ability
 {
     float abilityTime = 1;
     float throwHeight = 5f;
-    public float damage = 50f;
+
+    [SerializeField]
+    private float damage = 80f;
     public GameObject grenadePrefab;
     public GameObject grenadeExplosionPrefab;
 
@@ -42,6 +44,7 @@ public partial class Grenade : Ability
 
         // Explode and damage enemies
         CameraEffects.Instance.CameraShakeClientRpc();
+        ExplosionFxClientRpc(targetPosition, AreaRadius);
         ExplodeGrenade(targetPosition, AreaRadius);
         GameObject explosionEffect = NetworkHelper.Spawn(
             grenadeExplosionPrefab,
@@ -55,9 +58,25 @@ public partial class Grenade : Ability
         NetworkHelper.Instance.Despawn(grenade);
     }
 
+    [ClientRpc]
+    private void ExplosionFxClientRpc(Vector3 explosionPosition, float areaRadius)
+    {
+        // Alarm-yellow shockwave matching the damage radius; runs on host too (host is a client).
+        ImpactShockwave.Spawn(
+            explosionPosition,
+            new Color(1f, 0.77f, 0f),
+            areaRadius * GameLoop.cellSize,
+            0.55f
+        );
+    }
+
     private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)
     {
         string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
+
+        // Units move by Transform during execution. Sync before the overlap query so a completed
+        // dodge is evaluated at its current position even when no physics tick ran this frame.
+        Physics.SyncTransforms();
 
         // Find all enemies within explosion range
         Collider[] enemiesInRange = Physics.OverlapSphere(

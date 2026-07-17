@@ -40,28 +40,13 @@ public class Shooting : NetworkBehaviour
     private Coroutine shootingCoroutine;
 
     // CONTROLLER
-    void Start()
-    {
-        // Initialize laser on all clients
-        targetLaser = gameObject.AddComponent<LineRenderer>();
-        targetLaser.enabled = false;
-
-        if (!IsServer)
-        {
-            enabled = false;
-            return;
-        }
-
-        GameLoop.OrderAllowShooting += (toggle) => allowShooting = toggle;
-        GameLoop.OrderStillShooting += (toggle) => stillShooting = toggle;
-        GameLoop.OrderContinueShooting += ContinueShooting;
-
-        enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
-    }
-
+    // All setup is in OnNetworkSpawn (not Start) so a fog NetworkShow re-runs it and the current
+    // laser NetworkVariable values are applied to a freshly (re)created LineRenderer.
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+
+        EnsureTargetLaser();
 
         // Subscribe to network variable changes on all clients
         isLaserEnabled.OnValueChanged += OnLaserEnabledChanged;
@@ -69,6 +54,19 @@ public class Shooting : NetworkBehaviour
         laserEndPos.OnValueChanged += OnLaserPositionChanged;
         laserWidth.OnValueChanged += OnLaserWidthChanged;
         laserColor.OnValueChanged += OnLaserColorChanged;
+        ApplyCurrentLaserState();
+
+        if (!IsServer)
+        {
+            enabled = false;
+            return;
+        }
+
+        GameLoop.OrderAllowShooting += SetAllowShooting;
+        GameLoop.OrderStillShooting += SetStillShooting;
+        GameLoop.OrderContinueShooting += ContinueShooting;
+        // enemyTeam is resolved lazily (ResolveEnemyTeam): at spawn time GameLoop has not yet
+        // assigned this unit's team tag (tags are set right after NetworkHelper.Spawn returns).
     }
 
     public override void OnNetworkDespawn()
@@ -80,27 +78,101 @@ public class Shooting : NetworkBehaviour
         laserWidth.OnValueChanged -= OnLaserWidthChanged;
         laserColor.OnValueChanged -= OnLaserColorChanged;
 
+        if (IsServer)
+        {
+            GameLoop.OrderAllowShooting -= SetAllowShooting;
+            GameLoop.OrderStillShooting -= SetStillShooting;
+            GameLoop.OrderContinueShooting -= ContinueShooting;
+        }
+
         base.OnNetworkDespawn();
+    }
+
+    private void EnsureTargetLaser()
+    {
+        if (targetLaser != null)
+            return;
+
+        targetLaser = GetComponent<LineRenderer>();
+        if (targetLaser == null)
+            targetLaser = gameObject.AddComponent<LineRenderer>();
+        targetLaser.enabled = false;
+
+        // Energy-beam look: white HDR core, glow tinted by the replicated start/end colors
+        // (the white->red lock-on ramp rides the LineRenderer vertex colors).
+        Shader beamShader = Shader.Find("BattlePlan/EnergyBeam");
+        if (beamShader != null)
+        {
+            Material beamMaterial = new(beamShader);
+            beamMaterial.SetColor("_GlowColor", Color.white);
+            beamMaterial.SetColor("_CoreColor", Color.white * 1.5f);
+            beamMaterial.SetFloat("_CoreWidth", 0.35f);
+            beamMaterial.SetFloat("_NoiseStrength", 0.2f);
+            targetLaser.material = beamMaterial;
+        }
+    }
+
+    private void ApplyCurrentLaserState()
+    {
+        EnsureTargetLaser();
+        targetLaser.SetPositions(new[] { laserStartPos.Value, laserEndPos.Value });
+        targetLaser.startWidth = targetLaser.endWidth = laserWidth.Value;
+        targetLaser.startColor = targetLaser.endColor = laserColor.Value;
+        targetLaser.enabled = isLaserEnabled.Value;
+    }
+
+    private void SetAllowShooting(bool toggle)
+    {
+        allowShooting = toggle;
+    }
+
+    private void SetStillShooting(bool toggle)
+    {
+        stillShooting = toggle;
     }
 
     private void OnLaserEnabledChanged(bool previousValue, bool newValue)
     {
+        EnsureTargetLaser();
         targetLaser.enabled = newValue;
     }
 
     private void OnLaserPositionChanged(Vector3 previousValue, Vector3 newValue)
     {
-        targetLaser.SetPositions(new Vector3[] { laserStartPos.Value, laserEndPos.Value });
+        EnsureTargetLaser();
+        targetLaser.SetPositions(new[] { laserStartPos.Value, laserEndPos.Value });
     }
 
     private void OnLaserWidthChanged(float previousValue, float newValue)
     {
+        EnsureTargetLaser();
         targetLaser.startWidth = targetLaser.endWidth = newValue;
     }
 
     private void OnLaserColorChanged(Color previousValue, Color newValue)
     {
+        EnsureTargetLaser();
         targetLaser.startColor = targetLaser.endColor = newValue;
+    }
+
+    /// <summary>
+    /// A target-lock laser must be dodgeable/readable: reveal this shooter to the victim's
+    /// client for the lock duration (plus a short grace) so the beam replicates and renders.
+    /// </summary>
+    private void ForceRevealForTargetLock(GameObject target)
+    {
+        if (!IsServer || target == null || unitData.targetLockDuration <= 0f)
+            return;
+
+        Unit targetIdentity = target.GetComponent<Unit>();
+        if (targetIdentity == null || GameLoop.Instance == null)
+            return;
+
+        GameLoop.Instance.ForceRevealToTeam(
+            gameObject,
+            targetIdentity.TeamIndex,
+            unitData.targetLockDuration + 0.5f
+        );
     }
 
     public void PauseShooting()
@@ -154,7 +226,10 @@ public class Shooting : NetworkBehaviour
         {
             GameObject target = FindNearestEnemy();
             if (target)
+            {
                 yield return StartCoroutine(RotateToFaceTarget(target));
+                ForceRevealForTargetLock(target);
+            }
 
             remainingTargetLockTime = unitData.targetLockDuration;
 
@@ -169,6 +244,7 @@ public class Shooting : NetworkBehaviour
                     {
                         remainingTargetLockTime = unitData.targetLockDuration;
                         yield return StartCoroutine(RotateToFaceTarget(target));
+                        ForceRevealForTargetLock(target);
                     }
                     if (!allowShooting)
                         break;
@@ -245,9 +321,7 @@ public class Shooting : NetworkBehaviour
             backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
         range = range == -1 ? unitData.bulletRange : range;
         backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
-        bulletPrefab =
-            bulletPrefab
-            ?? (transform.tag == "BlueTeam" ? unitData.blueBulletPrefab : unitData.redBulletPrefab);
+        bulletPrefab = bulletPrefab ?? ResolveBulletPrefab();
 
         // Fire bullet with spread
         Vector3 baseDirection = transform.forward;
@@ -279,6 +353,26 @@ public class Shooting : NetworkBehaviour
         }
     }
 
+    private GameObject ResolveBulletPrefab()
+    {
+        return GetComponent<Unit>()?.TeamIndex == GameLoop.HostTeamIndex
+            ? unitData.blueBulletPrefab
+            : unitData.redBulletPrefab;
+    }
+
+    public static float GetProjectileCollisionRadius(GameObject bulletPrefab)
+    {
+        SphereCollider collider = bulletPrefab?.GetComponentInChildren<SphereCollider>(
+            includeInactive: true
+        );
+        if (collider == null)
+            return 0f;
+
+        Vector3 scale = collider.transform.lossyScale;
+        return collider.radius
+            * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+    }
+
     private int GetActiveBulletCount()
     {
         bullets.RemoveAll(bullet => bullet == null);
@@ -291,6 +385,18 @@ public class Shooting : NetworkBehaviour
         currentAmmo = unitData.magazineSize;
     }
 
+    private string ResolveEnemyTeam()
+    {
+        // The team tag is assigned by GameLoop right after spawn, which is later than
+        // OnNetworkSpawn — so resolve on first use instead of at spawn.
+        if (string.IsNullOrEmpty(enemyTeam))
+        {
+            int ownTeamIndex = GetComponent<Unit>()?.TeamIndex ?? -1;
+            enemyTeam = GameLoop.GetTeamName(GameLoop.GetEnemyTeamIndex(ownTeamIndex));
+        }
+        return enemyTeam;
+    }
+
     GameObject FindNearestEnemy()
     {
         GameObject nearestEnemy = null;
@@ -298,6 +404,9 @@ public class Shooting : NetworkBehaviour
 
         if (IsServer)
         {
+            if (string.IsNullOrEmpty(ResolveEnemyTeam()))
+                return null;
+
             // Server: use tags or any authoritative lookup
             GameObject[] enemies = GameObject.FindGameObjectsWithTag(enemyTeam);
             foreach (GameObject enemy in enemies)
@@ -317,15 +426,21 @@ public class Shooting : NetworkBehaviour
         {
             return null;
         }
-        ulong localClientId = NetworkManager.Singleton.LocalClientId;
+        int ownTeamIndex = GetComponent<Unit>()?.TeamIndex ?? -1;
         foreach (var netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
         {
             if (netObj == null)
                 continue;
-            if (netObj.OwnerClientId == localClientId)
+            Unit candidateIdentity = netObj.GetComponent<Unit>();
+            if (
+                candidateIdentity == null
+                || candidateIdentity.TeamIndex < 0
+                || candidateIdentity.TeamIndex == ownTeamIndex
+                || netObj.GetComponent<Health>() == null
+            )
+            {
                 continue;
-            if (netObj.GetComponent<Health>() == null)
-                continue;
+            }
 
             GameObject enemy = netObj.gameObject;
             float distance = Vector3.Distance(transform.position, enemy.transform.position);
@@ -340,22 +455,64 @@ public class Shooting : NetworkBehaviour
 
     bool lineOfSight(GameObject enemy)
     {
-        // Check for clear line of sight within range
-        Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
+        Unit identity = GetComponent<Unit>();
         if (
-            Physics.Raycast(
+            GameLoop.Instance != null
+            && identity != null
+            && !GameLoop.Instance.CanTeamObserveUnit(identity.TeamIndex, enemy)
+        )
+        {
+            return false;
+        }
+
+        if (
+            GameLoop.Instance != null
+            && GameLoop.Instance.DoesWorldSegmentCrossActiveSmoke(
                 transform.position,
-                directionToEnemy,
-                out RaycastHit hit,
-                unitData.targetRange * GameLoop.cellSize,
-                LayerMask.GetMask("Walls", enemyTeam)
+                enemy.transform.position
             )
         )
         {
-            if (hit.collider.gameObject == enemy)
-            {
-                return true;
-            }
+            return false;
+        }
+
+        // Check for clear line of sight within range
+        Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
+        float projectileRadius = GetProjectileCollisionRadius(ResolveBulletPrefab());
+        RaycastHit hit;
+        bool hitSomething;
+        if (projectileRadius > 0f)
+        {
+            hitSomething = Physics.SphereCast(
+                transform.position,
+                projectileRadius,
+                directionToEnemy,
+                out hit,
+                unitData.targetRange * GameLoop.cellSize,
+                LayerMask.GetMask("Walls", enemyTeam),
+                QueryTriggerInteraction.Ignore
+            );
+        }
+        else
+        {
+            hitSomething = Physics.Raycast(
+                transform.position,
+                directionToEnemy,
+                out hit,
+                unitData.targetRange * GameLoop.cellSize,
+                LayerMask.GetMask("Walls", enemyTeam),
+                QueryTriggerInteraction.Ignore
+            );
+        }
+        if (
+            hitSomething
+            && (
+                hit.collider.gameObject == enemy
+                || hit.collider.transform.IsChildOf(enemy.transform)
+            )
+        )
+        {
+            return true;
         }
         return false;
     }

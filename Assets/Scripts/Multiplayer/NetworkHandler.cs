@@ -1,52 +1,177 @@
-using System.Collections;
-using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class NetworkHandler : NetworkBehaviour
 {
-    public static System.Action StartGame;
+    private const string JoinSceneName = "JoinGame";
+    private static NetworkManager approvalManager;
+    private static bool acceptingConnections = true;
+
+    private readonly NetworkVariable<MatchOptions> replicatedOptions = new(MatchOptions.Default);
+    private bool sceneLoadRequested;
+
+    public MatchOptions Options => replicatedOptions.Value.Sanitized();
+
+    private void Awake()
+    {
+        InstallConnectionApproval();
+    }
 
     public override void OnNetworkSpawn()
     {
+        base.OnNetworkSpawn();
+        InstallConnectionApproval();
+        replicatedOptions.OnValueChanged += OnOptionsChanged;
+
         if (!IsServer)
         {
-            enabled = false;
+            MatchOptions.SetCurrent(replicatedOptions.Value);
             return;
         }
-        base.OnNetworkSpawn();
+
+        replicatedOptions.Value = MatchOptions.Current.Sanitized();
+        MatchOptions.SetCurrent(replicatedOptions.Value);
+        acceptingConnections = true;
         NetworkManager.OnClientConnectedCallback += OnClientConnected;
+        TryAdvance();
     }
 
     public override void OnNetworkDespawn()
     {
+        replicatedOptions.OnValueChanged -= OnOptionsChanged;
+        if (NetworkManager != null)
+            NetworkManager.OnClientConnectedCallback -= OnClientConnected;
         base.OnNetworkDespawn();
-        NetworkManager.OnClientConnectedCallback -= OnClientConnected;
     }
 
-    void OnClientConnected(ulong clientId)
+    private void OnOptionsChanged(MatchOptions previousValue, MatchOptions newValue)
     {
-        if (NetworkManager.Singleton.ConnectedClients.Count == 2)
-        {
-            if (GameLoop.TESTING)
-            {
-                List<int[]> unitAssignments = new()
-                {
-                    new int[] { 0, 1, 2 },
-                    new int[] { 2, 3, 4 },
-                };
+        MatchOptions.SetCurrent(newValue);
+    }
 
-                int index = 0;
-                foreach (ulong id in NetworkManager.Singleton.ConnectedClients.Keys)
-                {
-                    GameLoop.allTeamUnits[id] = unitAssignments[index];
-                    index++;
-                }
-                NetworkManager.Singleton.SceneManager.LoadScene("Game", LoadSceneMode.Single);
-                return;
-            }
-            NetworkManager.Singleton.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
+    private void OnClientConnected(ulong clientId)
+    {
+        TryAdvance();
+    }
+
+    private static void InstallConnectionApproval()
+    {
+        NetworkManager manager =
+            NetworkManager.Singleton
+            ?? Object.FindFirstObjectByType<NetworkManager>(FindObjectsInactive.Include);
+        if (manager == null)
+        {
+            Debug.LogError("[NetworkHandler] NetworkManager is required for connection approval.");
+            return;
         }
+
+        if (approvalManager != manager || !manager.IsListening)
+            acceptingConnections = true;
+        approvalManager = manager;
+        manager.NetworkConfig.ConnectionApproval = true;
+        manager.ConnectionApprovalCallback = ApproveConnection;
+    }
+
+    private static void ApproveConnection(
+        NetworkManager.ConnectionApprovalRequest request,
+        NetworkManager.ConnectionApprovalResponse response
+    )
+    {
+        NetworkManager manager = approvalManager;
+        bool isServerClient = request.ClientNetworkId == NetworkManager.ServerClientId;
+        MatchOptions options = MatchOptions.Current.Sanitized();
+        int clientLimit = RequiredClientCount(options);
+        int admittedOrPending =
+            manager == null
+                ? int.MaxValue
+                : manager
+                    .ConnectedClientsIds.Concat(manager.PendingClients.Keys)
+                    .Append(request.ClientNetworkId)
+                    .Distinct()
+                    .Count();
+        bool inJoinScene = SceneManager.GetActiveScene().name == JoinSceneName;
+        bool approved = CanApproveConnection(
+            isServerClient,
+            acceptingConnections,
+            inJoinScene,
+            admittedOrPending,
+            clientLimit
+        );
+
+        response.Approved = approved;
+        response.CreatePlayerObject = false;
+        response.Pending = false;
+        response.Reason = approved ? string.Empty : "This match is full or has already started.";
+    }
+
+    public static int RequiredClientCount(MatchOptions options)
+    {
+        return options.Sanitized().IsBotMatch ? 1 : 2;
+    }
+
+    public static bool CanApproveConnection(
+        bool isServerClient,
+        bool gateOpen,
+        bool inJoinScene,
+        int admittedOrPending,
+        int clientLimit
+    )
+    {
+        if (isServerClient)
+            return true;
+
+        return gateOpen && inJoinScene && clientLimit > 0 && admittedOrPending <= clientLimit;
+    }
+
+    private void TryAdvance()
+    {
+        if (!IsServer || sceneLoadRequested || NetworkManager == null)
+            return;
+
+        MatchOptions options = replicatedOptions.Value.Sanitized();
+        int requiredClients = RequiredClientCount(options);
+        if (NetworkManager.ConnectedClients.Count < requiredClients)
+            return;
+
+        acceptingConnections = false;
+        if (GameLoop.devMode)
+        {
+            GameLoop.ResetMatchState();
+            GameLoop.ConfigureTeam(
+                GameLoop.HostTeamIndex,
+                NetworkManager.ServerClientId,
+                options.IsBotMatch ? GameLoop.DevBotHostRoster : GameLoop.DevHostRoster
+            );
+
+            if (options.IsBotMatch)
+            {
+                GameLoop.ConfigureTeam(
+                    GameLoop.OpponentTeamIndex,
+                    GameLoop.BotParticipantId,
+                    GameLoop.DefaultBotRoster
+                );
+            }
+            else
+            {
+                ulong opponentClientId = NetworkManager
+                    .ConnectedClientsIds.Where(id => id != NetworkManager.ServerClientId)
+                    .OrderBy(id => id)
+                    .First();
+                GameLoop.ConfigureTeam(
+                    GameLoop.OpponentTeamIndex,
+                    opponentClientId,
+                    GameLoop.DevOpponentRoster
+                );
+            }
+
+            sceneLoadRequested = true;
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
+        sceneLoadRequested = true;
+        NetworkManager.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
     }
 }

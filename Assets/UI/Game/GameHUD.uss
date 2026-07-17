@@ -1,0 +1,989 @@
+.game-screen {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.hud-flash {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0;
+    background-color: rgba(255, 255, 255, 0.15);
+    transition-duration: 0.14s;
+    transition-property: opacity;
+}
+
+.hud-flash--active {
+    opacity: 1;
+}
+
+.phase-cluster {
+    position: absolute;
+    top: 28px;
+    left: 35%;
+    right: 35%;
+    min-height: 66px;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 28px;
+    background-color: rgba(7, 12, 19, 0.94);
+    border-bottom-width: 2px;
+    border-bottom-color: rgb(226, 157, 46);
+    border-radius: 2px;
+}
+
+.phase-cluster__mark {
+    position: absolute;
+    top: 9px;
+    left: 10px;
+    width: 7px;
+    height: 7px;
+    background-color: rgb(226, 157, 46);
+}
+
+.phase-label {
+    font-size: 20px;
+    -unity-font-style: bold;
+    color: rgb(239, 243, 246);
+    letter-spacing: 1px;
+    -unity-text-align: middle-center;
+}
+
+.phase-label--friendly {
+    color: rgb(238, 180, 80);
+}
+
+.phase-label--enemy {
+    color: rgb(255, 108, 103);
+}
+
+.phase-label--neutral {
+    color: rgb(229, 235, 240);
+}
+
+.timer-label {
+    min-height: 20px;
+    font-size: 16px;
+    color: rgb(235, 178, 76);
+}
+
+.timer-label--urgent {
+    color: rgb(255, 113, 104);
+}
+
+.match-readout {
+    position: absolute;
+    top: 30px;
+    right: 34px;
+    align-items: flex-end;
+}
+
+.match-readout__key {
+    margin-bottom: 5px;
+    font-size: 11px;
+    color: rgb(100, 119, 136);
+    letter-spacing: 1px;
+}
+
+.match-readout__primary {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(210, 220, 228);
+    letter-spacing: 1px;
+}
+
+.match-readout__secondary {
+    margin-top: 4px;
+    font-size: 11px;
+    color: rgb(112, 187, 236);
+    letter-spacing: 1px;
+}
+
+.match-readout__objective {
+    margin-top: 6px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(226, 157, 46);
+    letter-spacing: 1px;
+}
+
+.hill-status--blue {
+    color: rgb(100, 193, 249);
+}
+
+.hill-status--red {
+    color: rgb(255, 108, 103);
+}
+
+.hill-status--contested {
+    color: rgb(235, 178, 76);
+}
+
+.hud-dock {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 8px;
+    min-height: 0;
+    padding: 8px 16px;
+    background-color: rgba(7, 12, 19, 0.94);
+    border-width: 1px;
+    border-color: rgb(48, 65, 80);
+    border-radius: 3px;
+}
+
+.hud-dock__header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.planning-copy {
+    flex-grow: 1;
+    min-width: 0;
+    padding-right: 16px;
+}
+
+.planning-message-slot {
+    position: relative;
+    height: 24px;
+    min-height: 24px;
+}
+
+.planning-help {
+    font-size: 11px;
+    color: rgb(157, 172, 185);
+    white-space: normal;
+}
+
+.target-feedback {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    min-height: 24px;
+    padding: 3px 8px;
+    background-color: rgb(13, 21, 29);
+    color: rgb(225, 231, 235);
+    border-left-width: 3px;
+    border-left-color: rgb(123, 141, 156);
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    white-space: normal;
+}
+
+.target-feedback--visible {
+    opacity: 1;
+}
+
+.target-feedback--error {
+    background-color: rgb(42, 20, 23);
+    color: rgb(255, 211, 207);
+    border-left-color: rgb(255, 126, 118);
+}
+
+.target-feedback--success {
+    background-color: rgb(41, 32, 17);
+    color: rgb(255, 231, 188);
+    border-left-color: rgb(235, 174, 69);
+}
+
+.hud-header-actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.hud-key {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 12px;
+}
+
+.hud-key__swatch {
+    width: 9px;
+    height: 9px;
+    margin-right: 7px;
+}
+
+.hud-key__swatch--amber {
+    background-color: rgb(229, 158, 45);
+}
+
+.hud-key__label {
+    font-size: 11px;
+    color: rgb(147, 162, 175);
+    letter-spacing: 1px;
+}
+
+.hud-controls-button {
+    min-height: 32px;
+    padding: 6px 11px;
+    font-size: 11px;
+}
+
+.enemy-status-strip {
+    margin-top: 6px;
+}
+
+.enemy-status-strip__header {
+    min-height: 15px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.enemy-status-strip__label,
+.enemy-status-strip__summary {
+    font-size: 10px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.enemy-status-strip__label {
+    color: rgb(255, 139, 132);
+}
+
+.enemy-status-strip__summary {
+    color: rgb(146, 162, 176);
+}
+
+.enemy-unit-cards {
+    flex-grow: 0;
+    height: 78px;
+    margin-top: 3px;
+}
+
+.enemy-unit-cards .unity-scroll-view__content-container {
+    flex-grow: 1;
+    flex-direction: row;
+}
+
+.unit-cards {
+    flex-grow: 0;
+    height: 104px;
+    margin-top: 8px;
+}
+
+.unit-cards .unity-scroll-view__content-container {
+    flex-grow: 1;
+    flex-direction: row;
+}
+
+.unit-card-host {
+    flex-grow: 1;
+    flex-shrink: 0;
+    width: 0;
+    min-width: 248px;
+    max-width: 360px;
+    min-height: 96px;
+    margin-right: 8px;
+}
+
+.unit-card-host--last {
+    margin-right: 0;
+}
+
+.enemy-unit-card-host {
+    flex-grow: 1;
+    flex-shrink: 0;
+    width: 0;
+    min-width: 220px;
+    max-width: 320px;
+    min-height: 72px;
+    margin-right: 6px;
+}
+
+.enemy-unit-card-host--last {
+    margin-right: 0;
+}
+
+.unit-card {
+    position: relative;
+    flex-grow: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 96px;
+    flex-direction: row;
+    overflow: hidden;
+    background-color: rgb(13, 22, 31);
+    border-width: 1px;
+    border-color: rgb(48, 65, 80);
+    border-radius: 2px;
+}
+
+.unit-card__state-mark {
+    display: none;
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    width: 7px;
+    height: 7px;
+    background-color: rgb(232, 167, 58);
+}
+
+.unit-card--selected {
+    background-color: rgb(25, 37, 47);
+    border-color: rgb(231, 167, 58);
+}
+
+.unit-card--selected .unit-card__state-mark {
+    display: flex;
+}
+
+.unit-card--disabled {
+    opacity: 0.55;
+    border-color: rgb(92, 56, 60);
+}
+
+.unit-card__select {
+    flex-grow: 1;
+    width: auto;
+    min-width: 160px;
+    padding: 0;
+    flex-direction: row;
+    align-items: stretch;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: 0;
+}
+
+.unit-card__select:hover {
+    background-color: rgb(23, 36, 48);
+}
+
+.unit-card__select:focus {
+    background-color: rgb(27, 41, 54);
+    border-color: rgb(237, 174, 65);
+}
+
+.unit-card__portrait {
+    width: 80px;
+    min-width: 80px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-color: rgb(7, 13, 20);
+}
+
+.unit-card__copy {
+    flex-grow: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 8px;
+}
+
+.unit-card__name {
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(239, 243, 246);
+    white-space: normal;
+}
+
+.unit-card__health {
+    min-height: 13px;
+    margin-top: 3px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.unit-card__health-track {
+    flex-grow: 1;
+    height: 5px;
+    margin-right: 7px;
+    overflow: hidden;
+    background-color: rgb(48, 31, 36);
+    border-radius: 1px;
+}
+
+.unit-card__health-fill {
+    width: 0%;
+    height: 100%;
+    background-color: rgb(226, 82, 82);
+}
+
+.unit-card__health-value {
+    min-width: 68px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(229, 235, 240);
+    -unity-text-align: middle-right;
+}
+
+.unit-card__ability {
+    margin-top: 4px;
+    font-size: 11px;
+    color: rgb(159, 174, 187);
+    white-space: normal;
+}
+
+.unit-card__state {
+    min-height: 0;
+    margin-top: 4px;
+    font-size: 11px;
+    color: rgb(255, 126, 118);
+    letter-spacing: 1px;
+}
+
+.unit-card__modes {
+    flex-grow: 0;
+    width: 96px;
+    min-width: 96px;
+    border-left-width: 1px;
+    border-left-color: rgb(45, 61, 75);
+}
+
+.unit-card__mode {
+    flex-grow: 1;
+    min-height: 48px;
+    padding: 4px 6px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(10, 17, 25);
+    color: rgb(157, 171, 183);
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: 0;
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.unit-card__mode:hover {
+    background-color: rgb(22, 34, 46);
+    color: rgb(231, 236, 240);
+}
+
+.unit-card__mode:focus {
+    border-width: 2px;
+    border-color: rgb(237, 174, 65);
+}
+
+.unit-card__mode:disabled {
+    opacity: 1;
+    background-color: rgb(8, 14, 21);
+    color: rgb(111, 125, 137);
+}
+
+.unit-card__mode-label {
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(214, 221, 227);
+    -unity-text-align: middle-center;
+}
+
+.unit-card__mode-charge {
+    margin-top: 2px;
+    font-size: 9px;
+    color: rgb(171, 185, 196);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.unit-card__mode:disabled .unit-card__mode-label {
+    color: rgb(124, 137, 148);
+}
+
+.unit-card__mode:disabled .unit-card__mode-charge {
+    color: rgb(153, 163, 172);
+}
+
+.unit-card__mode--move {
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(45, 61, 75);
+}
+
+.unit-card__mode--chosen {
+    background-color: rgb(24, 34, 44);
+    color: rgb(232, 234, 231);
+}
+
+.unit-card__mode--armed {
+    background-color: rgb(84, 61, 21);
+    color: rgb(255, 229, 177);
+}
+
+.unit-card__mode--armed .unit-card__mode-label,
+.unit-card__mode--armed .unit-card__mode-charge {
+    color: rgb(255, 229, 177);
+}
+
+.unit-card--enemy {
+    min-height: 72px;
+    background-color: rgb(24, 16, 22);
+    border-color: rgb(107, 55, 62);
+}
+
+.unit-card--enemy-active {
+    border-color: rgb(168, 70, 75);
+}
+
+.unit-card--enemy-eliminated {
+    background-color: rgb(16, 15, 19);
+    border-color: rgb(74, 62, 68);
+}
+
+.unit-card--enemy .unit-card__select {
+    min-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    opacity: 1;
+}
+
+.unit-card--enemy .unit-card__select:disabled {
+    background-color: rgba(0, 0, 0, 0);
+    opacity: 1;
+}
+
+.unit-card--enemy .unit-card__portrait {
+    width: 52px;
+    min-width: 52px;
+    background-color: rgb(12, 10, 14);
+}
+
+.unit-card--enemy .unit-card__copy {
+    position: relative;
+    justify-content: center;
+    padding: 5px 7px;
+}
+
+.unit-card--enemy .unit-card__name {
+    padding-right: 82px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.unit-card--enemy .unit-card__ability {
+    margin-top: 2px;
+    font-size: 10px;
+    white-space: normal;
+}
+
+.unit-card--enemy .unit-card__state {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-height: 13px;
+    margin-top: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(255, 139, 132);
+    letter-spacing: 0;
+}
+
+.unit-card--enemy-eliminated .unit-card__name,
+.unit-card--enemy-eliminated .unit-card__ability,
+.unit-card--enemy-eliminated .unit-card__health-value {
+    color: rgb(136, 144, 151);
+}
+
+.unit-card--enemy-eliminated .unit-card__health-fill {
+    background-color: rgb(91, 66, 70);
+}
+
+.unit-card--enemy-eliminated .unit-card__state {
+    color: rgb(196, 139, 139);
+}
+
+.unit-card--enemy .unit-card__modes {
+    display: none;
+}
+
+.deployment-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background-color: rgb(5, 9, 15);
+}
+
+.deployment-overlay__content {
+    width: 620px;
+    max-width: 92%;
+    align-items: center;
+}
+
+.deployment-overlay__mark {
+    width: 78px;
+    height: 3px;
+    margin-bottom: 18px;
+    background-color: rgb(229, 160, 55);
+}
+
+.deployment-overlay__title {
+    font-size: 30px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(242, 245, 247);
+}
+
+.deployment-overlay__status {
+    margin-top: 12px;
+    font-size: 14px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    color: rgb(157, 172, 185);
+}
+
+.results-overlay {
+    background-color: rgba(2, 5, 9, 0.82);
+}
+
+.controls-overlay {
+    background-color: rgba(2, 5, 9, 0.88);
+}
+
+.results-panel {
+    width: 620px;
+    align-items: stretch;
+}
+
+.results-mark {
+    width: 92px;
+    height: 3px;
+    margin-top: 8px;
+    margin-bottom: 14px;
+    background-color: rgb(229, 160, 55);
+}
+
+.results-status {
+    margin-bottom: 8px;
+    font-size: 38px;
+    -unity-font-style: bold;
+    color: rgb(242, 245, 247);
+    white-space: normal;
+}
+
+.results-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.results-button {
+    min-width: 170px;
+    margin-left: 10px;
+}
+
+.compact .hud-dock {
+    left: 16px;
+    right: 16px;
+    bottom: 8px;
+}
+
+.compact .unit-card-host {
+    width: 0;
+    min-width: 176px;
+    max-width: 280px;
+}
+
+.compact .enemy-unit-card-host {
+    min-width: 210px;
+    max-width: 280px;
+}
+
+.compact .unit-card__select {
+    flex-grow: 1;
+    width: auto;
+    min-width: 118px;
+}
+
+.compact .unit-card__portrait {
+    width: 48px;
+    min-width: 48px;
+}
+
+.compact .unit-card__copy {
+    padding: 6px;
+}
+
+.compact .unit-card__name {
+    font-size: 12px;
+}
+
+.compact .unit-card__ability {
+    font-size: 10px;
+}
+
+.compact .unit-card__state {
+    font-size: 9px;
+}
+
+.compact .unit-card--enemy .unit-card__name {
+    padding-right: 76px;
+}
+
+.compact .unit-card--enemy .unit-card__state,
+.compact .unit-card--enemy .unit-card__health-value {
+    font-size: 10px;
+}
+
+.compact .unit-card__modes {
+    width: 58px;
+    min-width: 58px;
+}
+
+.compact .unit-card__mode,
+.compact .unit-card__mode-label {
+    font-size: 11px;
+}
+
+.compact .unit-card__mode {
+    padding: 4px;
+}
+
+.compact .unit-card__mode-charge {
+    font-size: 8px;
+}
+
+.compact .hud-dock__header .section-label,
+.compact .planning-help,
+.compact .hud-key {
+    display: none;
+}
+
+.compact .phase-cluster {
+    left: 30%;
+    right: 30%;
+}
+
+.narrow .hud-dock {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+}
+
+.narrow .unit-card-host {
+    width: 190px;
+    min-width: 190px;
+}
+
+.narrow .enemy-unit-card-host {
+    width: 210px;
+    min-width: 210px;
+}
+
+.narrow .unit-card__portrait {
+    display: none;
+}
+
+.narrow .unit-card__select {
+    min-width: 100px;
+}
+
+.narrow .phase-cluster {
+    left: 24%;
+    right: 24%;
+}
+
+.phone .hud-dock {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.phone .unit-cards {
+    flex-grow: 1;
+    height: auto;
+}
+
+.phone .hud-key {
+    display: none;
+}
+
+.phone .planning-copy {
+    padding-right: 8px;
+}
+
+.phone .hud-controls-button {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.phone .unit-card-host {
+    width: 158px;
+    min-width: 158px;
+    margin-right: 6px;
+}
+
+.phone .unit-card-host--last {
+    margin-right: 0;
+}
+
+.phone .unit-card {
+    min-height: 136px;
+    flex-direction: column;
+}
+
+.phone .unit-card__select {
+    width: 100%;
+    min-width: 0;
+    min-height: 70px;
+}
+
+.phone .unit-card__copy {
+    padding: 8px;
+}
+
+.phone .unit-card__name {
+    font-size: 12px;
+}
+
+.phone .unit-card__ability {
+    font-size: 11px;
+}
+
+.phone .unit-card__modes {
+    min-width: 0;
+    min-height: 40px;
+    flex-direction: row;
+    border-left-width: 0;
+    border-top-width: 1px;
+    border-top-color: rgb(45, 61, 75);
+}
+
+.phone .unit-card__mode {
+    min-height: 40px;
+    padding-left: 4px;
+    padding-right: 4px;
+    font-size: 14px;
+}
+
+.phone .unit-card__mode-label {
+    font-size: 11px;
+}
+
+.phone .unit-card__mode-charge {
+    margin-top: 2px;
+    font-size: 8px;
+}
+
+.phone .unit-card__mode--move {
+    border-bottom-width: 0;
+    border-right-width: 1px;
+    border-right-color: rgb(45, 61, 75);
+}
+
+.phone .enemy-unit-cards {
+    flex-grow: 0;
+    height: 78px;
+}
+
+.phone .enemy-unit-card-host {
+    width: 210px;
+    min-width: 210px;
+}
+
+.phone .unit-card--enemy {
+    min-height: 72px;
+    flex-direction: row;
+}
+
+.phone .unit-card--enemy .unit-card__select {
+    width: 100%;
+    min-height: 0;
+}
+
+.phone .unit-card--enemy .unit-card__copy {
+    padding: 5px 7px;
+}
+
+.phone .unit-card--enemy .unit-card__name {
+    padding-right: 76px;
+    font-size: 12px;
+}
+
+.phone .unit-card--enemy .unit-card__ability,
+.phone .unit-card--enemy .unit-card__state,
+.phone .unit-card--enemy .unit-card__health-value {
+    font-size: 10px;
+}
+
+.phone .unit-card--enemy .unit-card__modes {
+    display: none;
+}
+
+.phone .phase-cluster {
+    left: 18%;
+    right: 18%;
+}
+
+.phone .match-readout {
+    display: none;
+}
+
+.phone .deployment-overlay {
+    padding: 18px;
+}
+
+.phone .deployment-overlay__title {
+    font-size: 24px;
+}
+
+.phone .results-actions {
+    flex-direction: column;
+}
+
+.phone .results-button {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 7px;
+}
+
+.short .hud-dock {
+    min-height: 0;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.short .hud-dock__header {
+    min-height: 24px;
+    align-items: center;
+}
+
+.short .hud-dock__header .section-label,
+.short .planning-help,
+.short .hud-key {
+    display: none;
+}
+
+.short .planning-message-slot {
+    height: 24px;
+    min-height: 24px;
+}
+
+.short .target-feedback {
+    min-height: 22px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.short .hud-controls-button {
+    min-height: 26px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.short .unit-cards {
+    margin-top: 0;
+}
+
+.short .unit-card-host,
+.short .unit-card {
+    min-height: 88px;
+}
+
+.short .enemy-unit-card-host,
+.short .unit-card--enemy {
+    min-height: 72px;
+}
+
+.short .phase-cluster {
+    top: 16px;
+    min-height: 54px;
+}
+
+.short .phase-label {
+    font-size: 17px;
+}
