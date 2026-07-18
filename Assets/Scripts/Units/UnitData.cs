@@ -84,6 +84,10 @@ public class UnitData : ScriptableObject
     [Tooltip("Rotation speed in degrees per second")]
     public float aimRotationSpeed = 270f;
 
+    [Header("=== VISION PARAMETERS ===")]
+    [Tooltip("Manhattan vision range in cells; must be at least targetRange")]
+    public int visionRange = 5;
+
     [Header("=== HEALTH PARAMETERS ===")]
     [Tooltip("Maximum health points for this unit")]
     public float maxHealth = 100f;

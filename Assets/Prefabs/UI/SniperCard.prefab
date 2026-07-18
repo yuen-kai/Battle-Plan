@@ -10,7 +10,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -375620079018468532, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 532551297
+      value: 784019860
       objectReference: {fileID: 0}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: unitData
@@ -115,18 +115,6 @@ PrefabInstance:
     - target: {fileID: 3689484883408530691, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: m_PreserveAspect
       value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_SizeDelta.x
-      value: 167.4
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_AnchoredPosition.x
-      value: 40.19
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_AnchoredPosition.y
-      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 6877355979647964550, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: m_Name

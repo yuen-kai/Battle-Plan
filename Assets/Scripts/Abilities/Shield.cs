@@ -1,29 +1,56 @@
 using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 public class Shield : Ability
 {
-    float abilityTime = 3;
+    private float abilityTime = 3f;
+    private Transform shieldTransform;
+
+    // NetworkVariable (not ClientRpc) so shield state survives fog NetworkHide/NetworkShow:
+    // a unit revealed mid-shield renders the correct state from the resynced value.
+    private NetworkVariable<bool> shieldActive = new(false);
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        shieldTransform = transform.Find("Shield");
+        shieldActive.OnValueChanged += OnShieldActiveChanged;
+        ApplyShieldState(shieldActive.Value);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        shieldActive.OnValueChanged -= OnShieldActiveChanged;
+        base.OnNetworkDespawn();
+    }
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
-        GameObject shield = transform.Find("Shield").gameObject;
-        shield?.SetActive(true);
-        ToggleShieldClientRpc(true);
+        shieldActive.Value = true;
         yield return new WaitForSeconds(abilityTime);
-        shield?.SetActive(false);
-        ToggleShieldClientRpc(false);
+        shieldActive.Value = false;
     }
 
-    [ClientRpc]
-    private void ToggleShieldClientRpc(bool enabled)
+    private void OnShieldActiveChanged(bool previousValue, bool newValue)
     {
-        var shield = transform.Find("Shield");
-        if (shield != null)
+        ApplyShieldState(newValue);
+    }
+
+    private void ApplyShieldState(bool active)
+    {
+        if (shieldTransform == null)
+            shieldTransform = transform.Find("Shield");
+        if (shieldTransform != null)
+            shieldTransform.gameObject.SetActive(active);
+
+        // Materialization ring on every peer (NetworkVariable callback runs everywhere).
+        if (active && gameObject.activeInHierarchy)
         {
-            shield.gameObject.SetActive(enabled);
+            Color teamColor = gameObject.CompareTag("BlueTeam")
+                ? new Color(0.22f, 0.78f, 1f)
+                : new Color(1f, 0.23f, 0.33f);
+            ImpactShockwave.Spawn(transform.position, teamColor, 1.6f, 0.35f);
         }
     }
 }

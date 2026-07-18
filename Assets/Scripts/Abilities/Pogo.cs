@@ -35,7 +35,20 @@ public partial class Pogo : Ability
         }
         transform.position = targetPosition;
 
+        // Landing slam on every peer + a light shake to sell the weight
+        LandingFxClientRpc(targetPosition);
+        CameraEffects.Instance?.CameraShakeClientRpc();
+
         transform.GetComponent<Collider>().enabled = true;
         transform.GetComponent<Movement>().transitionToShooting();
+    }
+
+    [ClientRpc]
+    private void LandingFxClientRpc(Vector3 landingPosition)
+    {
+        Color teamColor = gameObject.CompareTag("BlueTeam")
+            ? new Color(0.22f, 0.78f, 1f)
+            : new Color(1f, 0.23f, 0.33f);
+        ImpactShockwave.Spawn(landingPosition, teamColor, 1.8f, 0.4f);
     }
 }

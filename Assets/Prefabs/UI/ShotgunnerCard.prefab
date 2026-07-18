@@ -10,7 +10,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -375620079018468532, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2259230072
+      value: 3269167905
       objectReference: {fileID: 0}
     - target: {fileID: 347597076770873492, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: unitData
@@ -102,26 +102,6 @@ PrefabInstance:
       objectReference: {fileID: 21300000, guid: ffae25607ef7a47449b9a6f422400820, type: 3}
     - target: {fileID: 3689484883408530691, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
       propertyPath: m_PreserveAspect
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 2.58
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 0.3390423
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.7343372
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_AnchoredPosition.y
-      value: 2.56
-      objectReference: {fileID: 0}
-    - target: {fileID: 5375729631261781902, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}
-      propertyPath: m_ConstrainProportionsScale
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6877355979647964550, guid: b21b15e9cddeb9b469626e430f40914f, type: 3}

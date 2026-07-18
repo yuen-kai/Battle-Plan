@@ -16,8 +16,12 @@ public class UnitCardContainer : NetworkBehaviour
     {
         foreach (Transform child in transform)
         {
-            child.GetComponent<CardHandler>().setUnitCardInteractable(interactable);
+            child.GetComponent<CardHandler>()?.setUnitCardInteractable(interactable);
         }
+
+        Transform planningHint = transform.parent?.Find("PlanningModeHelp");
+        if (planningHint != null)
+            planningHint.gameObject.SetActive(interactable);
     }
 
     //Server

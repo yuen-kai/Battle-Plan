@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -7,15 +6,16 @@ public class AreaLock : Ability
 {
     float abilityTime = 3;
     float rotationSpeed = 720f; // Degrees per second
-    private LineRenderer laserLine;
-    private LineRenderer clientLaserLine;
     public GameObject superBulletBlue;
     public GameObject superBulletRed;
     float damageMultiplier = 2f;
     float delayForDodge = 0.5f;
 
-    float initialWidth = 0.2f;
-    float finalWidth = 0.5f;
+    // Threat-red laser regardless of team: it reads as "danger line" to both players.
+    static readonly Color LaserGlow = new(1f, 0.14f, 0.25f);
+
+    private BeamVFX serverBeam;
+    private BeamVFX clientBeam;
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
@@ -29,8 +29,11 @@ public class AreaLock : Ability
         Vector3 startPosition = transform.position =
             GridSystem.GetNearestGridCell(transform.position) + Helper.heightOffset(transform); //snap to nearest cell
         Vector3 targetPosition = abilitySquare + Helper.heightOffset(transform);
-        CreateLaserLine(startPosition, targetPosition);
-        ShowLaserClientRpc(startPosition, targetPosition);
+
+        Vector3 beamEnd = ComputeBeamEnd(startPosition, targetPosition);
+        serverBeam = BeamVFX.Create(transform, startPosition, beamEnd, LaserGlow);
+        serverBeam.Pulse();
+        ShowLaserClientRpc(startPosition, beamEnd);
 
         yield return StartCoroutine(
             transform.GetComponent<Movement>().RotateToFaceTarget(targetPosition, rotationSpeed)
@@ -48,12 +51,11 @@ public class AreaLock : Ability
         }
     }
 
-    private void CreateLaserLine(Vector3 start, Vector3 end)
+    /// <summary>Beam runs past the target square until it hits a wall (or 50 units).</summary>
+    private static Vector3 ComputeBeamEnd(Vector3 start, Vector3 end)
     {
         Vector3 direction = (end - start).normalized;
         Vector3 finalEnd = end + direction * 50f;
-
-        // Stop if there is a wall in the way
         if (
             Physics.Raycast(
                 start,
@@ -66,80 +68,28 @@ public class AreaLock : Ability
         {
             finalEnd = hit.point;
         }
-
-        GameObject laserObject = new("LaserLine");
-        laserLine = laserObject.AddComponent<LineRenderer>();
-        laserLine.material = new Material(Shader.Find("Sprites/Default"));
-        if (laserLine.material.shader == null)
-        {
-            Debug.LogWarning(
-                "[AreaLock] Could not find 'Sprites/Default' shader, falling back to default material"
-            );
-        }
-        laserLine.startColor = Color.red;
-        laserLine.endColor = Color.red;
-        laserLine.startWidth = 0.1f;
-        laserLine.endWidth = 0.1f;
-        laserLine.positionCount = 2;
-        laserLine.SetPosition(0, start);
-        laserLine.SetPosition(1, finalEnd);
-        laserObject.transform.parent = transform;
+        return finalEnd;
     }
 
     [ClientRpc]
     private void ShowLaserClientRpc(Vector3 start, Vector3 end)
     {
-        // Create a simple client-side line (no heavy animation)
-        Vector3 direction = (end - start).normalized;
-        Vector3 finalEnd = end + direction * 50f;
-        if (
-            Physics.Raycast(
-                start,
-                direction,
-                out RaycastHit hit,
-                Mathf.Infinity,
-                LayerMask.GetMask("Walls")
-            )
-        )
-        {
-            finalEnd = hit.point;
-        }
+        if (IsServer)
+            return; // host already renders the server beam
 
-        if (clientLaserLine != null)
-        {
-            Destroy(clientLaserLine.gameObject);
-            clientLaserLine = null;
-        }
-        GameObject laserObject = new("LaserLineClient");
-        clientLaserLine = laserObject.AddComponent<LineRenderer>();
-        clientLaserLine.material = new Material(Shader.Find("Sprites/Default"));
-        if (clientLaserLine.material.shader == null)
-        {
-            Debug.LogWarning(
-                "[AreaLock] Could not find 'Sprites/Default' shader for client laser, falling back to default material"
-            );
-        }
-        clientLaserLine.startColor = Color.red;
-        clientLaserLine.endColor = Color.red;
-        clientLaserLine.startWidth = 0.1f;
-        clientLaserLine.endWidth = 0.1f;
-        clientLaserLine.positionCount = 2;
-        clientLaserLine.SetPosition(0, start);
-        clientLaserLine.SetPosition(1, finalEnd);
-        laserObject.transform.parent = transform;
+        if (clientBeam != null)
+            Destroy(clientBeam.gameObject);
+        clientBeam = BeamVFX.Create(transform, start, end, LaserGlow);
+        clientBeam.Pulse();
     }
 
     [ClientRpc]
     private void HideLaserClientRpc()
     {
-        if (clientLaserLine != null)
+        if (clientBeam != null)
         {
-            Destroy(clientLaserLine.gameObject);
-            clientLaserLine = null;
-        }
-        else
-        {
-            Debug.LogWarning("[AreaLock] Client laser line was null");
+            StartCoroutine(clientBeam.FadeOut(0.2f));
+            clientBeam = null;
         }
     }
 
@@ -171,22 +121,19 @@ public class AreaLock : Ability
 
     private void FireSuperDamageBullet(GameObject target)
     {
-        // Create and fire a super damage bullet at the target
         Vector3 direction = (target.transform.position - transform.position).normalized;
-        float bulletSpeed = direction.magnitude * 40f; // Example speed, adjust as needed
-
-        //// Assuming there's a bullet prefab and shooting system
-        //if (transform.GetComponent<Shooting>() != null)
-        //{
-        //    transform.GetComponent<Shooting>().FireBullet(spread: 0, bulletSpeed: bulletSpeed, backstabMultiplier: 2f, range: 10f, backstabAngle: 0f, bulletPrefab: gameObject.tag == "BlueTeam" ? superBulletBlue : superBulletRed); //guaranteed 2x damage hit
-        //}
+        float bulletSpeed = direction.magnitude * 40f;
 
         StartCoroutine(AnimateLaserRush(bulletSpeed, target));
     }
 
     IEnumerator cleanup()
     {
-        Destroy(laserLine?.gameObject);
+        if (serverBeam != null)
+        {
+            StartCoroutine(serverBeam.FadeOut(0.2f));
+            serverBeam = null;
+        }
         HideLaserClientRpc();
         transform.GetComponent<Shooting>().stillShooting = false;
         yield return new WaitForSeconds(1f); //moment to regain composure
@@ -198,314 +145,47 @@ public class AreaLock : Ability
 
     private IEnumerator AnimateLaserRush(float speed, GameObject target)
     {
-        if (laserLine == null)
+        if (serverBeam == null)
             yield break;
-
-        float distance = Vector3.Distance(transform.position, target.transform.position);
-        float rushDuration = distance / (speed * GameLoop.cellSize);
-
-        // Setup laser segments
-        int segments = 20;
-        laserLine.positionCount = segments + 1;
 
         Vector3 startPos = transform.position;
         Vector3 endPos = target.transform.position;
+        float distance = Vector3.Distance(startPos, endPos);
+        float rushDuration = distance / (speed * GameLoop.cellSize);
 
-        // Tell clients to run the same rush animation locally
-        StartRushClientRpc(rushDuration, segments, startPos, endPos, initialWidth, finalWidth);
+        // Shorten the beam to the victim and surge into them, mirrored on clients
+        serverBeam.SetPositions(startPos, endPos);
+        StartRushClientRpc(rushDuration, startPos, endPos);
 
-        // Execute rush animation
-        yield return StartCoroutine(AnimateRushEffect(rushDuration, segments, startPos, endPos));
+        yield return StartCoroutine(serverBeam.Rush(rushDuration));
 
-        StartCoroutine(CreateExplosionEffect(target.transform.position));
+        // Impact: shockwave on every peer; HitFlash fires everywhere via Health's
+        // NetworkVariable callback when the damage below replicates.
+        ImpactFxClientRpc(endPos);
+        ImpactShockwave.Spawn(endPos, LaserGlow, 3f);
         CameraEffects.Instance?.CameraShakeClientRpc();
 
         target
             .GetComponent<Health>()
             ?.TakeDamage(transform.GetComponent<Shooting>().unitData.damage * damageMultiplier);
 
-        // Execute cleanup animation
-        yield return StartCoroutine(AnimateCleanupEffect(segments, endPos));
         StartCoroutine(cleanup());
     }
 
     [ClientRpc]
-    private void StartRushClientRpc(
-        float rushDuration,
-        int segments,
-        Vector3 startPos,
-        Vector3 endPos,
-        float initWidth,
-        float finWidth
-    )
+    private void StartRushClientRpc(float rushDuration, Vector3 startPos, Vector3 endPos)
     {
-        StartCoroutine(
-            AnimateRushEffectClient(rushDuration, segments, startPos, endPos, initWidth, finWidth)
-        );
+        if (IsServer || clientBeam == null)
+            return;
+        clientBeam.SetPositions(startPos, endPos);
+        StartCoroutine(clientBeam.Rush(rushDuration));
     }
 
-    private IEnumerator AnimateRushEffectClient(
-        float rushDuration,
-        int segments,
-        Vector3 startPos,
-        Vector3 endPos,
-        float initWidth,
-        float finWidth
-    )
+    [ClientRpc]
+    private void ImpactFxClientRpc(Vector3 impactPoint)
     {
-        if (clientLaserLine == null)
-        {
-            // Ensure a client line exists
-            Debug.LogWarning("[AreaLock] Client laser line was null, creating fallback laser line");
-            Vector3 direction = (endPos - startPos).normalized;
-            Vector3 finalEnd = endPos + direction * 50f;
-            if (
-                Physics.Raycast(
-                    startPos,
-                    direction,
-                    out RaycastHit hit,
-                    Mathf.Infinity,
-                    LayerMask.GetMask("Walls")
-                )
-            )
-            {
-                finalEnd = hit.point;
-            }
-
-            GameObject laserObject = new("LaserLineClient");
-            clientLaserLine = laserObject.AddComponent<LineRenderer>();
-            clientLaserLine.material = new Material(Shader.Find("Sprites/Default"));
-            clientLaserLine.startColor = Color.red;
-            clientLaserLine.endColor = Color.red;
-            clientLaserLine.startWidth = 0.1f;
-            clientLaserLine.endWidth = 0.1f;
-            clientLaserLine.positionCount = 2;
-            clientLaserLine.SetPosition(0, startPos);
-            clientLaserLine.SetPosition(1, finalEnd);
-            laserObject.transform.parent = transform;
-        }
-
-        clientLaserLine.positionCount = segments + 1;
-
-        float elapsed = 0f;
-        AnimationCurve rushCurve = new(
-            new Keyframe(0f, 0f),
-            new Keyframe(0.1f, 1f),
-            new Keyframe(0.9f, 1f),
-            new Keyframe(1f, 0f)
-        );
-
-        while (elapsed < rushDuration && clientLaserLine != null)
-        {
-            float progress = elapsed / rushDuration;
-
-            // Update line positions
-            for (int i = 0; i <= segments; i++)
-            {
-                float segmentProgress = (float)i / segments;
-                Vector3 segmentPosition = Vector3.Lerp(startPos, endPos, segmentProgress);
-                clientLaserLine.SetPosition(i, segmentPosition);
-            }
-
-            // Update width curve along the line
-            AnimationCurve widthCurve = new();
-            for (int i = 0; i <= segments; i++)
-            {
-                float segmentProgress = (float)i / segments;
-                float rushPosition = progress - segmentProgress;
-                float width = initWidth;
-                if (rushPosition >= -0.1f && rushPosition <= 0.1f)
-                {
-                    float curveValue = rushCurve.Evaluate(Mathf.Abs(rushPosition) * 10f);
-                    width = Mathf.Lerp(initWidth, finWidth, curveValue);
-                }
-                widthCurve.AddKey(segmentProgress, width);
-            }
-            clientLaserLine.widthCurve = widthCurve;
-
-            elapsed += Time.deltaTime;
-            yield return null;
-        }
-
-        // Cleanup effect on client
-        float cleanupDuration = 0.2f;
-        float cleanupElapsed = 0f;
-        while (cleanupElapsed < cleanupDuration && clientLaserLine != null)
-        {
-            float cleanupProgress = cleanupElapsed / cleanupDuration;
-            float currentWidth = Mathf.Lerp(finWidth, initWidth, cleanupProgress);
-            clientLaserLine.widthCurve = AnimationCurve.Linear(0f, currentWidth, 1f, currentWidth);
-            float alpha = Mathf.Lerp(1f, 0.5f, cleanupProgress);
-            Color cleanupColor = new(
-                clientLaserLine.startColor.r,
-                clientLaserLine.startColor.g,
-                clientLaserLine.startColor.b,
-                alpha
-            );
-            clientLaserLine.startColor = cleanupColor;
-            clientLaserLine.endColor = cleanupColor;
-
-            cleanupElapsed += Time.deltaTime;
-            yield return null;
-        }
-    }
-
-    private IEnumerator AnimateRushEffect(
-        float rushDuration,
-        int segments,
-        Vector3 startPos,
-        Vector3 endPos
-    )
-    {
-        float elapsed = 0f;
-
-        // Create animation curve for rush effect (peaks at middle, tapers at ends)
-        AnimationCurve rushCurve = new(
-            new Keyframe(0f, 0f),
-            new Keyframe(0.1f, 1f),
-            new Keyframe(0.9f, 1f),
-            new Keyframe(1f, 0f)
-        );
-
-        while (elapsed < rushDuration && laserLine != null)
-        {
-            float progress = elapsed / rushDuration;
-
-            // Update line positions
-            for (int i = 0; i <= segments; i++)
-            {
-                float segmentProgress = (float)i / segments;
-                Vector3 segmentPosition = Vector3.Lerp(startPos, endPos, segmentProgress);
-                laserLine.SetPosition(i, segmentPosition);
-            }
-
-            // Create rush effect by modifying width based on progress
-            AnimationCurve widthCurve = new();
-            for (int i = 0; i <= segments; i++)
-            {
-                float segmentProgress = (float)i / segments;
-                float rushPosition = progress - segmentProgress;
-
-                // Width is maximum when rush passes through this segment
-                float width = initialWidth;
-                if (rushPosition >= -0.1f && rushPosition <= 0.1f)
-                {
-                    float curveValue = rushCurve.Evaluate(Mathf.Abs(rushPosition) * 10f);
-                    width = Mathf.Lerp(initialWidth, finalWidth, curveValue);
-                }
-
-                widthCurve.AddKey(segmentProgress, width);
-            }
-
-            laserLine.widthCurve = widthCurve;
-
-            elapsed += Time.deltaTime;
-            yield return null;
-        }
-    }
-
-    private IEnumerator AnimateCleanupEffect(int segments, Vector3 endPos)
-    {
-        float cleanupDuration = 0.2f;
-        float cleanupElapsed = 0f;
-
-        while (cleanupElapsed < cleanupDuration && laserLine != null)
-        {
-            float cleanupProgress = cleanupElapsed / cleanupDuration;
-
-            // Gradually reduce width back to initial
-            float currentWidth = Mathf.Lerp(finalWidth, initialWidth, cleanupProgress);
-            laserLine.widthCurve = AnimationCurve.Linear(0f, currentWidth, 1f, currentWidth);
-
-            // Fade out color
-            float alpha = Mathf.Lerp(1f, 0.5f, cleanupProgress);
-            Color cleanupColor = new(
-                laserLine.startColor.r,
-                laserLine.startColor.g,
-                laserLine.startColor.b,
-                alpha
-            );
-            laserLine.startColor = cleanupColor;
-            laserLine.endColor = cleanupColor;
-
-            cleanupElapsed += Time.deltaTime;
-            yield return null;
-        }
-
-        // Ensure final position is set
-        laserLine.SetPosition(segments, endPos);
-    }
-
-    private IEnumerator CreateExplosionEffect(Vector3 explosionCenter)
-    {
-        float explosionDuration = 0.8f;
-        int particleCount = 12;
-
-        // Create explosion particles
-        List<GameObject> particles = new();
-        List<Vector3> particleVelocities = new();
-
-        for (int i = 0; i < particleCount; i++)
-        {
-            GameObject particle = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            particle.transform.position = explosionCenter;
-            particle.transform.localScale = Vector3.one * 0.2f;
-
-            // Set particle color based on team
-            Renderer particleRenderer = particle.GetComponent<Renderer>();
-            particleRenderer.material = new Material(Shader.Find("Sprites/Default"));
-            particleRenderer.material.color = gameObject.tag == "BlueTeam" ? Color.cyan : Color.red;
-
-            // Remove collider to prevent physics interference
-            Destroy(particle.GetComponent<Collider>());
-
-            // Calculate random velocity direction
-            float angle = (360f / particleCount) * i + Random.Range(-15f, 15f);
-            Vector3 direction = new(
-                Mathf.Cos(angle * Mathf.Deg2Rad),
-                0,
-                Mathf.Sin(angle * Mathf.Deg2Rad)
-            );
-            Vector3 velocity = direction * Random.Range(8f, 12f);
-
-            particles.Add(particle);
-            particleVelocities.Add(velocity);
-        }
-
-        float elapsed = 0f;
-
-        while (elapsed < explosionDuration)
-        {
-            float progress = elapsed / explosionDuration;
-
-            for (int i = 0; i < particles.Count; i++)
-            {
-                if (particles[i] != null)
-                {
-                    // Move particle outward
-                    particles[i].transform.position += particleVelocities[i] * Time.deltaTime;
-
-                    // Fade out particle
-                    float alpha = Mathf.Lerp(1f, 0f, progress);
-                    Color particleColor = particles[i].GetComponent<Renderer>().material.color;
-                    particleColor.a = alpha;
-                    particles[i].GetComponent<Renderer>().material.color = particleColor;
-
-                    // Shrink particle over time
-                    float scale = Mathf.Lerp(0.2f, 0f, progress);
-                    particles[i].transform.localScale = Vector3.one * scale;
-                }
-            }
-
-            elapsed += Time.deltaTime;
-            yield return null;
-        }
-
-        // Clean up particles
-        foreach (GameObject particle in particles)
-        {
-            if (particle != null)
-                Destroy(particle);
-        }
+        if (IsServer)
+            return; // host spawns its shockwave directly in AnimateLaserRush
+        ImpactShockwave.Spawn(impactPoint, LaserGlow, 3f);
     }
 }

@@ -85,4 +85,125 @@ public class GridSystem : MonoBehaviour
         int z = Mathf.RoundToInt(position.z / CellSize);
         return new Vector2Int(x, z);
     }
+
+    // === FOG OF WAR VISION MATH (pure/static, shared by server visibility + client overlay) ===
+
+    public const int ColumnCount = 9;
+    public const int RowCount = 10;
+
+    public static bool IsCellInBounds(Vector2Int cell)
+    {
+        return cell.x >= 0
+            && cell.x < ColumnCount
+            && cell.y >= 0
+            && cell.y < RowCount;
+    }
+
+    /// <summary>
+    /// Grid line-of-sight over wallLayout using a supercover line walk. Endpoints never block.
+    /// When the ideal line crosses exactly through a cell corner, sight is blocked only if BOTH
+    /// corner-adjacent cells are walls (permissive diagonals).
+    /// </summary>
+    public static bool HasGridLineOfSight(Vector2Int viewer, Vector2Int target)
+    {
+        int x = viewer.x;
+        int y = viewer.y;
+        int dx = Mathf.Abs(target.x - viewer.x);
+        int dy = Mathf.Abs(target.y - viewer.y);
+        int stepX = target.x >= viewer.x ? 1 : -1;
+        int stepY = target.y >= viewer.y ? 1 : -1;
+        int crossedX = 0;
+        int crossedY = 0;
+
+        while (crossedX < dx || crossedY < dy)
+        {
+            int horizontalDecision = (1 + 2 * crossedX) * dy;
+            int verticalDecision = (1 + 2 * crossedY) * dx;
+
+            if (horizontalDecision == verticalDecision)
+            {
+                // The ideal line crosses a corner. It is blocked only when both side cells
+                // are walls; one open side permits diagonal sight around the corner.
+                Vector2Int horizontalSide = new(x + stepX, y);
+                Vector2Int verticalSide = new(x, y + stepY);
+                if (
+                    IsBlockingIntermediateCell(horizontalSide, viewer, target)
+                    && IsBlockingIntermediateCell(verticalSide, viewer, target)
+                )
+                {
+                    return false;
+                }
+
+                x += stepX;
+                y += stepY;
+                crossedX++;
+                crossedY++;
+            }
+            else if (horizontalDecision < verticalDecision)
+            {
+                x += stepX;
+                crossedX++;
+            }
+            else
+            {
+                y += stepY;
+                crossedY++;
+            }
+
+            if (IsBlockingIntermediateCell(new Vector2Int(x, y), viewer, target))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsBlockingIntermediateCell(
+        Vector2Int cell,
+        Vector2Int viewer,
+        Vector2Int target
+    )
+    {
+        return cell != viewer
+            && cell != target
+            && GameLoop.wallLayout.Contains(cell);
+    }
+
+    /// <summary>
+    /// Union of every viewer's visible cell set: Manhattan diamond of the viewer's range,
+    /// intersected with grid LoS, clamped to the board.
+    /// </summary>
+    public static HashSet<Vector2Int> ComputeVisibleCells(
+        IEnumerable<(Vector2Int cell, int range)> viewers
+    )
+    {
+        HashSet<Vector2Int> visible = new();
+        if (viewers == null)
+            return visible;
+
+        foreach ((Vector2Int viewerCell, int configuredRange) in viewers)
+        {
+            int range = Mathf.Max(0, configuredRange);
+            for (int rowOffset = -range; rowOffset <= range; rowOffset++)
+            {
+                int horizontalRange = range - Mathf.Abs(rowOffset);
+                for (
+                    int columnOffset = -horizontalRange;
+                    columnOffset <= horizontalRange;
+                    columnOffset++
+                )
+                {
+                    Vector2Int target = new(
+                        viewerCell.x + columnOffset,
+                        viewerCell.y + rowOffset
+                    );
+                    if (!IsCellInBounds(target))
+                        continue;
+                    if (HasGridLineOfSight(viewerCell, target))
+                        visible.Add(target);
+                }
+            }
+        }
+
+        return visible;
+    }
 }

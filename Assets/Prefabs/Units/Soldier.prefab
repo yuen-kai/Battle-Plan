@@ -124,7 +124,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5aca1b55015634e4ea0e35c4f3261891, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  damage: 50
+  ShowTopMostFoldoutHeaderGroup: 1
+  damage: 80
   grenadePrefab: {fileID: 5062763313020825273, guid: c79d8a5b8690bca45876c9875de67463, type: 3}
   grenadeExplosionPrefab: {fileID: 7426381648914058826, guid: ae8b6b4593e1ede4f9708cd44c729170, type: 3}
 --- !u!1001 &5489869268760417126
@@ -183,10 +184,74 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -8143710011712545758, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -7918335002988649766, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -7664728788398519507, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -6093592463355912122, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -3195828791156449804, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -1806680513116206669, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -1461304994638716399, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -1439730007547781893, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -1120989108687609925, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -804731622281664130, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: -678588488315902003, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
     - target: {fileID: 919132149155446097, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
       propertyPath: m_Name
       value: Battle Plan character soldier rifle
       objectReference: {fileID: 0}
+    - target: {fileID: 1129496810705857465, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: 4321514657177891973, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: 6745302439343835087, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: 8521902485874960664, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
+    - target: {fileID: 8567717000986892130, guid: 46138cae8f59a6044a9c4eeeb264f689, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 545d6ce9b104147d9a2f87e1fba306be, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -265,6 +330,30 @@ PrefabInstance:
       propertyPath: m_Enabled
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: -4683669308469848369, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 13fdd63c1f6784bea94f764cb4ea15ab, type: 2}
+    - target: {fileID: -4683669308469848369, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 050ed95e34e464b669ccf225a0fe9908, type: 2}
+    - target: {fileID: -4683669308469848369, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[2]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 470a67f56936c40adba727ee3937ad1f, type: 2}
+    - target: {fileID: -3216998209466556742, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: da1ca4c600cbc43baa78063ea081e59e, type: 2}
+    - target: {fileID: -1990968323811559735, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 470a67f56936c40adba727ee3937ad1f, type: 2}
+    - target: {fileID: -1684107799473140416, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: da1ca4c600cbc43baa78063ea081e59e, type: 2}
     - target: {fileID: 919132149155446097, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
       propertyPath: m_Name
       value: Battle Plan character blue soldier
@@ -277,6 +366,26 @@ PrefabInstance:
       propertyPath: m_TagString
       value: TeamIndicatorProp
       objectReference: {fileID: 0}
+    - target: {fileID: 6317578925029434746, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 050ed95e34e464b669ccf225a0fe9908, type: 2}
+    - target: {fileID: 6829333093618665122, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 470a67f56936c40adba727ee3937ad1f, type: 2}
+    - target: {fileID: 7202271454713460447, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 050ed95e34e464b669ccf225a0fe9908, type: 2}
+    - target: {fileID: 8100320773420232829, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 1b3b0f5f3b6ad486c88b23eb53def851, type: 2}
+    - target: {fileID: 8730303016566787287, guid: 8fa982147f7767544ab1563e4a609a82, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 470a67f56936c40adba727ee3937ad1f, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

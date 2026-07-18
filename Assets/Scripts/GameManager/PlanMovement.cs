@@ -91,6 +91,8 @@ public class PlanMovement : MonoBehaviour
 {
     private List<GameObject> teamCharacters = new();
     public GameObject selectedUnit;
+    private bool useUnitCards;
+    private int planningRangeOverride = -1;
 
     public PathsDict plans = new();
     public List<Vector3> currentPlan = new();
@@ -132,15 +134,25 @@ public class PlanMovement : MonoBehaviour
         int range = -1
     )
     {
+        useUnitCards = units == null;
+        planningRangeOverride = range;
         teamCharacters = units ?? PopulateTeamCharacters();
 
         InitializeVisuals();
-        SwitchToUnit(null, range);
+        // Select the first unit up front so planning (and especially the dodge window, where
+        // cards don't map to the alerted subset) is immediately usable without a card click.
+        selectedUnit = null;
+        SwitchToUnit(teamCharacters.FirstOrDefault(IsPlanningUnitAvailable), range);
 
+        NetworkManager networkManager = NetworkManager.Singleton;
         float timer;
-        while ((timer = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0)
+        while (
+            networkManager != null
+            && (timer = (float)(endTime - networkManager.ServerTime.Time)) > 0
+        )
         {
-            timerTextUI.text = Mathf.CeilToInt(timer).ToString();
+            if (timerTextUI != null)
+                timerTextUI.text = Mathf.CeilToInt(timer).ToString();
             if (selectedUnit == null)
             {
                 Debug.LogWarning("No unit selected");
@@ -160,13 +172,125 @@ public class PlanMovement : MonoBehaviour
         }
 
         ClearVisuals();
-        timerTextUI.text = "";
+        if (timerTextUI != null)
+            timerTextUI.text = "";
+        if (networkManager == null || !networkManager.IsListening)
+            yield break;
         callback(plans);
     }
 
+    /// <summary>
+    /// Planning-phase ability targeting: while a unit is in ability mode (card toggled yellow),
+    /// clicks pick the ability's target square within abilitySquareRange (Manhattan diamond,
+    /// matching the displayed overlay). Self-targeted abilities (Shield) need no square. The
+    /// square is stored as the plan's second element: (true, [startCell, targetSquare]).
+    /// </summary>
     void AbilitySelection()
     {
-        //TODO: implement ability selection
+        UnitData unitData = selectedUnit.GetComponent<Movement>().unitData;
+        if (!unitData.selectAbilitySquare)
+            return;
+
+        if (!Input.GetMouseButtonDown(0))
+            return;
+
+        Vector3? clicked = Mouse.GetGridCellUnderMouse();
+        if (clicked == null)
+            return;
+        Vector3 square = clicked.Value;
+        Vector3 start = GridSystem.GetNearestGridCell(selectedUnit);
+
+        float manhattanCells =
+            (Mathf.Abs(square.x - start.x) + Mathf.Abs(square.z - start.z)) / cellSize;
+        if (manhattanCells > unitData.abilitySquareRange + 0.1f)
+            return;
+        // Line abilities (AreaLock) use the square as a direction anchor, so walls are fine.
+        if (!unitData.responseDistLine
+            && GameLoop.wallLayout.Contains(GridSystem.ConvertToGridCoords(square)))
+            return;
+
+        plans[selectedUnit] = (true, new List<Vector3> { start, square });
+        currentPlan = plans[selectedUnit].Item2;
+        UpdateAbilityTargetIndicator(start, square, unitData);
+    }
+
+    // Runtime-generated ability target visuals (marker + AOE disc, or preview line), mirroring
+    // how AreaLock builds its laser at runtime — no prefab/scene references needed.
+    private GameObject abilityTargetIndicator;
+
+    void UpdateAbilityTargetIndicator(Vector3 start, Vector3 square, UnitData unitData)
+    {
+        ClearAbilityTargetIndicator();
+        abilityTargetIndicator = new GameObject("AbilityTargetIndicator");
+
+        if (unitData.responseDistLine)
+        {
+            Vector3 casterPos = selectedUnit.transform.position;
+            Vector3 direction = (square + Helper.heightOffset(selectedUnit.transform) - casterPos).normalized;
+            if (direction == Vector3.zero)
+                return;
+            Vector3 end = casterPos + direction * 50f;
+            if (Physics.Raycast(casterPos, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+            {
+                end = hit.point;
+            }
+
+            LineRenderer lr = abilityTargetIndicator.AddComponent<LineRenderer>();
+            lr.material = new Material(Shader.Find("Sprites/Default"));
+            lr.startColor = lr.endColor = new Color(1f, 0.8f, 0f, 0.9f);
+            lr.startWidth = lr.endWidth = 0.12f;
+            lr.positionCount = 2;
+            lr.SetPosition(0, casterPos);
+            lr.SetPosition(1, end);
+        }
+        else
+        {
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Destroy(marker.GetComponent<Collider>());
+            marker.transform.parent = abilityTargetIndicator.transform;
+            float diameter = Mathf.Max(1f, 2f * unitData.abilityRadius * cellSize);
+            marker.transform.position = square + new Vector3(0, 0.15f, 0);
+            marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+            Renderer rend = marker.GetComponent<Renderer>();
+            rend.material = new Material(Shader.Find("Sprites/Default"));
+            rend.material.color = new Color(1f, 0.8f, 0f, 0.5f);
+        }
+    }
+
+    void ClearAbilityTargetIndicator()
+    {
+        if (abilityTargetIndicator != null)
+            Destroy(abilityTargetIndicator);
+        abilityTargetIndicator = null;
+    }
+
+    /// <summary>
+    /// Selects the team unit occupying the given cell, if any (used by PathSelection so clicking
+    /// a unit on the board switches selection — essential during dodge windows, where the unit
+    /// cards don't map to the alerted subset). Returns true when the selection switched.
+    /// </summary>
+    public bool TrySelectUnitAtCell(Vector3 cell)
+    {
+        foreach (GameObject character in teamCharacters)
+        {
+            if (!IsPlanningUnitAvailable(character) || character == selectedUnit)
+                continue;
+            if (GridSystem.GetNearestGridCell(character) == cell)
+            {
+                SwitchToUnit(character);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsPlanningUnitAvailable(GameObject unit)
+    {
+        if (unit == null || !unit.activeInHierarchy)
+            return false;
+
+        Health health = unit.GetComponent<Health>();
+        return health == null || health.IsAlive;
     }
 
     /// <summary>
@@ -201,37 +325,136 @@ public class PlanMovement : MonoBehaviour
 
     public void SwitchToUnit(int unitIndex)
     {
-        SwitchToUnit(teamCharacters[unitIndex]);
+        SelectUnit(unitIndex);
+    }
+
+    public void SelectUnit(int unitIndex)
+    {
+        if (!useUnitCards || unitIndex < 0 || unitIndex >= teamCharacters.Count)
+            return;
+
+        GameObject unit = teamCharacters[unitIndex];
+        if (IsPlanningUnitAvailable(unit))
+            SwitchToUnit(unit);
+    }
+
+    public void SetSelectionMode(int unitIndex, bool abilityMode)
+    {
+        if (!useUnitCards || unitIndex < 0 || unitIndex >= teamCharacters.Count)
+            return;
+
+        GameObject unit = teamCharacters[unitIndex];
+        if (
+            !IsPlanningUnitAvailable(unit)
+            || (abilityMode && unit.GetComponent<Ability>() == null)
+        )
+            return;
+
+        if (selectedUnit != unit)
+            SwitchToUnit(unit);
+
+        if (!plans.ContainsKey(unit))
+        {
+            plans[unit] = (
+                false,
+                new List<Vector3> { GridSystem.GetNearestGridCell(unit) }
+            );
+        }
+
+        if (plans[unit].Item1 != abilityMode)
+        {
+            plans[unit] = (
+                abilityMode,
+                new List<Vector3> { GridSystem.GetNearestGridCell(unit) }
+            );
+            ClearAbilityTargetIndicator();
+            ResetVisualPlan();
+        }
+
+        ApplySelectedUnitModeVisuals();
+        RefreshUnitCards();
     }
 
     public void SwitchToUnit(GameObject newSelectedUnit, int range = -1)
     {
-        GameObject oldSelectedUnit = selectedUnit;
-        selectedUnit = newSelectedUnit;
-        if (selectedUnit == null) return;
+        if (newSelectedUnit != null && !IsPlanningUnitAvailable(newSelectedUnit))
+            return;
 
-        DisplayMoveRange(range == -1 ? selectedUnit.GetComponent<Movement>().unitData.moveDist : range);
+        GameObject previousUnit = selectedUnit;
+        selectedUnit = newSelectedUnit;
+        if (selectedUnit == null)
+        {
+            ClearAbilityTargetIndicator();
+            Destroy(moveOverlay);
+            RefreshUnitCards();
+            return;
+        }
+        if (previousUnit != selectedUnit)
+            ClearAbilityTargetIndicator();
+
         if (!plans.ContainsKey(selectedUnit))
         {
             plans[selectedUnit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit)});
             ResetVisualPlan();
         }
-        else if (oldSelectedUnit != null && oldSelectedUnit == selectedUnit)
-        {
-            plans[selectedUnit] = (!plans[selectedUnit].Item1, new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit)});
 
-            int unitIndex = teamCharacters.IndexOf(selectedUnit);
-            if (unitIndex != -1)
-            {
-                CardHandler cardHandler = GameLoop.Instance.unitCards.transform.GetChild(unitIndex).GetComponent<CardHandler>();
-                cardHandler.SetCardColor(plans[selectedUnit].Item1 ? Color.yellow : Color.white);
-            }
-            
-            ResetVisualPlan();
-        }
+        ApplySelectedUnitModeVisuals(range);
+        RefreshUnitCards();
+    }
+
+    private void ApplySelectedUnitModeVisuals(int range = -1)
+    {
+        if (selectedUnit == null || !plans.ContainsKey(selectedUnit))
+            return;
+
+        // Show the range for the explicit MOVE / ABILITY mode selected on the card.
+        UnitData unitData = selectedUnit.GetComponent<Movement>().unitData;
+        bool abilityMode = plans[selectedUnit].Item1;
+        int movementRange =
+            range != -1
+                ? range
+                : (planningRangeOverride != -1 ? planningRangeOverride : unitData.moveDist);
+        DisplayMoveRange(
+            abilityMode
+                ? (unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0)
+                : movementRange
+        );
+
         currentPlan = plans[selectedUnit].Item2;
-        currentVisuals = planVisuals[selectedUnit];
-        // DisplayAttackRange();
+        if (planVisuals.TryGetValue(selectedUnit, out GameObject visuals))
+            currentVisuals = visuals;
+
+        if (
+            abilityMode
+            && unitData.selectAbilitySquare
+            && currentPlan != null
+            && currentPlan.Count >= 2
+        )
+        {
+            UpdateAbilityTargetIndicator(currentPlan[0], currentPlan[1], unitData);
+        }
+    }
+
+    private void RefreshUnitCards()
+    {
+        if (!useUnitCards || GameLoop.Instance?.unitCards == null)
+            return;
+
+        int count = Mathf.Min(
+            teamCharacters.Count,
+            GameLoop.Instance.unitCards.transform.childCount
+        );
+        for (int i = 0; i < count; i++)
+        {
+            CardHandler card = GameLoop
+                .Instance.unitCards.transform.GetChild(i)
+                .GetComponent<CardHandler>();
+            bool selected = teamCharacters[i] == selectedUnit;
+            bool abilityMode =
+                plans.TryGetValue(teamCharacters[i], out (bool, List<Vector3>) plan)
+                && plan.Item1;
+            card?.SetPlanningState(selected, abilityMode);
+        }
     }
 
     void ResetVisualPlan()
@@ -257,6 +480,14 @@ public class PlanMovement : MonoBehaviour
         Destroy(planVisualsFolder);
         Destroy(moveOverlay);
         Destroy(attackOverlay);
+        ClearAbilityTargetIndicator();
+        planningRangeOverride = -1;
+
+        if (useUnitCards && GameLoop.Instance?.unitCards != null)
+        {
+            foreach (Transform cardTransform in GameLoop.Instance.unitCards.transform)
+                cardTransform.GetComponent<CardHandler>()?.SetPlanningState(false, false);
+        }
     }
 
     void DisplayMoveRange(int range)

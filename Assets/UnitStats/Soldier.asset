@@ -15,9 +15,9 @@ MonoBehaviour:
   unitModel: {fileID: 5730507131329954583, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
   unitName: Soldier
   unitDescription: Jack of all trades.
-  unitSprite: {fileID: 21300000, guid: 242e47418176e6845837e2afdb22c133, type: 3}
+  unitSprite: {fileID: 21300000, guid: 4311808404f2b456e9afebd81d87d4b8, type: 3}
   abilityName: Grenade
-  abilitySprite: {fileID: 21300000, guid: 7a8ffb4f66cdddf4caf23340b10ca162, type: 3}
+  abilitySprite: {fileID: 21300000, guid: 4311808404f2b456e9afebd81d87d4b8, type: 3}
   moveDist: 3
   moveSpeed: 1
   diveSpeed: 4
@@ -31,12 +31,13 @@ MonoBehaviour:
   bulletSpeed: 3
   targetRange: 4
   bulletRange: 8
-  damage: 10
+  damage: 25
   backstabMultiplier: 1
   backstabAngle: 90
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 270
+  visionRange: 5
   maxHealth: 100
   abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1
