@@ -6,7 +6,10 @@ public class Mouse : MonoBehaviour
 {
     public static RaycastHit? GetHitUnderMouse(int layerMask)
     {
-        Camera teamCamera = GameLoop.Instance.TeamCamera;
+        if (GameHUDController.IsPointerOverUI(Input.mousePosition))
+            return null;
+
+        Camera teamCamera = GameLoop.Instance?.TeamCamera;
         if (teamCamera == null)
             return null;
 
@@ -22,6 +25,7 @@ public class Mouse : MonoBehaviour
     {
         return GetHitUnderMouse(layerMask)?.collider.gameObject;
     }
+
     public static GameObject GetObjectUnderMouse(string layerMaskName)
     {
         return GetObjectUnderMouse(LayerMask.GetMask(layerMaskName));

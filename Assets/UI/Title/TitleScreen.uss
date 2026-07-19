@@ -1,0 +1,173 @@
+.title-screen {
+    background-color: rgb(5, 9, 15);
+}
+
+.title-layout {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.title-identity {
+    width: 56%;
+    max-width: 880px;
+    height: 66%;
+    min-height: 430px;
+    justify-content: center;
+    padding-right: 72px;
+}
+
+.title-logo {
+    width: 100%;
+    height: 250px;
+    background-image: url("project://database/Assets/Images/Battle plan title screen logo.png");
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.title-rule {
+    width: 78%;
+    height: 2px;
+    margin-top: 22px;
+    margin-bottom: 0;
+    background-color: rgb(59, 130, 181);
+}
+
+.title-actions {
+    width: 330px;
+}
+
+.title-action {
+    width: 100%;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.title-action--last {
+    margin-top: 16px;
+}
+
+.quality-dropdown {
+    min-height: 44px;
+    margin-bottom: 8px;
+    color: rgb(236, 240, 244);
+    font-size: 14px;
+}
+
+.quality-dropdown > .unity-base-field__input {
+    min-height: 44px;
+    padding-left: 12px;
+    background-color: rgb(7, 13, 20);
+    border-width: 1px;
+    border-color: rgb(58, 76, 92);
+    border-radius: 2px;
+}
+
+.quality-dropdown:focus > .unity-base-field__input {
+    border-color: rgb(237, 174, 65);
+}
+
+.settings-note {
+    margin-top: 6px;
+}
+
+.control-row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.control-key {
+    width: 170px;
+    color: rgb(235, 174, 69);
+    -unity-font-style: bold;
+}
+
+.control-copy {
+    flex-grow: 1;
+    white-space: normal;
+}
+
+.credit-row {
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+
+.credit-name {
+    margin-bottom: 3px;
+}
+
+.credit-role {
+    white-space: normal;
+}
+
+.compact .title-identity {
+    width: 52%;
+    padding-right: 36px;
+}
+
+.compact .title-logo {
+    height: 190px;
+}
+
+.compact .title-actions {
+    width: 300px;
+}
+
+.narrow .title-layout {
+    flex-direction: column;
+}
+
+.narrow .title-identity {
+    width: 100%;
+    height: 42%;
+    min-height: 230px;
+    padding-right: 0;
+    align-items: center;
+}
+
+.narrow .title-logo {
+    height: 170px;
+}
+
+.narrow .title-actions {
+    width: 84%;
+    max-width: 420px;
+}
+
+.phone .title-identity {
+    min-height: 190px;
+}
+
+.phone .title-logo {
+    height: 135px;
+}
+
+.phone .title-actions {
+    width: 100%;
+}
+
+.phone .control-row {
+    flex-direction: column;
+}
+
+.phone .control-key {
+    width: auto;
+    margin-bottom: 4px;
+}
+
+.short .title-identity {
+    min-height: 190px;
+}
+
+.short .title-logo {
+    height: 145px;
+}
+
+.short .title-action {
+    min-height: 38px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+}

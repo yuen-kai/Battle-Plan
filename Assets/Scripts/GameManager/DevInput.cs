@@ -37,25 +37,68 @@ public static class DevInput
         GameLoop.devMode = true;
         if (speed > 0f)
             GameLoop.devSpeedMultiplier = speed;
+        MatchOptions.SetCurrent(MatchOptions.Default);
+        GameLoop.ResetMatchState();
+#if UNITY_EDITOR
+        DevMppmAutoJoin.EnableLocalAutoJoin();
+#endif
         StartHost();
     }
 
-    /// <summary>Start an NGO host in this (main) editor. The MPPM clone auto-joins as client 2.</summary>
+    /// <summary>Start a one-client development match against the real authoritative bot.</summary>
+    public static void StartBotMatch(float speed = -1f, bool fogOfWar = true)
+    {
+        GameLoop.devMode = true;
+        if (speed > 0f)
+            GameLoop.devSpeedMultiplier = speed;
+
+#if UNITY_EDITOR
+        DevMppmAutoJoin.DisableAutoJoin();
+#endif
+        MatchOptions options = MatchOptions.Default;
+        options.opponentType = OpponentType.AI;
+        options.fogOfWar = fogOfWar;
+        MatchOptions.SetCurrent(options);
+        GameLoop.ResetMatchState();
+        StartHost();
+    }
+
+    /// <summary>Start an NGO host in this editor after configuring direct loopback transport.</summary>
     public static void StartHost()
     {
         var nm = NetworkManager.Singleton;
         if (nm == null)
         {
+#if UNITY_EDITOR
+            DevMppmAutoJoin.DisableAutoJoin();
+#endif
             Debug.LogWarning("[DevInput] No NetworkManager in scene yet; enter Play mode first.");
             return;
         }
         if (nm.IsListening || nm.IsServer || nm.IsClient)
         {
+#if UNITY_EDITOR
+            DevMppmAutoJoin.DisableAutoJoin();
+#endif
             Debug.Log("[DevInput] Host/client already running.");
             return;
         }
-        nm.StartHost();
-        Debug.Log("[DevInput] StartHost() called; waiting for the MPPM clone to join.");
+#if UNITY_EDITOR
+        DevMppmAutoJoin.ConfigureLoopbackTransport(nm);
+#endif
+        if (!nm.StartHost())
+        {
+#if UNITY_EDITOR
+            DevMppmAutoJoin.DisableAutoJoin();
+#endif
+            Debug.LogError("[DevInput] StartHost() failed.");
+            return;
+        }
+
+        string waitState = MatchOptions.Current.IsBotMatch
+            ? "authoritative bot match started"
+            : "waiting for explicit Player 2 auto-join";
+        Debug.Log($"[DevInput] StartHost() called; {waitState}.");
     }
 
     /// <summary>Toggle dev mode at runtime and keep Time.timeScale consistent.</summary>
@@ -63,6 +106,10 @@ public static class DevInput
     {
         GameLoop.devMode = on;
         Time.timeScale = on ? Mathf.Max(0.01f, GameLoop.devSpeedMultiplier) : 1f;
+#if UNITY_EDITOR
+        if (!on)
+            DevMppmAutoJoin.DisableAutoJoin();
+#endif
         Debug.Log($"[DevInput] devMode={on} timeScale={Time.timeScale}");
     }
 
@@ -117,7 +164,12 @@ public static class DevInput
     }
 
     /// <summary>Queue a movement path for team/unit as a list of grid cells (col,row).</summary>
-    public static void SetPath(int team, int unitIndex, List<Vector2Int> cells, bool ability = false)
+    public static void SetPath(
+        int team,
+        int unitIndex,
+        List<Vector2Int> cells,
+        bool ability = false
+    )
     {
         GameObject unit = GetUnit(team, unitIndex);
         if (unit == null)
@@ -131,11 +183,14 @@ public static class DevInput
         pending[unit] = (ability, path);
         Debug.Log(
             $"[DevInput] Queued team {team} unit {unitIndex} ({unit.name}) path: "
-                + string.Join(" -> ", path.Select(p =>
-                {
-                    var g = GridSystem.ConvertToGridCoords(p);
-                    return $"({g.x},{g.y})";
-                }))
+                + string.Join(
+                    " -> ",
+                    path.Select(p =>
+                    {
+                        var g = GridSystem.ConvertToGridCoords(p);
+                        return $"({g.x},{g.y})";
+                    })
+                )
         );
     }
 
@@ -149,12 +204,17 @@ public static class DevInput
         GameObject unit = GetUnit(team, unitIndex);
         if (unit == null)
             return;
-        pending[unit] = (true, new List<Vector3>
-        {
-            GridSystem.GetNearestGridCell(unit),
-            GameLoop.gridCoordToWorld(new Vector2Int(targetCol, targetRow)),
-        });
-        Debug.Log($"[DevInput] Queued ability at ({targetCol},{targetRow}) for team {team} unit {unitIndex}.");
+        pending[unit] = (
+            true,
+            new List<Vector3>
+            {
+                GridSystem.GetNearestGridCell(unit),
+                GameLoop.gridCoordToWorld(new Vector2Int(targetCol, targetRow)),
+            }
+        );
+        Debug.Log(
+            $"[DevInput] Queued ability at ({targetCol},{targetRow}) for team {team} unit {unitIndex}."
+        );
     }
 
     /// <summary>Queue a self-targeted ability (e.g. Shield) — no target square needed.</summary>
@@ -185,7 +245,9 @@ public static class DevInput
         for (int i = 0; i + 1 < colRowPairs.Length; i += 2)
             path.Add(GameLoop.gridCoordToWorld(new Vector2Int(colRowPairs[i], colRowPairs[i + 1])));
         pendingDodges[unit] = path;
-        Debug.Log($"[DevInput] Queued dodge for team {team} unit {unitIndex} ({path.Count - 1} step(s)).");
+        Debug.Log(
+            $"[DevInput] Queued dodge for team {team} unit {unitIndex} ({path.Count - 1} step(s))."
+        );
     }
 
     /// <summary>
@@ -213,11 +275,17 @@ public static class DevInput
     public static void AutoFillRemaining()
     {
         for (int t = 0; t < GameLoop.teamNames.Count; t++)
-            ForEachUnit(t, (unit, i) =>
-            {
-                if (!pending.ContainsKey(unit))
-                    pending[unit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(unit) });
-            });
+            ForEachUnit(
+                t,
+                (unit, i) =>
+                {
+                    if (!pending.ContainsKey(unit))
+                        pending[unit] = (
+                            false,
+                            new List<Vector3> { GridSystem.GetNearestGridCell(unit) }
+                        );
+                }
+            );
     }
 
     // ---- Submission -----------------------------------------------------------------------
@@ -233,7 +301,9 @@ public static class DevInput
         var gl = GameLoop.Instance;
         if (gl == null)
         {
-            Debug.LogWarning("[DevInput] No GameLoop yet; start a match and wait for the Game scene.");
+            Debug.LogWarning(
+                "[DevInput] No GameLoop yet; start a match and wait for the Game scene."
+            );
             return;
         }
 
@@ -242,7 +312,9 @@ public static class DevInput
             dict[kv.Key] = (kv.Value.ability, kv.Value.path);
 
         gl.DevSubmitPlansServer(dict);
-        Debug.Log($"[DevInput] SubmitPlans() -> {dict.Count} explicit unit(s); server auto-fills the rest.");
+        Debug.Log(
+            $"[DevInput] SubmitPlans() -> {dict.Count} explicit unit(s); server auto-fills the rest."
+        );
         pending.Clear();
     }
 
@@ -273,7 +345,8 @@ public static class DevInput
             $"devMode={GameLoop.devMode} phase={GameLoop.currentPhase} "
                 + $"fog={fogState} "
                 + $"speed={GameLoop.devSpeedMultiplier} timeScale={Time.timeScale} "
-                + $"lastPlanningWait={GameLoop.lastPlanningSeconds:0.###}s");
+                + $"lastPlanningWait={GameLoop.lastPlanningSeconds:0.###}s"
+        );
 
         // During a dodge window, show which units may dive (SetDodgePath + SubmitDodge).
         var alerted = GameLoop.Instance != null ? GameLoop.Instance.dodgeAlerted : null;
@@ -282,26 +355,34 @@ public static class DevInput
             foreach (var kvp in alerted)
             {
                 sb.AppendLine(
-                    $"dodge window: client {kvp.Key} may dive: "
-                        + string.Join(", ", kvp.Value.Select(u => u == null ? "<null>" : u.name)));
+                    $"dodge window: team {kvp.Key} may dive: "
+                        + string.Join(", ", kvp.Value.Select(u => u == null ? "<null>" : u.name))
+                );
             }
         }
 
         var nm = NetworkManager.Singleton;
         sb.AppendLine(
-            $"network: listening={nm?.IsListening} server={nm?.IsServer} clients={nm?.ConnectedClients?.Count}");
+            $"network: listening={nm?.IsListening} server={nm?.IsServer} clients={nm?.ConnectedClients?.Count}"
+        );
 
-        for (int t = 0; t < GameLoop.teamNames.Count && t < GameLoop.allTeamUnits.Count; t++)
+        for (int t = 0; t < GameLoop.TeamCount; t++)
         {
             sb.AppendLine($"Team {t} ({GameLoop.teamNames[t]}):");
-            ForEachUnit(t, (unit, i) =>
-            {
-                bool alive = unit != null && unit.activeSelf;
-                Vector2Int c = unit == null
-                    ? new Vector2Int(-1, -1)
-                    : GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
-                sb.AppendLine($"  [{i}] {(unit == null ? "<null>" : unit.name)} cell=({c.x},{c.y}) alive={alive}");
-            });
+            ForEachUnit(
+                t,
+                (unit, i) =>
+                {
+                    bool alive = unit != null && unit.activeSelf;
+                    Vector2Int c =
+                        unit == null
+                            ? new Vector2Int(-1, -1)
+                            : GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+                    sb.AppendLine(
+                        $"  [{i}] {(unit == null ? "<null>" : unit.name)} cell=({c.x},{c.y}) alive={alive}"
+                    );
+                }
+            );
         }
         return sb.ToString();
     }
@@ -310,13 +391,13 @@ public static class DevInput
 
     private static GameObject GetUnit(int team, int unitIndex)
     {
-        if (GameLoop.allTeamUnits == null || team < 0 || team >= GameLoop.allTeamUnits.Count)
+        if (team < 0 || team >= GameLoop.TeamCount)
         {
             Debug.LogWarning($"[DevInput] Team {team} not available (is a match running?).");
             return null;
         }
-        ulong clientId = GameLoop.allTeamUnits.ElementAt(team).Key;
-        if (!GameLoop.allTeamUnitObjects.TryGetValue(clientId, out GameObject[] units))
+        GameObject[] units = GameLoop.GetTeamUnits(team);
+        if (units.Length == 0)
         {
             Debug.LogWarning($"[DevInput] No unit objects for team {team}.");
             return null;
@@ -331,10 +412,10 @@ public static class DevInput
 
     private static void ForEachUnit(int team, System.Action<GameObject, int> action)
     {
-        if (team < 0 || team >= GameLoop.allTeamUnits.Count)
+        if (team < 0 || team >= GameLoop.TeamCount)
             return;
-        ulong clientId = GameLoop.allTeamUnits.ElementAt(team).Key;
-        if (!GameLoop.allTeamUnitObjects.TryGetValue(clientId, out GameObject[] units))
+        GameObject[] units = GameLoop.GetTeamUnits(team);
+        if (units.Length == 0)
             return;
         for (int i = 0; i < units.Length; i++)
             action(units[i], i);
@@ -343,18 +424,16 @@ public static class DevInput
 
 #if UNITY_EDITOR
 /// <summary>
-/// DEV: auto-starts an NGO host in the main editor on Play, gated by <see cref="GameLoop.devMode"/>
-/// (the SAME flag that gates everything else in dev mode — there is no separate auto-host flag, so
-/// this can never drift out of sync with the dev-mode toggle) so a match begins with no menu
-/// clicks. When devMode is off this does nothing at all, and multiplayer starts exactly like the
-/// original manual host/join flow. Complements TempMppmAutoJoin, which auto-joins the clone.
+/// DEV: auto-starts an NGO host in the main editor on Play when gameplay dev mode was explicitly
+/// retained (for example, with domain reload disabled). Player 2 still requires a fresh,
+/// project-scoped directive for this Play session.
 /// </summary>
 public static class DevAutoHost
 {
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Init()
     {
-        // Only the main editor hosts; the MPPM clone auto-joins as a client via TempMppmAutoJoin.
+        // Only the main editor hosts. Virtual players wait for an explicit session directive.
         if (!Unity.Multiplayer.PlayMode.CurrentPlayer.IsMainEditor)
             return;
         if (!GameLoop.devMode)
@@ -386,8 +465,17 @@ public class DevAutoHostRunner : MonoBehaviour
                 if (nm.IsListening || nm.IsServer || nm.IsClient)
                     yield break;
 
+                if (MatchOptions.Current.IsBotMatch)
+                    DevMppmAutoJoin.DisableAutoJoin();
+                else
+                    DevMppmAutoJoin.EnableLocalAutoJoin();
+                DevMppmAutoJoin.ConfigureLoopbackTransport(nm);
                 Debug.Log("[DevAutoHost] Starting host...");
-                nm.StartHost();
+                if (!nm.StartHost())
+                {
+                    DevMppmAutoJoin.DisableAutoJoin();
+                    Debug.LogError("[DevAutoHost] StartHost() failed.");
+                }
                 yield break;
             }
             yield return null;

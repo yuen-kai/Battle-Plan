@@ -1,0 +1,78 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="../Shared/BattlePlan.uss" />
+    <ui:Style src="TitleScreen.uss" />
+    <ui:VisualElement name="screen" class="screen title-screen">
+        <ui:VisualElement class="command-ribbon">
+            <ui:VisualElement class="command-ribbon__beacon" picking-mode="Ignore" />
+            <ui:Label text="BATTLE PLAN / COMMAND TERMINAL" class="command-ribbon__text" picking-mode="Ignore" />
+            <ui:Label text="TITLE / STANDBY" class="command-ribbon__route" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="screen-frame title-layout">
+            <ui:VisualElement class="title-identity">
+                <ui:VisualElement name="game-logo" class="brand-mark title-logo" picking-mode="Ignore" />
+                <ui:VisualElement class="title-rule" picking-mode="Ignore" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="title-actions panel">
+                <ui:Label text="Command menu" class="section-label" picking-mode="Ignore" />
+                <ui:Button name="play-button" text="Play" class="button button--primary title-action" />
+                <ui:Button name="controls-button" text="Controls" class="button title-action" />
+                <ui:Button name="settings-button" text="Settings" class="button title-action" />
+                <ui:Button name="credits-button" text="Credits" class="button title-action" />
+                <ui:Button name="quit-button" text="Quit" class="button button--flat title-action title-action--last" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="settings-modal" class="modal-shade hidden">
+            <ui:VisualElement name="settings-modal-panel" class="modal" focusable="true" tabindex="-1">
+                <ui:Label text="Settings" class="title-lg" picking-mode="Ignore" />
+                <ui:VisualElement class="divider" picking-mode="Ignore" />
+                <ui:Label text="Graphics quality" class="section-label" picking-mode="Ignore" />
+                <ui:DropdownField name="quality-dropdown" class="quality-dropdown" />
+                <ui:Label text="Quality changes apply immediately." class="label label--muted settings-note" picking-mode="Ignore" />
+                <ui:Button name="settings-close-button" text="Close" class="button button--primary modal-close" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="controls-modal" class="modal-shade hidden">
+            <ui:VisualElement name="controls-modal-panel" class="modal" focusable="true" tabindex="-1">
+                <ui:Label text="Controls" class="title-lg" picking-mode="Ignore" />
+                <ui:VisualElement class="divider" picking-mode="Ignore" />
+                <ui:VisualElement class="control-row" picking-mode="Ignore">
+                    <ui:Label text="Select unit" class="control-key" picking-mode="Ignore" />
+                    <ui:Label text="Select a unit card or a unit on the board" class="label control-copy" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row" picking-mode="Ignore">
+                    <ui:Label text="Plan movement" class="control-key" picking-mode="Ignore" />
+                    <ui:Label text="Drag across adjacent grid cells from the selected unit" class="label control-copy" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row" picking-mode="Ignore">
+                    <ui:Label text="Use ability" class="control-key" picking-mode="Ignore" />
+                    <ui:Label text="Choose Ability on a unit card, then select a target" class="label control-copy" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row" picking-mode="Ignore">
+                    <ui:Label text="Close panel" class="control-key" picking-mode="Ignore" />
+                    <ui:Label text="Press Escape" class="label control-copy" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:Button name="controls-close-button" text="Close" class="button button--primary modal-close" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="credits-modal" class="modal-shade hidden">
+            <ui:VisualElement name="credits-modal-panel" class="modal" focusable="true" tabindex="-1">
+                <ui:Label text="Credits" class="title-lg" picking-mode="Ignore" />
+                <ui:VisualElement class="divider" picking-mode="Ignore" />
+                <ui:VisualElement class="credit-row" picking-mode="Ignore">
+                    <ui:Label text="Yuen Kai" class="title-md credit-name" picking-mode="Ignore" />
+                    <ui:Label text="Programming and game design" class="label label--muted credit-role" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement class="credit-row" picking-mode="Ignore">
+                    <ui:Label text="Logan Suite" class="title-md credit-name" picking-mode="Ignore" />
+                    <ui:Label text="3D art, animation, music, and code" class="label label--muted credit-role" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:Button name="credits-close-button" text="Close" class="button button--primary modal-close" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

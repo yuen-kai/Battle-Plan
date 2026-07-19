@@ -47,9 +47,10 @@ public class Shield : Ability
         // Materialization ring on every peer (NetworkVariable callback runs everywhere).
         if (active && gameObject.activeInHierarchy)
         {
-            Color teamColor = gameObject.CompareTag("BlueTeam")
-                ? new Color(0.22f, 0.78f, 1f)
-                : new Color(1f, 0.23f, 0.33f);
+            Color teamColor =
+                GetComponent<Unit>()?.TeamIndex == GameLoop.HostTeamIndex
+                    ? new Color(0.22f, 0.78f, 1f)
+                    : new Color(1f, 0.23f, 0.33f);
             ImpactShockwave.Spawn(transform.position, teamColor, 1.6f, 0.35f);
         }
     }

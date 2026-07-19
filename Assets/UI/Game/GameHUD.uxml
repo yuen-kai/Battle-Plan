@@ -1,0 +1,59 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Template name="unit-card-template" src="../Shared/Templates/UnitCard.uxml" />
+    <ui:Style src="../Shared/BattlePlan.uss" />
+    <ui:Style src="GameHUD.uss" />
+    <ui:VisualElement name="screen" class="screen game-screen" picking-mode="Ignore">
+        <ui:VisualElement name="hud-flash" class="hud-flash" picking-mode="Ignore" />
+
+        <ui:VisualElement class="phase-cluster" picking-mode="Ignore">
+            <ui:VisualElement class="phase-cluster__mark" picking-mode="Ignore" />
+            <ui:Label name="phase-label" text="Initializing" class="phase-label" picking-mode="Ignore" />
+            <ui:Label name="timer-label" class="timer-label" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="match-readout" picking-mode="Ignore">
+            <ui:Label text="MATCH STATUS" class="match-readout__key" picking-mode="Ignore" />
+            <ui:Label name="match-type-label" text="ELIMINATION / PLAYER" class="match-readout__primary" picking-mode="Ignore" />
+            <ui:Label name="fog-label" text="FOG ON" class="match-readout__secondary" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="hud-dock" class="hud-dock">
+            <ui:VisualElement class="hud-dock__header">
+                <ui:VisualElement picking-mode="Ignore">
+                    <ui:Label text="Fireteam orders" class="section-label" picking-mode="Ignore" />
+                    <ui:Label name="planning-help" text="Select a unit, then choose Move or Ability." class="planning-help" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement class="hud-key" picking-mode="Ignore">
+                    <ui:VisualElement class="hud-key__swatch hud-key__swatch--amber" picking-mode="Ignore" />
+                    <ui:Label text="ACTIVE ORDER" class="hud-key__label" picking-mode="Ignore" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="unit-cards" class="unit-cards">
+                <ui:Instance name="unit-card-0" template="unit-card-template" class="unit-card-host" />
+                <ui:Instance name="unit-card-1" template="unit-card-template" class="unit-card-host" />
+                <ui:Instance name="unit-card-2" template="unit-card-template" class="unit-card-host unit-card-host--last" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="deployment-overlay" class="deployment-overlay">
+            <ui:VisualElement class="deployment-overlay__content" picking-mode="Ignore">
+                <ui:VisualElement class="deployment-overlay__mark" picking-mode="Ignore" />
+                <ui:Label text="Deploying fireteams" class="deployment-overlay__title" picking-mode="Ignore" />
+                <ui:Label name="deployment-status" text="Synchronizing both players and preparing the battlefield." class="deployment-overlay__status" picking-mode="Ignore" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="results-overlay" class="modal-shade results-overlay hidden">
+            <ui:VisualElement name="results-panel" class="modal results-panel" focusable="true" tabindex="-1">
+                <ui:Label text="Battle report" class="section-label" picking-mode="Ignore" />
+                <ui:VisualElement class="results-mark" picking-mode="Ignore" />
+                <ui:Label name="results-status" text="Match complete" class="results-status" picking-mode="Ignore" />
+                <ui:VisualElement class="divider" picking-mode="Ignore" />
+                <ui:VisualElement class="results-actions">
+                    <ui:Button name="play-again-button" text="Play again" class="button button--primary results-button" />
+                    <ui:Button name="main-menu-button" text="Main menu" class="button results-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

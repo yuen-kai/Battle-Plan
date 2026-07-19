@@ -164,13 +164,22 @@ public class Shooting : NetworkBehaviour
         if (!IsServer || target == null || unitData.targetLockDuration <= 0f)
             return;
 
-        NetworkObject targetNetObj = target.GetComponent<NetworkObject>();
-        if (targetNetObj == null)
+        Unit targetIdentity = target.GetComponent<Unit>();
+        if (
+            targetIdentity == null
+            || GameLoop.Instance == null
+            || !GameLoop.Instance.TryGetHumanClientId(
+                targetIdentity.TeamIndex,
+                out ulong targetClientId
+            )
+        )
+        {
             return;
+        }
 
         GameLoop.Instance?.ForceReveal(
             gameObject,
-            targetNetObj.OwnerClientId,
+            targetClientId,
             unitData.targetLockDuration + 0.5f
         );
     }
@@ -323,7 +332,11 @@ public class Shooting : NetworkBehaviour
         backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
         bulletPrefab =
             bulletPrefab
-            ?? (transform.tag == "BlueTeam" ? unitData.blueBulletPrefab : unitData.redBulletPrefab);
+            ?? (
+                GetComponent<Unit>()?.TeamIndex == GameLoop.HostTeamIndex
+                    ? unitData.blueBulletPrefab
+                    : unitData.redBulletPrefab
+            );
 
         // Fire bullet with spread
         Vector3 baseDirection = transform.forward;
@@ -371,8 +384,11 @@ public class Shooting : NetworkBehaviour
     {
         // The team tag is assigned by GameLoop right after spawn, which is later than
         // OnNetworkSpawn — so resolve on first use instead of at spawn.
-        if (string.IsNullOrEmpty(enemyTeam) && GameLoop.teamNames.Contains(transform.tag))
-            enemyTeam = GameLoop.GetEnemyTeam(transform.tag);
+        if (string.IsNullOrEmpty(enemyTeam))
+        {
+            int ownTeamIndex = GetComponent<Unit>()?.TeamIndex ?? -1;
+            enemyTeam = GameLoop.GetTeamName(GameLoop.GetEnemyTeamIndex(ownTeamIndex));
+        }
         return enemyTeam;
     }
 
@@ -405,15 +421,21 @@ public class Shooting : NetworkBehaviour
         {
             return null;
         }
-        ulong localClientId = NetworkManager.Singleton.LocalClientId;
+        int ownTeamIndex = GetComponent<Unit>()?.TeamIndex ?? -1;
         foreach (var netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
         {
             if (netObj == null)
                 continue;
-            if (netObj.OwnerClientId == localClientId)
+            Unit candidateIdentity = netObj.GetComponent<Unit>();
+            if (
+                candidateIdentity == null
+                || candidateIdentity.TeamIndex < 0
+                || candidateIdentity.TeamIndex == ownTeamIndex
+                || netObj.GetComponent<Health>() == null
+            )
+            {
                 continue;
-            if (netObj.GetComponent<Health>() == null)
-                continue;
+            }
 
             GameObject enemy = netObj.gameObject;
             float distance = Vector3.Distance(transform.position, enemy.transform.position);

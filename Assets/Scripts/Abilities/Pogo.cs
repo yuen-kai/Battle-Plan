@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 public partial class Pogo : Ability
 {
@@ -11,7 +11,8 @@ public partial class Pogo : Ability
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         Vector3 startPosition = transform.position;
-        Vector3 targetPosition = abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0); //Has to be before collider is disabled
+        Vector3 targetPosition =
+            abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0); //Has to be before collider is disabled
 
         transform.GetComponent<Movement>().PauseMovement();
         transform.GetComponent<Shooting>().PauseShooting();
@@ -46,9 +47,10 @@ public partial class Pogo : Ability
     [ClientRpc]
     private void LandingFxClientRpc(Vector3 landingPosition)
     {
-        Color teamColor = gameObject.CompareTag("BlueTeam")
-            ? new Color(0.22f, 0.78f, 1f)
-            : new Color(1f, 0.23f, 0.33f);
+        Color teamColor =
+            GetComponent<Unit>()?.TeamIndex == GameLoop.HostTeamIndex
+                ? new Color(0.22f, 0.78f, 1f)
+                : new Color(1f, 0.23f, 0.33f);
         ImpactShockwave.Spawn(landingPosition, teamColor, 1.8f, 0.4f);
     }
 }

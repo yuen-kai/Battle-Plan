@@ -71,7 +71,7 @@ public class Health : NetworkBehaviour
             return;
 
         isAlive.Value = false;
-        GameLoop.Instance.unitCards.GetComponent<UnitCardContainer>().DisableUnitCard(gameObject);
+        GameLoop.Instance?.DisableUnitCard(gameObject);
 
         // Leave the NetworkObject active through this frame's network update so the final
         // NetworkVariable values can be sent, then preserve the existing tag-based teamSize rule.

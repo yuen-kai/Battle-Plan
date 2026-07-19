@@ -4,10 +4,15 @@ using UnityEngine;
 
 public class GridSystem : MonoBehaviour
 {
-    [SerializeField] private GameObject cellPrefab; // Public variable for the GameObject prefab
+    [SerializeField]
+    private GameObject cellPrefab; // Public variable for the GameObject prefab
     public static float CellSize => GameLoop.cellSize; // Size of each grid cell
-    [SerializeField] private int gridWidth = 10; // Width of the grid
-    [SerializeField] private int gridHeight = 10; // Height of the grid
+
+    [SerializeField]
+    private int gridWidth = 10; // Width of the grid
+
+    [SerializeField]
+    private int gridHeight = 10; // Height of the grid
     GameObject[,] gridArray; // 2D array to hold grid cells
 
     // Start is called before the first frame update
@@ -90,13 +95,117 @@ public class GridSystem : MonoBehaviour
 
     public const int ColumnCount = 9;
     public const int RowCount = 10;
+    private static readonly Vector2Int[] CardinalDirections =
+    {
+        Vector2Int.up,
+        Vector2Int.right,
+        Vector2Int.down,
+        Vector2Int.left,
+    };
 
     public static bool IsCellInBounds(Vector2Int cell)
     {
-        return cell.x >= 0
-            && cell.x < ColumnCount
-            && cell.y >= 0
-            && cell.y < RowCount;
+        return cell.x >= 0 && cell.x < ColumnCount && cell.y >= 0 && cell.y < RowCount;
+    }
+
+    /// <summary>
+    /// Deterministic four-directional BFS. The returned path includes start and goal. A blocked
+    /// goal is allowed so callers can path toward an occupied enemy cell and stop one step short.
+    /// </summary>
+    public static List<Vector2Int> FindPath(
+        Vector2Int start,
+        Vector2Int goal,
+        ISet<Vector2Int> blockedCells = null
+    )
+    {
+        if (
+            !IsCellInBounds(start)
+            || !IsCellInBounds(goal)
+            || GameLoop.wallLayout.Contains(start)
+            || GameLoop.wallLayout.Contains(goal)
+        )
+        {
+            return null;
+        }
+
+        Queue<Vector2Int> frontier = new();
+        Dictionary<Vector2Int, Vector2Int> cameFrom = new() { [start] = start };
+        frontier.Enqueue(start);
+
+        while (frontier.Count > 0)
+        {
+            Vector2Int current = frontier.Dequeue();
+            if (current == goal)
+                break;
+
+            foreach (Vector2Int direction in CardinalDirections)
+            {
+                Vector2Int next = current + direction;
+                if (
+                    !IsCellInBounds(next)
+                    || GameLoop.wallLayout.Contains(next)
+                    || cameFrom.ContainsKey(next)
+                    || (next != goal && blockedCells != null && blockedCells.Contains(next))
+                )
+                {
+                    continue;
+                }
+
+                cameFrom[next] = current;
+                frontier.Enqueue(next);
+            }
+        }
+
+        if (!cameFrom.ContainsKey(goal))
+            return null;
+
+        List<Vector2Int> path = new() { goal };
+        while (path[0] != start)
+            path.Insert(0, cameFrom[path[0]]);
+        return path;
+    }
+
+    /// <summary>All cells reachable in at most maxSteps, in deterministic BFS order.</summary>
+    public static List<Vector2Int> GetReachableCells(
+        Vector2Int start,
+        int maxSteps,
+        ISet<Vector2Int> blockedCells = null
+    )
+    {
+        List<Vector2Int> reachable = new();
+        if (!IsCellInBounds(start) || GameLoop.wallLayout.Contains(start))
+            return reachable;
+
+        Queue<Vector2Int> frontier = new();
+        Dictionary<Vector2Int, int> distance = new() { [start] = 0 };
+        frontier.Enqueue(start);
+
+        while (frontier.Count > 0)
+        {
+            Vector2Int current = frontier.Dequeue();
+            reachable.Add(current);
+            if (distance[current] >= Mathf.Max(0, maxSteps))
+                continue;
+
+            foreach (Vector2Int direction in CardinalDirections)
+            {
+                Vector2Int next = current + direction;
+                if (
+                    !IsCellInBounds(next)
+                    || GameLoop.wallLayout.Contains(next)
+                    || distance.ContainsKey(next)
+                    || (next != start && blockedCells != null && blockedCells.Contains(next))
+                )
+                {
+                    continue;
+                }
+
+                distance[next] = distance[current] + 1;
+                frontier.Enqueue(next);
+            }
+        }
+
+        return reachable;
     }
 
     /// <summary>
@@ -163,9 +272,7 @@ public class GridSystem : MonoBehaviour
         Vector2Int target
     )
     {
-        return cell != viewer
-            && cell != target
-            && GameLoop.wallLayout.Contains(cell);
+        return cell != viewer && cell != target && GameLoop.wallLayout.Contains(cell);
     }
 
     /// <summary>
@@ -192,10 +299,7 @@ public class GridSystem : MonoBehaviour
                     columnOffset++
                 )
                 {
-                    Vector2Int target = new(
-                        viewerCell.x + columnOffset,
-                        viewerCell.y + rowOffset
-                    );
+                    Vector2Int target = new(viewerCell.x + columnOffset, viewerCell.y + rowOffset);
                     if (!IsCellInBounds(target))
                         continue;
                     if (HasGridLineOfSight(viewerCell, target))

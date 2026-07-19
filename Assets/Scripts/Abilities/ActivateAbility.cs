@@ -30,7 +30,6 @@
 //     private GameObject globalAOEIndicator;
 //     private LineRenderer globalAbilityLaser;
 
-
 // //---------------------------------
 //     [ServerRpc(RequireOwnership = false)]
 //     public void activateAbilityServerRpc(ServerRpcParams rpcParams = default)
@@ -49,7 +48,7 @@
 
 //         //pause time
 //         Time.timeScale = 0f;
-//         GameLoop.setUnitCardsInteractable?.Invoke(false);
+//         GameHUDController.Instance?.SetCardsInteractable(false);
 
 //         double endTime = NetworkManager.ServerTime.Time + unitData.selectTime;
 //         string team = unit.tag;
@@ -81,10 +80,10 @@
 //         float timeRemaining;
 //         while ((timeRemaining = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0f)
 //         {
-//             PlanMovement.Instance.timerTextUI.text = (Mathf.CeilToInt(timeRemaining)).ToString();
+//             GameHUDController.Instance?.SetTimer(timeRemaining);
 //             yield return null;
 //         }
-//         PlanMovement.Instance.timerTextUI.text = "";
+//         GameHUDController.Instance?.SetTimer(0f);
 //     }
 
 //     //On client
@@ -123,7 +122,7 @@
 //         float timeRemaining;
 //         while ((timeRemaining = (float)(endTime - NetworkManager.Singleton.ServerTime.Time)) > 0f)
 //         {
-//             PlanMovement.Instance.timerTextUI.text = Mathf.CeilToInt(timeRemaining).ToString();
+//             GameHUDController.Instance?.SetTimer(timeRemaining);
 
 //             if (Input.GetMouseButtonDown(0))
 //             {
@@ -135,7 +134,7 @@
 
 //         Destroy(abilityRangeOverlay);
 
-//         PlanMovement.Instance.timerTextUI.text = "";
+//         GameHUDController.Instance?.SetTimer(0f);
 
 //         planEnemyResponseServerRpc(selectedSquare);
 //     }
@@ -244,7 +243,7 @@
 
 //         //continue time
 //         Time.timeScale = 1f;
-//         GameLoop.setUnitCardsInteractable(true);
+//         GameHUDController.Instance?.SetCardsInteractable(true);
 
 //         foreach (GameObject enemy in enemiesInRange)
 //         {

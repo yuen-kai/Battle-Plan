@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -33,7 +32,7 @@ public class PathsDict : Dictionary<GameObject, (bool, List<Vector3>)>, INetwork
                 var (boolValue, path) = kvp.Value;
                 serializer.SerializeValue(ref boolValue);
 
-                int pathCount = path.Count;
+                int pathCount = path?.Count ?? 0;
                 serializer.SerializeValue(ref pathCount);
 
                 for (int i = 0; i < pathCount; i++)
@@ -99,8 +98,7 @@ public class PlanMovement : MonoBehaviour
 
     // Visual representation of paths
     private GameObject planVisualsFolder;
-    private Dictionary<GameObject, GameObject> planVisuals =
-        new();
+    private Dictionary<GameObject, GameObject> planVisuals = new();
 
     public GameObject currentVisuals;
 
@@ -113,8 +111,6 @@ public class PlanMovement : MonoBehaviour
 
     [SerializeField]
     private GameObject attackOverlayPrefab;
-
-    public TMP_Text timerTextUI;
 
     private static float cellSize => GameLoop.cellSize; //shortened reference to GameLoop.cellSize
 
@@ -137,6 +133,18 @@ public class PlanMovement : MonoBehaviour
         useUnitCards = units == null;
         planningRangeOverride = range;
         teamCharacters = units ?? PopulateTeamCharacters();
+        while (
+            units == null
+            && teamCharacters.Count == 0
+            && NetworkManager.Singleton != null
+            && NetworkManager.Singleton.IsListening
+            && NetworkManager.Singleton.ServerTime.Time < endTime
+        )
+        {
+            // Unit spawns and TeamIndex NetworkVariables can arrive just after the phase RPC.
+            yield return null;
+            teamCharacters = PopulateTeamCharacters();
+        }
 
         InitializeVisuals();
         // Select the first unit up front so planning (and especially the dodge window, where
@@ -151,8 +159,7 @@ public class PlanMovement : MonoBehaviour
             && (timer = (float)(endTime - networkManager.ServerTime.Time)) > 0
         )
         {
-            if (timerTextUI != null)
-                timerTextUI.text = Mathf.CeilToInt(timer).ToString();
+            GameHUDController.Instance?.SetTimer(timer);
             if (selectedUnit == null)
             {
                 Debug.LogWarning("No unit selected");
@@ -172,8 +179,7 @@ public class PlanMovement : MonoBehaviour
         }
 
         ClearVisuals();
-        if (timerTextUI != null)
-            timerTextUI.text = "";
+        GameHUDController.Instance?.SetTimer(0f);
         if (networkManager == null || !networkManager.IsListening)
             yield break;
         callback(plans);
@@ -205,8 +211,10 @@ public class PlanMovement : MonoBehaviour
         if (manhattanCells > unitData.abilitySquareRange + 0.1f)
             return;
         // Line abilities (AreaLock) use the square as a direction anchor, so walls are fine.
-        if (!unitData.responseDistLine
-            && GameLoop.wallLayout.Contains(GridSystem.ConvertToGridCoords(square)))
+        if (
+            !unitData.responseDistLine
+            && GameLoop.wallLayout.Contains(GridSystem.ConvertToGridCoords(square))
+        )
             return;
 
         plans[selectedUnit] = (true, new List<Vector3> { start, square });
@@ -226,11 +234,21 @@ public class PlanMovement : MonoBehaviour
         if (unitData.responseDistLine)
         {
             Vector3 casterPos = selectedUnit.transform.position;
-            Vector3 direction = (square + Helper.heightOffset(selectedUnit.transform) - casterPos).normalized;
+            Vector3 direction = (
+                square + Helper.heightOffset(selectedUnit.transform) - casterPos
+            ).normalized;
             if (direction == Vector3.zero)
                 return;
             Vector3 end = casterPos + direction * 50f;
-            if (Physics.Raycast(casterPos, direction, out RaycastHit hit, Mathf.Infinity, LayerMask.GetMask("Walls")))
+            if (
+                Physics.Raycast(
+                    casterPos,
+                    direction,
+                    out RaycastHit hit,
+                    Mathf.Infinity,
+                    LayerMask.GetMask("Walls")
+                )
+            )
             {
                 end = hit.point;
             }
@@ -308,13 +326,17 @@ public class PlanMovement : MonoBehaviour
             return localTeamCharacters;
         }
 
-        ulong localClientId = NetworkManager.Singleton.LocalClientId;
-        foreach (var netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
-        {
-            if (netObj == null)
-                continue;
+        int localTeamIndex = GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1;
+        if (localTeamIndex < 0)
+            return localTeamCharacters;
 
-            if (netObj.GetComponent<Unit>() != null && netObj.OwnerClientId == localClientId)
+        foreach (
+            NetworkObject netObj in NetworkManager
+                .Singleton.SpawnManager.SpawnedObjectsList.Where(netObj => netObj != null)
+                .OrderBy(netObj => netObj.NetworkObjectId)
+        )
+        {
+            if (netObj.GetComponent<Unit>()?.TeamIndex == localTeamIndex)
             {
                 localTeamCharacters.Add(netObj.gameObject);
             }
@@ -344,10 +366,7 @@ public class PlanMovement : MonoBehaviour
             return;
 
         GameObject unit = teamCharacters[unitIndex];
-        if (
-            !IsPlanningUnitAvailable(unit)
-            || (abilityMode && unit.GetComponent<Ability>() == null)
-        )
+        if (!IsPlanningUnitAvailable(unit) || (abilityMode && unit.GetComponent<Ability>() == null))
             return;
 
         if (selectedUnit != unit)
@@ -355,18 +374,12 @@ public class PlanMovement : MonoBehaviour
 
         if (!plans.ContainsKey(unit))
         {
-            plans[unit] = (
-                false,
-                new List<Vector3> { GridSystem.GetNearestGridCell(unit) }
-            );
+            plans[unit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(unit) });
         }
 
         if (plans[unit].Item1 != abilityMode)
         {
-            plans[unit] = (
-                abilityMode,
-                new List<Vector3> { GridSystem.GetNearestGridCell(unit) }
-            );
+            plans[unit] = (abilityMode, new List<Vector3> { GridSystem.GetNearestGridCell(unit) });
             ClearAbilityTargetIndicator();
             ResetVisualPlan();
         }
@@ -394,7 +407,10 @@ public class PlanMovement : MonoBehaviour
 
         if (!plans.ContainsKey(selectedUnit))
         {
-            plans[selectedUnit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit)});
+            plans[selectedUnit] = (
+                false,
+                new List<Vector3> { GridSystem.GetNearestGridCell(selectedUnit) }
+            );
             ResetVisualPlan();
         }
 
@@ -437,23 +453,17 @@ public class PlanMovement : MonoBehaviour
 
     private void RefreshUnitCards()
     {
-        if (!useUnitCards || GameLoop.Instance?.unitCards == null)
+        if (!useUnitCards || GameLoop.Instance == null)
             return;
 
-        int count = Mathf.Min(
-            teamCharacters.Count,
-            GameLoop.Instance.unitCards.transform.childCount
-        );
+        int count = teamCharacters.Count;
         for (int i = 0; i < count; i++)
         {
-            CardHandler card = GameLoop
-                .Instance.unitCards.transform.GetChild(i)
-                .GetComponent<CardHandler>();
             bool selected = teamCharacters[i] == selectedUnit;
             bool abilityMode =
-                plans.TryGetValue(teamCharacters[i], out (bool, List<Vector3>) plan)
-                && plan.Item1;
-            card?.SetPlanningState(selected, abilityMode);
+                plans.TryGetValue(teamCharacters[i], out (bool, List<Vector3>) plan) && plan.Item1;
+
+            GameHUDController.Instance?.SetCardPlanningState(i, selected, abilityMode);
         }
     }
 
@@ -483,10 +493,9 @@ public class PlanMovement : MonoBehaviour
         ClearAbilityTargetIndicator();
         planningRangeOverride = -1;
 
-        if (useUnitCards && GameLoop.Instance?.unitCards != null)
+        if (useUnitCards)
         {
-            foreach (Transform cardTransform in GameLoop.Instance.unitCards.transform)
-                cardTransform.GetComponent<CardHandler>()?.SetPlanningState(false, false);
+            GameHUDController.Instance?.ClearCardPlanningStates();
         }
     }
 
@@ -560,7 +569,9 @@ public class PlanMovement : MonoBehaviour
         foreach (var pair in actions)
         {
             var (boolValue, path) = pair.Value;
-            Debug.Log($"Unit: {pair.Key.name}, Boolean: {boolValue}, Path: {string.Join(", ", path)}");
+            Debug.Log(
+                $"Unit: {pair.Key.name}, Boolean: {boolValue}, Path: {string.Join(", ", path)}"
+            );
         }
     }
 }

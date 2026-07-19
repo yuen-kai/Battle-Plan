@@ -1,0 +1,84 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="../Shared/BattlePlan.uss" />
+    <ui:Style src="JoinGame.uss" />
+    <ui:VisualElement name="screen" class="screen join-screen">
+        <ui:VisualElement class="command-ribbon">
+            <ui:VisualElement class="command-ribbon__beacon" picking-mode="Ignore" />
+            <ui:Label text="MATCH OPERATIONS / CONNECTION" class="command-ribbon__text" picking-mode="Ignore" />
+            <ui:Label name="route-label" text="LINK / CREATE" class="command-ribbon__route" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="screen-frame join-layout">
+            <ui:VisualElement class="join-nav">
+                <ui:Label text="Deploy" class="title-xl" picking-mode="Ignore" />
+                <ui:Label text="Choose how this match begins." class="label label--muted join-intro" picking-mode="Ignore" />
+                <ui:Button name="show-create-button" text="Create match" class="button join-nav-button" />
+                <ui:Button name="show-join-button" text="Join match" class="button join-nav-button" />
+                <ui:Button name="title-button" text="Back to title" class="button button--flat join-nav-button join-title-button" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="join-content">
+                <ui:VisualElement name="create-panel" class="panel join-panel">
+                    <ui:Label text="Match options" class="title-lg" picking-mode="Ignore" />
+                    <ui:VisualElement class="divider" />
+                    <ui:Label text="Game mode" class="section-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="mode-row">
+                        <ui:Button name="elimination-button" class="button button--selected mode-option">
+                            <ui:Label text="Elimination" class="mode-option__name" picking-mode="Ignore" />
+                            <ui:Label text="Defeat the opposing fireteam" class="mode-option__detail" picking-mode="Ignore" />
+                        </ui:Button>
+                        <ui:Button name="king-button" enabled="false" class="button mode-option">
+                            <ui:Label text="King of the Hill" class="mode-option__name" picking-mode="Ignore" />
+                            <ui:Label text="Coming soon" class="mode-option__status" picking-mode="Ignore" />
+                        </ui:Button>
+                        <ui:Button name="flag-button" enabled="false" class="button mode-option">
+                            <ui:Label text="Capture the Flag" class="mode-option__name" picking-mode="Ignore" />
+                            <ui:Label text="Coming soon" class="mode-option__status" picking-mode="Ignore" />
+                        </ui:Button>
+                    </ui:VisualElement>
+
+                    <ui:Label text="Opponent" class="section-label option-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="opponent-row">
+                        <ui:Button name="player-opponent-button" class="button button--selected opponent-option">
+                            <ui:Label text="Player" class="opponent-option__name" picking-mode="Ignore" />
+                            <ui:Label text="Online via Relay" class="opponent-option__detail" picking-mode="Ignore" />
+                        </ui:Button>
+                        <ui:Button name="ai-opponent-button" class="button opponent-option">
+                            <ui:Label text="AI" class="opponent-option__name" picking-mode="Ignore" />
+                            <ui:Label text="Local bot opponent" class="opponent-option__detail" picking-mode="Ignore" />
+                        </ui:Button>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement name="local-multiplayer-row" class="local-multiplayer-row hidden">
+                        <ui:Toggle name="local-multiplayer-toggle" text="Local multiplayer (dev)" value="false" enabled="false" class="toggle local-multiplayer-toggle" />
+                        <ui:Label text="Connect MPPM Player 2 at 127.0.0.1:7777." class="label label--muted local-multiplayer-detail" picking-mode="Ignore" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="fog-row">
+                        <ui:Toggle name="fog-toggle" text="Fog of war" value="true" class="toggle fog-toggle" />
+                        <ui:Label text="Hide enemy units outside your fireteam's vision." class="label label--muted fog-detail" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Label name="create-error-label" class="label label--danger status-line" />
+                    <ui:Button name="create-match-button" text="Create PvP match" class="button button--primary create-action" />
+
+                    <ui:VisualElement name="relay-code-panel" class="relay-code-panel hidden">
+                        <ui:Label name="connection-code-heading" text="Relay code" class="section-label" picking-mode="Ignore" />
+                        <ui:Label name="relay-code-label" class="relay-code" />
+                        <ui:Label name="relay-status-label" class="label label--muted relay-status" />
+                        <ui:Button name="cancel-host-button" text="Cancel host" class="button relay-cancel hidden" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="join-panel" class="panel join-panel hidden">
+                    <ui:Label text="Join Relay match" class="title-lg" picking-mode="Ignore" />
+                    <ui:VisualElement class="divider" />
+                    <ui:Label text="Enter join code" class="section-label" picking-mode="Ignore" />
+                    <ui:TextField name="join-code-input" class="text-field join-code-input" />
+                    <ui:Label name="join-status-label" class="label status-line" />
+                    <ui:Button name="join-match-button" text="Join match" class="button button--primary create-action" />
+                    <ui:Button name="cancel-join-button" text="Cancel connection" class="button join-cancel hidden" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

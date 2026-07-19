@@ -7,6 +7,7 @@ public partial class Grenade : Ability
 {
     float abilityTime = 1;
     float throwHeight = 5f;
+
     [SerializeField]
     private float damage = 80f;
     public GameObject grenadePrefab;
@@ -72,6 +73,10 @@ public partial class Grenade : Ability
     private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)
     {
         string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
+
+        // Units move by Transform during execution. Sync before the overlap query so a completed
+        // dodge is evaluated at its current position even when no physics tick ran this frame.
+        Physics.SyncTransforms();
 
         // Find all enemies within explosion range
         Collider[] enemiesInRange = Physics.OverlapSphere(

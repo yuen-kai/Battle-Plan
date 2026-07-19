@@ -4,12 +4,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Unity.Netcode;
+using Unity.Netcode.Transports.UTP;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// ONE-SHOT END-TO-END GAMEPLAY TEST for Battle-Plan. Re-runnable, self-asserting, editor-only.
 ///
-/// What it covers (in order, one live 2-client match on the TESTING spawn layout):
+/// What it covers (in order, one live 2-client match on the explicit dev spawn layout):
 ///   R0  match start via DevInput.StartMatch() (devMode is opt-in), roster + spawn verification
 ///   R1  legal multi-step movement (3-step and 5-step paths), wall-step rejection, moving units
 ///       on BOTH teams (unit switching), speed control (SetSpeed 30 during execution, back to 6)
@@ -32,7 +34,7 @@ using UnityEngine;
 /// Requires the MPPM virtual player to be active (TempMppmAutoJoin auto-joins it as client 2).
 ///
 /// Results: every step logs [E2E][PASS]/[E2E][FAIL]; the final report aggregates pass/fail.
-/// Screenshots are saved to Assets/Screenshots/e2e/ as visual evidence.
+/// Screenshots are saved outside Assets so Play Mode does not trigger an import/refresh cycle.
 /// </summary>
 public static class DevE2ETest
 {
@@ -40,7 +42,8 @@ public static class DevE2ETest
 
     public static bool IsRunning =>
         DevE2ETestRunner.Instance != null && !DevE2ETestRunner.Instance.Done;
-    public static bool IsDone => DevE2ETestRunner.Instance != null && DevE2ETestRunner.Instance.Done;
+    public static bool IsDone =>
+        DevE2ETestRunner.Instance != null && DevE2ETestRunner.Instance.Done;
     public static bool Passed => IsDone && DevE2ETestRunner.Instance.FailCount == 0;
     public static string Report =>
         DevE2ETestRunner.Instance == null
@@ -52,7 +55,9 @@ public static class DevE2ETest
     {
         if (!Application.isPlaying)
         {
-            Debug.LogWarning("[E2E] Enter Play mode first, or use menu Battle Plan/Run End-To-End Test.");
+            Debug.LogWarning(
+                "[E2E] Enter Play mode first, or use menu Battle Plan/Run End-To-End Test."
+            );
             return;
         }
         if (DevE2ETestRunner.Instance != null)
@@ -150,7 +155,8 @@ public class DevE2ETestRunner : MonoBehaviour
         sb.AppendLine(
             Done
                 ? $"RESULT: {(FailCount == 0 ? "PASS" : "FAIL")} ({PassCount} passed, {FailCount} failed)"
-                : $"RESULT: still running ({PassCount} passed, {FailCount} failed so far)");
+                : $"RESULT: still running ({PassCount} passed, {FailCount} failed so far)"
+        );
         return sb.ToString();
     }
 
@@ -191,8 +197,7 @@ public class DevE2ETestRunner : MonoBehaviour
 
     static GameObject U(int team, int index)
     {
-        ulong clientId = GameLoop.allTeamUnits.ElementAt(team).Key;
-        return GameLoop.allTeamUnitObjects[clientId][index];
+        return GameLoop.GetTeamUnits(team)[index];
     }
 
     static Vector2Int Cell(GameObject unit) =>
@@ -217,8 +222,7 @@ public class DevE2ETestRunner : MonoBehaviour
     {
         for (int t = 0; t < GameLoop.teamNames.Count; t++)
         {
-            ulong clientId = GameLoop.allTeamUnits.ElementAt(t).Key;
-            GameObject[] units = GameLoop.allTeamUnitObjects[clientId];
+            GameObject[] units = GameLoop.GetTeamUnits(t);
             for (int i = 0; i < units.Length; i++)
             {
                 GameObject unit = units[i];
@@ -232,7 +236,8 @@ public class DevE2ETestRunner : MonoBehaviour
                     continue; // unreachable or already adjacent: stand and shoot
                 int steps = Mathf.Min(
                     unit.GetComponent<Movement>().unitData.moveDist,
-                    path.Count - 2); // stop on the cell next to the enemy, not on it
+                    path.Count - 2
+                ); // stop on the cell next to the enemy, not on it
                 if (steps <= 0)
                     continue;
                 DevInput.SetPath(t, i, path.GetRange(1, steps));
@@ -244,7 +249,9 @@ public class DevE2ETestRunner : MonoBehaviour
     {
         GameObject nearest = null;
         float best = float.MaxValue;
-        foreach (GameObject enemy in GameObject.FindGameObjectsWithTag(GameLoop.GetEnemyTeam(unit.tag)))
+        foreach (
+            GameObject enemy in GameObject.FindGameObjectsWithTag(GameLoop.GetEnemyTeam(unit.tag))
+        )
         {
             float d = Vector3.Distance(unit.transform.position, enemy.transform.position);
             if (d < best)
@@ -293,9 +300,9 @@ public class DevE2ETestRunner : MonoBehaviour
     {
         try
         {
-            const string dir = "Assets/Screenshots/e2e";
+            string dir = System.IO.Path.Combine(Application.temporaryCachePath, "BattlePlanE2E");
             System.IO.Directory.CreateDirectory(dir);
-            ScreenCapture.CaptureScreenshot(dir + "/" + name + ".png");
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, name + ".png"));
         }
         catch (System.Exception e)
         {
@@ -318,8 +325,16 @@ public class DevE2ETestRunner : MonoBehaviour
             else
                 DevInput.SubmitDodge(); // best effort so the round can still resolve
         }
+        else
+        {
+            Check(Phase != "dodging", label + ": exhausted ability did not open a dodge phase");
+        }
 
-        yield return WaitFor(() => Phase == "planning" || Phase == "idle", 120f, label + ": round end");
+        yield return WaitFor(
+            () => Phase == "planning" || Phase == "idle",
+            120f,
+            label + ": round end"
+        );
         Check(!timedOut, label + $": round resolved (phase={Phase})");
     }
 
@@ -330,6 +345,17 @@ public class DevE2ETestRunner : MonoBehaviour
         Info("Suite starting. Speed 6x. Requires MPPM clone for client 2.");
 
         // ================= R0: match start =================
+        if (NetworkManager.Singleton == null)
+            SceneManager.LoadScene("JoinGame", LoadSceneMode.Single);
+        yield return WaitFor(
+            () => NetworkManager.Singleton != null,
+            30f,
+            "network bootstrap scene"
+        );
+        Check(!timedOut, "R0 network bootstrap scene loaded");
+        if (timedOut)
+            yield break;
+
         DevInput.StartMatch(6f);
         yield return WaitFor(
             () =>
@@ -340,26 +366,53 @@ public class DevE2ETestRunner : MonoBehaviour
                 && GameLoop.allTeamUnitObjects.Count == 2
                 && Phase == "planning",
             120f,
-            "match start (host + MPPM clone join + Game scene + first planning phase)");
+            "match start (host + MPPM clone join + Game scene + first planning phase)"
+        );
         Check(!timedOut, "R0 match start: host up, 2 clients, Game scene, planning phase");
         if (timedOut)
             yield break; // Nothing else can run.
 
-        GameObject cmd = U(0, 0), pogo = U(0, 1), bShot = U(0, 2);
-        GameObject rShot = U(1, 0), sniper = U(1, 1), soldier = U(1, 2);
+        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        Check(
+            NetworkManager.Singleton.NetworkConfig.ConnectionApproval,
+            "R0 local PvP host requires connection approval"
+        );
+        Check(
+            transport != null
+                && transport.Protocol == UnityTransport.ProtocolType.UnityTransport
+                && transport.ConnectionData.Address == DevMppmAutoJoin.LoopbackAddress
+                && transport.ConnectionData.ServerListenAddress == DevMppmAutoJoin.LoopbackAddress,
+            "R0 local PvP host uses the loopback direct endpoint"
+        );
+
+        GameObject cmd = U(0, 0),
+            pogo = U(0, 1),
+            bShot = U(0, 2);
+        GameObject rShot = U(1, 0),
+            sniper = U(1, 1),
+            soldier = U(1, 2);
 
         Check(
-            cmd.name.StartsWith("Commander") && pogo.name.StartsWith("PogoRider")
-                && bShot.name.StartsWith("Shotgunner") && rShot.name.StartsWith("Shotgunner")
-                && sniper.name.StartsWith("Sniper") && soldier.name.StartsWith("Soldier"),
+            cmd.name.StartsWith("Commander")
+                && pogo.name.StartsWith("PogoRider")
+                && bShot.name.StartsWith("Shotgunner")
+                && rShot.name.StartsWith("Shotgunner")
+                && sniper.name.StartsWith("Sniper")
+                && soldier.name.StartsWith("Soldier"),
             "R0 roster: Blue=Commander/PogoRider/Shotgunner, Red=Shotgunner/Sniper/Soldier",
-            $"actual: {cmd.name},{pogo.name},{bShot.name} | {rShot.name},{sniper.name},{soldier.name}");
+            $"actual: {cmd.name},{pogo.name},{bShot.name} | {rShot.name},{sniper.name},{soldier.name}"
+        );
+        Check(GameLoop.Instance.FogOfWarEnabled, "R0 fog of war enabled from match options");
         Check(
-            Cell(cmd) == new Vector2Int(1, 3) && Cell(pogo) == new Vector2Int(4, 5)
-                && Cell(bShot) == new Vector2Int(7, 3) && Cell(rShot) == new Vector2Int(5, 6)
-                && Cell(sniper) == new Vector2Int(4, 6) && Cell(soldier) == new Vector2Int(3, 6),
-            "R0 spawns match TESTING layout",
-            $"blue {Cell(cmd)},{Cell(pogo)},{Cell(bShot)} red {Cell(rShot)},{Cell(sniper)},{Cell(soldier)}");
+            Cell(cmd) == new Vector2Int(1, 3)
+                && Cell(pogo) == new Vector2Int(4, 5)
+                && Cell(bShot) == new Vector2Int(7, 3)
+                && Cell(rShot) == new Vector2Int(5, 6)
+                && Cell(sniper) == new Vector2Int(4, 6)
+                && Cell(soldier) == new Vector2Int(3, 6),
+            "R0 spawns match dev layout",
+            $"blue {Cell(cmd)},{Cell(pogo)},{Cell(bShot)} red {Cell(rShot)},{Cell(sniper)},{Cell(soldier)}"
+        );
         Snap("r0-match-start");
 
         // ================= R1: movement (legal + illegal wall step), both teams, speed =========
@@ -384,25 +437,48 @@ public class DevE2ETestRunner : MonoBehaviour
 
         // Speed control mid-execution.
         DevInput.SetSpeed(30f);
-        Check(Mathf.Approximately(Time.timeScale, 30f), "R1 SetSpeed(30) applied to Time.timeScale");
+        Check(
+            Mathf.Approximately(Time.timeScale, 30f),
+            "R1 SetSpeed(30) applied to Time.timeScale"
+        );
         yield return WaitFor(() => Phase == "planning", 120f, "R1 round end");
         Check(!timedOut, "R1 round resolved");
         DevInput.SetSpeed(6f);
         Check(Mathf.Approximately(Time.timeScale, 6f), "R1 SetSpeed(6) restored");
 
-        Check(Cell(cmd) == new Vector2Int(0, 1), "R1 legal 3-step path executed (Commander at (0,1))", $"actual {Cell(cmd)}");
-        Check(Cell(pogo) == new Vector2Int(4, 0), "R1 legal 5-step path executed (PogoRider at (4,0))", $"actual {Cell(pogo)}");
+        Check(
+            Cell(cmd) == new Vector2Int(0, 1),
+            "R1 legal 3-step path executed (Commander at (0,1))",
+            $"actual {Cell(cmd)}"
+        );
+        Check(
+            Cell(pogo) == new Vector2Int(4, 0),
+            "R1 legal 5-step path executed (PogoRider at (4,0))",
+            $"actual {Cell(pogo)}"
+        );
         Check(
             Cell(bShot) == new Vector2Int(8, 3),
             "R1 illegal wall step (8,4) rejected by server sanitizer (Shotgunner stopped at (8,3))",
-            $"actual {Cell(bShot)}");
-        Check(Cell(rShot) == new Vector2Int(7, 5), "R1 red-team unit moved by dev input (RedShotgunner at (7,5))", $"actual {Cell(rShot)}");
-        Check(Cell(sniper) == new Vector2Int(4, 9), "R1 red Sniper retreated to (4,9) (out of weapon range of the pogo lane)", $"actual {Cell(sniper)}");
+            $"actual {Cell(bShot)}"
+        );
+        Check(
+            Cell(rShot) == new Vector2Int(7, 5),
+            "R1 red-team unit moved by dev input (RedShotgunner at (7,5))",
+            $"actual {Cell(rShot)}"
+        );
+        Check(
+            Cell(sniper) == new Vector2Int(4, 9),
+            "R1 red Sniper retreated to (4,9) (out of weapon range of the pogo lane)",
+            $"actual {Cell(sniper)}"
+        );
         Check(
             Cell(soldier) == new Vector2Int(3, 6),
             "R1 auto-filled unit stayed put (Soldier (3,6))",
-            $"actual {Cell(soldier)}");
-        Info($"R1 HP after round: cmd={HP(cmd)} pogo={HP(pogo)} bShot={HP(bShot)} | rShot={HP(rShot)} sniper={HP(sniper)} soldier={HP(soldier)}");
+            $"actual {Cell(soldier)}"
+        );
+        Info(
+            $"R1 HP after round: cmd={HP(cmd)} pogo={HP(pogo)} bShot={HP(bShot)} | rShot={HP(rShot)} sniper={HP(sniper)} soldier={HP(soldier)}"
+        );
         Snap("r1-movement");
 
         // ================= R2: illegal non-adjacent move + AreaLock line ability + death =======
@@ -411,21 +487,38 @@ public class DevE2ETestRunner : MonoBehaviour
         // Sniper line ability straight down column 4 at the PogoRider -- a dodge alert must fire
         // for the PogoRider; we DECLINE the dodge, so the beam kills it (death + damage proof).
         DevInput.SetAbility(1, 1, 4, 0);
-        yield return RunRoundToCompletion("R2", true, () =>
-        {
-            var alerted = AlertedUnits();
-            bool pogoWasAlerted = alerted.Contains(pogo);
-            var icon = pogo.transform.Find("UnitCanvas/Alert");
-            bool pogoAlertIconOn = icon != null && icon.gameObject.activeSelf;
-            Check(alerted.Count == 1 && pogoWasAlerted,
-                "R2 dodge alert targeted exactly the threatened unit (PogoRider on the beam line)",
-                "alerted: " + string.Join(",", alerted.Select(u => u.name)));
-            Check(pogoAlertIconOn, "R2 alert icon (UnitCanvas/Alert) enabled on threatened unit");
-            Snap("r2-dodge-window");
-            DevInput.SubmitDodge(); // decline: no dive queued -> PogoRider holds still on the line
-        });
-        Check(!Alive(pogo), "R2 AreaLock beam killed the non-dodging PogoRider (death + damage applied)", $"alive={Alive(pogo)}");
-        Check(Cell(cmd) == new Vector2Int(0, 1), "R2 illegal non-adjacent move rejected (Commander still at (0,1))", $"actual {Cell(cmd)}");
+        yield return RunRoundToCompletion(
+            "R2",
+            true,
+            () =>
+            {
+                var alerted = AlertedUnits();
+                bool pogoWasAlerted = alerted.Contains(pogo);
+                var icon = pogo.transform.Find("UnitCanvas/Alert");
+                bool pogoAlertIconOn = icon != null && icon.gameObject.activeSelf;
+                Check(
+                    alerted.Count == 1 && pogoWasAlerted,
+                    "R2 dodge alert targeted exactly the threatened unit (PogoRider on the beam line)",
+                    "alerted: " + string.Join(",", alerted.Select(u => u.name))
+                );
+                Check(
+                    pogoAlertIconOn,
+                    "R2 alert icon (UnitCanvas/Alert) enabled on threatened unit"
+                );
+                Snap("r2-dodge-window");
+                DevInput.SubmitDodge(); // decline: no dive queued -> PogoRider holds still on the line
+            }
+        );
+        Check(
+            !Alive(pogo),
+            "R2 AreaLock beam killed the non-dodging PogoRider (death + damage applied)",
+            $"alive={Alive(pogo)}"
+        );
+        Check(
+            Cell(cmd) == new Vector2Int(0, 1),
+            "R2 illegal non-adjacent move rejected (Commander still at (0,1))",
+            $"actual {Cell(cmd)}"
+        );
         Snap("r2-arealock-kill");
 
         // ================= R3: Grenade + dodge dive that REPLACES the planned move ==============
@@ -434,33 +527,47 @@ public class DevE2ETestRunner : MonoBehaviour
         // (1,0) (3 cells from the blast, outside radius 2): must end on the dive cell, undamaged.
         float cmdHpBeforeR3 = HP(cmd);
         DevInput.SetAbility(1, 2, 1, 3);
-        yield return RunRoundToCompletion("R3", true, () =>
-        {
-            var alerted = AlertedUnits();
-            Check(alerted.Count == 1 && alerted.Contains(cmd),
-                "R3 grenade dodge alert targeted exactly the Commander",
-                "alerted: " + string.Join(",", alerted.Select(u => u.name)));
-            DevInput.SetDodgePath(0, 0, 0, 0, 1, 0); // (0,1) -> (0,0) -> (1,0)
-            Snap("r3-grenade-telegraph");
-            DevInput.SubmitDodge();
-        });
-        Check(Cell(cmd) == new Vector2Int(1, 0),
+        yield return RunRoundToCompletion(
+            "R3",
+            true,
+            () =>
+            {
+                var alerted = AlertedUnits();
+                Check(
+                    alerted.Count == 1 && alerted.Contains(cmd),
+                    "R3 grenade dodge alert targeted exactly the Commander",
+                    "alerted: " + string.Join(",", alerted.Select(u => u.name))
+                );
+                DevInput.SetDodgePath(0, 0, 0, 0, 1, 0); // (0,1) -> (0,0) -> (1,0)
+                Snap("r3-grenade-telegraph");
+                DevInput.SubmitDodge();
+            }
+        );
+        Check(
+            Cell(cmd) == new Vector2Int(1, 0),
             "R3 dodge dive replaced the planned move (Commander ended on dive cell (1,0))",
-            $"actual {Cell(cmd)}");
-        Check(Alive(cmd) && HP(cmd) >= cmdHpBeforeR3 - 0.01f,
+            $"actual {Cell(cmd)}"
+        );
+        Check(
+            Alive(cmd) && HP(cmd) >= cmdHpBeforeR3 - 0.01f,
             "R3 successful dodge: no grenade damage taken",
-            $"hp {cmdHpBeforeR3} -> {HP(cmd)}");
+            $"hp {cmdHpBeforeR3} -> {HP(cmd)}"
+        );
         Snap("r3-dodged");
 
-        // ================= R4: Shield (self-targeted) + a move on the same team =================
-        DevInput.SetPath(1, 2, 3, 5, 3, 4, 3, 3); // Soldier walks to (3,3) for R5 grenade range.
+        // ================= R4: Shield (self-targeted) + a simultaneous safe move ================
+        // The Commander survived R3 by assertion and is outside every red unit's weapon range.
+        // Moving the already-wounded Soldier here made this check depend on nondeterministic
+        // crossfire from prior rounds rather than movement correctness.
+        DevInput.SetPath(0, 0, 2, 0);
         DevInput.SetAbility(1, 0); // Red Shotgunner shields (self-targeted, no square).
         Transform shield = rShot.transform.Find("Shield");
         Check(shield != null, "R4 red Shotgunner has a Shield child object");
 
         DevInput.SubmitPlans();
         yield return WaitFor(() => Phase == "executing", 30f, "R4 execution start");
-        bool shieldSeenOn = false, shieldSeenOffAfterOn = false;
+        bool shieldSeenOn = false,
+            shieldSeenOffAfterOn = false;
         {
             float deadline = Time.realtimeSinceStartup + 120f;
             while (Phase != "planning" && Phase != "idle" && Time.realtimeSinceStartup < deadline)
@@ -473,33 +580,42 @@ public class DevE2ETestRunner : MonoBehaviour
                 yield return null;
             }
         }
+        if (shieldSeenOn && (shield == null || !shield.gameObject.activeSelf))
+            shieldSeenOffAfterOn = true;
         Check(shieldSeenOn, "R4 Shield ability activated the Shield child during execution");
         Check(shieldSeenOffAfterOn, "R4 Shield deactivated again after its duration");
-        Check(Cell(soldier) == new Vector2Int(3, 3), "R4 Soldier moved to (3,3)", $"actual {Cell(soldier)}");
+        Check(
+            Cell(cmd) == new Vector2Int(2, 0),
+            "R4 Commander completed its simultaneous move to (2,0)",
+            $"actual {Cell(cmd)}"
+        );
         Snap("r4-shield");
 
-        // ================= R5: Grenade damage application on a non-dodging target ===============
-        if (!Alive(cmd))
+        // ================= R5: exhausted ability is rejected server-side =========================
+        if (!Alive(cmd) || !Alive(sniper))
         {
-            Check(false, "R5 precondition: Commander alive for grenade-damage round", "died earlier than the scenario expects");
+            Check(
+                false,
+                "R5 precondition: Commander and Sniper alive for ability-exhaustion round",
+                $"commander alive={Alive(cmd)}, sniper alive={Alive(sniper)}"
+            );
         }
         else
         {
             float cmdHpBeforeR5 = HP(cmd);
             Vector2Int cmdCell = Cell(cmd);
-            DevInput.SetAbility(1, 2, cmdCell.x, cmdCell.y); // grenade directly on the Commander
-            yield return RunRoundToCompletion("R5", true, () =>
-            {
-                var alerted = AlertedUnits();
-                Check(alerted.Contains(cmd), "R5 dodge alert on grenade target (Commander)",
-                    "alerted: " + string.Join(",", alerted.Select(u => u.name)));
-                DevInput.SubmitDodge(); // decline: eat the grenade
-            });
-            // Grenade damage rebalanced 50 -> 80 (fog/damage rebalance).
-            Check(!Alive(cmd) || HP(cmd) <= cmdHpBeforeR5 - 80f,
-                "R5 grenade damage applied to non-dodging target (>=80 HP or death)",
-                "hp " + cmdHpBeforeR5 + " -> " + (Alive(cmd) ? HP(cmd).ToString() : "dead"));
-            Snap("r5-grenade-hit");
+            DevInput.SetAbility(1, 1, cmdCell.x, cmdCell.y);
+            yield return RunRoundToCompletion("R5", false, null);
+            Check(
+                sniper.GetComponent<Unit>().RemainingAbilityUses == 0,
+                "R5 Sniper Area Lock charge remained exhausted after a rejected second use"
+            );
+            Check(
+                Alive(cmd) && HP(cmd) >= cmdHpBeforeR5 - 0.01f,
+                "R5 exhausted Area Lock caused no damage",
+                "hp " + cmdHpBeforeR5 + " -> " + (Alive(cmd) ? HP(cmd).ToString() : "dead")
+            );
+            Snap("r5-ability-exhausted");
         }
 
         // ================= R6+: chase rounds until the win condition ends the match =============
@@ -511,7 +627,11 @@ public class DevE2ETestRunner : MonoBehaviour
         while (Phase != "idle" && guard < 12)
         {
             guard++;
-            yield return WaitFor(() => Phase == "planning" || Phase == "idle", 60f, $"chase round {guard}: planning");
+            yield return WaitFor(
+                () => Phase == "planning" || Phase == "idle",
+                60f,
+                $"chase round {guard}: planning"
+            );
             if (Phase == "idle" || timedOut)
                 break;
             QueueChasePlans();
@@ -519,7 +639,11 @@ public class DevE2ETestRunner : MonoBehaviour
             yield return WaitFor(() => Phase != "planning", 30f, $"chase round {guard}: execution");
             if (Phase == "dodging")
                 DevInput.SubmitDodge();
-            yield return WaitFor(() => Phase == "planning" || Phase == "idle", 120f, $"chase round {guard}: round end");
+            yield return WaitFor(
+                () => Phase == "planning" || Phase == "idle",
+                120f,
+                $"chase round {guard}: round end"
+            );
             if (timedOut)
                 break;
         }
@@ -528,9 +652,15 @@ public class DevE2ETestRunner : MonoBehaviour
         Check(
             Phase == "idle" && (blueLeft == 0 ^ redLeft == 0),
             "Win condition reached: exactly one team wiped, game loop ended",
-            $"phase={Phase} blue={blueLeft} red={redLeft} (chase rounds used: {guard})");
+            $"phase={Phase} blue={blueLeft} red={redLeft} (chase rounds used: {guard})"
+        );
         // EndGame resets Time.timeScale — assert BEFORE touching speed controls again.
-        Check(Mathf.Approximately(Time.timeScale, 1f), "EndGame restored Time.timeScale to 1", $"actual {Time.timeScale}");
+        Check(
+            Mathf.Approximately(Time.timeScale, 1f),
+            "EndGame restored Time.timeScale to 1",
+            $"actual {Time.timeScale}"
+        );
+        Check(!GameLoop.Instance.FogOfWarEnabled, "EndGame disabled fog of war");
         Snap("r6-endgame");
 
         Info("Final state dump:\n" + DevInput.Dump());

@@ -1,13 +1,10 @@
 using System.Collections;
-using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class CameraEffects : NetworkBehaviour
 {
     public static CameraEffects Instance { get; private set; }
-    public GameObject flash;
 
     private void Awake()
     {
@@ -20,6 +17,13 @@ public class CameraEffects : NetworkBehaviour
             Debug.LogWarning("[CameraEffects] Multiple instances detected, destroying duplicate");
             Destroy(gameObject);
         }
+    }
+
+    public override void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
+        base.OnDestroy();
     }
 
     [ClientRpc]
@@ -88,27 +92,12 @@ public class CameraEffects : NetworkBehaviour
     [ClientRpc]
     public void FlashClientRpc(MessagePerspective perspective, float flashDuration = 0.2f)
     {
-        Color color =
-            perspective == MessagePerspective.Friendly
-                ? (Color)(GameLoop.Instance?.teamColors[0] ?? Color.white)
-                : (
-                    perspective == MessagePerspective.Enemy
-                        ? (Color)(GameLoop.Instance?.teamColors[1] ?? Color.white)
-                        : (Color)(GameLoop.Instance?.executingMoves ?? Color.white)
-                );
-        StartCoroutine(Flash(color, flashDuration));
-    }
+        if (GameHUDController.Instance != null)
+        {
+            GameHUDController.Instance.Flash(perspective, flashDuration);
+            return;
+        }
 
-    public IEnumerator Flash(Color color = default, float flashDuration = 0.2f)
-    {
-        var image = flash.GetComponent<Image>();
-        float originalAlpha = image.color.a;
-        Color newColor = color;
-        newColor.a = originalAlpha;
-        image.color = newColor;
-
-        flash.SetActive(true);
-        yield return new WaitForSecondsRealtime(flashDuration);
-        flash.SetActive(false);
+        Debug.LogWarning("[CameraEffects] UI Toolkit HUD is unavailable; flash skipped.");
     }
 }

@@ -46,7 +46,9 @@ public class BeamVFX : MonoBehaviour
         Shader beamShader = Shader.Find("BattlePlan/EnergyBeam");
         if (beamShader == null)
         {
-            Debug.LogWarning("[BeamVFX] BattlePlan/EnergyBeam shader not found, falling back to Sprites/Default");
+            Debug.LogWarning(
+                "[BeamVFX] BattlePlan/EnergyBeam shader not found, falling back to Sprites/Default"
+            );
             beamShader = Shader.Find("Sprites/Default");
         }
 
@@ -54,7 +56,13 @@ public class BeamVFX : MonoBehaviour
         coreLine = CreateLine("Core", beamShader, coreWidth, CoreColor, intensity: 2.5f);
     }
 
-    LineRenderer CreateLine(string childName, Shader shader, float width, Color color, float intensity)
+    LineRenderer CreateLine(
+        string childName,
+        Shader shader,
+        float width,
+        Color color,
+        float intensity
+    )
     {
         GameObject lineObject = new(childName);
         lineObject.transform.SetParent(transform, worldPositionStays: false);
@@ -109,7 +117,8 @@ public class BeamVFX : MonoBehaviour
     {
         while (true)
         {
-            float multiplier = 1f + amount * 0.5f * (1f + Mathf.Sin(Time.time * speed * Mathf.PI * 2f));
+            float multiplier =
+                1f + amount * 0.5f * (1f + Mathf.Sin(Time.time * speed * Mathf.PI * 2f));
             ApplyWidthMultiplier(multiplier);
             yield return null;
         }
@@ -122,6 +131,9 @@ public class BeamVFX : MonoBehaviour
     public IEnumerator Rush(float duration, int segments = 24)
     {
         StopPulse();
+        if (coreLine == null || glowLine == null)
+            yield break;
+
         Vector3 start = glowLine.GetPosition(0);
         Vector3 end = glowLine.GetPosition(1);
 
@@ -137,6 +149,9 @@ public class BeamVFX : MonoBehaviour
         float elapsed = 0f;
         while (elapsed < duration)
         {
+            if (coreLine == null || glowLine == null)
+                yield break;
+
             float progress = elapsed / duration;
             AnimationCurve coreCurve = new();
             AnimationCurve glowCurve = new();
@@ -178,6 +193,9 @@ public class BeamVFX : MonoBehaviour
         float elapsed = 0f;
         while (elapsed < duration)
         {
+            if (coreLine == null || glowLine == null)
+                yield break;
+
             float alpha = 1f - elapsed / duration;
             Color faded = new(1f, 1f, 1f, alpha);
             coreLine.startColor = coreLine.endColor = faded;
