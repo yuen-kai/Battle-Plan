@@ -8,6 +8,14 @@ public partial class Pogo : Ability
     float abilityTime = 1;
     float jumpHeight = 5f;
 
+    public override void ResetForRespawn()
+    {
+        base.ResetForRespawn();
+        Collider unitCollider = GetComponent<Collider>();
+        if (unitCollider != null)
+            unitCollider.enabled = true;
+    }
+
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         Vector3 startPosition = transform.position;

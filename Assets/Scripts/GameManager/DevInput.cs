@@ -34,29 +34,53 @@ public static class DevInput
     /// <summary>Turn dev mode on and start hosting so a match begins with no menu clicks.</summary>
     public static void StartMatch(float speed = -1f)
     {
-        GameLoop.devMode = true;
-        if (speed > 0f)
-            GameLoop.devSpeedMultiplier = speed;
-        MatchOptions.SetCurrent(MatchOptions.Default);
-        GameLoop.ResetMatchState();
-#if UNITY_EDITOR
-        DevMppmAutoJoin.EnableLocalAutoJoin();
-#endif
-        StartHost();
+        StartConfiguredMatch(GameMode.Elimination, OpponentType.Player, speed, true);
     }
 
     /// <summary>Start a one-client development match against the real authoritative bot.</summary>
     public static void StartBotMatch(float speed = -1f, bool fogOfWar = true)
+    {
+        StartConfiguredMatch(GameMode.Elimination, OpponentType.AI, speed, fogOfWar);
+    }
+
+    /// <summary>
+    /// Start a King of the Hill dev match. Player matches use the MPPM clone; bot matches stay
+    /// single-client. In both cases the normal server-authoritative objective rules are used.
+    /// </summary>
+    public static void StartKingOfTheHillMatch(
+        float speed = -1f,
+        bool botOpponent = false,
+        bool fogOfWar = true
+    )
+    {
+        StartConfiguredMatch(
+            GameMode.KingOfTheHill,
+            botOpponent ? OpponentType.AI : OpponentType.Player,
+            speed,
+            fogOfWar
+        );
+    }
+
+    private static void StartConfiguredMatch(
+        GameMode gameMode,
+        OpponentType opponentType,
+        float speed,
+        bool fogOfWar
+    )
     {
         GameLoop.devMode = true;
         if (speed > 0f)
             GameLoop.devSpeedMultiplier = speed;
 
 #if UNITY_EDITOR
-        DevMppmAutoJoin.DisableAutoJoin();
+        if (opponentType == OpponentType.AI)
+            DevMppmAutoJoin.DisableAutoJoin();
+        else
+            DevMppmAutoJoin.EnableLocalAutoJoin();
 #endif
         MatchOptions options = MatchOptions.Default;
-        options.opponentType = OpponentType.AI;
+        options.gameMode = gameMode;
+        options.opponentType = opponentType;
         options.fogOfWar = fogOfWar;
         MatchOptions.SetCurrent(options);
         GameLoop.ResetMatchState();
@@ -335,14 +359,32 @@ public static class DevInput
             : GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
     }
 
+#if UNITY_EDITOR
+    /// <summary>Ask every connected client to report its received mode and hill-marker count.</summary>
+    public static void RequestHillPresentationReports()
+    {
+        if (GameLoop.Instance == null)
+        {
+            Debug.LogWarning("[DevInput] No GameLoop available for hill presentation reports.");
+            return;
+        }
+
+        GameLoop.Instance.DevRequestHillPresentationReports();
+    }
+#endif
+
     /// <summary>Human-readable snapshot of dev state and every unit's cell (alive/dead). Return this.</summary>
     public static string Dump()
     {
         var sb = new StringBuilder();
         string fogState =
             GameLoop.Instance == null ? "n/a" : (GameLoop.Instance.FogOfWarEnabled ? "on" : "off");
+        string mode =
+            GameLoop.Instance != null
+                ? GameLoop.Instance.Options.GameModeDisplayName
+                : MatchOptions.Current.GameModeDisplayName;
         sb.AppendLine(
-            $"devMode={GameLoop.devMode} phase={GameLoop.currentPhase} "
+            $"devMode={GameLoop.devMode} mode={mode} phase={GameLoop.currentPhase} "
                 + $"fog={fogState} "
                 + $"speed={GameLoop.devSpeedMultiplier} timeScale={Time.timeScale} "
                 + $"lastPlanningWait={GameLoop.lastPlanningSeconds:0.###}s"
@@ -365,6 +407,24 @@ public static class DevInput
         sb.AppendLine(
             $"network: listening={nm?.IsListening} server={nm?.IsServer} clients={nm?.ConnectedClients?.Count}"
         );
+
+        if (GameLoop.Instance != null && GameLoop.Instance.Options.IsKingOfTheHill)
+        {
+            HillControlState hill = GameLoop.Instance.HillControl;
+            sb.AppendLine(
+                $"hill: round={GameLoop.Instance.RoundNumber} status={hill.Status} "
+                    + $"controller={hill.ControllingTeamIndex} "
+                    + $"streak={hill.Streak}/{GameLoop.HillControlRoundsToWin}"
+            );
+#if UNITY_EDITOR
+            if (!string.IsNullOrWhiteSpace(GameLoop.Instance.DevHillPresentationReport))
+            {
+                sb.AppendLine(
+                    "hill presentation: " + GameLoop.Instance.DevHillPresentationReport
+                );
+            }
+#endif
+        }
 
         for (int t = 0; t < GameLoop.TeamCount; t++)
         {

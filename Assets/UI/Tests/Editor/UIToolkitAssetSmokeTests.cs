@@ -37,6 +37,9 @@ public class UIToolkitAssetSmokeTests
                 "show-create-button",
                 "show-join-button",
                 "title-button",
+                "elimination-button",
+                "king-button",
+                "flag-button",
                 "player-opponent-button",
                 "ai-opponent-button",
                 "local-multiplayer-row",
@@ -77,6 +80,9 @@ public class UIToolkitAssetSmokeTests
                 "hud-flash",
                 "phase-label",
                 "timer-label",
+                "match-type-label",
+                "fog-label",
+                "hill-status-label",
                 "unit-cards",
                 "unit-card-0",
                 "unit-card-1",
@@ -251,6 +257,23 @@ public class UIToolkitAssetSmokeTests
         );
         Assert.That(checkmarkRule, Does.Contain("width: 22px"));
         Assert.That(checkmarkRule, Does.Contain("height: 22px"));
+    }
+
+    [Test]
+    public void JoinEnablesKingOfTheHillButKeepsCaptureTheFlagUnavailable()
+    {
+        const string assetPath = "Assets/UI/Join/JoinGame.uxml";
+        VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
+        Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
+
+        TemplateContainer tree = asset.Instantiate();
+        Button king = tree.Q<Button>("king-button");
+        Button flag = tree.Q<Button>("flag-button");
+
+        Assert.That(king, Is.Not.Null);
+        Assert.That(flag, Is.Not.Null);
+        Assert.That(king.enabledSelf, Is.True);
+        Assert.That(flag.enabledSelf, Is.False);
     }
 
     [Test]

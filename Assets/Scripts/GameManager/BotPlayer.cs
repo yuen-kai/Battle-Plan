@@ -140,7 +140,10 @@ public sealed class BotPlayer
             AbilityContributionCount++;
 
         HashSet<Vector2Int> occupiedCells = new(botUnits.Select(GetCell).Concat(visibleEnemyCells));
-        List<Vector2Int> targets = knowledge.GetTargetCells();
+        List<Vector2Int> targets = GetStrategicTargets(
+            gameLoop.Options.gameMode,
+            knowledge.GetTargetCells()
+        );
 
         foreach (GameObject unit in botUnits)
         {
@@ -175,6 +178,29 @@ public sealed class BotPlayer
         }
 
         return plans;
+    }
+
+    public static List<Vector2Int> GetStrategicTargets(
+        GameMode gameMode,
+        IEnumerable<Vector2Int> knownEnemyCells
+    )
+    {
+        IEnumerable<Vector2Int> targets =
+            gameMode == GameMode.KingOfTheHill
+                ? GameLoop.KingOfTheHillCells
+                : (knownEnemyCells ?? Enumerable.Empty<Vector2Int>());
+        return targets.Distinct().OrderBy(cell => cell.x).ThenBy(cell => cell.y).ToList();
+    }
+
+    public static bool WouldAbandonHill(
+        GameMode gameMode,
+        Vector2Int start,
+        Vector2Int destination
+    )
+    {
+        return gameMode == GameMode.KingOfTheHill
+            && GameLoop.KingOfTheHillCells.Contains(start)
+            && !GameLoop.KingOfTheHillCells.Contains(destination);
     }
 
     public PathsDict CreateDodgeContribution(
@@ -316,6 +342,7 @@ public sealed class BotPlayer
                         direction == Vector2Int.zero
                         || !GridSystem.IsCellInBounds(directionTarget)
                         || destination == start
+                        || WouldAbandonHill(gameLoop.Options.gameMode, start, destination)
                         || GridDistance(destination, visibleTarget)
                             > Mathf.CeilToInt(candidate.data.targetRange)
                         || !GridSystem.HasGridLineOfSight(destination, visibleTarget)
@@ -355,6 +382,13 @@ public sealed class BotPlayer
                 if (GridDistance(start, visibleTarget) > candidate.data.abilitySquareRange)
                     continue;
                 if (!candidate.data.responseDistLine && GameLoop.wallLayout.Contains(visibleTarget))
+                {
+                    continue;
+                }
+                if (
+                    candidate.unit.GetComponent<Pogo>() != null
+                    && WouldAbandonHill(gameLoop.Options.gameMode, start, visibleTarget)
+                )
                 {
                     continue;
                 }

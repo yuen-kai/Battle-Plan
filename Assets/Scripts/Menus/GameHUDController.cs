@@ -24,6 +24,7 @@ public class GameHUDController : MonoBehaviour
     private Label planningHelp;
     private Label matchTypeLabel;
     private Label fogLabel;
+    private Label hillStatusLabel;
     private Label deploymentStatus;
     private Label resultsStatus;
     private Button playAgainButton;
@@ -32,6 +33,8 @@ public class GameHUDController : MonoBehaviour
     private Action mainMenuAction;
     private Coroutine flashCoroutine;
     private bool callbacksRegistered;
+
+    public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
 
     private void OnEnable()
     {
@@ -95,6 +98,7 @@ public class GameHUDController : MonoBehaviour
         planningHelp = RequireElement<Label>("planning-help");
         matchTypeLabel = RequireElement<Label>("match-type-label");
         fogLabel = RequireElement<Label>("fog-label");
+        hillStatusLabel = RequireElement<Label>("hill-status-label");
         deploymentStatus = RequireElement<Label>("deployment-status");
         resultsStatus = RequireElement<Label>("results-status");
         playAgainButton = RequireElement<Button>("play-again-button");
@@ -283,10 +287,52 @@ public class GameHUDController : MonoBehaviour
         options = options.Sanitized();
         if (matchTypeLabel != null)
         {
-            matchTypeLabel.text = options.IsBotMatch ? "ELIMINATION / AI" : "ELIMINATION / PLAYER";
+            string opponent = options.IsBotMatch ? "AI" : "PLAYER";
+            matchTypeLabel.text = $"{options.GameModeDisplayName.ToUpperInvariant()} / {opponent}";
         }
         if (fogLabel != null)
             fogLabel.text = options.fogOfWar ? "FOG ON" : "FOG OFF";
+
+        if (hillStatusLabel != null)
+        {
+            hillStatusLabel.EnableInClassList("hidden", !options.IsKingOfTheHill);
+            if (options.IsKingOfTheHill)
+            {
+                SetHillControl(
+                    GameLoop.Instance != null ? GameLoop.Instance.HillControl : HillControlState.Empty
+                );
+            }
+        }
+    }
+
+    public void SetHillControl(HillControlState state)
+    {
+        if (hillStatusLabel == null)
+            return;
+
+        bool hostControlled =
+            state.Status == HillControlStatus.Controlled
+            && state.ControllingTeamIndex == GameLoop.HostTeamIndex;
+        bool opponentControlled =
+            state.Status == HillControlStatus.Controlled
+            && state.ControllingTeamIndex == GameLoop.OpponentTeamIndex;
+
+        hillStatusLabel.EnableInClassList("hill-status--blue", hostControlled);
+        hillStatusLabel.EnableInClassList("hill-status--red", opponentControlled);
+        hillStatusLabel.EnableInClassList(
+            "hill-status--contested",
+            state.Status == HillControlStatus.Contested
+        );
+
+        hillStatusLabel.text = state.Status switch
+        {
+            HillControlStatus.Contested => "CONTESTED · STREAK RESET",
+            HillControlStatus.Controlled =>
+                $"{(hostControlled ? "BLUE" : "RED")} CONTROL · "
+                + $"{Mathf.Clamp(state.Streak, 0, GameLoop.HillControlRoundsToWin)}/"
+                + GameLoop.HillControlRoundsToWin,
+            _ => "NO CONTROL · 0/" + GameLoop.HillControlRoundsToWin,
+        };
     }
 
     public void ShowDeployment(string status = null)

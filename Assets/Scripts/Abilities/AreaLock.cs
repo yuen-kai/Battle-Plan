@@ -17,6 +17,18 @@ public class AreaLock : Ability
     private BeamVFX serverBeam;
     private BeamVFX clientBeam;
 
+    public override void ResetForRespawn()
+    {
+        base.ResetForRespawn();
+        foreach (BeamVFX beam in GetComponentsInChildren<BeamVFX>(includeInactive: true))
+        {
+            beam.gameObject.SetActive(false);
+            Destroy(beam.gameObject);
+        }
+        serverBeam = null;
+        clientBeam = null;
+    }
+
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         transform.GetComponent<Movement>().PauseMovement();

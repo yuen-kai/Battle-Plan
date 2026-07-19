@@ -26,6 +26,14 @@ public class Shield : Ability
         base.OnNetworkDespawn();
     }
 
+    public override void ResetForRespawn()
+    {
+        base.ResetForRespawn();
+        if (IsServer)
+            shieldActive.Value = false;
+        ApplyShieldState(false);
+    }
+
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         Movement movement = GetComponent<Movement>();

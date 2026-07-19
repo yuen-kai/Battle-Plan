@@ -14,6 +14,11 @@ public abstract class Ability: NetworkBehaviour
         }
     }
 
+    public virtual void ResetForRespawn()
+    {
+        StopAllCoroutines();
+    }
+
     public abstract IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius);
 }
 

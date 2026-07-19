@@ -27,9 +27,9 @@
                             <ui:Label text="Elimination" class="mode-option__name" picking-mode="Ignore" />
                             <ui:Label text="Defeat the opposing fireteam" class="mode-option__detail" picking-mode="Ignore" />
                         </ui:Button>
-                        <ui:Button name="king-button" enabled="false" class="button mode-option">
+                        <ui:Button name="king-button" class="button mode-option">
                             <ui:Label text="King of the Hill" class="mode-option__name" picking-mode="Ignore" />
-                            <ui:Label text="Coming soon" class="mode-option__status" picking-mode="Ignore" />
+                            <ui:Label text="Hold the central zone for 3 rounds" class="mode-option__detail" picking-mode="Ignore" />
                         </ui:Button>
                         <ui:Button name="flag-button" enabled="false" class="button mode-option">
                             <ui:Label text="Capture the Flag" class="mode-option__name" picking-mode="Ignore" />

@@ -100,6 +100,26 @@
     letter-spacing: 1px;
 }
 
+.match-readout__objective {
+    margin-top: 6px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(226, 157, 46);
+    letter-spacing: 1px;
+}
+
+.hill-status--blue {
+    color: rgb(100, 193, 249);
+}
+
+.hill-status--red {
+    color: rgb(255, 108, 103);
+}
+
+.hill-status--contested {
+    color: rgb(235, 178, 76);
+}
+
 .hud-dock {
     position: absolute;
     left: 34px;

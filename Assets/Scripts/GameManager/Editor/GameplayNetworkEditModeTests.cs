@@ -32,6 +32,17 @@ public class GameplayNetworkEditModeTests
         Assert.That(defaults.opponentType, Is.EqualTo(OpponentType.Player));
         Assert.That(defaults.fogOfWar, Is.True);
 
+        MatchOptions kingOfTheHill = defaults;
+        kingOfTheHill.gameMode = GameMode.KingOfTheHill;
+        MatchOptions sanitizedKingOfTheHill = kingOfTheHill.Sanitized();
+        Assert.That(sanitizedKingOfTheHill.gameMode, Is.EqualTo(GameMode.KingOfTheHill));
+        Assert.That(sanitizedKingOfTheHill.IsKingOfTheHill, Is.True);
+        Assert.That(sanitizedKingOfTheHill.GameModeDisplayName, Is.EqualTo("King of the Hill"));
+
+        MatchOptions unsupported = defaults;
+        unsupported.gameMode = GameMode.CaptureTheFlag;
+        Assert.That(unsupported.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
+
         MatchOptions invalid = new()
         {
             gameMode = (GameMode)byte.MaxValue,
@@ -54,7 +65,7 @@ public class GameplayNetworkEditModeTests
     {
         MatchOptions written = new()
         {
-            gameMode = (GameMode)99,
+            gameMode = GameMode.KingOfTheHill,
             opponentType = OpponentType.AI,
             fogOfWar = false,
         };
@@ -65,9 +76,17 @@ public class GameplayNetworkEditModeTests
         using FastBufferReader reader = new(writer, Allocator.Temp);
         reader.ReadNetworkSerializable(out MatchOptions roundTripped);
 
-        Assert.That(roundTripped.gameMode, Is.EqualTo(GameMode.Elimination));
+        Assert.That(roundTripped.gameMode, Is.EqualTo(GameMode.KingOfTheHill));
         Assert.That(roundTripped.opponentType, Is.EqualTo(OpponentType.AI));
         Assert.That(roundTripped.fogOfWar, Is.False);
+
+        MatchOptions invalid = written;
+        invalid.gameMode = (GameMode)99;
+        using FastBufferWriter invalidWriter = new(16, Allocator.Temp);
+        invalidWriter.WriteNetworkSerializable(invalid);
+        using FastBufferReader invalidReader = new(invalidWriter, Allocator.Temp);
+        invalidReader.ReadNetworkSerializable(out MatchOptions sanitizedRoundTrip);
+        Assert.That(sanitizedRoundTrip.gameMode, Is.EqualTo(GameMode.Elimination));
     }
 
     [Test]
@@ -343,6 +362,233 @@ public class GameplayNetworkEditModeTests
         }
 
         CollectionAssert.AreEqual(path, GridSystem.FindPath(start, goal, blocked));
+    }
+
+    [Test]
+    public void KingOfTheHillCells_AreCentralSymmetricAndTraversable()
+    {
+        HashSet<Vector2Int> expected = new()
+        {
+            new Vector2Int(3, 4),
+            new Vector2Int(4, 4),
+            new Vector2Int(5, 4),
+            new Vector2Int(3, 5),
+            new Vector2Int(4, 5),
+            new Vector2Int(5, 5),
+        };
+
+        Assert.That(GameLoop.KingOfTheHillCells.Count, Is.EqualTo(6));
+        CollectionAssert.AreEquivalent(expected, GameLoop.KingOfTheHillCells);
+        foreach (Vector2Int cell in GameLoop.KingOfTheHillCells)
+        {
+            Assert.That(GridSystem.IsCellInBounds(cell), Is.True);
+            Assert.That(GameLoop.wallLayout.Contains(cell), Is.False);
+            Assert.That(
+                GameLoop.KingOfTheHillCells.Contains(new Vector2Int(8 - cell.x, 9 - cell.y)),
+                Is.True,
+                $"{cell} has no rotationally symmetric hill cell."
+            );
+        }
+    }
+
+    [Test]
+    public void HillControl_DetectsEmptySoleAndContestedOccupancy()
+    {
+        Assert.That(
+            GameLoop.DetermineHillControl(null, null, out int emptyController),
+            Is.EqualTo(HillControlStatus.Empty)
+        );
+        Assert.That(emptyController, Is.EqualTo(GameLoop.NoHillController));
+
+        Assert.That(
+            GameLoop.DetermineHillControl(
+                new[] { new Vector2Int(4, 4) },
+                new[] { new Vector2Int(0, 9) },
+                out int hostController
+            ),
+            Is.EqualTo(HillControlStatus.Controlled)
+        );
+        Assert.That(hostController, Is.EqualTo(GameLoop.HostTeamIndex));
+
+        Assert.That(
+            GameLoop.DetermineHillControl(
+                new[] { new Vector2Int(3, 5) },
+                new[] { new Vector2Int(5, 4) },
+                out int contestedController
+            ),
+            Is.EqualTo(HillControlStatus.Contested)
+        );
+        Assert.That(contestedController, Is.EqualTo(GameLoop.NoHillController));
+    }
+
+    [Test]
+    public void HillControlStreak_RequiresThreeConsecutiveSoleControlRounds()
+    {
+        HillControlState state = HillControlState.Empty;
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Controlled,
+            GameLoop.HostTeamIndex
+        );
+        Assert.That(state.Streak, Is.EqualTo(1));
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Controlled,
+            GameLoop.HostTeamIndex
+        );
+        Assert.That(state.Streak, Is.EqualTo(2));
+
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Empty,
+            GameLoop.NoHillController
+        );
+        Assert.That(state.Status, Is.EqualTo(HillControlStatus.Empty));
+        Assert.That(state.Streak, Is.Zero);
+
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Controlled,
+            GameLoop.HostTeamIndex
+        );
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Contested,
+            GameLoop.NoHillController
+        );
+        Assert.That(state.Status, Is.EqualTo(HillControlStatus.Contested));
+        Assert.That(state.Streak, Is.Zero);
+
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Controlled,
+            GameLoop.HostTeamIndex
+        );
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Controlled,
+            GameLoop.OpponentTeamIndex
+        );
+        Assert.That(state.ControllingTeamIndex, Is.EqualTo(GameLoop.OpponentTeamIndex));
+        Assert.That(state.Streak, Is.EqualTo(1), "A control swap starts a new streak.");
+
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Controlled,
+            GameLoop.OpponentTeamIndex
+        );
+        state = GameLoop.AdvanceHillControlState(
+            state,
+            HillControlStatus.Controlled,
+            GameLoop.OpponentTeamIndex
+        );
+        Assert.That(state.Streak, Is.EqualTo(GameLoop.HillControlRoundsToWin));
+    }
+
+    [Test]
+    public void KingOfTheHillRespawn_RequiresSurvivorsOnBothTeams()
+    {
+        Assert.That(
+            GameLoop.ShouldRespawnEliminatedUnits(GameMode.KingOfTheHill, GameLoop.TeamCount),
+            Is.True
+        );
+        Assert.That(
+            GameLoop.ShouldRespawnEliminatedUnits(GameMode.KingOfTheHill, 1),
+            Is.False,
+            "A full-team wipe must still end the match before respawns."
+        );
+        Assert.That(
+            GameLoop.ShouldRespawnEliminatedUnits(GameMode.Elimination, GameLoop.TeamCount),
+            Is.False
+        );
+    }
+
+    [Test]
+    public void HillControlState_RoundTripsAndLivesOnAlwaysVisibleGameLoop()
+    {
+        HillControlState written = new(
+            HillControlStatus.Controlled,
+            GameLoop.OpponentTeamIndex,
+            2
+        );
+        using FastBufferWriter writer = new(32, Allocator.Temp);
+        writer.WriteNetworkSerializable(written);
+        using FastBufferReader reader = new(writer, Allocator.Temp);
+        reader.ReadNetworkSerializable(out HillControlState roundTripped);
+        Assert.That(roundTripped, Is.EqualTo(written));
+
+        FieldInfo field = typeof(GameLoop).GetField(
+            "replicatedHillControl",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        Assert.That(field, Is.Not.Null);
+        Assert.That(field.FieldType, Is.EqualTo(typeof(NetworkVariable<HillControlState>)));
+    }
+
+    [Test]
+    public void BotMovement_PrioritizesAndHoldsKingOfTheHillCells()
+    {
+        List<Vector2Int> targets = BotPlayer.GetStrategicTargets(
+            GameMode.KingOfTheHill,
+            new[] { new Vector2Int(8, 0) }
+        );
+        CollectionAssert.AreEqual(
+            GameLoop.KingOfTheHillCells
+                .OrderBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+                .ToList(),
+            targets
+        );
+
+        Vector2Int start = new(4, 9);
+        List<Vector2Int> approach = BotPlayer.BuildMovementPath(
+            start,
+            targets,
+            new HashSet<Vector2Int>(),
+            new HashSet<Vector2Int>(),
+            3
+        );
+        int startDistance = targets.Min(cell =>
+            Mathf.Abs(start.x - cell.x) + Mathf.Abs(start.y - cell.y)
+        );
+        int endDistance = targets.Min(cell =>
+            Mathf.Abs(approach[^1].x - cell.x) + Mathf.Abs(approach[^1].y - cell.y)
+        );
+        Assert.That(endDistance, Is.LessThan(startDistance));
+
+        Vector2Int controlledCell = new(4, 5);
+        List<Vector2Int> hold = BotPlayer.BuildMovementPath(
+            controlledCell,
+            targets,
+            new HashSet<Vector2Int>(),
+            new HashSet<Vector2Int>(),
+            3
+        );
+        CollectionAssert.AreEqual(new[] { controlledCell }, hold);
+        Assert.That(
+            BotPlayer.WouldAbandonHill(
+                GameMode.KingOfTheHill,
+                controlledCell,
+                new Vector2Int(4, 8)
+            ),
+            Is.True
+        );
+        Assert.That(
+            BotPlayer.WouldAbandonHill(
+                GameMode.KingOfTheHill,
+                controlledCell,
+                new Vector2Int(3, 4)
+            ),
+            Is.False
+        );
+        Assert.That(
+            BotPlayer.WouldAbandonHill(
+                GameMode.Elimination,
+                controlledCell,
+                new Vector2Int(4, 8)
+            ),
+            Is.False
+        );
     }
 
     [Test]

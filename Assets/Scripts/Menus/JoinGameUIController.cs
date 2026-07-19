@@ -178,6 +178,10 @@ public class JoinGameUIController : MonoBehaviour
             showJoinButton.clicked += ShowJoin;
         if (titleButton != null)
             titleButton.clicked += NavigateBack;
+        if (eliminationButton != null)
+            eliminationButton.clicked += SelectEliminationMode;
+        if (kingButton != null)
+            kingButton.clicked += SelectKingOfTheHillMode;
         if (playerOpponentButton != null)
             playerOpponentButton.clicked += SelectPlayerOpponent;
         if (aiOpponentButton != null)
@@ -215,6 +219,10 @@ public class JoinGameUIController : MonoBehaviour
             showJoinButton.clicked -= ShowJoin;
         if (titleButton != null)
             titleButton.clicked -= NavigateBack;
+        if (eliminationButton != null)
+            eliminationButton.clicked -= SelectEliminationMode;
+        if (kingButton != null)
+            kingButton.clicked -= SelectKingOfTheHillMode;
         if (playerOpponentButton != null)
             playerOpponentButton.clicked -= SelectPlayerOpponent;
         if (aiOpponentButton != null)
@@ -282,15 +290,14 @@ public class JoinGameUIController : MonoBehaviour
     private void ConfigureInitialState()
     {
         pendingOptions = MatchOptions.Current.Sanitized();
-        pendingOptions.gameMode = GameMode.Elimination;
-        pendingOptions = pendingOptions.Sanitized();
 
         eliminationButton?.SetEnabled(true);
-        kingButton?.SetEnabled(false);
+        kingButton?.SetEnabled(true);
         flagButton?.SetEnabled(false);
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
         joinCodeInput?.SetValueWithoutNotify(string.Empty);
         localMultiplayerToggle?.SetValueWithoutNotify(false);
+        SetGameMode(pendingOptions.gameMode);
         SetOpponent(pendingOptions.opponentType);
         SetCreateStatus(string.Empty, false);
         SetJoinStatus(string.Empty, false);
@@ -337,6 +344,32 @@ public class JoinGameUIController : MonoBehaviour
     private void SelectPlayerOpponent()
     {
         SetOpponent(OpponentType.Player);
+    }
+
+    private void SelectEliminationMode()
+    {
+        SetGameMode(GameMode.Elimination);
+    }
+
+    private void SelectKingOfTheHillMode()
+    {
+        SetGameMode(GameMode.KingOfTheHill);
+    }
+
+    private void SetGameMode(GameMode gameMode)
+    {
+        pendingOptions.gameMode = gameMode;
+        pendingOptions = pendingOptions.Sanitized();
+
+        eliminationButton?.EnableInClassList(
+            "button--selected",
+            pendingOptions.gameMode == GameMode.Elimination
+        );
+        kingButton?.EnableInClassList(
+            "button--selected",
+            pendingOptions.gameMode == GameMode.KingOfTheHill
+        );
+        SetCreateStatus(string.Empty, false);
     }
 
     private void SelectAiOpponent()
@@ -405,7 +438,6 @@ public class JoinGameUIController : MonoBehaviour
             return;
 
         MatchOptions options = pendingOptions;
-        options.gameMode = GameMode.Elimination;
         options.fogOfWar = fogToggle?.value ?? options.fogOfWar;
         options = options.Sanitized();
         bool useLocalMultiplayer =
@@ -840,6 +872,9 @@ public class JoinGameUIController : MonoBehaviour
         showCreateButton?.SetEnabled(enabled);
         showJoinButton?.SetEnabled(enabled);
         titleButton?.SetEnabled(enabled);
+        eliminationButton?.SetEnabled(enabled);
+        kingButton?.SetEnabled(enabled);
+        flagButton?.SetEnabled(false);
         createMatchButton?.SetEnabled(enabled);
         joinMatchButton?.SetEnabled(enabled);
         playerOpponentButton?.SetEnabled(enabled);

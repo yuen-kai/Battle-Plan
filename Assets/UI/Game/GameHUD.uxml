@@ -15,6 +15,7 @@
             <ui:Label text="MATCH STATUS" class="match-readout__key" picking-mode="Ignore" />
             <ui:Label name="match-type-label" text="ELIMINATION / PLAYER" class="match-readout__primary" picking-mode="Ignore" />
             <ui:Label name="fog-label" text="FOG ON" class="match-readout__secondary" picking-mode="Ignore" />
+            <ui:Label name="hill-status-label" text="NO CONTROL · 0/3" class="match-readout__objective hidden" picking-mode="Ignore" />
         </ui:VisualElement>
 
         <ui:VisualElement name="hud-dock" class="hud-dock">

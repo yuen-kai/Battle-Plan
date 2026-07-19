@@ -5,6 +5,8 @@ using Unity.Netcode;
 
 public class Bullet : NetworkBehaviour
 {
+    private static readonly HashSet<Bullet> activeServerBullets = new();
+
     public float damage = 10f;
     public float backstabMultiplier = 1f;
     public float backstabAngle = 90f; // Angle in degrees from forward direction to consider a backstab
@@ -16,6 +18,14 @@ public class Bullet : NetworkBehaviour
     private float maxLifetime = 8f;
     private float timeElapsed = 0f;
 
+    public static int ActiveServerBulletCount => activeServerBullets.Count;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActiveBullets()
+    {
+        activeServerBullets.Clear();
+    }
+
     public override void OnNetworkSpawn()
     {
         if (!IsServer)
@@ -23,7 +33,19 @@ public class Bullet : NetworkBehaviour
             enabled = false;
             return;
         }
+        activeServerBullets.Add(this);
         startPosition = transform.position;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        activeServerBullets.Remove(this);
+        base.OnNetworkDespawn();
+    }
+
+    private void OnDestroy()
+    {
+        activeServerBullets.Remove(this);
     }
 
     void Update()

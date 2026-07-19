@@ -33,6 +33,9 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
 
     public static MatchOptions Current => current;
     public bool IsBotMatch => opponentType == OpponentType.AI;
+    public bool IsKingOfTheHill => gameMode == GameMode.KingOfTheHill;
+    public string GameModeDisplayName =>
+        IsKingOfTheHill ? "King of the Hill" : "Elimination";
 
     public static void SetCurrent(MatchOptions options)
     {
@@ -47,8 +50,13 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     public MatchOptions Sanitized()
     {
         MatchOptions sanitized = this;
-        if (sanitized.gameMode != GameMode.Elimination)
+        if (
+            sanitized.gameMode != GameMode.Elimination
+            && sanitized.gameMode != GameMode.KingOfTheHill
+        )
+        {
             sanitized.gameMode = GameMode.Elimination;
+        }
 
         if (
             sanitized.opponentType != OpponentType.Player

@@ -93,6 +93,16 @@ public class HitFlash : MonoBehaviour
         flashRoutine = null;
     }
 
+    void OnDisable()
+    {
+        if (flashRoutine != null)
+        {
+            StopCoroutine(flashRoutine);
+            flashRoutine = null;
+        }
+        ClearFlash();
+    }
+
     void ClearFlash()
     {
         foreach (Renderer unitRenderer in renderers)

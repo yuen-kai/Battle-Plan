@@ -636,7 +636,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     {
         options = options.Sanitized();
         if (modeSummary != null)
-            modeSummary.text = "Elimination";
+            modeSummary.text = options.GameModeDisplayName;
         if (opponentSummary != null)
             opponentSummary.text = options.IsBotMatch ? "AI" : "Player";
         if (fogSummary != null)

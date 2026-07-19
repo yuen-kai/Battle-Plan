@@ -12,6 +12,76 @@ public enum MessagePerspective
     Enemy,
 }
 
+public enum HillControlStatus : byte
+{
+    Empty,
+    Contested,
+    Controlled,
+}
+
+public struct HillControlState
+    : INetworkSerializable,
+        System.IEquatable<HillControlState>
+{
+    public HillControlStatus Status;
+    public int ControllingTeamIndex;
+    public int Streak;
+
+    public static HillControlState Empty => new(HillControlStatus.Empty, -1, 0);
+
+    public HillControlState(HillControlStatus status, int controllingTeamIndex, int streak)
+    {
+        bool validControl =
+            status == HillControlStatus.Controlled
+            && (
+                controllingTeamIndex == GameLoop.HostTeamIndex
+                || controllingTeamIndex == GameLoop.OpponentTeamIndex
+            );
+        Status = validControl
+            ? HillControlStatus.Controlled
+            : (
+                status == HillControlStatus.Contested
+                    ? HillControlStatus.Contested
+                    : HillControlStatus.Empty
+            );
+        ControllingTeamIndex = validControl ? controllingTeamIndex : -1;
+        Streak = validControl ? Mathf.Max(1, streak) : 0;
+    }
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        byte serializedStatus = (byte)Status;
+        serializer.SerializeValue(ref serializedStatus);
+        serializer.SerializeValue(ref ControllingTeamIndex);
+        serializer.SerializeValue(ref Streak);
+
+        if (serializer.IsReader)
+            this = new HillControlState(
+                (HillControlStatus)serializedStatus,
+                ControllingTeamIndex,
+                Streak
+            );
+    }
+
+    public bool Equals(HillControlState other)
+    {
+        return Status == other.Status
+            && ControllingTeamIndex == other.ControllingTeamIndex
+            && Streak == other.Streak;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is HillControlState other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return System.HashCode.Combine(Status, ControllingTeamIndex, Streak);
+    }
+}
+
 public class GameLoop : NetworkBehaviour
 {
     // === EXPLICIT DEV MODE (no-mouse input, fast-forward, self-run) ===
@@ -68,6 +138,8 @@ public class GameLoop : NetworkBehaviour
     public const int OpponentTeamIndex = 1;
     public const int TeamCount = 2;
     public const ulong BotParticipantId = ulong.MaxValue;
+    public const int NoHillController = -1;
+    public const int HillControlRoundsToWin = 3;
 
     public static readonly int[] DefaultBotRoster = { 2, 3, 4 };
     public static readonly int[] DevHostRoster = { 0, 1, 2 };
@@ -87,6 +159,15 @@ public class GameLoop : NetworkBehaviour
         new Vector2(0, 0),
         new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f)
     );
+    public static readonly HashSet<Vector2Int> KingOfTheHillCells = new()
+    {
+        new Vector2Int(3, 4),
+        new Vector2Int(4, 4),
+        new Vector2Int(5, 4),
+        new Vector2Int(3, 5),
+        new Vector2Int(4, 5),
+        new Vector2Int(5, 5),
+    };
 
     [SerializeField]
     private GameObject wallPrefab;
@@ -154,8 +235,32 @@ public class GameLoop : NetworkBehaviour
     public static System.Action OrderContinueShooting;
 
     private readonly Dictionary<int, PathsDict> submittedTeamPaths = new();
+    private readonly Dictionary<
+        GameObject,
+        (Vector3 position, Quaternion rotation)
+    > unitSpawnTransforms = new();
     private BotPlayer botPlayer;
     private int roundNumber;
+
+    // === KING OF THE HILL ===
+    // Atomic, server-authored objective state on the always-visible GameLoop object. Keeping this
+    // off unit NetworkObjects ensures fog NetworkHide never drops a control update.
+    private readonly NetworkVariable<HillControlState> replicatedHillControl = new(
+        HillControlState.Empty
+    );
+    private readonly List<Renderer> hillOverlayRenderers = new();
+    private GameObject hillOverlayRoot;
+    private Material hillOverlayMaterial;
+    private MaterialPropertyBlock hillOverlayProperties;
+    private static readonly int HillGlowColorId = Shader.PropertyToID("_GlowColor");
+    private static readonly int HillRingWidthId = Shader.PropertyToID("_RingWidth");
+    private static readonly int HillEdgeSoftnessId = Shader.PropertyToID("_EdgeSoftness");
+    private static readonly int HillIntensityId = Shader.PropertyToID("_Intensity");
+    private static readonly int HillPulseSpeedId = Shader.PropertyToID("_PulseSpeed");
+    private static readonly int HillPulseAmountId = Shader.PropertyToID("_PulseAmount");
+#if UNITY_EDITOR
+    private readonly Dictionary<ulong, string> devHillPresentationReports = new();
+#endif
 
     public GameObject teamCameraParent;
     public Camera TeamCamera;
@@ -206,6 +311,18 @@ public class GameLoop : NetworkBehaviour
     public int BotDodgeContributionCount => botPlayer?.DodgeContributionCount ?? 0;
     public int BotAbilityContributionCount => botPlayer?.AbilityContributionCount ?? 0;
     public bool BotLastPlanUsedAbility => botPlayer?.LastPlanUsedAbility ?? false;
+    public int RoundNumber => roundNumber;
+    public HillControlState HillControl => replicatedHillControl.Value;
+#if UNITY_EDITOR
+    public int DevHillPresentationReportCount => devHillPresentationReports.Count;
+    public string DevHillPresentationReport =>
+        string.Join(
+            " | ",
+            devHillPresentationReports
+                .OrderBy(entry => entry.Key)
+                .Select(entry => $"client={entry.Key} {entry.Value}")
+        );
+#endif
 
     public static GameLoop Instance { get; private set; }
 
@@ -219,6 +336,7 @@ public class GameLoop : NetworkBehaviour
         teamZeroParticipant.OnValueChanged += OnTeamParticipantChanged;
         teamOneParticipant.OnValueChanged += OnTeamParticipantChanged;
         fogOfWarEnabled.OnValueChanged += OnFogOfWarEnabledChanged;
+        replicatedHillControl.OnValueChanged += OnHillControlChanged;
         if (NetworkManager != null)
             NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
         matchEnded = false;
@@ -232,6 +350,7 @@ public class GameLoop : NetworkBehaviour
             teamZeroParticipant.Value = GetConfiguredParticipantId(HostTeamIndex);
             teamOneParticipant.Value = GetConfiguredParticipantId(OpponentTeamIndex);
             fogOfWarEnabled.Value = replicatedMatchOptions.Value.fogOfWar;
+            replicatedHillControl.Value = HillControlState.Empty;
             botPlayer = replicatedMatchOptions.Value.IsBotMatch
                 ? new BotPlayer(this, OpponentTeamIndex)
                 : null;
@@ -254,6 +373,7 @@ public class GameLoop : NetworkBehaviour
         }
 
         GameHUDController.Instance?.SetMatchSummary(replicatedMatchOptions.Value);
+        RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
         Unit.RefreshAllTeamPresentation();
 
         if (IsClient && FogOfWarEnabled)
@@ -282,11 +402,14 @@ public class GameLoop : NetworkBehaviour
         teamZeroParticipant.OnValueChanged -= OnTeamParticipantChanged;
         teamOneParticipant.OnValueChanged -= OnTeamParticipantChanged;
         fogOfWarEnabled.OnValueChanged -= OnFogOfWarEnabledChanged;
+        replicatedHillControl.OnValueChanged -= OnHillControlChanged;
         if (NetworkManager != null)
             NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
         StopServerFog(false);
         forceRevealUntil.Clear();
         StopClientFog();
+        ClearKingOfTheHillOverlay();
+        unitSpawnTransforms.Clear();
 
         if (Instance == this)
             Instance = null;
@@ -298,6 +421,12 @@ public class GameLoop : NetworkBehaviour
     {
         MatchOptions.SetCurrent(newValue);
         GameHUDController.Instance?.SetMatchSummary(newValue);
+        RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
+    }
+
+    private void OnHillControlChanged(HillControlState previousValue, HillControlState newValue)
+    {
+        RefreshKingOfTheHillPresentation(newValue);
     }
 
     private void OnTeamParticipantChanged(ulong previousValue, ulong newValue)
@@ -468,6 +597,7 @@ public class GameLoop : NetworkBehaviour
 
     void StartGame()
     {
+        unitSpawnTransforms.Clear();
         foreach (var pos in wallLayout)
         {
             Vector3 worldPos = gridCoordToWorld(pos);
@@ -544,6 +674,7 @@ public class GameLoop : NetworkBehaviour
             Vector3 heightOffset = Helper.heightOffset(unit.transform);
             unit.transform.position += heightOffset;
             NetworkHelper.SyncHeightAdjustedPositionStatic(unit, unit.transform.position);
+            unitSpawnTransforms[unit] = (unit.transform.position, unit.transform.rotation);
 
             unit.tag = team;
             SetGroupLayerGlobal(unit, LayerMask.NameToLayer(team));
@@ -592,6 +723,11 @@ public class GameLoop : NetworkBehaviour
 
     public void DisableUnitCard(GameObject unit)
     {
+        SetUnitCardDisabled(unit, true);
+    }
+
+    private void SetUnitCardDisabled(GameObject unit, bool disabled)
+    {
         if (!IsServer || unit == null || NetworkManager == null)
             return;
 
@@ -607,15 +743,23 @@ public class GameLoop : NetworkBehaviour
                 continue;
             }
 
-            SetCardDisabledClientRpc(unitIndexInTeam, NetworkHelper.ToClient(clientId));
+            SetCardDisabledClientRpc(
+                unitIndexInTeam,
+                disabled,
+                NetworkHelper.ToClient(clientId)
+            );
             return;
         }
     }
 
     [ClientRpc]
-    private void SetCardDisabledClientRpc(int unitIndex, ClientRpcParams clientRpcParams = default)
+    private void SetCardDisabledClientRpc(
+        int unitIndex,
+        bool disabled,
+        ClientRpcParams clientRpcParams = default
+    )
     {
-        GameHUDController.Instance?.SetCardDisabled(unitIndex, true);
+        GameHUDController.Instance?.SetCardDisabled(unitIndex, disabled);
     }
 
     IEnumerator GameLoopTemp()
@@ -624,7 +768,10 @@ public class GameLoop : NetworkBehaviour
             yield break;
         yield return null;
 
-        while (!matchEnded && teamNames.All(team => teamSize(team) > 0))
+        while (
+            !matchEnded
+            && Enumerable.Range(0, TeamCount).All(HasLivingTeamUnits)
+        )
         {
             roundNumber++;
             submittedTeamPaths.Clear();
@@ -751,7 +898,32 @@ public class GameLoop : NetworkBehaviour
                 yield return null;
             }
 
+            if (matchEnded)
+                yield break;
+
+            // A dead shooter is inactive, so its own shooting coroutine can no longer hold the
+            // round open. Wait on the server-wide projectile registry before scoring or reviving.
+            while (!matchEnded && Bullet.ActiveServerBulletCount > 0)
+                yield return null;
+
+            if (matchEnded)
+                yield break;
+
             HideAbilityTelegraphsClientRpc();
+
+            // Elimination takes precedence over objective control. The existing post-loop EndGame
+            // path resolves a survivor or simultaneous-wipe draw.
+            int livingTeamCount = Enumerable.Range(0, TeamCount).Count(HasLivingTeamUnits);
+            if (livingTeamCount < TeamCount)
+                break;
+
+            if (ShouldRespawnEliminatedUnits(Options.gameMode, livingTeamCount))
+            {
+                if (ResolveKingOfTheHillRound())
+                    yield break;
+
+                RespawnEliminatedKingOfTheHillUnits();
+            }
         }
 
         if (matchEnded)
@@ -1359,6 +1531,420 @@ public class GameLoop : NetworkBehaviour
                 Destroy(telegraph);
         }
         clientTelegraphs.Clear();
+    }
+
+    // === KING OF THE HILL ===
+
+    public static HillControlStatus DetermineHillControl(
+        IEnumerable<Vector2Int> hostTeamCells,
+        IEnumerable<Vector2Int> opponentTeamCells,
+        out int controllingTeamIndex
+    )
+    {
+        bool hostPresent = (hostTeamCells ?? Enumerable.Empty<Vector2Int>())
+            .Any(KingOfTheHillCells.Contains);
+        bool opponentPresent = (opponentTeamCells ?? Enumerable.Empty<Vector2Int>())
+            .Any(KingOfTheHillCells.Contains);
+
+        if (hostPresent && opponentPresent)
+        {
+            controllingTeamIndex = NoHillController;
+            return HillControlStatus.Contested;
+        }
+
+        if (hostPresent)
+        {
+            controllingTeamIndex = HostTeamIndex;
+            return HillControlStatus.Controlled;
+        }
+
+        if (opponentPresent)
+        {
+            controllingTeamIndex = OpponentTeamIndex;
+            return HillControlStatus.Controlled;
+        }
+
+        controllingTeamIndex = NoHillController;
+        return HillControlStatus.Empty;
+    }
+
+    public static HillControlState AdvanceHillControlState(
+        HillControlState previous,
+        HillControlStatus status,
+        int controllingTeamIndex
+    )
+    {
+        if (
+            status != HillControlStatus.Controlled
+            || (
+                controllingTeamIndex != HostTeamIndex
+                && controllingTeamIndex != OpponentTeamIndex
+            )
+        )
+        {
+            return new HillControlState(status, NoHillController, 0);
+        }
+
+        int nextStreak =
+            previous.Status == HillControlStatus.Controlled
+                && previous.ControllingTeamIndex == controllingTeamIndex
+                ? previous.Streak + 1
+                : 1;
+        return new HillControlState(
+            HillControlStatus.Controlled,
+            controllingTeamIndex,
+            Mathf.Min(HillControlRoundsToWin, nextStreak)
+        );
+    }
+
+    public static bool ShouldRespawnEliminatedUnits(GameMode gameMode, int livingTeamCount)
+    {
+        return gameMode == GameMode.KingOfTheHill && livingTeamCount == TeamCount;
+    }
+
+    private bool ResolveKingOfTheHillRound()
+    {
+        HillControlStatus status = DetermineHillControl(
+            GetLivingUnitCells(HostTeamIndex),
+            GetLivingUnitCells(OpponentTeamIndex),
+            out int controllingTeamIndex
+        );
+        HillControlState next = AdvanceHillControlState(
+            replicatedHillControl.Value,
+            status,
+            controllingTeamIndex
+        );
+        replicatedHillControl.Value = next;
+
+        if (
+            next.Status != HillControlStatus.Controlled
+            || next.Streak < HillControlRoundsToWin
+        )
+        {
+            return false;
+        }
+
+        FinishGame(
+            true,
+            next.ControllingTeamIndex,
+            $"Held the hill for {HillControlRoundsToWin} consecutive rounds."
+        );
+        return true;
+    }
+
+    private void RespawnEliminatedKingOfTheHillUnits()
+    {
+        List<
+            (
+                GameObject unit,
+                int teamIndex,
+                NetworkObject networkObject,
+                Vector3 position,
+                Quaternion rotation
+            )
+        > respawned = new();
+        foreach (var team in allTeamUnitObjects.OrderBy(entry => entry.Key))
+        {
+            foreach (GameObject unit in team.Value ?? System.Array.Empty<GameObject>())
+            {
+                Health health = unit != null ? unit.GetComponent<Health>() : null;
+                if (health == null || health.IsAlive)
+                    continue;
+
+                if (
+                    !unitSpawnTransforms.TryGetValue(
+                        unit,
+                        out (Vector3 position, Quaternion rotation) spawn
+                    )
+                )
+                {
+                    Debug.LogError($"[GameLoop] No KOTH spawn transform recorded for {unit.name}.");
+                    continue;
+                }
+
+                if (!health.RespawnAt(spawn.position, spawn.rotation))
+                    continue;
+
+                foreach (
+                    var reveal in forceRevealUntil.Keys.Where(key => key.unit == unit).ToList()
+                )
+                {
+                    forceRevealUntil.Remove(reveal);
+                }
+                lastFogCells.Remove(unit);
+                NetworkObject networkObject = unit.GetComponent<NetworkObject>();
+                if (networkObject != null && networkObject.IsSpawned)
+                {
+                    respawned.Add(
+                        (unit, team.Key, networkObject, spawn.position, spawn.rotation)
+                    );
+                }
+                SetUnitCardDisabled(unit, false);
+            }
+        }
+
+        if (respawned.Count == 0)
+            return;
+
+        serverFogDirty = true;
+        if (FogOfWarEnabled)
+        {
+            RefreshFogCellCache();
+            RemoveExpiredForceReveals();
+            UpdateAllUnitVisibility();
+            serverFogDirty = false;
+        }
+
+        foreach (var entry in respawned)
+        {
+            ulong[] observers = GetRespawnObserverClientIds(
+                entry.unit,
+                entry.teamIndex,
+                GridSystem.ConvertToGridCoords(entry.position)
+            );
+            if (observers.Length == 0)
+                continue;
+
+            RespawnUnitClientRpc(
+                entry.networkObject,
+                entry.position,
+                entry.rotation,
+                new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = observers },
+                }
+            );
+        }
+
+        Debug.Log(
+            $"[GameLoop] Respawned {respawned.Count} KOTH unit(s) without restoring ability charges."
+        );
+    }
+
+    private ulong[] GetRespawnObserverClientIds(
+        GameObject unit,
+        int unitTeamIndex,
+        Vector2Int spawnCell
+    )
+    {
+        if (NetworkManager == null)
+            return System.Array.Empty<ulong>();
+
+        List<ulong> observers = new();
+        foreach (ulong clientId in GetConnectedHumanClientIds())
+        {
+            int viewerTeamIndex = GetTeamIndexForClient(clientId);
+            bool shouldSee =
+                !FogOfWarEnabled
+                || viewerTeamIndex == unitTeamIndex
+                || (
+                    viewerTeamIndex >= 0
+                    && (
+                        ComputeVisibleCellsForTeam(viewerTeamIndex).Contains(spawnCell)
+                        || IsForceRevealed(unit, clientId)
+                    )
+                );
+            if (shouldSee)
+                observers.Add(clientId);
+        }
+        return observers.ToArray();
+    }
+
+    [ClientRpc]
+    private void RespawnUnitClientRpc(
+        NetworkObjectReference unitReference,
+        Vector3 position,
+        Quaternion rotation,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        if (!unitReference.TryGet(out NetworkObject networkObject))
+            return;
+
+        networkObject.gameObject.SetActive(true);
+        networkObject.transform.SetPositionAndRotation(position, rotation);
+        networkObject.GetComponent<Ability>()?.ResetForRespawn();
+    }
+
+    private IEnumerable<Vector2Int> GetLivingUnitCells(int teamIndex)
+    {
+        return GetTeamUnits(teamIndex)
+            .Where(IsLivingUnit)
+            .Select(unit => GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit)));
+    }
+
+    private void RefreshKingOfTheHillPresentation(HillControlState state)
+    {
+        if (!IsClient)
+            return;
+
+        if (!Options.IsKingOfTheHill)
+        {
+            ClearKingOfTheHillOverlay();
+            return;
+        }
+
+        EnsureKingOfTheHillOverlay();
+        UpdateKingOfTheHillOverlay(state);
+        GameHUDController.Instance?.SetHillControl(state);
+    }
+
+    private void EnsureKingOfTheHillOverlay()
+    {
+        if (hillOverlayRoot != null)
+            return;
+
+        Shader glowShader = Shader.Find("BattlePlan/GroundGlow");
+        if (glowShader == null)
+        {
+            Debug.LogError(
+                "[GameLoop] BattlePlan/GroundGlow shader is required for the hill overlay."
+            );
+            return;
+        }
+
+        hillOverlayRoot = new GameObject("KingOfTheHillOverlay");
+        hillOverlayRoot.transform.SetParent(transform, true);
+        hillOverlayMaterial = new Material(glowShader) { name = "KingOfTheHillOverlay (Runtime)" };
+        hillOverlayProperties = new MaterialPropertyBlock();
+
+        foreach (
+            Vector2Int cell in KingOfTheHillCells
+                .OrderBy(cell => cell.y)
+                .ThenBy(cell => cell.x)
+        )
+        {
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            marker.name = $"HillCell_{cell.x}_{cell.y}";
+            marker.transform.SetParent(hillOverlayRoot.transform, true);
+            marker.transform.position = gridCoordToWorld(cell) + Vector3.up * 0.075f;
+            marker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            marker.transform.localScale = Vector3.one * (cellSize * 0.92f);
+            Destroy(marker.GetComponent<Collider>());
+
+            Renderer markerRenderer = marker.GetComponent<Renderer>();
+            markerRenderer.sharedMaterial = hillOverlayMaterial;
+            markerRenderer.shadowCastingMode =
+                UnityEngine.Rendering.ShadowCastingMode.Off;
+            markerRenderer.receiveShadows = false;
+            hillOverlayRenderers.Add(markerRenderer);
+        }
+    }
+
+    private void UpdateKingOfTheHillOverlay(HillControlState state)
+    {
+        if (hillOverlayProperties == null || hillOverlayRenderers.Count == 0)
+            return;
+
+        bool controlled =
+            state.Status == HillControlStatus.Controlled
+            && state.ControllingTeamIndex >= 0
+            && state.ControllingTeamIndex < teamColors.Count;
+        Color color = controlled
+            ? teamColors[state.ControllingTeamIndex]
+            : new Color(0.95f, 0.64f, 0.2f, 1f);
+        color.a = controlled ? 0.58f : 0.36f;
+
+        hillOverlayProperties.Clear();
+        hillOverlayProperties.SetColor(HillGlowColorId, color);
+        hillOverlayProperties.SetFloat(HillRingWidthId, 1f);
+        hillOverlayProperties.SetFloat(HillEdgeSoftnessId, controlled ? 0.32f : 0.45f);
+        hillOverlayProperties.SetFloat(HillIntensityId, controlled ? 1.25f : 0.72f);
+        hillOverlayProperties.SetFloat(HillPulseSpeedId, controlled ? 0.7f : 0f);
+        hillOverlayProperties.SetFloat(HillPulseAmountId, controlled ? 0.16f : 0f);
+
+        foreach (Renderer markerRenderer in hillOverlayRenderers)
+        {
+            if (markerRenderer != null)
+                markerRenderer.SetPropertyBlock(hillOverlayProperties);
+        }
+    }
+
+#if UNITY_EDITOR
+    public void DevRequestHillPresentationReports()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning(
+                "[GameLoop] Hill presentation reports can only be requested by the server."
+            );
+            return;
+        }
+
+        devHillPresentationReports.Clear();
+        DevReportHillPresentationClientRpc();
+    }
+
+    [ClientRpc]
+    private void DevReportHillPresentationClientRpc()
+    {
+        HillControlState state = replicatedHillControl.Value;
+        int localTeamIndex = LocalTeamIndex;
+        string localUnits = string.Join(
+            ",",
+            FindObjectsByType<Unit>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(unit => unit.TeamIndex == localTeamIndex)
+                .OrderBy(unit => unit.name)
+                .Select(unit =>
+                {
+                    Health health = unit.GetComponent<Health>();
+                    Collider unitCollider = unit.GetComponent<Collider>();
+                    Vector2Int cell = GridSystem.ConvertToGridCoords(unit.transform.position);
+                    return $"{unit.name}@{cell} active={unit.gameObject.activeSelf} "
+                        + $"alive={health != null && health.IsAlive} "
+                        + $"uses={unit.RemainingAbilityUses} "
+                        + $"collider={unitCollider == null || unitCollider.enabled}";
+                })
+        );
+        DevSubmitHillPresentationReportServerRpc(
+            Options.gameMode,
+            hillOverlayRenderers.Count,
+            (byte)state.Status,
+            state.ControllingTeamIndex,
+            state.Streak,
+            GameHUDController.Instance?.HillStatusText ?? string.Empty,
+            localUnits
+        );
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void DevSubmitHillPresentationReportServerRpc(
+        GameMode gameMode,
+        int markerCount,
+        byte status,
+        int controllingTeamIndex,
+        int streak,
+        string hudText,
+        string localUnits,
+        ServerRpcParams rpcParams = default
+    )
+    {
+        ulong clientId = rpcParams.Receive.SenderClientId;
+        string report =
+            $"mode={gameMode} markers={markerCount} status={(HillControlStatus)status} "
+            + $"controller={controllingTeamIndex} streak={streak} hud=\"{hudText}\" "
+            + $"localUnits=[{localUnits}]";
+        devHillPresentationReports[clientId] = report;
+        Debug.Log($"[GameLoop] Hill presentation report: client={clientId} {report}");
+    }
+#endif
+
+    private void ClearKingOfTheHillOverlay()
+    {
+        hillOverlayRenderers.Clear();
+        hillOverlayProperties = null;
+
+        if (hillOverlayRoot != null)
+        {
+            Destroy(hillOverlayRoot);
+            hillOverlayRoot = null;
+        }
+
+        if (hillOverlayMaterial != null)
+        {
+            Destroy(hillOverlayMaterial);
+            hillOverlayMaterial = null;
+        }
     }
 
     // === FOG OF WAR (server: authoritative per-client visibility) ===
@@ -2201,12 +2787,11 @@ public class GameLoop : NetworkBehaviour
 
     int? GetWinnerTeamIndex()
     {
-        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
-        {
-            if (teamSize(teamIndex) > 0)
-                return teamIndex;
-        }
-        return null;
+        List<int> livingTeams = Enumerable
+            .Range(0, TeamCount)
+            .Where(HasLivingTeamUnits)
+            .ToList();
+        return livingTeams.Count == 1 ? livingTeams[0] : null;
     }
 
     [ClientRpc]
@@ -2601,6 +3186,11 @@ public class GameLoop : NetworkBehaviour
     {
         string team = GetTeamName(teamIndex);
         return team == null ? 0 : teamSize(team);
+    }
+
+    public static bool HasLivingTeamUnits(int teamIndex)
+    {
+        return GetTeamUnits(teamIndex).Any(IsLivingUnit);
     }
 
     public static Vector3 gridCoordToWorld(Vector2Int coords)

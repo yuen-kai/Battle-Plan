@@ -74,8 +74,41 @@ public class Health : NetworkBehaviour
         GameLoop.Instance?.DisableUnitCard(gameObject);
 
         // Leave the NetworkObject active through this frame's network update so the final
-        // NetworkVariable values can be sent, then preserve the existing tag-based teamSize rule.
+        // NetworkVariable values can be sent before round-end arbitration.
         StartCoroutine(DeactivateOnServerNextFrame());
+    }
+
+    /// <summary>
+    /// Server-only KOTH revival. Restores health and transient movement/shooting state without
+    /// touching Unit.RemainingAbilityUses.
+    /// </summary>
+    public bool RespawnAt(Vector3 position, Quaternion rotation)
+    {
+        if (!IsServer || isAlive.Value)
+            return false;
+
+        gameObject.SetActive(true);
+        transform.SetPositionAndRotation(position, rotation);
+        GetComponent<Ability>()?.ResetForRespawn();
+
+        Movement movement = GetComponent<Movement>();
+        if (movement != null)
+        {
+            movement.PauseMovement();
+            movement.moving = false;
+        }
+
+        Shooting shooting = GetComponent<Shooting>();
+        shooting?.PauseShooting();
+
+        Transform alert = transform.Find("UnitCanvas/Alert");
+        if (alert != null)
+            alert.gameObject.SetActive(false);
+
+        currentHealth.Value = unitData.maxHealth;
+        isAlive.Value = true;
+        GetComponent<AnimationHandler>()?.PlayAnimation("Idle");
+        return true;
     }
 
     private IEnumerator DeactivateOnServerNextFrame()
@@ -110,7 +143,8 @@ public class Health : NetworkBehaviour
             ImpactShockwave.Spawn(transform.position, teamColor, 2.2f, 0.5f);
         }
 
-        // The host/server deactivates after one network-update opportunity above.
+        // The host/server controls its active state directly. Death hides the remote object;
+        // fog-authorized KOTH observers are reactivated by GameLoop after visibility is resolved.
         if (!IsServer && !newValue)
             gameObject.SetActive(false);
     }
