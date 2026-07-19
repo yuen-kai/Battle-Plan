@@ -187,32 +187,56 @@ public class PlanMovement : MonoBehaviour
 
     /// <summary>
     /// Planning-phase ability targeting: while a unit is in ability mode (card toggled yellow),
-    /// clicks pick the ability's target square within abilitySquareRange (Manhattan diamond,
-    /// matching the displayed overlay). Self-targeted abilities (Shield) need no square. The
-    /// square is stored as the plan's second element: (true, [startCell, targetSquare]).
+    /// clicks pick a target square inside the displayed range. Directional abilities use one of
+    /// the eight adjacent cells as a direction anchor; self-targeted abilities need no square.
+    /// The square is stored as the plan's second element: (true, [startCell, targetSquare]).
     /// </summary>
     void AbilitySelection()
     {
         UnitData unitData = selectedUnit.GetComponent<Movement>().unitData;
-        if (!unitData.selectAbilitySquare)
-            return;
-
         if (!Input.GetMouseButtonDown(0))
             return;
 
+        GameObject hoveredNode = Mouse.GetObjectUnderMouse("PathNode");
         Vector3? clicked = Mouse.GetGridCellUnderMouse();
+        if (clicked == null && hoveredNode != null)
+            clicked = GridSystem.GetNearestGridCell(hoveredNode.transform.position);
         if (clicked == null)
             return;
         Vector3 square = clicked.Value;
         Vector3 start = GridSystem.GetNearestGridCell(selectedUnit);
 
-        float manhattanCells =
-            (Mathf.Abs(square.x - start.x) + Mathf.Abs(square.z - start.z)) / cellSize;
-        if (manhattanCells > unitData.abilitySquareRange + 0.1f)
-            return;
+        if (unitData.selectAbilityDirection)
+        {
+            Vector2Int startCell = GridSystem.ConvertToGridCoords(start);
+            Vector2Int selectedCell = GridSystem.ConvertToGridCoords(square);
+            if (!GridSystem.TryGetAdjacentDirection(startCell, selectedCell, out _))
+            {
+                if (selectedCell != startCell)
+                    PathSelection.Instance?.TryStartPath();
+                return;
+            }
+        }
+        else
+        {
+            int targetRange = unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0;
+            float manhattanCells =
+                (Mathf.Abs(square.x - start.x) + Mathf.Abs(square.z - start.z)) / cellSize;
+            if (manhattanCells > targetRange + 0.1f)
+            {
+                // An out-of-range press cannot target this ability. Let it begin a movement drag
+                // from another friendly unit or one of that unit's existing path nodes instead.
+                PathSelection.Instance?.TryStartPath();
+                return;
+            }
+            if (!unitData.selectAbilitySquare)
+                return;
+        }
+
         // Line abilities (AreaLock) use the square as a direction anchor, so walls are fine.
         if (
-            !unitData.responseDistLine
+            !unitData.selectAbilityDirection
+            && !unitData.responseDistLine
             && GameLoop.wallLayout.Contains(GridSystem.ConvertToGridCoords(square))
         )
             return;
@@ -230,6 +254,24 @@ public class PlanMovement : MonoBehaviour
     {
         ClearAbilityTargetIndicator();
         abilityTargetIndicator = new GameObject("AbilityTargetIndicator");
+
+        if (
+            unitData.selectAbilityDirection
+            && GridSystem.TryGetAdjacentDirection(
+                GridSystem.ConvertToGridCoords(start),
+                GridSystem.ConvertToGridCoords(square),
+                out Vector2Int abilityDirection
+            )
+        )
+        {
+            Vector2Int destination = GridSystem.GetDirectionalDestination(
+                GridSystem.ConvertToGridCoords(start),
+                abilityDirection,
+                unitData.abilityFixedDistance,
+                GameLoop.wallLayout
+            );
+            square = GameLoop.gridCoordToWorld(destination);
+        }
 
         if (unitData.responseDistLine)
         {
@@ -283,23 +325,50 @@ public class PlanMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// Selects the team unit occupying the given cell, if any (used by PathSelection so clicking
-    /// a unit on the board switches selection — essential during dodge windows, where the unit
-    /// cards don't map to the alerted subset). Returns true when the selection switched.
+    /// Selects the team unit occupying the given cell and prepares its movement path for editing.
+    /// This is essential during dodge windows, where the unit cards don't map to the alerted set.
     /// </summary>
-    public bool TrySelectUnitAtCell(Vector3 cell)
+    public bool TrySelectUnitForMovementAtCell(Vector3 cell)
     {
         foreach (GameObject character in teamCharacters)
         {
             if (!IsPlanningUnitAvailable(character) || character == selectedUnit)
                 continue;
             if (GridSystem.GetNearestGridCell(character) == cell)
-            {
-                SwitchToUnit(character);
-                return true;
-            }
+                return TrySetSelectionMode(character, false);
         }
         return false;
+    }
+
+    /// <summary>
+    /// Selects the unit that owns a path node and prepares that unit for movement editing.
+    /// </summary>
+    public bool TrySelectUnitForPathNode(GameObject node)
+    {
+        if (node == null)
+            return false;
+
+        GameObject owner = null;
+        for (Transform ancestor = node.transform; ancestor != null; ancestor = ancestor.parent)
+        {
+            foreach (KeyValuePair<GameObject, GameObject> pair in planVisuals)
+            {
+                if (pair.Value == null || pair.Value != ancestor.gameObject)
+                    continue;
+
+                owner = pair.Key;
+                break;
+            }
+            if (
+                owner != null
+                || (planVisualsFolder != null && ancestor.gameObject == planVisualsFolder)
+            )
+                break;
+        }
+
+        if (owner == null)
+            return false;
+        return owner == selectedUnit || TrySetSelectionMode(owner, false);
     }
 
     private static bool IsPlanningUnitAvailable(GameObject unit)
@@ -365,9 +434,13 @@ public class PlanMovement : MonoBehaviour
         if (!useUnitCards || unitIndex < 0 || unitIndex >= teamCharacters.Count)
             return;
 
-        GameObject unit = teamCharacters[unitIndex];
+        TrySetSelectionMode(teamCharacters[unitIndex], abilityMode);
+    }
+
+    private bool TrySetSelectionMode(GameObject unit, bool abilityMode)
+    {
         if (!IsPlanningUnitAvailable(unit) || (abilityMode && unit.GetComponent<Ability>() == null))
-            return;
+            return false;
 
         if (selectedUnit != unit)
             SwitchToUnit(unit);
@@ -386,6 +459,7 @@ public class PlanMovement : MonoBehaviour
 
         ApplySelectedUnitModeVisuals();
         RefreshUnitCards();
+        return true;
     }
 
     public void SwitchToUnit(GameObject newSelectedUnit, int range = -1)
@@ -430,11 +504,14 @@ public class PlanMovement : MonoBehaviour
             range != -1
                 ? range
                 : (planningRangeOverride != -1 ? planningRangeOverride : unitData.moveDist);
-        DisplayMoveRange(
-            abilityMode
-                ? (unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0)
-                : movementRange
-        );
+        if (abilityMode && unitData.selectAbilityDirection)
+            DisplayAbilityDirections();
+        else
+            DisplayMoveRange(
+                abilityMode
+                    ? (unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0)
+                    : movementRange
+            );
 
         currentPlan = plans[selectedUnit].Item2;
         if (planVisuals.TryGetValue(selectedUnit, out GameObject visuals))
@@ -508,6 +585,18 @@ public class PlanMovement : MonoBehaviour
         moveOverlay = GridSystem.DisplayGridRange(
             GridSystem.GetNearestGridCell(selectedUnit),
             range,
+            moveOverlayCellPrefab
+        );
+    }
+
+    void DisplayAbilityDirections()
+    {
+        Destroy(moveOverlay);
+        if (selectedUnit == null)
+            return;
+
+        moveOverlay = GridSystem.DisplayGridDirections(
+            GridSystem.GetNearestGridCell(selectedUnit),
             moveOverlayCellPrefab
         );
     }

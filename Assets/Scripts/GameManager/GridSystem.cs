@@ -70,6 +70,34 @@ public class GridSystem : MonoBehaviour
         return overlay;
     }
 
+    public static GameObject DisplayGridDirections(Vector3 currentPos, GameObject overlayPrefab)
+    {
+        GameObject overlay = new("AbilityDirectionOverlay");
+        for (int columnOffset = -1; columnOffset <= 1; columnOffset++)
+        {
+            for (int rowOffset = -1; rowOffset <= 1; rowOffset++)
+            {
+                if (columnOffset == 0 && rowOffset == 0)
+                    continue;
+
+                Vector2 overlayCellPos = new(
+                    currentPos.x + columnOffset * CellSize,
+                    currentPos.z + rowOffset * CellSize
+                );
+                if (!GameLoop.gridBounds.Contains(overlayCellPos))
+                    continue;
+
+                GameObject overlayCell = Instantiate(
+                    overlayPrefab,
+                    new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y),
+                    Quaternion.identity
+                );
+                overlayCell.transform.parent = overlay.transform;
+            }
+        }
+        return overlay;
+    }
+
     public static Vector3 GetNearestGridCell(GameObject character)
     {
         Vector3 position = character.transform.position; // Get the position of the character
@@ -89,6 +117,68 @@ public class GridSystem : MonoBehaviour
         int x = Mathf.RoundToInt(position.x / CellSize);
         int z = Mathf.RoundToInt(position.z / CellSize);
         return new Vector2Int(x, z);
+    }
+
+    public static bool TryGetAdjacentDirection(
+        Vector2Int start,
+        Vector2Int target,
+        out Vector2Int direction
+    )
+    {
+        Vector2Int delta = target - start;
+        bool isAdjacent =
+            delta != Vector2Int.zero && Mathf.Abs(delta.x) <= 1 && Mathf.Abs(delta.y) <= 1;
+        direction = isAdjacent
+            ? new Vector2Int(Mathf.Clamp(delta.x, -1, 1), Mathf.Clamp(delta.y, -1, 1))
+            : Vector2Int.zero;
+        return isAdjacent;
+    }
+
+    public static Vector2Int GetDirectionalDestination(
+        Vector2Int start,
+        Vector2Int direction,
+        int maxSteps,
+        ISet<Vector2Int> blockedCells = null
+    )
+    {
+        direction = new Vector2Int(
+            Mathf.Clamp(direction.x, -1, 1),
+            Mathf.Clamp(direction.y, -1, 1)
+        );
+        if (direction == Vector2Int.zero)
+            return start;
+
+        Vector2Int current = start;
+        for (int step = 0; step < Mathf.Max(0, maxSteps); step++)
+        {
+            Vector2Int next = current + direction;
+            if (
+                !IsCellInBounds(next)
+                || IsDirectionalStepBlocked(current, next, direction, blockedCells)
+            )
+                break;
+            current = next;
+        }
+        return current;
+    }
+
+    private static bool IsDirectionalStepBlocked(
+        Vector2Int current,
+        Vector2Int next,
+        Vector2Int direction,
+        ISet<Vector2Int> blockedCells
+    )
+    {
+        if (blockedCells == null)
+            return false;
+        if (blockedCells.Contains(next))
+            return true;
+
+        if (direction.x == 0 || direction.y == 0)
+            return false;
+
+        return blockedCells.Contains(current + new Vector2Int(direction.x, 0))
+            || blockedCells.Contains(current + new Vector2Int(0, direction.y));
     }
 
     // === FOG OF WAR VISION MATH (pure/static, shared by server visibility + client overlay) ===

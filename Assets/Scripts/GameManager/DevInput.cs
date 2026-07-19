@@ -217,7 +217,7 @@ public static class DevInput
         );
     }
 
-    /// <summary>Queue a self-targeted ability (e.g. Shield) — no target square needed.</summary>
+    /// <summary>Queue a self-targeted ability — no target square needed.</summary>
     public static void SetAbility(int team, int unitIndex)
     {
         GameObject unit = GetUnit(team, unitIndex);

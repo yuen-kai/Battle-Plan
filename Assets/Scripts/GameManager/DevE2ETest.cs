@@ -19,7 +19,7 @@ using UnityEngine.SceneManagement;
 ///       the correct unit; declined dodge; beam kill (death + damage application)
 ///   R3  Grenade (targeted ability) dodge phase: correct unit alerted, dodge dive REPLACES the
 ///       planned move (unit asserted on the dive cell), no grenade damage taken
-///   R4  Shield (self-targeted ability) toggles the caster's Shield child on then off; a unit
+///   R4  Shield Rush dashes three cells and toggles the caster's Shield child on then off; a unit
 ///       moves and casts on the same team in the same round
 ///   R5  Grenade damage application on a non-dodging target (HP drop >= 80 or death; grenade
 ///       damage rebalanced 50 -> 80)
@@ -425,10 +425,8 @@ public class DevE2ETestRunner : MonoBehaviour
         // Red Shotgunner: legal 3-step away from the Pogo escape lane (also proves dev input
         // drives BOTH teams / all unit indices -- the no-mouse analog of unit switching).
         DevInput.SetPath(1, 0, 5, 5, 6, 5, 7, 5);
-        // Red Sniper: retreat up the lane to (4,9). DAMAGE REBALANCE (70 -> 110): a stationary
-        // sniper now ONE-SHOTS the fleeing PogoRider mid-escape (pre-rebalance it survived at 30
-        // HP), which would kill the R2 beam-dodge scenario. Moving the sniper keeps the pogo out
-        // of weapon range (9 > 7 at (4,0)) while keeping it on the beam lane for R2.
+        // Red Sniper: retreat up the lane to (4,9), keeping the Pogo out of the new weapon range
+        // (9 > 5 at (4,0)) while leaving it on the beam lane for R2.
         DevInput.SetPath(1, 1, 4, 7, 4, 8, 4, 9);
 
         DevInput.SubmitPlans();
@@ -555,12 +553,22 @@ public class DevE2ETestRunner : MonoBehaviour
         );
         Snap("r3-dodged");
 
-        // ================= R4: Shield (self-targeted) + a simultaneous safe move ================
+        // ================= R4: Shield Rush + a simultaneous safe move ============================
         // The Commander survived R3 by assertion and is outside every red unit's weapon range.
         // Moving the already-wounded Soldier here made this check depend on nondeterministic
         // crossfire from prior rounds rather than movement correctness.
         DevInput.SetPath(0, 0, 2, 0);
-        DevInput.SetAbility(1, 0); // Red Shotgunner shields (self-targeted, no square).
+        Vector2Int rushStart = Cell(rShot);
+        Vector2Int rushDirectionTarget = rushStart + Vector2Int.left;
+        Vector2Int expectedRushDestination = new(4, 5);
+        Unit rushIdentity = rShot.GetComponent<Unit>();
+        int rushUsesBefore = rushIdentity.RemainingAbilityUses;
+        Check(
+            rushStart == new Vector2Int(7, 5),
+            "R4 precondition: red Shotgunner starts at (7,5)",
+            $"actual {rushStart}"
+        );
+        DevInput.SetAbility(1, 0, rushDirectionTarget.x, rushDirectionTarget.y);
         Transform shield = rShot.transform.Find("Shield");
         Check(shield != null, "R4 red Shotgunner has a Shield child object");
 
@@ -582,14 +590,24 @@ public class DevE2ETestRunner : MonoBehaviour
         }
         if (shieldSeenOn && (shield == null || !shield.gameObject.activeSelf))
             shieldSeenOffAfterOn = true;
-        Check(shieldSeenOn, "R4 Shield ability activated the Shield child during execution");
-        Check(shieldSeenOffAfterOn, "R4 Shield deactivated again after its duration");
+        Check(shieldSeenOn, "R4 Shield Rush activated the Shield child during execution");
+        Check(shieldSeenOffAfterOn, "R4 Shield Rush deactivated again after its duration");
+        Check(
+            Cell(rShot) == expectedRushDestination,
+            "R4 Shield Rush reached its fixed three-cell destination",
+            $"expected {expectedRushDestination}, actual {Cell(rShot)}"
+        );
+        Check(
+            rushUsesBefore == 1 && rushIdentity.RemainingAbilityUses == 0,
+            "R4 Shield Rush consumed its single ability charge",
+            $"uses {rushUsesBefore} -> {rushIdentity.RemainingAbilityUses}"
+        );
         Check(
             Cell(cmd) == new Vector2Int(2, 0),
             "R4 Commander completed its simultaneous move to (2,0)",
             $"actual {Cell(cmd)}"
         );
-        Snap("r4-shield");
+        Snap("r4-shield-rush");
 
         // ================= R5: exhausted ability is rejected server-side =========================
         if (!Alive(cmd) || !Alive(sniper))

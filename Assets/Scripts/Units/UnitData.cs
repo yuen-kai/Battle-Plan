@@ -101,6 +101,12 @@ public class UnitData : ScriptableObject
     [Tooltip("Range in cells for ability target selection")]
     public int abilitySquareRange = 3;
 
+    [Tooltip("Restrict ability targeting to the eight adjacent compass directions")]
+    public bool selectAbilityDirection = false;
+
+    [Tooltip("Fixed travel distance in cells for a directional ability")]
+    public int abilityFixedDistance = 0;
+
     [Tooltip("Radius of ability area of effect in cells")]
     public float abilityRadius = 0f;
 

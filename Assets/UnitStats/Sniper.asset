@@ -30,15 +30,15 @@ MonoBehaviour:
   reloadTime: 2.5
   bulletSpread: 0.5
   bulletSpeed: 15
-  targetRange: 7
+  targetRange: 5
   bulletRange: 14
-  damage: 110
+  damage: 80
   backstabMultiplier: 1
   backstabAngle: 90
   findTargetTime: 0.3
   targetLockDuration: 2
   aimRotationSpeed: 270
-  visionRange: 8
+  visionRange: 7
   maxHealth: 50
   abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1

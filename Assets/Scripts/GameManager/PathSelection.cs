@@ -16,16 +16,12 @@ public class PathSelection : MonoBehaviour
     private GameObject currentPathNodes;
     private GameObject currentPathEdges;
     private bool pathDragActive;
-    private List<Vector3> CurrentPlan => PlanMovement.Instance != null ? PlanMovement.Instance.currentPlan : null;
-    private GameObject CurrentVisuals => PlanMovement.Instance != null ? PlanMovement.Instance.currentVisuals : null;
-    private GameObject SelectedUnit => PlanMovement.Instance != null ? PlanMovement.Instance.selectedUnit : null;
-    private bool SelectedUnitUsesAbility =>
-        SelectedUnit != null
-        && PlanMovement.Instance.plans.TryGetValue(
-            SelectedUnit,
-            out (bool, List<Vector3>) plan
-        )
-        && plan.Item1;
+    private List<Vector3> CurrentPlan =>
+        PlanMovement.Instance != null ? PlanMovement.Instance.currentPlan : null;
+    private GameObject CurrentVisuals =>
+        PlanMovement.Instance != null ? PlanMovement.Instance.currentVisuals : null;
+    private GameObject SelectedUnit =>
+        PlanMovement.Instance != null ? PlanMovement.Instance.selectedUnit : null;
     private float CellSize => GameLoop.cellSize;
     private Vector3 VisualPlanHeightOffset => PlanMovement.visualPlanHeightOffset;
 
@@ -36,10 +32,11 @@ public class PathSelection : MonoBehaviour
 
     public void MovementSelection(int moveDist)
     {
-        moveDist = moveDist == -1 ? SelectedUnit.GetComponent<Movement>().unitData.moveDist : moveDist;
+        moveDist =
+            moveDist == -1 ? SelectedUnit.GetComponent<Movement>().unitData.moveDist : moveDist;
         if (Input.GetMouseButtonDown(0))
         {
-            pathDragActive = StartPath();
+            TryStartPath();
         }
         else if (Input.GetMouseButton(0) && pathDragActive)
         {
@@ -49,6 +46,12 @@ public class PathSelection : MonoBehaviour
         {
             pathDragActive = false;
         }
+    }
+
+    public bool TryStartPath()
+    {
+        pathDragActive = StartPath();
+        return pathDragActive;
     }
 
     bool StartPath()
@@ -62,30 +65,31 @@ public class PathSelection : MonoBehaviour
         }
 
         GameObject node = Mouse.GetObjectUnderMouse("PathNode");
-        if (node?.transform.parent?.parent?.gameObject != CurrentVisuals)
+        if (node != null)
         {
-            // Clicking another of your units on the board selects it — the only selection
-            // method during dodge windows, where the unit cards don't map to the alerted set.
-            if (
-                clickedCell != null
-                && PlanMovement.Instance.TrySelectUnitAtCell(clickedCell.Value)
-                && !SelectedUnitUsesAbility
-            )
-            {
-                // The mouse-down that switched units is also the start of this drag. Set up
-                // that unit's visual containers before the held-mouse frame extends its path.
-                InitializePath();
-                return HasCurrentPathVisuals();
-            }
-            return false;
+            if (!PlanMovement.Instance.TrySelectUnitForPathNode(node))
+                return false;
+
+            BindCurrentPathVisuals();
+            node = FindCurrentPathNodeRoot(node);
+            if (!HasCurrentPathVisuals() || node == null)
+                return false;
+
+            ResetPath(node);
+            return true;
         }
 
-        BindCurrentPathVisuals();
-        if (!HasCurrentPathVisuals())
-            return false;
-
-        ResetPath(node);
-        return true;
+        // Pressing another friendly unit starts a fresh movement path for it. Preparing movement
+        // also makes this gesture work when the previously selected unit was targeting an ability.
+        if (
+            clickedCell != null
+            && PlanMovement.Instance.TrySelectUnitForMovementAtCell(clickedCell.Value)
+        )
+        {
+            InitializePath();
+            return HasCurrentPathVisuals();
+        }
+        return false;
     }
 
     void ExtendPath(int moveDist)
@@ -123,7 +127,6 @@ public class PathSelection : MonoBehaviour
         }
     }
 
-
     void InitializePath()
     {
         if (!CurrentVisuals)
@@ -158,6 +161,18 @@ public class PathSelection : MonoBehaviour
         currentPathEdges = CurrentVisuals.transform.Find("PathEdges")?.gameObject;
     }
 
+    GameObject FindCurrentPathNodeRoot(GameObject hitObject)
+    {
+        if (!currentPathNodes || hitObject == null)
+            return null;
+
+        Transform node = hitObject.transform;
+        while (node != null && node.parent != currentPathNodes.transform)
+            node = node.parent;
+
+        return node?.parent == currentPathNodes.transform ? node.gameObject : null;
+    }
+
     bool HasCurrentPathVisuals()
     {
         return CurrentVisuals
@@ -175,8 +190,7 @@ public class PathSelection : MonoBehaviour
             Destroy(currentPathEdges.transform.GetChild(i)?.gameObject);
         }
 
-        CurrentPlan
-            .RemoveRange(index + 2, CurrentPlan.Count - (index + 2)); //current plan includes start but visual does not
+        CurrentPlan.RemoveRange(index + 2, CurrentPlan.Count - (index + 2)); //current plan includes start but visual does not
     }
 
     void ResetPath(GameObject node)

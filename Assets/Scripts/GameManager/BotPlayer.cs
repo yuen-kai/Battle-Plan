@@ -287,6 +287,51 @@ public sealed class BotPlayer
         foreach (var candidate in candidates)
         {
             Vector2Int start = GetCell(candidate.unit);
+            if (candidate.data.selectAbilityDirection)
+            {
+                foreach (
+                    Vector2Int visibleTarget in visibleEnemyCells
+                        .OrderBy(cell => GridDistance(start, cell))
+                        .ThenBy(cell => cell.x)
+                        .ThenBy(cell => cell.y)
+                )
+                {
+                    Vector2Int delta = visibleTarget - start;
+                    int directionalDistance = Mathf.Max(Mathf.Abs(delta.x), Mathf.Abs(delta.y));
+                    int engageRange =
+                        candidate.data.abilityFixedDistance
+                        + Mathf.CeilToInt(candidate.data.targetRange);
+                    if (directionalDistance > engageRange)
+                        continue;
+
+                    Vector2Int direction = new(Math.Sign(delta.x), Math.Sign(delta.y));
+                    Vector2Int directionTarget = start + direction;
+                    Vector2Int destination = GridSystem.GetDirectionalDestination(
+                        start,
+                        direction,
+                        candidate.data.abilityFixedDistance,
+                        GameLoop.wallLayout
+                    );
+                    if (
+                        direction == Vector2Int.zero
+                        || !GridSystem.IsCellInBounds(directionTarget)
+                        || destination == start
+                        || GridDistance(destination, visibleTarget)
+                            > Mathf.CeilToInt(candidate.data.targetRange)
+                        || !GridSystem.HasGridLineOfSight(destination, visibleTarget)
+                    )
+                    {
+                        continue;
+                    }
+
+                    selectedUnit = candidate.unit;
+                    target = directionTarget;
+                    needsTarget = true;
+                    return;
+                }
+                continue;
+            }
+
             if (!candidate.data.selectAbilitySquare)
             {
                 bool enemyClose = visibleEnemyCells.Any(cell =>

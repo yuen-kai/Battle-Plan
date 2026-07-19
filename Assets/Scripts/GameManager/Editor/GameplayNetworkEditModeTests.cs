@@ -219,6 +219,108 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void DirectionalAbilityTargeting_AcceptsEightAdjacentCellsOnly()
+    {
+        Vector2Int start = new(4, 4);
+        Vector2Int[] expectedDirections =
+        {
+            new(-1, -1),
+            Vector2Int.down,
+            new(1, -1),
+            Vector2Int.left,
+            Vector2Int.right,
+            new(-1, 1),
+            Vector2Int.up,
+            new(1, 1),
+        };
+
+        foreach (Vector2Int expectedDirection in expectedDirections)
+        {
+            Assert.That(
+                GridSystem.TryGetAdjacentDirection(
+                    start,
+                    start + expectedDirection,
+                    out Vector2Int actualDirection
+                ),
+                Is.True,
+                $"Direction {expectedDirection} should be selectable."
+            );
+            Assert.That(actualDirection, Is.EqualTo(expectedDirection));
+        }
+        Assert.That(
+            GridSystem.TryGetAdjacentDirection(start, start, out _),
+            Is.False,
+            "The center cell is not a rush direction."
+        );
+        Assert.That(
+            GridSystem.TryGetAdjacentDirection(start, new Vector2Int(6, 4), out _),
+            Is.False,
+            "Direction selection is limited to the surrounding 3x3 cells."
+        );
+    }
+
+    [Test]
+    public void DirectionalDestination_UsesFixedLengthAndStopsBeforeObstacles()
+    {
+        Vector2Int start = new(4, 4);
+        Vector2Int[] directions =
+        {
+            new(-1, -1),
+            Vector2Int.down,
+            new(1, -1),
+            Vector2Int.left,
+            Vector2Int.right,
+            new(-1, 1),
+            Vector2Int.up,
+            new(1, 1),
+        };
+
+        foreach (Vector2Int direction in directions)
+        {
+            Assert.That(
+                GridSystem.GetDirectionalDestination(
+                    start,
+                    direction,
+                    3,
+                    new HashSet<Vector2Int>()
+                ),
+                Is.EqualTo(start + direction * 3),
+                $"Open-board direction {direction} should travel exactly three cells."
+            );
+        }
+        Assert.That(
+            GridSystem.GetDirectionalDestination(
+                start,
+                Vector2Int.right,
+                3,
+                new HashSet<Vector2Int> { new Vector2Int(6, 4) }
+            ),
+            Is.EqualTo(new Vector2Int(5, 4)),
+            "A wall stops the rush on the last legal cell."
+        );
+        Assert.That(
+            GridSystem.GetDirectionalDestination(
+                new Vector2Int(7, 9),
+                Vector2Int.right,
+                3,
+                new HashSet<Vector2Int>()
+            ),
+            Is.EqualTo(new Vector2Int(8, 9)),
+            "The board edge shortens the rush."
+        );
+        Assert.That(
+            GridSystem.GetDirectionalDestination(
+                start,
+                new Vector2Int(1, 1),
+                3,
+                new HashSet<Vector2Int> { new Vector2Int(5, 4) }
+            ),
+            Is.EqualTo(start),
+            "A diagonal rush cannot cut through a wall corner."
+        );
+    }
+
+    [Test]
     public void GridBfs_IsDeterministicAdjacentAndAvoidsBlockedCells()
     {
         Vector2Int start = new(0, 0);

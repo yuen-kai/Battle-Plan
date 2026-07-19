@@ -181,8 +181,9 @@ public class GameLoop : NetworkBehaviour
     private readonly NetworkVariable<ulong> teamOneParticipant = new(BotParticipantId);
     private readonly NetworkVariable<bool> fogOfWarEnabled = new(true);
 
-    // Server: per-(unit, viewer client) temporary visibility overrides (target lock, Area Lock).
+    // Server: per-(unit, viewer client) temporary visibility overrides (locks and abilities).
     private readonly Dictionary<(GameObject unit, ulong clientId), double> forceRevealUntil = new();
+    private const float AbilityActivationRevealSeconds = 1.75f;
     private readonly Dictionary<GameObject, Vector2Int> lastFogCells = new();
     private bool serverFogDirty = true;
     private Coroutine serverFogCoroutine;
@@ -787,7 +788,7 @@ public class GameLoop : NetworkBehaviour
 
             UnitData data = movement.unitData;
             List<Vector3> plan = kvp.Value.Item2;
-            // Self-targeted abilities (Shield) target the unit's own cell.
+            // Self-targeted abilities target the unit's own cell.
             Vector3 square = !data.selectAbilitySquare || plan.Count < 2 ? plan[0] : plan[^1];
             activations.Add((unit, square, data));
         }
@@ -847,11 +848,78 @@ public class GameLoop : NetworkBehaviour
     {
         if (unit == null || !unit.activeInHierarchy)
             yield break;
+
+        NetworkObject networkObject = unit.GetComponent<NetworkObject>();
+        Unit identity = unit.GetComponent<Unit>();
+        ForceRevealToEnemyClients(unit, AbilityActivationRevealSeconds);
+        if (networkObject != null && networkObject.IsSpawned)
+        {
+            ShowAbilityActivationFxClientRpc(
+                networkObject,
+                unit.transform.position,
+                identity != null ? identity.TeamIndex : -1
+            );
+        }
+
         runningAbilities++;
         yield return StartCoroutine(
             unit.GetComponent<Ability>().ExecuteAbility(square, data.abilityRadius)
         );
         runningAbilities--;
+    }
+
+    [ClientRpc]
+    private void ShowAbilityActivationFxClientRpc(
+        NetworkObjectReference unitReference,
+        Vector3 activationPosition,
+        int teamIndex
+    )
+    {
+        Color teamColor =
+            teamIndex == HostTeamIndex ? new Color(0.22f, 0.78f, 1f) : new Color(1f, 0.23f, 0.33f);
+        StartCoroutine(FlashAbilityCasterWhenVisible(unitReference));
+        ImpactShockwave.Spawn(activationPosition, teamColor, 1.8f, 0.45f);
+    }
+
+    private static IEnumerator FlashAbilityCasterWhenVisible(NetworkObjectReference unitReference)
+    {
+        // NGO applies NetworkShow at the end of the frame. A caster that was hidden by fog may
+        // therefore be absent when this GameLoop RPC first arrives; retry briefly until its spawn
+        // message has been processed instead of silently dropping the activation highlight.
+        float deadline = Time.realtimeSinceStartup + 1f;
+        do
+        {
+            if (unitReference.TryGet(out NetworkObject networkObject))
+            {
+                HitFlash.FlashTarget(networkObject.gameObject, 0.4f, 1.5f);
+                yield break;
+            }
+
+            yield return null;
+        } while (Time.realtimeSinceStartup < deadline);
+    }
+
+    private static Vector3 ResolveAbilityEffectSquare(
+        GameObject unit,
+        Vector3 selectedSquare,
+        UnitData data
+    )
+    {
+        if (unit == null || data == null || !data.selectAbilityDirection)
+            return selectedSquare;
+
+        Vector2Int start = GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+        Vector2Int selected = GridSystem.ConvertToGridCoords(selectedSquare);
+        if (!GridSystem.TryGetAdjacentDirection(start, selected, out Vector2Int direction))
+            return selectedSquare;
+
+        Vector2Int destination = GridSystem.GetDirectionalDestination(
+            start,
+            direction,
+            data.abilityFixedDistance,
+            wallLayout
+        );
+        return gridCoordToWorld(destination);
     }
 
     /// <summary>
@@ -873,13 +941,16 @@ public class GameLoop : NetworkBehaviour
         // counterplay window is the point; the Sniper's lock laser is the model).
         foreach (var (unit, square, data) in activations)
         {
+            Vector3 effectSquare = ResolveAbilityEffectSquare(unit, square, data);
             // Fog: only line telegraphs render the caster position. For non-line abilities,
             // don't put a possibly-hidden caster's cell on the wire (RPC payloads reach the
             // enemy client even though the marker branch never reads casterPos).
-            Vector3 telegraphOrigin = data.responseDistLine ? unit.transform.position : square;
+            Vector3 telegraphOrigin = data.responseDistLine
+                ? unit.transform.position
+                : effectSquare;
             ShowAbilityTelegraphClientRpc(
                 telegraphOrigin,
-                square,
+                effectSquare,
                 data.abilityRadius,
                 data.responseDistLine
             );
@@ -897,6 +968,7 @@ public class GameLoop : NetworkBehaviour
             if (enemyTeamIndex < 0 || enemyTeam == null || data.responseRange <= 0f)
                 continue;
 
+            Vector3 effectSquare = ResolveAbilityEffectSquare(unit, square, data);
             List<GameObject> threatened = data.responseDistLine
                 ? GetUnitsInRangeOfLine(
                     unit.transform.position,
@@ -904,7 +976,7 @@ public class GameLoop : NetworkBehaviour
                     enemyTeam,
                     data.responseRange
                 )
-                : Helper.GetObjectsInRange(square, enemyTeam, data.responseRange);
+                : Helper.GetObjectsInRange(effectSquare, enemyTeam, data.responseRange);
 
             if (threatened.Count == 0)
                 continue;
@@ -2170,9 +2242,9 @@ public class GameLoop : NetworkBehaviour
     /// Validates and snaps a set of submitted unit paths to legal grid moves (adjacency, walls,
     /// move-distance, no-repeat, in-bounds). When <paramref name="teamFilter"/> has a value the
     /// unit must belong to that logical team.
-    /// Plans flagged as abilities (Item1) are validated as [startCell, targetSquare] instead:
-    /// target within abilitySquareRange (Manhattan), in bounds, and not a wall for non-line
-    /// abilities. Invalid ability plans degrade to a stay-put movement plan.
+    /// Plans flagged as abilities (Item1) are validated as [startCell, targetSquare] instead.
+    /// Standard targets use abilitySquareRange (Manhattan); directional targets use one of the
+    /// eight adjacent cells as an anchor. Invalid plans degrade to a stay-put movement plan.
     /// <paramref name="maxStepsOverride"/> caps movement length (used for dodge dives).
     /// </summary>
     PathsDict SanitizePaths(PathsDict paths, int? teamFilter, int maxStepsOverride = -1)
@@ -2273,7 +2345,7 @@ public class GameLoop : NetworkBehaviour
         if (unit.GetComponent<Ability>() == null || identity == null || !identity.CanUseAbility)
             return (false, new List<Vector3> { start });
 
-        // Self-targeted abilities (e.g. Shield) need no square.
+        // Self-targeted abilities need no square.
         if (!data.selectAbilitySquare)
             return (true, new List<Vector3> { start });
 
@@ -2281,8 +2353,20 @@ public class GameLoop : NetworkBehaviour
             return (false, new List<Vector3> { start });
 
         Vector3 square = GridSystem.GetNearestGridCell(submitted[^1]);
-
         bool inBounds = gridBounds.Contains(new Vector2(square.x, square.z));
+
+        if (data.selectAbilityDirection)
+        {
+            Vector2Int startCell = GridSystem.ConvertToGridCoords(start);
+            Vector2Int selectedCell = GridSystem.ConvertToGridCoords(square);
+            bool validDirection =
+                data.abilityFixedDistance > 0
+                && GridSystem.TryGetAdjacentDirection(startCell, selectedCell, out _);
+            return inBounds && validDirection
+                ? (true, new List<Vector3> { start, square })
+                : (false, new List<Vector3> { start });
+        }
+
         float manhattanCells =
             (Mathf.Abs(square.x - start.x) + Mathf.Abs(square.z - start.z)) / cellSize;
         bool inRange = manhattanCells <= data.abilitySquareRange + 0.1f;
