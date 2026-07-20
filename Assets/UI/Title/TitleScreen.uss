@@ -70,24 +70,6 @@
     margin-top: 6px;
 }
 
-.control-row {
-    flex-direction: row;
-    align-items: flex-start;
-    margin-top: 8px;
-    margin-bottom: 8px;
-}
-
-.control-key {
-    width: 170px;
-    color: rgb(235, 174, 69);
-    -unity-font-style: bold;
-}
-
-.control-copy {
-    flex-grow: 1;
-    white-space: normal;
-}
-
 .credit-row {
     margin-top: 8px;
     margin-bottom: 12px;
@@ -145,15 +127,6 @@
 
 .phone .title-actions {
     width: 100%;
-}
-
-.phone .control-row {
-    flex-direction: column;
-}
-
-.phone .control-key {
-    width: auto;
-    margin-bottom: 4px;
 }
 
 .short .title-identity {

@@ -16,6 +16,13 @@ public class UnitData : ScriptableObject
     [Tooltip("Sprite representing the unit")]
     public Sprite unitSprite;
 
+    [Header("=== ROSTER PARAMETERS ===")]
+    [SerializeField]
+    [Tooltip("Opt out of player-selectable and externally configured fireteams")]
+    private bool unavailableForRoster = false;
+
+    public bool IsRosterEligible => !unavailableForRoster;
+
     [Header("=== ABILITY CARD PARAMETERS ===")]
     [Tooltip("Name of the ability")]
     public string abilityName = "New Ability";

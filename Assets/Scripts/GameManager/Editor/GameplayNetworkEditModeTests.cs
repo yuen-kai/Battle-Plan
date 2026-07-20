@@ -682,4 +682,508 @@ public class GameplayNetworkEditModeTests
             )
         );
     }
+
+    // === Roster validation (Wave 1) ===
+
+    [Test]
+    public void Roster_Validate_AcceptsDistinctEligibleTriplet()
+    {
+        List<UnitData> catalog = CreateCatalog(true, true, true, true);
+        try
+        {
+            RosterValidationResult result = RosterRules.Validate(new[] { 0, 2, 3 }, catalog);
+            Assert.That(result.IsValid, Is.True);
+            Assert.That(result.Reason, Is.EqualTo(RosterValidationReason.None));
+            Assert.That(result.SlotIndex, Is.EqualTo(-1));
+            Assert.That(result.UnitIndex, Is.EqualTo(-1));
+            Assert.That(result, Is.EqualTo(RosterValidationResult.Valid));
+            Assert.That(RosterRules.GetUserMessage(result), Is.Empty);
+        }
+        finally
+        {
+            DestroyCatalog(catalog);
+        }
+    }
+
+    [Test]
+    public void Roster_Validate_RejectsMissingWrongLengthAndMissingCatalog()
+    {
+        List<UnitData> catalog = CreateCatalog(true, true, true);
+        try
+        {
+            Assert.That(
+                RosterRules.Validate(null, catalog).Reason,
+                Is.EqualTo(RosterValidationReason.MissingRoster)
+            );
+            Assert.That(
+                RosterRules.Validate(new[] { 0, 1 }, catalog).Reason,
+                Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
+                "A short fireteam is rejected before any per-unit inspection."
+            );
+            Assert.That(
+                RosterRules.Validate(new[] { 0, 1, 2, 0 }, catalog).Reason,
+                Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
+                "An oversized fireteam is rejected on shape, not duplicates."
+            );
+            Assert.That(
+                RosterRules.Validate(new[] { 0, 1, 2 }, null).Reason,
+                Is.EqualTo(RosterValidationReason.UnitCatalogUnavailable),
+                "A correctly shaped roster still fails without a catalog to validate against."
+            );
+        }
+        finally
+        {
+            DestroyCatalog(catalog);
+        }
+    }
+
+    [Test]
+    public void Roster_Validate_RejectsDuplicateWithStableSlotAndIndex()
+    {
+        List<UnitData> catalog = CreateCatalog(true, true, true, true);
+        try
+        {
+            RosterValidationResult early = RosterRules.Validate(new[] { 1, 1, 2 }, catalog);
+            Assert.That(early.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
+            Assert.That(early.SlotIndex, Is.EqualTo(1), "The repeated slot is reported deterministically.");
+            Assert.That(early.UnitIndex, Is.EqualTo(1));
+
+            RosterValidationResult tail = RosterRules.Validate(new[] { 2, 3, 2 }, catalog);
+            Assert.That(tail.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
+            Assert.That(tail.SlotIndex, Is.EqualTo(2));
+            Assert.That(tail.UnitIndex, Is.EqualTo(2));
+            Assert.That(
+                RosterRules.GetUserMessage(tail),
+                Is.EqualTo("Choose three different units; duplicate picks are not allowed.")
+            );
+        }
+        finally
+        {
+            DestroyCatalog(catalog);
+        }
+    }
+
+    [Test]
+    public void Roster_Validate_RejectsNegativeAndOutOfRangeIndices()
+    {
+        List<UnitData> catalog = CreateCatalog(true, true, true);
+        try
+        {
+            RosterValidationResult negative = RosterRules.Validate(new[] { -1, 0, 1 }, catalog);
+            Assert.That(negative.Reason, Is.EqualTo(RosterValidationReason.UnitIndexOutOfRange));
+            Assert.That(negative.SlotIndex, Is.EqualTo(0));
+            Assert.That(negative.UnitIndex, Is.EqualTo(-1));
+
+            RosterValidationResult tooHigh = RosterRules.Validate(
+                new[] { 0, 1, catalog.Count },
+                catalog
+            );
+            Assert.That(tooHigh.Reason, Is.EqualTo(RosterValidationReason.UnitIndexOutOfRange));
+            Assert.That(tooHigh.SlotIndex, Is.EqualTo(2));
+            Assert.That(tooHigh.UnitIndex, Is.EqualTo(catalog.Count));
+
+            // Range is enforced before duplicate detection, so the first illegal slot wins.
+            RosterValidationResult rangeBeatsDuplicate = RosterRules.Validate(
+                new[] { 9, 9, 0 },
+                catalog
+            );
+            Assert.That(
+                rangeBeatsDuplicate.Reason,
+                Is.EqualTo(RosterValidationReason.UnitIndexOutOfRange)
+            );
+            Assert.That(rangeBeatsDuplicate.SlotIndex, Is.EqualTo(0));
+        }
+        finally
+        {
+            DestroyCatalog(catalog);
+        }
+    }
+
+    [Test]
+    public void Roster_Validate_RejectsIneligibleUnitAndHonorsFailurePriority()
+    {
+        // Slot 1 is opted out of rosters; the rest are eligible.
+        List<UnitData> catalog = CreateCatalog(true, false, true, true);
+        try
+        {
+            Assert.That(RosterRules.IsUnitEligible(catalog, 1), Is.False);
+            Assert.That(RosterRules.IsUnitEligible(catalog, 0), Is.True);
+
+            RosterValidationResult ineligible = RosterRules.Validate(new[] { 0, 1, 2 }, catalog);
+            Assert.That(ineligible.Reason, Is.EqualTo(RosterValidationReason.UnitUnavailable));
+            Assert.That(ineligible.SlotIndex, Is.EqualTo(1));
+            Assert.That(ineligible.UnitIndex, Is.EqualTo(1));
+            Assert.That(
+                RosterRules.GetUserMessage(ineligible),
+                Is.EqualTo("That unit is unavailable for deployment. Choose another unit.")
+            );
+
+            // Duplicate detection runs before availability, so a duplicate outranks an ineligible pick.
+            RosterValidationResult duplicateFirst = RosterRules.Validate(new[] { 0, 0, 1 }, catalog);
+            Assert.That(duplicateFirst.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
+            Assert.That(duplicateFirst.SlotIndex, Is.EqualTo(1));
+
+            Assert.That(RosterRules.Validate(new[] { 0, 2, 3 }, catalog).IsValid, Is.True);
+        }
+        finally
+        {
+            DestroyCatalog(catalog);
+        }
+    }
+
+    [Test]
+    public void UnitCatalogAsset_HasFiveUnitsWithIneligibleCommanderAndValidDevRosters()
+    {
+        const string catalogPath = "Assets/UnitStats/AllUnits.asset";
+        UnitDatabase catalog = UnityEditor.AssetDatabase.LoadAssetAtPath<UnitDatabase>(catalogPath);
+        Assert.That(catalog, Is.Not.Null, $"Could not load {catalogPath}.");
+        Assert.That(catalog.units, Is.Not.Null);
+        Assert.That(catalog.units.Count, Is.EqualTo(5), "AllUnits must stay at five units.");
+        Assert.That(catalog.units, Has.None.Null, "The catalog must not contain null unit entries.");
+
+        // Serialized catalog order: the Commander sits at index 0 and is the availability marker.
+        Assert.That(catalog.units[0].unitName, Is.EqualTo("Commander"));
+        Assert.That(
+            catalog.units[0].IsRosterEligible,
+            Is.False,
+            "Commander is opted out of player-selectable and configured fireteams."
+        );
+        for (int index = 1; index < catalog.units.Count; index++)
+        {
+            Assert.That(
+                catalog.units[index].IsRosterEligible,
+                Is.True,
+                $"Catalog unit {index} ({catalog.units[index].unitName}) should be roster-eligible."
+            );
+        }
+
+        // Configured dev/bot rosters must stay distinct and valid against the live catalog.
+        (string name, int[] roster)[] configuredRosters =
+        {
+            ("DefaultBotRoster", GameLoop.DefaultBotRoster),
+            ("DevHostRoster", GameLoop.DevHostRoster),
+            ("DevOpponentRoster", GameLoop.DevOpponentRoster),
+            ("DevBotHostRoster", GameLoop.DevBotHostRoster),
+        };
+        foreach ((string name, int[] roster) in configuredRosters)
+        {
+            Assert.That(
+                roster.Length,
+                Is.EqualTo(RosterRules.FireteamSize),
+                $"{name} must field exactly three units."
+            );
+            Assert.That(
+                roster.Distinct().Count(),
+                Is.EqualTo(roster.Length),
+                $"{name} must contain distinct units."
+            );
+            RosterValidationResult result = RosterRules.Validate(roster, catalog.units);
+            Assert.That(
+                result.IsValid,
+                Is.True,
+                $"{name} must validate against the live catalog (reason {result.Reason})."
+            );
+        }
+    }
+
+    // === Match results (Wave 1) ===
+
+    [Test]
+    public void MatchResult_SimultaneousWipeIsDrawWithExactCopy()
+    {
+        MatchResult result = GameLoop.ResolveEliminationResult(false, false);
+
+        Assert.That(result.Outcome, Is.EqualTo(MatchOutcome.Draw));
+        Assert.That(result.Reason, Is.EqualTo(MatchResultReason.SimultaneousElimination));
+        Assert.That(result.HasWinner, Is.False);
+        Assert.That(result.WinningTeamIndex, Is.EqualTo(GameLoop.NoHillController));
+        Assert.That(result.IsValid, Is.True);
+        Assert.That(result, Is.EqualTo(MatchResult.Draw(MatchResultReason.SimultaneousElimination)));
+        Assert.That(
+            result.GetStatusForTeam(GameLoop.HostTeamIndex),
+            Is.EqualTo("Draw — both fireteams eliminated.")
+        );
+        Assert.That(
+            result.GetStatusForTeam(GameLoop.OpponentTeamIndex),
+            Is.EqualTo("Draw — both fireteams eliminated."),
+            "A draw reads identically from either fireteam's perspective."
+        );
+    }
+
+    [Test]
+    public void MatchResult_SoleSurvivorWinsByEliminationWithPerspectiveCopy()
+    {
+        MatchResult hostWin = GameLoop.ResolveEliminationResult(true, false);
+        Assert.That(hostWin.Outcome, Is.EqualTo(MatchOutcome.Win));
+        Assert.That(hostWin.Reason, Is.EqualTo(MatchResultReason.Elimination));
+        Assert.That(hostWin.HasWinner, Is.True);
+        Assert.That(hostWin.WinningTeamIndex, Is.EqualTo(GameLoop.HostTeamIndex));
+        Assert.That(
+            hostWin,
+            Is.EqualTo(MatchResult.ForWinner(GameLoop.HostTeamIndex, MatchResultReason.Elimination))
+        );
+        Assert.That(hostWin.GetStatusForTeam(GameLoop.HostTeamIndex), Is.EqualTo("You win!"));
+        Assert.That(hostWin.GetStatusForTeam(GameLoop.OpponentTeamIndex), Is.EqualTo("You lose!"));
+
+        MatchResult opponentWin = GameLoop.ResolveEliminationResult(false, true);
+        Assert.That(opponentWin.WinningTeamIndex, Is.EqualTo(GameLoop.OpponentTeamIndex));
+        Assert.That(opponentWin.Reason, Is.EqualTo(MatchResultReason.Elimination));
+        Assert.That(opponentWin.GetStatusForTeam(GameLoop.OpponentTeamIndex), Is.EqualTo("You win!"));
+        Assert.That(opponentWin.GetStatusForTeam(GameLoop.HostTeamIndex), Is.EqualTo("You lose!"));
+        Assert.That(opponentWin, Is.Not.EqualTo(hostWin));
+    }
+
+    [Test]
+    public void MatchResult_BothAliveIsNotTerminalAndDefaultIsNotAResult()
+    {
+        // The pure seam refuses to resolve a terminal result while both fireteams still live.
+        Assert.That(
+            () => GameLoop.ResolveEliminationResult(true, true),
+            Throws.InstanceOf<System.InvalidOperationException>()
+        );
+
+        // A default (unresolved) result is not a valid, terminal outcome.
+        MatchResult unresolved = default;
+        Assert.That(unresolved.Outcome, Is.EqualTo(MatchOutcome.None));
+        Assert.That(unresolved.HasWinner, Is.False);
+        Assert.That(unresolved.IsValid, Is.False);
+        Assert.That(
+            unresolved.GetStatusForTeam(GameLoop.HostTeamIndex),
+            Is.EqualTo("Match complete.")
+        );
+    }
+
+    [Test]
+    public void MatchResult_KingOfTheHillAndDisconnectStatusesAreDistinct()
+    {
+        MatchResult hillWin = MatchResult.ForWinner(
+            GameLoop.HostTeamIndex,
+            MatchResultReason.KingOfTheHill
+        );
+        Assert.That(
+            hillWin.GetStatusForTeam(GameLoop.HostTeamIndex),
+            Is.EqualTo($"You win! Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds.")
+        );
+        Assert.That(
+            hillWin.GetStatusForTeam(GameLoop.OpponentTeamIndex),
+            Is.EqualTo($"You lose! Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds.")
+        );
+
+        MatchResult forfeit = MatchResult.ForWinner(
+            GameLoop.OpponentTeamIndex,
+            MatchResultReason.DisconnectForfeit
+        );
+        Assert.That(
+            forfeit.GetStatusForTeam(GameLoop.OpponentTeamIndex),
+            Is.EqualTo("You win! Opponent disconnected.")
+        );
+        Assert.That(
+            forfeit.GetStatusForTeam(GameLoop.HostTeamIndex),
+            Is.EqualTo("You lose! Opponent disconnected.")
+        );
+
+        MatchResult elimination = MatchResult.ForWinner(
+            GameLoop.HostTeamIndex,
+            MatchResultReason.Elimination
+        );
+        Assert.That(hillWin, Is.Not.EqualTo(forfeit));
+        Assert.That(hillWin, Is.Not.EqualTo(elimination));
+        Assert.That(
+            hillWin.GetStatusForTeam(GameLoop.HostTeamIndex),
+            Is.Not.EqualTo(elimination.GetStatusForTeam(GameLoop.HostTeamIndex)),
+            "KOTH and elimination victory copy must be distinguishable."
+        );
+    }
+
+    [Test]
+    public void MatchResult_NetworkRoundTripPreservesTypedOutcome()
+    {
+        MatchResult[] samples =
+        {
+            MatchResult.ForWinner(GameLoop.OpponentTeamIndex, MatchResultReason.KingOfTheHill),
+            MatchResult.ForWinner(GameLoop.HostTeamIndex, MatchResultReason.Elimination),
+            MatchResult.Draw(MatchResultReason.SimultaneousElimination),
+        };
+
+        foreach (MatchResult written in samples)
+        {
+            using FastBufferWriter writer = new(16, Allocator.Temp);
+            writer.WriteNetworkSerializable(written);
+            using FastBufferReader reader = new(writer, Allocator.Temp);
+            reader.ReadNetworkSerializable(out MatchResult roundTripped);
+
+            Assert.That(roundTripped, Is.EqualTo(written));
+            Assert.That(roundTripped.IsValid, Is.True);
+            Assert.That(
+                roundTripped.GetStatusForTeam(GameLoop.HostTeamIndex),
+                Is.EqualTo(written.GetStatusForTeam(GameLoop.HostTeamIndex))
+            );
+        }
+    }
+
+    [Test]
+    public void MatchResult_InvalidWinnerAndDrawConstructionsThrow()
+    {
+        Assert.That(
+            () => MatchResult.ForWinner(GameLoop.NoHillController, MatchResultReason.Elimination),
+            Throws.ArgumentException,
+            "A win requires a real winning team index."
+        );
+        Assert.That(
+            () => MatchResult.ForWinner(GameLoop.HostTeamIndex, MatchResultReason.None),
+            Throws.ArgumentException
+        );
+        Assert.That(
+            () =>
+                MatchResult.ForWinner(
+                    GameLoop.HostTeamIndex,
+                    MatchResultReason.SimultaneousElimination
+                ),
+            Throws.ArgumentException,
+            "A simultaneous elimination can never be a win."
+        );
+        Assert.That(
+            () => MatchResult.Draw(MatchResultReason.None),
+            Throws.ArgumentException
+        );
+        Assert.That(
+            () => MatchResult.Draw(MatchResultReason.Elimination),
+            Throws.ArgumentException,
+            "Only a simultaneous elimination is a valid draw."
+        );
+    }
+
+    // === Dodge guidance copy (Wave 1) ===
+
+    [Test]
+    public void DodgeGuidance_ExposesExactPerspectiveStringsAndMapping()
+    {
+        Assert.That(
+            GameLoop.ThreatenedDodgeGuidance,
+            Is.EqualTo("DODGE now — drag flashing units to safety")
+        );
+        Assert.That(GameLoop.CasterDodgeGuidance, Is.EqualTo("Opponent is dodging your ability"));
+        Assert.That(GameLoop.NeutralDodgeGuidance, Is.EqualTo("Waiting for dodge response"));
+
+        Assert.That(
+            GameLoop.GetDodgeGuidance(true, false),
+            Is.EqualTo(GameLoop.ThreatenedDodgeGuidance)
+        );
+        Assert.That(
+            GameLoop.GetDodgeGuidance(false, true),
+            Is.EqualTo(GameLoop.CasterDodgeGuidance)
+        );
+        Assert.That(
+            GameLoop.GetDodgeGuidance(false, false),
+            Is.EqualTo(GameLoop.NeutralDodgeGuidance)
+        );
+        Assert.That(
+            GameLoop.GetDodgeGuidance(true, true),
+            Is.EqualTo(GameLoop.ThreatenedDodgeGuidance),
+            "Being threatened outranks being the caster."
+        );
+
+        Assert.That(
+            GameLoop.GetDodgeGuidancePerspective(true, false),
+            Is.EqualTo(MessagePerspective.Enemy)
+        );
+        Assert.That(
+            GameLoop.GetDodgeGuidancePerspective(false, true),
+            Is.EqualTo(MessagePerspective.Friendly)
+        );
+        Assert.That(
+            GameLoop.GetDodgeGuidancePerspective(false, false),
+            Is.EqualTo(MessagePerspective.Neutral)
+        );
+        Assert.That(
+            GameLoop.GetDodgeGuidancePerspective(true, true),
+            Is.EqualTo(MessagePerspective.Enemy)
+        );
+
+        Assert.That(
+            new[]
+            {
+                GameLoop.ThreatenedDodgeGuidance,
+                GameLoop.CasterDodgeGuidance,
+                GameLoop.NeutralDodgeGuidance,
+            }.Distinct().Count(),
+            Is.EqualTo(3),
+            "The three dodge perspectives must map to three distinct strings."
+        );
+    }
+
+    // === No-new-mode / no-size-drift guards (Wave 1) ===
+
+    [Test]
+    public void SupportedGameModes_RemainEliminationAndKingOfTheHillOnly()
+    {
+        List<GameMode> supported = new();
+        foreach (GameMode mode in System.Enum.GetValues(typeof(GameMode)))
+        {
+            MatchOptions options = MatchOptions.Default;
+            options.gameMode = mode;
+            if (options.Sanitized().gameMode == mode)
+                supported.Add(mode);
+        }
+
+        CollectionAssert.AreEquivalent(
+            new[] { GameMode.Elimination, GameMode.KingOfTheHill },
+            supported,
+            "Only Elimination and King of the Hill may survive sanitization."
+        );
+
+        MatchOptions ctf = MatchOptions.Default;
+        ctf.gameMode = GameMode.CaptureTheFlag;
+        Assert.That(ctf.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
+    }
+
+    [Test]
+    public void RosterAndModeConstants_HaveNoSizeOrCountDrift()
+    {
+        Assert.That(RosterRules.FireteamSize, Is.EqualTo(3));
+        Assert.That(GameLoop.TeamCount, Is.EqualTo(2));
+
+        int[][] configuredRosters =
+        {
+            GameLoop.DefaultBotRoster,
+            GameLoop.DevHostRoster,
+            GameLoop.DevOpponentRoster,
+            GameLoop.DevBotHostRoster,
+        };
+        foreach (int[] roster in configuredRosters)
+        {
+            Assert.That(roster.Length, Is.EqualTo(RosterRules.FireteamSize));
+            Assert.That(roster.Distinct().Count(), Is.EqualTo(roster.Length));
+            Assert.That(roster, Has.All.GreaterThanOrEqualTo(0));
+        }
+    }
+
+    private static List<UnitData> CreateCatalog(params bool[] eligibility)
+    {
+        List<UnitData> catalog = new(eligibility.Length);
+        foreach (bool eligible in eligibility)
+        {
+            UnitData unit = ScriptableObject.CreateInstance<UnitData>();
+            if (!eligible)
+            {
+                typeof(UnitData)
+                    .GetField(
+                        "unavailableForRoster",
+                        BindingFlags.Instance | BindingFlags.NonPublic
+                    )
+                    .SetValue(unit, true);
+            }
+            catalog.Add(unit);
+        }
+        return catalog;
+    }
+
+    private static void DestroyCatalog(List<UnitData> catalog)
+    {
+        foreach (UnitData unit in catalog)
+        {
+            if (unit != null)
+                Object.DestroyImmediate(unit);
+        }
+    }
 }

@@ -13,6 +13,8 @@ public sealed class UnitCardElement : IDisposable
     private readonly Label stateLabel;
     private readonly Button moveButton;
     private readonly Button abilityButton;
+    private readonly Label abilityActionLabel;
+    private readonly Label abilityChargeLabel;
 
     private Action selectAction;
     private Action moveAction;
@@ -43,6 +45,8 @@ public sealed class UnitCardElement : IDisposable
         stateLabel = cardRoot.Q<Label>("unit-card-state");
         moveButton = cardRoot.Q<Button>("unit-card-move");
         abilityButton = cardRoot.Q<Button>("unit-card-ability-button");
+        abilityActionLabel = abilityButton?.Q<Label>("unit-card-ability-action");
+        abilityChargeLabel = abilityButton?.Q<Label>("unit-card-ability-charge");
 
         if (
             selectButton == null
@@ -52,6 +56,8 @@ public sealed class UnitCardElement : IDisposable
             || stateLabel == null
             || moveButton == null
             || abilityButton == null
+            || abilityActionLabel == null
+            || abilityChargeLabel == null
         )
         {
             Debug.LogError(
@@ -181,20 +187,37 @@ public sealed class UnitCardElement : IDisposable
 
     private void RefreshAbilityState()
     {
+        string remainingUseText =
+            remainingAbilityUses == 1 ? "1 use" : $"{remainingAbilityUses} uses";
+
         if (abilityName != null)
         {
             abilityName.text =
                 !hasAbility ? "Move only"
-                : remainingAbilityUses > 0 ? $"{configuredAbilityName} · {remainingAbilityUses} use"
-                : $"{configuredAbilityName} · spent";
+                : remainingAbilityUses > 0
+                    ? $"{configuredAbilityName} · {remainingUseText} this match"
+                    : $"{configuredAbilityName} · spent this match";
+        }
+
+        if (abilityActionLabel != null)
+            abilityActionLabel.text = "ABILITY";
+
+        if (abilityChargeLabel != null)
+        {
+            abilityChargeLabel.text =
+                !hasAbility ? "NOT AVAILABLE"
+                : remainingAbilityUses > 0
+                    ? $"{remainingUseText.ToUpperInvariant()} THIS MATCH"
+                    : "SPENT THIS MATCH";
         }
 
         if (abilityButton != null)
         {
-            abilityButton.text =
-                !hasAbility ? "N/A"
-                : remainingAbilityUses > 0 ? $"ABILITY · {remainingAbilityUses}"
-                : "SPENT";
+            abilityButton.tooltip =
+                !hasAbility ? "This unit can move only."
+                : remainingAbilityUses > 0
+                    ? $"{configuredAbilityName}: {remainingUseText} remaining this match"
+                    : $"{configuredAbilityName} is spent for this match";
         }
 
         SetInteractable(interactionRequested);
@@ -258,8 +281,14 @@ public sealed class UnitCardElement : IDisposable
         Button move = new() { name = "unit-card-move", text = "MOVE" };
         move.AddToClassList("unit-card__mode");
         move.AddToClassList("unit-card__mode--move");
-        Button abilityButton = new() { name = "unit-card-ability-button", text = "ABILITY" };
+        Button abilityButton = new() { name = "unit-card-ability-button" };
         abilityButton.AddToClassList("unit-card__mode");
+        Label abilityAction = new("ABILITY") { name = "unit-card-ability-action" };
+        abilityAction.AddToClassList("unit-card__mode-label");
+        Label abilityCharge = new("1 USE THIS MATCH") { name = "unit-card-ability-charge" };
+        abilityCharge.AddToClassList("unit-card__mode-charge");
+        abilityButton.Add(abilityAction);
+        abilityButton.Add(abilityCharge);
         modes.Add(move);
         modes.Add(abilityButton);
 

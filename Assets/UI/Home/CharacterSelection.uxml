@@ -14,7 +14,7 @@
             <ui:VisualElement class="roster-header">
                 <ui:VisualElement class="roster-heading" picking-mode="Ignore">
                     <ui:Label text="Assemble your fireteam" class="title-xl" picking-mode="Ignore" />
-                    <ui:Label text="Choose three units. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
+                    <ui:Label text="Choose three distinct eligible units. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
                 </ui:VisualElement>
                 <ui:VisualElement class="match-summary panel panel--quiet">
                     <ui:Label text="Match brief" class="section-label" picking-mode="Ignore" />
@@ -35,7 +35,7 @@
 
             <ui:VisualElement class="roster-body">
                 <ui:VisualElement class="unit-library panel">
-                    <ui:Label text="Available units" class="section-label" picking-mode="Ignore" />
+                    <ui:Label text="Deployment roster" class="section-label" picking-mode="Ignore" />
                     <ui:ScrollView name="roster-options" mode="Horizontal" class="roster-options" />
                 </ui:VisualElement>
                 <ui:VisualElement class="map-column">

@@ -36,25 +36,49 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="controls-modal" class="modal-shade hidden">
-            <ui:VisualElement name="controls-modal-panel" class="modal" focusable="true" tabindex="-1">
+            <ui:VisualElement name="controls-modal-panel" class="modal controls-panel" focusable="true" tabindex="-1">
                 <ui:Label text="Controls" class="title-lg" picking-mode="Ignore" />
                 <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:VisualElement class="control-row" picking-mode="Ignore">
-                    <ui:Label text="Select unit" class="control-key" picking-mode="Ignore" />
-                    <ui:Label text="Select a unit card or a unit on the board" class="label control-copy" picking-mode="Ignore" />
-                </ui:VisualElement>
-                <ui:VisualElement class="control-row" picking-mode="Ignore">
-                    <ui:Label text="Plan movement" class="control-key" picking-mode="Ignore" />
-                    <ui:Label text="Drag across adjacent grid cells from the selected unit" class="label control-copy" picking-mode="Ignore" />
-                </ui:VisualElement>
-                <ui:VisualElement class="control-row" picking-mode="Ignore">
-                    <ui:Label text="Use ability" class="control-key" picking-mode="Ignore" />
-                    <ui:Label text="Choose Ability on a unit card, then select a target" class="label control-copy" picking-mode="Ignore" />
-                </ui:VisualElement>
-                <ui:VisualElement class="control-row" picking-mode="Ignore">
-                    <ui:Label text="Close panel" class="control-key" picking-mode="Ignore" />
-                    <ui:Label text="Press Escape" class="label control-copy" picking-mode="Ignore" />
-                </ui:VisualElement>
+                <ui:ScrollView mode="Vertical" class="controls-scroll">
+                    <ui:VisualElement class="control-section">
+                        <ui:Label text="ROUND FLOW" class="control-section__label" picking-mode="Ignore" />
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Planning" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Both players plan at the same time. Enemy orders stay hidden until execution." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Select a unit, then choose Move or Ability." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Ability charge" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Each ability has one use per match. It replaces that unit's move for the round." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Commit" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Current orders commit automatically when the planning timer ends." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="DODGE" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="If threatened during DODGE, drag each flashing unit to safety." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row control-row--last">
+                            <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Fog hides enemies outside your fireteam's vision." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="control-section">
+                        <ui:Label text="WIN CONDITIONS" class="control-section__label" picking-mode="Ignore" />
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Wipe out the enemy fireteam." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row control-row--last">
+                            <ui:Label text="KOTH" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Hold the hill for three consecutive rounds. A contested round resets the streak." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:ScrollView>
                 <ui:Button name="controls-close-button" text="Close" class="button button--primary modal-close" />
             </ui:VisualElement>
         </ui:VisualElement>

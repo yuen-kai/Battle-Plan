@@ -23,8 +23,8 @@ using UnityEngine.SceneManagement;
 ///       moves and casts on the same team in the same round
 ///   R5  Grenade damage application on a non-dodging target (HP drop >= 80 or death; grenade
 ///       damage rebalanced 50 -> 80)
-///   R6+ drives chase rounds (BFS toward nearest enemy) until the win condition ends the match
-///       (exactly one team wiped, phase idle, timeScale restored to 1)
+///   R6+ drives chase rounds (BFS toward nearest enemy) until elimination ends the match
+///       (win or simultaneous-wipe draw, phase idle, timeScale restored to 1)
 ///
 /// HOW TO RUN (either):
 ///   - Editor menu: Battle Plan > Run End-To-End Test (enters Play mode and auto-runs), or
@@ -385,38 +385,38 @@ public class DevE2ETestRunner : MonoBehaviour
             "R0 local PvP host uses the loopback direct endpoint"
         );
 
-        GameObject cmd = U(0, 0),
+        GameObject bSoldier = U(0, 0),
             pogo = U(0, 1),
             bShot = U(0, 2);
         GameObject rShot = U(1, 0),
             sniper = U(1, 1),
-            soldier = U(1, 2);
+            rSoldier = U(1, 2);
 
         Check(
-            cmd.name.StartsWith("Commander")
+            bSoldier.name.StartsWith("Soldier")
                 && pogo.name.StartsWith("PogoRider")
                 && bShot.name.StartsWith("Shotgunner")
                 && rShot.name.StartsWith("Shotgunner")
                 && sniper.name.StartsWith("Sniper")
-                && soldier.name.StartsWith("Soldier"),
-            "R0 roster: Blue=Commander/PogoRider/Shotgunner, Red=Shotgunner/Sniper/Soldier",
-            $"actual: {cmd.name},{pogo.name},{bShot.name} | {rShot.name},{sniper.name},{soldier.name}"
+                && rSoldier.name.StartsWith("Soldier"),
+            "R0 roster: Blue=Soldier/PogoRider/Shotgunner, Red=Shotgunner/Sniper/Soldier",
+            $"actual: {bSoldier.name},{pogo.name},{bShot.name} | {rShot.name},{sniper.name},{rSoldier.name}"
         );
         Check(GameLoop.Instance.FogOfWarEnabled, "R0 fog of war enabled from match options");
         Check(
-            Cell(cmd) == new Vector2Int(1, 3)
+            Cell(bSoldier) == new Vector2Int(1, 3)
                 && Cell(pogo) == new Vector2Int(4, 5)
                 && Cell(bShot) == new Vector2Int(7, 3)
                 && Cell(rShot) == new Vector2Int(5, 6)
                 && Cell(sniper) == new Vector2Int(4, 6)
-                && Cell(soldier) == new Vector2Int(3, 6),
+                && Cell(rSoldier) == new Vector2Int(3, 6),
             "R0 spawns match dev layout",
-            $"blue {Cell(cmd)},{Cell(pogo)},{Cell(bShot)} red {Cell(rShot)},{Cell(sniper)},{Cell(soldier)}"
+            $"blue {Cell(bSoldier)},{Cell(pogo)},{Cell(bShot)} red {Cell(rShot)},{Cell(sniper)},{Cell(rSoldier)}"
         );
         Snap("r0-match-start");
 
         // ================= R1: movement (legal + illegal wall step), both teams, speed =========
-        // Commander: legal 3-step (1,3)->(1,2)->(0,2)->(0,1).
+        // Blue Soldier: legal 3-step (1,3)->(1,2)->(0,2)->(0,1).
         DevInput.SetPath(0, 0, 1, 2, 0, 2, 0, 1);
         // PogoRider: legal 5-step escape straight down column 4 to (4,0) (beam lane for R2).
         DevInput.SetPath(0, 1, 4, 4, 4, 3, 4, 2, 4, 1, 4, 0);
@@ -445,9 +445,9 @@ public class DevE2ETestRunner : MonoBehaviour
         Check(Mathf.Approximately(Time.timeScale, 6f), "R1 SetSpeed(6) restored");
 
         Check(
-            Cell(cmd) == new Vector2Int(0, 1),
-            "R1 legal 3-step path executed (Commander at (0,1))",
-            $"actual {Cell(cmd)}"
+            Cell(bSoldier) == new Vector2Int(0, 1),
+            "R1 legal 3-step path executed (blue Soldier at (0,1))",
+            $"actual {Cell(bSoldier)}"
         );
         Check(
             Cell(pogo) == new Vector2Int(4, 0),
@@ -470,17 +470,17 @@ public class DevE2ETestRunner : MonoBehaviour
             $"actual {Cell(sniper)}"
         );
         Check(
-            Cell(soldier) == new Vector2Int(3, 6),
+            Cell(rSoldier) == new Vector2Int(3, 6),
             "R1 auto-filled unit stayed put (Soldier (3,6))",
-            $"actual {Cell(soldier)}"
+            $"actual {Cell(rSoldier)}"
         );
         Info(
-            $"R1 HP after round: cmd={HP(cmd)} pogo={HP(pogo)} bShot={HP(bShot)} | rShot={HP(rShot)} sniper={HP(sniper)} soldier={HP(soldier)}"
+            $"R1 HP after round: bSoldier={HP(bSoldier)} pogo={HP(pogo)} bShot={HP(bShot)} | rShot={HP(rShot)} sniper={HP(sniper)} rSoldier={HP(rSoldier)}"
         );
         Snap("r1-movement");
 
         // ================= R2: illegal non-adjacent move + AreaLock line ability + death =======
-        // Commander submits a NON-ADJACENT jump (0,1)->(2,1): must be fully rejected (stay put).
+        // Blue Soldier submits a NON-ADJACENT jump (0,1)->(2,1): must be rejected (stay put).
         DevInput.SetPath(0, 0, 2, 1);
         // Sniper line ability straight down column 4 at the PogoRider -- a dodge alert must fire
         // for the PogoRider; we DECLINE the dodge, so the beam kills it (death + damage proof).
@@ -513,17 +513,17 @@ public class DevE2ETestRunner : MonoBehaviour
             $"alive={Alive(pogo)}"
         );
         Check(
-            Cell(cmd) == new Vector2Int(0, 1),
-            "R2 illegal non-adjacent move rejected (Commander still at (0,1))",
-            $"actual {Cell(cmd)}"
+            Cell(bSoldier) == new Vector2Int(0, 1),
+            "R2 illegal non-adjacent move rejected (blue Soldier still at (0,1))",
+            $"actual {Cell(bSoldier)}"
         );
         Snap("r2-arealock-kill");
 
         // ================= R3: Grenade + dodge dive that REPLACES the planned move ==============
         // Soldier (3,6) throws a grenade at (1,3): Manhattan 5 = max range, radius 2, response 3.
-        // Commander (0,1) is within response range of the square -> alerted. He dives 2 cells to
-        // (1,0) (3 cells from the blast, outside radius 2): must end on the dive cell, undamaged.
-        float cmdHpBeforeR3 = HP(cmd);
+        // Blue Soldier (0,1) is within response range of the square -> alerted, then dives 2 cells
+        // to (1,0), outside radius 2: must end on the dive cell without taking grenade damage.
+        float bSoldierHpBeforeR3 = HP(bSoldier);
         DevInput.SetAbility(1, 2, 1, 3);
         yield return RunRoundToCompletion(
             "R3",
@@ -532,8 +532,8 @@ public class DevE2ETestRunner : MonoBehaviour
             {
                 var alerted = AlertedUnits();
                 Check(
-                    alerted.Count == 1 && alerted.Contains(cmd),
-                    "R3 grenade dodge alert targeted exactly the Commander",
+                    alerted.Count == 1 && alerted.Contains(bSoldier),
+                    "R3 grenade dodge alert targeted exactly the blue Soldier",
                     "alerted: " + string.Join(",", alerted.Select(u => u.name))
                 );
                 DevInput.SetDodgePath(0, 0, 0, 0, 1, 0); // (0,1) -> (0,0) -> (1,0)
@@ -542,19 +542,19 @@ public class DevE2ETestRunner : MonoBehaviour
             }
         );
         Check(
-            Cell(cmd) == new Vector2Int(1, 0),
-            "R3 dodge dive replaced the planned move (Commander ended on dive cell (1,0))",
-            $"actual {Cell(cmd)}"
+            Cell(bSoldier) == new Vector2Int(1, 0),
+            "R3 dodge dive replaced the planned move (blue Soldier ended on dive cell (1,0))",
+            $"actual {Cell(bSoldier)}"
         );
         Check(
-            Alive(cmd) && HP(cmd) >= cmdHpBeforeR3 - 0.01f,
+            Alive(bSoldier) && HP(bSoldier) >= bSoldierHpBeforeR3 - 0.01f,
             "R3 successful dodge: no grenade damage taken",
-            $"hp {cmdHpBeforeR3} -> {HP(cmd)}"
+            $"hp {bSoldierHpBeforeR3} -> {HP(bSoldier)}"
         );
         Snap("r3-dodged");
 
         // ================= R4: Shield Rush + a simultaneous safe move ============================
-        // The Commander survived R3 by assertion and is outside every red unit's weapon range.
+        // The blue Soldier survived R3 by assertion and is outside every red unit's weapon range.
         // Moving the already-wounded Soldier here made this check depend on nondeterministic
         // crossfire from prior rounds rather than movement correctness.
         DevInput.SetPath(0, 0, 2, 0);
@@ -603,35 +603,38 @@ public class DevE2ETestRunner : MonoBehaviour
             $"uses {rushUsesBefore} -> {rushIdentity.RemainingAbilityUses}"
         );
         Check(
-            Cell(cmd) == new Vector2Int(2, 0),
-            "R4 Commander completed its simultaneous move to (2,0)",
-            $"actual {Cell(cmd)}"
+            Cell(bSoldier) == new Vector2Int(2, 0),
+            "R4 blue Soldier completed its simultaneous move to (2,0)",
+            $"actual {Cell(bSoldier)}"
         );
         Snap("r4-shield-rush");
 
         // ================= R5: exhausted ability is rejected server-side =========================
-        if (!Alive(cmd) || !Alive(sniper))
+        if (!Alive(bSoldier) || !Alive(sniper))
         {
             Check(
                 false,
-                "R5 precondition: Commander and Sniper alive for ability-exhaustion round",
-                $"commander alive={Alive(cmd)}, sniper alive={Alive(sniper)}"
+                "R5 precondition: blue Soldier and Sniper alive for ability-exhaustion round",
+                $"blue Soldier alive={Alive(bSoldier)}, sniper alive={Alive(sniper)}"
             );
         }
         else
         {
-            float cmdHpBeforeR5 = HP(cmd);
-            Vector2Int cmdCell = Cell(cmd);
-            DevInput.SetAbility(1, 1, cmdCell.x, cmdCell.y);
+            float bSoldierHpBeforeR5 = HP(bSoldier);
+            Vector2Int bSoldierCell = Cell(bSoldier);
+            DevInput.SetAbility(1, 1, bSoldierCell.x, bSoldierCell.y);
             yield return RunRoundToCompletion("R5", false, null);
             Check(
                 sniper.GetComponent<Unit>().RemainingAbilityUses == 0,
                 "R5 Sniper Area Lock charge remained exhausted after a rejected second use"
             );
             Check(
-                Alive(cmd) && HP(cmd) >= cmdHpBeforeR5 - 0.01f,
+                Alive(bSoldier) && HP(bSoldier) >= bSoldierHpBeforeR5 - 0.01f,
                 "R5 exhausted Area Lock caused no damage",
-                "hp " + cmdHpBeforeR5 + " -> " + (Alive(cmd) ? HP(cmd).ToString() : "dead")
+                "hp "
+                    + bSoldierHpBeforeR5
+                    + " -> "
+                    + (Alive(bSoldier) ? HP(bSoldier).ToString() : "dead")
             );
             Snap("r5-ability-exhausted");
         }
@@ -668,9 +671,30 @@ public class DevE2ETestRunner : MonoBehaviour
         int blueLeft = GameLoop.teamSize("BlueTeam");
         int redLeft = GameLoop.teamSize("RedTeam");
         Check(
-            Phase == "idle" && (blueLeft == 0 ^ redLeft == 0),
-            "Win condition reached: exactly one team wiped, game loop ended",
+            Phase == "idle" && (blueLeft == 0 || redLeft == 0),
+            "Elimination result reached: at least one team wiped, game loop ended",
             $"phase={Phase} blue={blueLeft} red={redLeft} (chase rounds used: {guard})"
+        );
+        MatchResult? finalResult = GameLoop.Instance?.LastMatchResult;
+        bool simultaneousWipe = blueLeft == 0 && redLeft == 0;
+        int expectedWinner =
+            blueLeft == 0 ? GameLoop.OpponentTeamIndex : GameLoop.HostTeamIndex;
+        bool resultMatchesElimination = finalResult.HasValue
+            && (
+                simultaneousWipe
+                    ? finalResult.Value.Outcome == MatchOutcome.Draw
+                        && finalResult.Value.Reason
+                            == MatchResultReason.SimultaneousElimination
+                    : finalResult.Value.Outcome == MatchOutcome.Win
+                        && finalResult.Value.Reason == MatchResultReason.Elimination
+                        && finalResult.Value.WinningTeamIndex == expectedWinner
+            );
+        Check(
+            resultMatchesElimination,
+            "Typed elimination result distinguishes a win from a simultaneous-wipe draw",
+            finalResult.HasValue
+                ? $"outcome={finalResult.Value.Outcome} reason={finalResult.Value.Reason} winner={finalResult.Value.WinningTeamIndex}"
+                : "no match result"
         );
         // EndGame resets Time.timeScale — assert BEFORE touching speed controls again.
         Check(

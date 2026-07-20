@@ -20,13 +20,19 @@
 
         <ui:VisualElement name="hud-dock" class="hud-dock">
             <ui:VisualElement class="hud-dock__header">
-                <ui:VisualElement picking-mode="Ignore">
+                <ui:VisualElement class="planning-copy" picking-mode="Ignore">
                     <ui:Label text="Fireteam orders" class="section-label" picking-mode="Ignore" />
-                    <ui:Label name="planning-help" text="Select a unit, then choose Move or Ability." class="planning-help" picking-mode="Ignore" />
+                    <ui:VisualElement class="planning-message-slot" picking-mode="Ignore">
+                        <ui:Label name="planning-help" text="Select a unit, then choose Move or Ability." class="planning-help" picking-mode="Ignore" />
+                        <ui:Label name="target-feedback-label" class="target-feedback hidden" picking-mode="Ignore" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
-                <ui:VisualElement class="hud-key" picking-mode="Ignore">
-                    <ui:VisualElement class="hud-key__swatch hud-key__swatch--amber" picking-mode="Ignore" />
-                    <ui:Label text="ACTIVE ORDER" class="hud-key__label" picking-mode="Ignore" />
+                <ui:VisualElement class="hud-header-actions">
+                    <ui:VisualElement class="hud-key" picking-mode="Ignore">
+                        <ui:VisualElement class="hud-key__swatch hud-key__swatch--amber" picking-mode="Ignore" />
+                        <ui:Label text="ACTIVE ORDER" class="hud-key__label" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement name="unit-cards" class="unit-cards">
@@ -41,6 +47,54 @@
                 <ui:VisualElement class="deployment-overlay__mark" picking-mode="Ignore" />
                 <ui:Label text="Deploying fireteams" class="deployment-overlay__title" picking-mode="Ignore" />
                 <ui:Label name="deployment-status" text="Synchronizing both players and preparing the battlefield." class="deployment-overlay__status" picking-mode="Ignore" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="controls-overlay" class="modal-shade controls-overlay hidden">
+            <ui:VisualElement class="modal controls-panel" focusable="true" tabindex="-1">
+                <ui:Label text="Match controls" class="title-lg" picking-mode="Ignore" />
+                <ui:VisualElement class="divider" picking-mode="Ignore" />
+                <ui:ScrollView mode="Vertical" class="controls-scroll">
+                    <ui:VisualElement class="control-section">
+                        <ui:Label text="ROUND FLOW" class="control-section__label" picking-mode="Ignore" />
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Planning" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Both players plan at the same time. Enemy orders stay hidden until execution." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Select a unit, then choose Move or Ability." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Ability charge" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Each ability has one use per match. It replaces that unit's move for the round." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Commit" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Current orders commit automatically when the planning timer ends." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="DODGE" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="If threatened during DODGE, drag each flashing unit to safety." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row control-row--last">
+                            <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Fog hides enemies outside your fireteam's vision." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="control-section">
+                        <ui:Label text="WIN CONDITIONS" class="control-section__label" picking-mode="Ignore" />
+                        <ui:VisualElement class="control-row">
+                            <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Wipe out the enemy fireteam." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row control-row--last">
+                            <ui:Label text="KOTH" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Hold the hill for three consecutive rounds. A contested round resets the streak." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:ScrollView>
+                <ui:Button name="controls-close-button" text="Return to match" class="button button--primary modal-close" />
             </ui:VisualElement>
         </ui:VisualElement>
 

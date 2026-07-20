@@ -206,6 +206,48 @@ public class BotExplorationEditModeTests
         CollectionAssert.IsEmpty(paths[0].Intersect(paths[1]).ToArray());
     }
 
+    [Test]
+    public void ObservationBoundary_HonorsFogFlagAndDropsAllHiddenSightings()
+    {
+        Vector2Int visibleCell = new(4, 4);
+        HashSet<Vector2Int> observable = new() { visibleCell };
+        BotEnemySighting[] sightings =
+        {
+            new(2, new Vector2Int(0, 0)),
+            new(1, visibleCell),
+            new(3, new Vector2Int(8, 9)),
+        };
+
+        // Fog on: only the sighting standing on an observable cell survives.
+        List<BotEnemySighting> fogOn = GameLoop.FilterObservableEnemySightings(
+            sightings,
+            observable,
+            true
+        );
+        Assert.That(fogOn.Count, Is.EqualTo(1));
+        Assert.That(fogOn[0].EnemyId, Is.EqualTo(1));
+        Assert.That(fogOn[0].Cell, Is.EqualTo(visibleCell));
+
+        // Fog on with nothing (or no set) observable: no hidden coordinate leaks through.
+        Assert.That(
+            GameLoop.FilterObservableEnemySightings(sightings, new HashSet<Vector2Int>(), true),
+            Is.Empty
+        );
+        Assert.That(GameLoop.FilterObservableEnemySightings(sightings, null, true), Is.Empty);
+        Assert.That(GameLoop.FilterObservableEnemySightings(null, observable, true), Is.Empty);
+
+        // Fog off is the mirror: every authoritative sighting is visible, ordered by enemy id.
+        List<BotEnemySighting> fogOff = GameLoop.FilterObservableEnemySightings(
+            sightings,
+            observable,
+            false
+        );
+        CollectionAssert.AreEqual(
+            new ulong[] { 1, 2, 3 },
+            fogOff.Select(sighting => sighting.EnemyId).ToArray()
+        );
+    }
+
     private static HashSet<Vector2Int> CreateProductionBotObservation()
     {
         return GridSystem.ComputeVisibleCells(

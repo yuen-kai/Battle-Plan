@@ -81,6 +81,18 @@ public class PathsDict : Dictionary<GameObject, (bool, List<Vector3>)>, INetwork
     }
 }
 
+public enum AbilityTargetValidationReason : byte
+{
+    Valid,
+    NoTargetCell,
+    TargetNotRequired,
+    AbilityUnavailable,
+    OutOfBounds,
+    DirectionNotAdjacent,
+    OutOfRange,
+    WallBlocked,
+}
+
 /// <summary>
 /// Manages interactive path planning on a grid for team units.
 /// Handles mouse-driven path creation, visual feedback, range displays, and movement validation.
@@ -193,57 +205,130 @@ public class PlanMovement : MonoBehaviour
     /// </summary>
     void AbilitySelection()
     {
-        UnitData unitData = selectedUnit.GetComponent<Movement>().unitData;
+        Movement movement = selectedUnit != null ? selectedUnit.GetComponent<Movement>() : null;
+        UnitData unitData = movement != null ? movement.unitData : null;
         if (!Input.GetMouseButtonDown(0))
             return;
+        if (GameHUDController.IsPointerOverUI(Input.mousePosition))
+            return;
+        if (selectedUnit == null || unitData == null)
+        {
+            ShowInvalidTargetFeedback(AbilityTargetValidationReason.AbilityUnavailable);
+            return;
+        }
 
         GameObject hoveredNode = Mouse.GetObjectUnderMouse("PathNode");
         Vector3? clicked = Mouse.GetGridCellUnderMouse();
         if (clicked == null && hoveredNode != null)
             clicked = GridSystem.GetNearestGridCell(hoveredNode.transform.position);
         if (clicked == null)
+        {
+            ShowInvalidTargetFeedback(AbilityTargetValidationReason.NoTargetCell);
             return;
+        }
+
         Vector3 square = clicked.Value;
         Vector3 start = GridSystem.GetNearestGridCell(selectedUnit);
+        Vector2Int startCell = GridSystem.ConvertToGridCoords(start);
+        Vector2Int selectedCell = GridSystem.ConvertToGridCoords(square);
+        AbilityTargetValidationReason validation = ValidateAbilityTarget(
+            unitData,
+            startCell,
+            selectedCell,
+            GameLoop.gridBounds.Contains(new Vector2(square.x, square.z)),
+            GameLoop.wallLayout.Contains(selectedCell)
+        );
 
-        if (unitData.selectAbilityDirection)
+        if (validation == AbilityTargetValidationReason.TargetNotRequired)
         {
-            Vector2Int startCell = GridSystem.ConvertToGridCoords(start);
-            Vector2Int selectedCell = GridSystem.ConvertToGridCoords(square);
-            if (!GridSystem.TryGetAdjacentDirection(startCell, selectedCell, out _))
-            {
-                if (selectedCell != startCell)
-                    PathSelection.Instance?.TryStartPath();
-                return;
-            }
-        }
-        else
-        {
-            int targetRange = unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0;
-            float manhattanCells =
-                (Mathf.Abs(square.x - start.x) + Mathf.Abs(square.z - start.z)) / cellSize;
-            if (manhattanCells > targetRange + 0.1f)
-            {
-                // An out-of-range press cannot target this ability. Let it begin a movement drag
-                // from another friendly unit or one of that unit's existing path nodes instead.
-                PathSelection.Instance?.TryStartPath();
-                return;
-            }
-            if (!unitData.selectAbilitySquare)
-                return;
-        }
-
-        // Line abilities (AreaLock) use the square as a direction anchor, so walls are fine.
-        if (
-            !unitData.selectAbilityDirection
-            && !unitData.responseDistLine
-            && GameLoop.wallLayout.Contains(GridSystem.ConvertToGridCoords(square))
-        )
+            GameHUDController.Instance?.SetTargetFeedback(
+                GetAbilityTargetFeedback(validation),
+                false
+            );
             return;
+        }
+
+        if (validation != AbilityTargetValidationReason.Valid)
+        {
+            bool canStartMovement =
+                validation == AbilityTargetValidationReason.DirectionNotAdjacent
+                || validation == AbilityTargetValidationReason.OutOfRange;
+            if (
+                canStartMovement
+                && selectedCell != startCell
+                && PathSelection.Instance?.TryStartPath() == true
+            )
+            {
+                GameHUDController.Instance?.ClearTargetFeedback();
+                return;
+            }
+            ShowInvalidTargetFeedback(validation);
+            return;
+        }
 
         plans[selectedUnit] = (true, new List<Vector3> { start, square });
         currentPlan = plans[selectedUnit].Item2;
         UpdateAbilityTargetIndicator(start, square, unitData);
+        GameHUDController.Instance?.SetTargetFeedback("Target locked.", false);
+    }
+
+    public static AbilityTargetValidationReason ValidateAbilityTarget(
+        UnitData unitData,
+        Vector2Int startCell,
+        Vector2Int targetCell,
+        bool isInBounds,
+        bool isWall
+    )
+    {
+        if (unitData == null)
+            return AbilityTargetValidationReason.AbilityUnavailable;
+        if (!unitData.selectAbilitySquare)
+            return AbilityTargetValidationReason.TargetNotRequired;
+        if (!isInBounds)
+            return AbilityTargetValidationReason.OutOfBounds;
+
+        if (unitData.selectAbilityDirection)
+        {
+            return unitData.abilityFixedDistance > 0
+                && GridSystem.TryGetAdjacentDirection(startCell, targetCell, out _)
+                ? AbilityTargetValidationReason.Valid
+                : AbilityTargetValidationReason.DirectionNotAdjacent;
+        }
+
+        int manhattanCells =
+            Mathf.Abs(targetCell.x - startCell.x) + Mathf.Abs(targetCell.y - startCell.y);
+        if (manhattanCells > unitData.abilitySquareRange)
+            return AbilityTargetValidationReason.OutOfRange;
+        if (!unitData.responseDistLine && isWall)
+            return AbilityTargetValidationReason.WallBlocked;
+        return AbilityTargetValidationReason.Valid;
+    }
+
+    public static string GetAbilityTargetFeedback(AbilityTargetValidationReason reason)
+    {
+        return reason switch
+        {
+            AbilityTargetValidationReason.NoTargetCell =>
+                "Choose a highlighted target cell.",
+            AbilityTargetValidationReason.TargetNotRequired =>
+                "This ability activates on its caster.",
+            AbilityTargetValidationReason.AbilityUnavailable =>
+                "This unit has no targetable ability.",
+            AbilityTargetValidationReason.OutOfBounds =>
+                "Choose a target inside the battlefield.",
+            AbilityTargetValidationReason.DirectionNotAdjacent =>
+                "Choose one of the eight adjacent direction cells.",
+            AbilityTargetValidationReason.OutOfRange =>
+                "Target is outside this ability's range.",
+            AbilityTargetValidationReason.WallBlocked =>
+                "That ability cannot target a wall cell.",
+            _ => string.Empty,
+        };
+    }
+
+    private static void ShowInvalidTargetFeedback(AbilityTargetValidationReason reason)
+    {
+        GameHUDController.Instance?.SetTargetFeedback(GetAbilityTargetFeedback(reason), true);
     }
 
     // Runtime-generated ability target visuals (marker + AOE disc, or preview line), mirroring
@@ -457,6 +542,7 @@ public class PlanMovement : MonoBehaviour
             ResetVisualPlan();
         }
 
+        GameHUDController.Instance?.ClearTargetFeedback();
         ApplySelectedUnitModeVisuals();
         RefreshUnitCards();
         return true;
@@ -469,6 +555,7 @@ public class PlanMovement : MonoBehaviour
 
         GameObject previousUnit = selectedUnit;
         selectedUnit = newSelectedUnit;
+        GameHUDController.Instance?.ClearTargetFeedback();
         if (selectedUnit == null)
         {
             ClearAbilityTargetIndicator();

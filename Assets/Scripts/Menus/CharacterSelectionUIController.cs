@@ -10,7 +10,7 @@ using UnityEngine.UIElements;
 [RequireComponent(typeof(UIDocument))]
 public class CharacterSelectionUIController : NetworkBehaviour
 {
-    private const int FireteamSize = 3;
+    private const int FireteamSize = RosterRules.FireteamSize;
     private static readonly int[] BotRoster = GameLoop.DefaultBotRoster;
 
     [SerializeField]
@@ -61,7 +61,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         BuildSelectedSlots();
         UpdateSummary(IsSpawned ? replicatedOptions.Value : MatchOptions.Current);
         UpdateSelectionState();
-        root.schedule.Execute(() => optionViews.FirstOrDefault()?.Button?.Focus());
+        root.schedule.Execute(FocusFirstEnabledRosterOption);
     }
 
     private void OnDisable()
@@ -229,6 +229,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
         Label unitName = button.Q<Label>("unit-option-name");
         Label description = button.Q<Label>("unit-option-description");
         Label ability = button.Q<Label>("unit-option-ability");
+        Label optionStatus = button.Q<Label>("unit-option-status");
+        if (optionStatus == null)
+        {
+            optionStatus = new Label { name = "unit-option-status" };
+            optionStatus.AddToClassList("unit-option__status");
+            button.Add(optionStatus);
+        }
 
         button.name = $"unit-option-{index}";
         button.tooltip = data != null ? $"Add {data.unitName} to the fireteam" : "Add unit";
@@ -243,7 +250,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
                     : "Move only";
         SetBackgroundImage(portrait, data != null ? data.unitSprite : null);
 
-        return new UnitOptionView(viewRoot, button);
+        return new UnitOptionView(viewRoot, button, data, optionStatus);
     }
 
     private static Button BuildFallbackUnitOption()
@@ -376,19 +383,39 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
     private void SelectUnit(int unitIndex)
     {
-        if (
-            localSelectionSubmitted
-            || allUnits?.units == null
-            || unitIndex < 0
-            || unitIndex >= allUnits.units.Count
-        )
+        if (localSelectionSubmitted)
+            return;
+
+        if (allUnits?.units == null || unitIndex < 0 || unitIndex >= allUnits.units.Count)
         {
+            localStatusOverride =
+                "That unit is no longer available. Choose another unit.";
+            UpdateSelectionState();
+            return;
+        }
+
+        if (!RosterRules.IsUnitEligible(allUnits.units, unitIndex))
+        {
+            localStatusOverride =
+                "That unit is unavailable for deployment. Choose another unit.";
+            UpdateSelectionState();
+            return;
+        }
+
+        if (Array.IndexOf(selectedUnits, unitIndex) >= 0)
+        {
+            localStatusOverride = "That unit is already selected. Choose a different unit.";
+            UpdateSelectionState();
             return;
         }
 
         int emptySlot = Array.IndexOf(selectedUnits, -1);
         if (emptySlot < 0)
+        {
+            localStatusOverride = "Fireteam full. Remove a unit before choosing another.";
+            UpdateSelectionState();
             return;
+        }
 
         localStatusOverride = null;
         selectedUnits[emptySlot] = unitIndex;
@@ -412,16 +439,33 @@ public class CharacterSelectionUIController : NetworkBehaviour
         localStatusOverride = null;
         selectedUnits[slotIndex] = -1;
         UpdateSelectionState();
-        optionViews.FirstOrDefault()?.Button?.Focus();
+        root?.schedule.Execute(FocusFirstEnabledRosterOption);
+    }
+
+    private void FocusFirstEnabledRosterOption()
+    {
+        optionViews.FirstOrDefault(view => view.CanReceiveFocus)?.Button?.Focus();
     }
 
     private void UpdateSelectionState()
     {
         bool selectionComplete = selectedUnits.All(index => index >= 0);
+        RosterValidationResult validation = selectionComplete
+            ? RosterRules.Validate(selectedUnits, allUnits?.units)
+            : RosterValidationResult.Invalid(RosterValidationReason.IncorrectUnitCount);
+        bool selectionValid = selectionComplete && validation.IsValid;
         bool canEdit = !localSelectionSubmitted && !sceneLoadRequested;
 
-        foreach (UnitOptionView view in optionViews)
-            view.Button.SetEnabled(canEdit && !selectionComplete);
+        for (int unitIndex = 0; unitIndex < optionViews.Count; unitIndex++)
+        {
+            bool selected = Array.IndexOf(selectedUnits, unitIndex) >= 0;
+            bool eligible = RosterRules.IsUnitEligible(allUnits?.units, unitIndex);
+            optionViews[unitIndex].Configure(
+                selected,
+                eligible,
+                canEdit && !selectionComplete && !selected && eligible
+            );
+        }
 
         for (int i = 0; i < slotViews.Count && i < selectedUnits.Length; i++)
         {
@@ -434,20 +478,24 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         if (confirmButton != null)
         {
-            confirmButton.SetEnabled(IsSpawned && IsClient && selectionComplete && canEdit);
+            confirmButton.SetEnabled(IsSpawned && IsClient && selectionValid && canEdit);
         }
         UpdateStatusText();
     }
 
     private void ConfirmSelection()
     {
-        if (
-            localSelectionSubmitted
-            || !IsSpawned
-            || !IsClient
-            || selectedUnits.Any(index => index < 0)
-        )
+        if (localSelectionSubmitted || !IsSpawned || !IsClient)
+            return;
+
+        RosterValidationResult validation = RosterRules.Validate(
+            selectedUnits,
+            allUnits?.units
+        );
+        if (!validation.IsValid)
         {
+            localStatusOverride = RosterRules.GetUserMessage(validation);
+            UpdateSelectionState();
             return;
         }
 
@@ -469,15 +517,19 @@ public class CharacterSelectionUIController : NetworkBehaviour
             return;
         }
 
-        if (
-            sceneLoadRequested
-            || allUnits?.units == null
-            || submittedUnits == null
-            || submittedUnits.Length != FireteamSize
-            || submittedUnits.Any(index => index < 0 || index >= allUnits.units.Count)
-        )
+        if (sceneLoadRequested)
         {
             RejectSelection(sender, "That fireteam is not valid. Choose three units again.");
+            return;
+        }
+
+        RosterValidationResult validation = RosterRules.Validate(
+            submittedUnits,
+            allUnits?.units
+        );
+        if (!validation.IsValid)
+        {
+            RejectSelection(sender, RosterRules.GetUserMessage(validation));
             return;
         }
 
@@ -525,17 +577,22 @@ public class CharacterSelectionUIController : NetworkBehaviour
         ulong hostId = NetworkManager.ServerClientId;
         if (!teamSelections.TryGetValue(hostId, out int[] hostRoster))
             return;
+        if (!RevalidateStoredSelection(hostId, hostRoster))
+            return;
 
         int[] opponentRoster;
         ulong opponentId;
         if (options.IsBotMatch)
         {
-            if (
-                allUnits?.units == null
-                || BotRoster.Any(index => index < 0 || index >= allUnits.units.Count)
-            )
+            RosterValidationResult botValidation = RosterRules.Validate(
+                BotRoster,
+                allUnits?.units
+            );
+            if (!botValidation.IsValid)
             {
-                DeploymentFailedClientRpc("The AI fireteam could not be created.");
+                DeploymentFailedClientRpc(
+                    $"The AI fireteam could not be created. {RosterRules.GetUserMessage(botValidation)}"
+                );
                 return;
             }
             opponentId = GameLoop.BotParticipantId;
@@ -551,13 +608,27 @@ public class CharacterSelectionUIController : NetworkBehaviour
             {
                 return;
             }
+            if (!RevalidateStoredSelection(opponentId, opponentRoster))
+                return;
         }
 
         sceneLoadRequested = true;
         GameLoop.ResetMatchState();
-        GameLoop.ConfigureTeam(0, hostId, hostRoster);
-        GameLoop.ConfigureTeam(1, opponentId, opponentRoster);
+        GameLoop.ConfigureTeam(GameLoop.HostTeamIndex, hostId, hostRoster);
+        GameLoop.ConfigureTeam(GameLoop.OpponentTeamIndex, opponentId, opponentRoster);
         NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+    }
+
+    private bool RevalidateStoredSelection(ulong clientId, int[] roster)
+    {
+        RosterValidationResult validation = RosterRules.Validate(roster, allUnits?.units);
+        if (validation.IsValid)
+            return true;
+
+        teamSelections.Remove(clientId);
+        confirmedHumanCount.Value = teamSelections.Count;
+        RejectSelection(clientId, RosterRules.GetUserMessage(validation));
+        return false;
     }
 
     [ClientRpc]
@@ -709,12 +780,49 @@ public class CharacterSelectionUIController : NetworkBehaviour
     {
         public VisualElement Root { get; }
         public Button Button { get; }
+        public bool CanReceiveFocus { get; private set; }
         public Action ClickAction { get; set; }
 
-        public UnitOptionView(VisualElement root, Button button)
+        private readonly UnitData data;
+        private readonly Label optionStatus;
+
+        public UnitOptionView(
+            VisualElement root,
+            Button button,
+            UnitData data,
+            Label optionStatus
+        )
         {
             Root = root;
             Button = button;
+            this.data = data;
+            this.optionStatus = optionStatus;
+        }
+
+        public void Configure(bool selected, bool eligible, bool canChoose)
+        {
+            Root.EnableInClassList("unit-option--selected", selected);
+            Root.EnableInClassList("unit-option--unavailable", !eligible);
+            Button.EnableInClassList("unit-option--selected", selected);
+            Button.EnableInClassList("unit-option--unavailable", !eligible);
+            CanReceiveFocus = canChoose;
+            Button.SetEnabled(canChoose);
+
+            if (optionStatus != null)
+            {
+                optionStatus.text = !eligible ? "Unavailable" : (selected ? "Selected" : string.Empty);
+                optionStatus.EnableInClassList("hidden", eligible && !selected);
+            }
+
+            string unitName =
+                data != null && !string.IsNullOrWhiteSpace(data.unitName) ? data.unitName : "unit";
+            Button.tooltip = !eligible
+                ? $"{unitName} is unavailable for deployment"
+                : (
+                    selected
+                        ? $"{unitName} is already selected"
+                        : (canChoose ? $"Add {unitName} to the fireteam" : "Fireteam selection is locked")
+                );
         }
 
         public void Dispose()

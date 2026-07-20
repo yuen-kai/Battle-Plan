@@ -152,6 +152,24 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
     private static Vector2Int Cell(GameObject unit) =>
         GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
 
+    // Screenshots land outside Assets so Play mode never triggers an import/refresh cycle.
+    private static void Snap(string name)
+    {
+        try
+        {
+            string dir = System.IO.Path.Combine(
+                Application.temporaryCachePath,
+                "BattlePlanBotE2E"
+            );
+            System.IO.Directory.CreateDirectory(dir);
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, name + ".png"));
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("[BOT-E2E] screenshot '" + name + "' failed: " + e.Message);
+        }
+    }
+
     private static Vector2 PanelToInputScreen(IPanel panel, Vector2 panelPosition)
     {
         Vector2 panelMin = RuntimePanelUtils.ScreenToPanel(panel, Vector2.zero);
@@ -271,6 +289,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         {
             if (GameLoop.currentPhase == "dodging" && !submittedDodge)
             {
+                Snap("02-dodge");
                 DevInput.SubmitDodge();
                 submittedDodge = true;
             }
@@ -360,6 +379,44 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         if (HudPickingOnly)
             yield break;
 
+        // Typed HUD copy: the readout reflects the authoritative AI/Elimination match, and the
+        // slot-1 ability card advertises a match-long charge (never a per-round refresh).
+        UIDocument hudDocument = GameHUDController.Instance != null
+            ? GameHUDController.Instance.GetComponent<UIDocument>()
+            : null;
+        VisualElement hudRoot = hudDocument != null ? hudDocument.rootVisualElement : null;
+        Check(hudRoot != null, "live Game HUD root is available for typed copy checks");
+        if (hudRoot != null)
+        {
+            Label matchTypeLabel = hudRoot.Q<Label>("match-type-label");
+            Check(
+                matchTypeLabel != null && matchTypeLabel.text == "ELIMINATION / AI",
+                $"HUD match readout reflects the typed AI elimination match (got '{matchTypeLabel?.text ?? "<none>"}')"
+            );
+            Label fogLabel = hudRoot.Q<Label>("fog-label");
+            Check(
+                fogLabel != null && fogLabel.text == "FOG ON",
+                $"HUD fog readout reflects the seeded fog option (got '{fogLabel?.text ?? "<none>"}')"
+            );
+
+            VisualElement soldierCard = hudRoot.Q<VisualElement>("unit-card-1");
+            Label soldierAbility = soldierCard?.Q<Label>("unit-card-ability");
+            string abilityCopy = soldierAbility?.text ?? string.Empty;
+            string abilityCopyLower = abilityCopy.ToLowerInvariant();
+            Check(
+                soldierAbility != null
+                    && !abilityCopyLower.Contains("per round")
+                    && !abilityCopyLower.Contains("per turn")
+                    && (
+                        abilityCopyLower.Contains("match")
+                        || abilityCopyLower.Contains("use")
+                        || abilityCopyLower.Contains("move only")
+                    ),
+                $"slot-1 ability card shows honest match-long copy (got '{abilityCopy}')"
+            );
+        }
+        Snap("01-planning-hud");
+
         // The focused roster puts Soldier (Grenade) in slot 1. Threaten a bot in the first round
         // so the dodge contribution is observed before either side can eliminate the caster.
         GameObject soldier = humanUnits[1];
@@ -423,6 +480,8 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             loop.BotAbilityContributionCount <= loop.BotPlanningContributionCount,
             "bot never contributed more than one ability per planning phase"
         );
+
+        Snap("03-result-final");
     }
 }
 #endif

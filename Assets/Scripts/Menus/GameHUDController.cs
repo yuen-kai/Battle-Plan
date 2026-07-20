@@ -27,12 +27,17 @@ public class GameHUDController : MonoBehaviour
     private Label hillStatusLabel;
     private Label deploymentStatus;
     private Label resultsStatus;
+    private Label targetFeedbackLabel;
     private Button playAgainButton;
     private Button mainMenuButton;
+    private Button controlsButton;
+    private VisualElement controlsOverlay;
+    private Button controlsCloseButton;
     private Action playAgainAction;
     private Action mainMenuAction;
     private Coroutine flashCoroutine;
     private bool callbacksRegistered;
+    private bool targetFeedbackUsesPlanningHelp;
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
 
@@ -60,6 +65,8 @@ public class GameHUDController : MonoBehaviour
         RegisterCallbacks();
         BuildCards();
         HideResults();
+        CloseControlsOverlay(false);
+        ClearTargetFeedback();
         ShowDeployment();
         SetCardsInteractable(false);
         SetMatchSummary(MatchOptions.Current);
@@ -103,6 +110,10 @@ public class GameHUDController : MonoBehaviour
         resultsStatus = RequireElement<Label>("results-status");
         playAgainButton = RequireElement<Button>("play-again-button");
         mainMenuButton = RequireElement<Button>("main-menu-button");
+        targetFeedbackLabel = root.Q<Label>("target-feedback-label");
+        controlsButton = root.Q<Button>("controls-button");
+        controlsOverlay = root.Q<VisualElement>("controls-overlay");
+        controlsCloseButton = root.Q<Button>("controls-close-button");
     }
 
     private T RequireElement<T>(string elementName)
@@ -126,7 +137,12 @@ public class GameHUDController : MonoBehaviour
             playAgainButton.clicked += OnPlayAgainClicked;
         if (mainMenuButton != null)
             mainMenuButton.clicked += OnMainMenuClicked;
+        if (controlsButton != null)
+            controlsButton.clicked += ShowControlsOverlay;
+        if (controlsCloseButton != null)
+            controlsCloseButton.clicked += HideControlsOverlay;
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
+        root.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
         callbacksRegistered = true;
     }
 
@@ -138,7 +154,12 @@ public class GameHUDController : MonoBehaviour
             playAgainButton.clicked -= OnPlayAgainClicked;
         if (mainMenuButton != null)
             mainMenuButton.clicked -= OnMainMenuClicked;
+        if (controlsButton != null)
+            controlsButton.clicked -= ShowControlsOverlay;
+        if (controlsCloseButton != null)
+            controlsCloseButton.clicked -= HideControlsOverlay;
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
+        root.UnregisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
         callbacksRegistered = false;
     }
 
@@ -187,6 +208,7 @@ public class GameHUDController : MonoBehaviour
         foreach (UnitCardElement card in cards)
             card?.SetInteractable(interactable);
 
+        ClearTargetFeedback();
         SetPlanningHelp(
             interactable
                 ? "Select a unit, then choose Move or Ability."
@@ -198,6 +220,41 @@ public class GameHUDController : MonoBehaviour
     {
         if (planningHelp != null)
             planningHelp.text = message ?? string.Empty;
+    }
+
+    public void SetTargetFeedback(string message, bool isError = true)
+    {
+        Label feedback = targetFeedbackLabel ?? planningHelp;
+        if (feedback == null)
+            return;
+
+        bool visible = !string.IsNullOrWhiteSpace(message);
+        targetFeedbackUsesPlanningHelp = targetFeedbackLabel == null && visible;
+        feedback.text = visible ? message : string.Empty;
+        if (targetFeedbackLabel != null)
+            targetFeedbackLabel.EnableInClassList("hidden", !visible);
+        feedback.EnableInClassList("target-feedback--visible", visible);
+        feedback.EnableInClassList("target-feedback--error", visible && isError);
+        feedback.EnableInClassList("target-feedback--success", visible && !isError);
+        feedback.EnableInClassList("label--danger", visible && isError);
+    }
+
+    public void ClearTargetFeedback()
+    {
+        if (targetFeedbackLabel != null)
+        {
+            SetTargetFeedback(string.Empty, false);
+            return;
+        }
+        if (!targetFeedbackUsesPlanningHelp || planningHelp == null)
+            return;
+
+        targetFeedbackUsesPlanningHelp = false;
+        planningHelp.text = "Select a unit, then choose Move or Ability.";
+        planningHelp.RemoveFromClassList("target-feedback--visible");
+        planningHelp.RemoveFromClassList("target-feedback--error");
+        planningHelp.RemoveFromClassList("target-feedback--success");
+        planningHelp.RemoveFromClassList("label--danger");
     }
 
     public void SetCardDisabled(int cardIndex, bool disabled)
@@ -352,6 +409,16 @@ public class GameHUDController : MonoBehaviour
         deploymentOverlay?.AddToClassList("hidden");
     }
 
+    public void ShowResults(
+        MatchResult result,
+        int localTeamIndex,
+        Action onPlayAgain,
+        Action onMainMenu
+    )
+    {
+        ShowResults(result.GetStatusForTeam(localTeamIndex), onPlayAgain, onMainMenu);
+    }
+
     public void ShowResults(string status, Action onPlayAgain, Action onMainMenu)
     {
         if (resultsStatus != null)
@@ -381,7 +448,7 @@ public class GameHUDController : MonoBehaviour
     private void OnPlayAgainClicked()
     {
         Action action = playAgainAction;
-        SetResultButtonsEnabled(false, false);
+        SetResultButtonsEnabled(false, true);
         action?.Invoke();
     }
 
@@ -390,6 +457,42 @@ public class GameHUDController : MonoBehaviour
         Action action = mainMenuAction;
         SetResultButtonsEnabled(false, false);
         action?.Invoke();
+    }
+
+    private void ShowControlsOverlay()
+    {
+        if (controlsOverlay == null)
+            return;
+        controlsOverlay.RemoveFromClassList("hidden");
+        controlsOverlay.BringToFront();
+        root?.schedule.Execute(() => controlsCloseButton?.Focus());
+    }
+
+    private void HideControlsOverlay()
+    {
+        CloseControlsOverlay(true);
+    }
+
+    private void CloseControlsOverlay(bool restoreFocus)
+    {
+        controlsOverlay?.AddToClassList("hidden");
+        if (restoreFocus)
+            root?.schedule.Execute(() => controlsButton?.Focus());
+    }
+
+    private void OnKeyDown(KeyDownEvent evt)
+    {
+        if (
+            evt.keyCode != KeyCode.Escape
+            || controlsOverlay == null
+            || controlsOverlay.ClassListContains("hidden")
+        )
+        {
+            return;
+        }
+
+        HideControlsOverlay();
+        evt.StopImmediatePropagation();
     }
 
     public static bool IsPointerOverUI(Vector2 screenPosition)

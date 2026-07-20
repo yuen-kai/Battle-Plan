@@ -113,6 +113,7 @@ public class UIToolkitAssetSmokeTests
                 "unit-card-state",
                 "unit-card-move",
                 "unit-card-ability-button",
+                "unit-card-ability-charge",
             },
         },
         new object[]
@@ -125,6 +126,7 @@ public class UIToolkitAssetSmokeTests
                 "unit-option-name",
                 "unit-option-description",
                 "unit-option-ability",
+                "unit-option-status",
             },
         },
         new object[]
@@ -319,6 +321,119 @@ public class UIToolkitAssetSmokeTests
         Assert.That(panelSettings.scaleMode, Is.EqualTo(PanelScaleMode.ScaleWithScreenSize));
         Assert.That(panelSettings.referenceResolution, Is.EqualTo(new Vector2Int(1920, 1080)));
         Assert.That(panelSettings.match, Is.EqualTo(0.5f).Within(0.001f));
+    }
+
+    [Test]
+    public void GameHudExposesTargetFeedbackAndControlsElements()
+    {
+        const string assetPath = "Assets/UI/Game/GameHUD.uxml";
+        VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
+        Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
+
+        TemplateContainer tree = asset.Instantiate();
+        Assert.That(
+            tree.Q<Label>("target-feedback-label"),
+            Is.Not.Null,
+            "GameHUDController binds target-feedback-label as a Label for ability/target feedback."
+        );
+        Assert.That(
+            tree.Q<Button>("controls-button"),
+            Is.Not.Null,
+            "GameHUDController wires controls-button to open the in-match controls overlay."
+        );
+        Assert.That(
+            tree.Q<VisualElement>("controls-overlay"),
+            Is.Not.Null,
+            "GameHUDController shows and hides controls-overlay."
+        );
+        Assert.That(
+            tree.Q<Button>("controls-close-button"),
+            Is.Not.Null,
+            "GameHUDController wires controls-close-button to dismiss the overlay."
+        );
+    }
+
+    [Test]
+    public void TitleControlsModalExposesControlGuidanceContent()
+    {
+        const string assetPath = "Assets/UI/Title/TitleScreen.uxml";
+        VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
+        Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
+
+        TemplateContainer tree = asset.Instantiate();
+        VisualElement controlsModal = tree.Q<VisualElement>("controls-modal");
+        Assert.That(controlsModal, Is.Not.Null, "TitleScreen must expose the controls modal.");
+        Assert.That(
+            controlsModal.Q<Button>("controls-close-button"),
+            Is.Not.Null,
+            "The controls modal must be dismissible."
+        );
+
+        var labels = controlsModal.Query<Label>().ToList();
+        int populated = 0;
+        foreach (Label label in labels)
+        {
+            if (!string.IsNullOrWhiteSpace(label.text))
+                populated++;
+        }
+        Assert.That(
+            populated,
+            Is.GreaterThanOrEqualTo(4),
+            "The controls modal must document the core controls, not sit empty."
+        );
+    }
+
+    [Test]
+    public void UnitCardAbilityCopyIsMatchLongWithoutPerRound()
+    {
+        const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
+        VisualTreeAsset card = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(cardPath);
+        Assert.That(card, Is.Not.Null, $"Could not import {cardPath}.");
+
+        Label chargeLabel = card.Instantiate().Q<Label>("unit-card-ability-charge");
+        Assert.That(
+            chargeLabel,
+            Is.Not.Null,
+            "UnitCard must surface the match-long ability charge copy."
+        );
+        string charge = (chargeLabel.text ?? string.Empty).ToLowerInvariant();
+        Assert.That(charge, Does.Contain("match"), "Ability charge copy must be match-scoped.");
+        Assert.That(charge, Does.Not.Contain("round"), "Charges are match-long, never per round.");
+        Assert.That(charge, Does.Not.Contain("turn"), "Charges are match-long, never per turn.");
+
+        // The runtime copy builder must not describe charges as per-round either.
+        string source = File.ReadAllText("Assets/Scripts/Menus/UnitCardElement.cs")
+            .ToLowerInvariant();
+        Assert.That(
+            source,
+            Does.Contain("this match"),
+            "Runtime ability copy should state the match-long scope."
+        );
+        Assert.That(source, Does.Not.Contain("per round"));
+        Assert.That(source, Does.Not.Contain("per turn"));
+        Assert.That(source, Does.Not.Contain("each round"));
+    }
+
+    [Test]
+    public void UnitOptionExposesSelectionAndAvailabilityStateClasses()
+    {
+        const string stylePath = "Assets/UI/Home/CharacterSelection.uss";
+        string style = File.ReadAllText(stylePath);
+        Assert.That(
+            style,
+            Does.Contain(".unit-option--selected"),
+            "Selected roster options need a visual state hook."
+        );
+        Assert.That(
+            style,
+            Does.Contain(".unit-option--unavailable"),
+            "Unavailable roster options need a visual state hook."
+        );
+        Assert.That(
+            style,
+            Does.Contain(".unit-option__status"),
+            "The unit-option status badge needs styling."
+        );
     }
 
     private static void AssertVisualTreeContract(string assetPath, string[] requiredNames)

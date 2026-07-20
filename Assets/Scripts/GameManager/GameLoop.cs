@@ -12,6 +12,127 @@ public enum MessagePerspective
     Enemy,
 }
 
+public enum MatchOutcome : byte
+{
+    None,
+    Win,
+    Draw,
+}
+
+public enum MatchResultReason : byte
+{
+    None,
+    Elimination,
+    SimultaneousElimination,
+    KingOfTheHill,
+    DisconnectForfeit,
+}
+
+public struct MatchResult
+    : INetworkSerializable,
+        System.IEquatable<MatchResult>
+{
+    public MatchOutcome Outcome;
+    public MatchResultReason Reason;
+    public int WinningTeamIndex;
+
+    public bool HasWinner => Outcome == MatchOutcome.Win;
+    public bool IsValid =>
+        Outcome switch
+        {
+            MatchOutcome.Win =>
+                (WinningTeamIndex == GameLoop.HostTeamIndex
+                    || WinningTeamIndex == GameLoop.OpponentTeamIndex)
+                && Reason != MatchResultReason.None
+                && Reason != MatchResultReason.SimultaneousElimination,
+            MatchOutcome.Draw =>
+                WinningTeamIndex == GameLoop.NoHillController
+                && Reason == MatchResultReason.SimultaneousElimination,
+            _ => false,
+        };
+
+    private MatchResult(
+        MatchOutcome outcome,
+        MatchResultReason reason,
+        int winningTeamIndex
+    )
+    {
+        Outcome = outcome;
+        Reason = reason;
+        WinningTeamIndex = winningTeamIndex;
+    }
+
+    public static MatchResult ForWinner(int winningTeamIndex, MatchResultReason reason)
+    {
+        MatchResult result = new(MatchOutcome.Win, reason, winningTeamIndex);
+        if (!result.IsValid)
+            throw new System.ArgumentException("Winner and result reason must describe a valid win.");
+        return result;
+    }
+
+    public static MatchResult Draw(MatchResultReason reason)
+    {
+        MatchResult result = new(MatchOutcome.Draw, reason, GameLoop.NoHillController);
+        if (!result.IsValid)
+            throw new System.ArgumentException("Draw reason must describe a valid draw.");
+        return result;
+    }
+
+    public string GetStatusForTeam(int localTeamIndex)
+    {
+        if (!IsValid)
+            return "Match complete.";
+        if (Outcome == MatchOutcome.Draw)
+        {
+            return Reason == MatchResultReason.SimultaneousElimination
+                ? "Draw — both fireteams eliminated."
+                : "Draw.";
+        }
+
+        string status = WinningTeamIndex == localTeamIndex ? "You win!" : "You lose!";
+        return Reason switch
+        {
+            MatchResultReason.KingOfTheHill =>
+                $"{status} Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds.",
+            MatchResultReason.DisconnectForfeit => $"{status} Opponent disconnected.",
+            _ => status,
+        };
+    }
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        byte serializedOutcome = (byte)Outcome;
+        byte serializedReason = (byte)Reason;
+        serializer.SerializeValue(ref serializedOutcome);
+        serializer.SerializeValue(ref serializedReason);
+        serializer.SerializeValue(ref WinningTeamIndex);
+
+        if (serializer.IsReader)
+        {
+            Outcome = (MatchOutcome)serializedOutcome;
+            Reason = (MatchResultReason)serializedReason;
+        }
+    }
+
+    public bool Equals(MatchResult other)
+    {
+        return Outcome == other.Outcome
+            && Reason == other.Reason
+            && WinningTeamIndex == other.WinningTeamIndex;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is MatchResult other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return System.HashCode.Combine(Outcome, Reason, WinningTeamIndex);
+    }
+}
+
 public enum HillControlStatus : byte
 {
     Empty,
@@ -140,9 +261,13 @@ public class GameLoop : NetworkBehaviour
     public const ulong BotParticipantId = ulong.MaxValue;
     public const int NoHillController = -1;
     public const int HillControlRoundsToWin = 3;
+    public const string ThreatenedDodgeGuidance =
+        "DODGE now — drag flashing units to safety";
+    public const string CasterDodgeGuidance = "Opponent is dodging your ability";
+    public const string NeutralDodgeGuidance = "Waiting for dodge response";
 
     public static readonly int[] DefaultBotRoster = { 2, 3, 4 };
-    public static readonly int[] DevHostRoster = { 0, 1, 2 };
+    public static readonly int[] DevHostRoster = { 4, 1, 2 };
     public static readonly int[] DevOpponentRoster = { 2, 3, 4 };
     public static readonly int[] DevBotHostRoster = { 3, 4, 2 };
 
@@ -313,6 +438,7 @@ public class GameLoop : NetworkBehaviour
     public bool BotLastPlanUsedAbility => botPlayer?.LastPlanUsedAbility ?? false;
     public int RoundNumber => roundNumber;
     public HillControlState HillControl => replicatedHillControl.Value;
+    public MatchResult? LastMatchResult { get; private set; }
 #if UNITY_EDITOR
     public int DevHillPresentationReportCount => devHillPresentationReports.Count;
     public string DevHillPresentationReport =>
@@ -340,6 +466,7 @@ public class GameLoop : NetworkBehaviour
         if (NetworkManager != null)
             NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
         matchEnded = false;
+        LastMatchResult = null;
         disconnectRecoveryStarted = false;
 
         if (IsServer)
@@ -447,8 +574,12 @@ public class GameLoop : NetworkBehaviour
             throw new System.ArgumentOutOfRangeException(nameof(teamIndex));
         if (participantId == BotParticipantId && teamIndex != OpponentTeamIndex)
             throw new System.ArgumentException("The bot may only occupy the opponent team.");
-        if (roster == null || roster.Length != 3)
+        if (roster == null || roster.Length != RosterRules.FireteamSize)
             throw new System.ArgumentException("A team roster must contain exactly three units.");
+        if (roster.Any(unitIndex => unitIndex < 0))
+            throw new System.ArgumentException("A team roster contains an invalid unit index.");
+        if (roster.Distinct().Count() != roster.Length)
+            throw new System.ArgumentException("A team roster must contain three distinct units.");
         if (teamParticipants.Any(entry => entry.Key != teamIndex && entry.Value == participantId))
         {
             throw new System.ArgumentException(
@@ -643,8 +774,16 @@ public class GameLoop : NetworkBehaviour
         string team
     )
     {
-        if (teamUnits == null || teamUnits.Length != 3)
-            throw new System.InvalidOperationException($"Team {teamIndex} has an invalid roster.");
+        RosterValidationResult rosterValidation = RosterRules.Validate(
+            teamUnits,
+            allUnits?.units
+        );
+        if (!rosterValidation.IsValid)
+        {
+            throw new System.InvalidOperationException(
+                $"Team {teamIndex} has an invalid roster ({rosterValidation.Reason})."
+            );
+        }
 
         allTeamUnitObjects[teamIndex] = new GameObject[teamUnits.Length];
         for (int i = 0; i < teamUnits.Length; i++)
@@ -1178,14 +1317,22 @@ public class GameLoop : NetworkBehaviour
             yield break; // Telegraphs stay up; nobody can dodge.
         }
 
-        // Alert icons on threatened units, network-wide.
+        // Alert icons and unit references are sent only to each threatened team's client.
         SetDodgeAlerts(true);
 
         dodgeDivePaths = new PathsDict();
         dodgeResponsesReceived.Clear();
         devDodgeSubmitted = false;
 
-        setOverlayUITextClientRpc("Dodging", MessagePerspective.Enemy);
+        HashSet<int> casterTeamsAwaitingDodge = activations
+            .Select(activation => activation.unit.GetComponent<Unit>())
+            .Where(identity =>
+                identity != null
+                && dodgeAlerted.ContainsKey(GetEnemyTeamIndex(identity.TeamIndex))
+            )
+            .Select(identity => identity.TeamIndex)
+            .ToHashSet();
+        SetDodgeGuidanceForHumanTeams(casterTeamsAwaitingDodge);
 
         if (
             botPlayer != null
@@ -1269,6 +1416,46 @@ public class GameLoop : NetworkBehaviour
         SetDodgeAlerts(false);
         dodgeAlerted = null;
         dodgeDivePaths = null;
+    }
+
+    public static string GetDodgeGuidance(bool isThreatened, bool isCaster)
+    {
+        if (isThreatened)
+            return ThreatenedDodgeGuidance;
+        return isCaster ? CasterDodgeGuidance : NeutralDodgeGuidance;
+    }
+
+    public static MessagePerspective GetDodgeGuidancePerspective(
+        bool isThreatened,
+        bool isCaster
+    )
+    {
+        if (isThreatened)
+            return MessagePerspective.Enemy;
+        return isCaster ? MessagePerspective.Friendly : MessagePerspective.Neutral;
+    }
+
+    private void SetDodgeGuidanceForHumanTeams(HashSet<int> casterTeamsAwaitingDodge)
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (
+                !TryGetHumanClientId(teamIndex, out ulong clientId)
+                || NetworkManager == null
+                || !NetworkManager.ConnectedClients.ContainsKey(clientId)
+            )
+            {
+                continue;
+            }
+
+            bool isThreatened = dodgeAlerted.ContainsKey(teamIndex);
+            bool isCaster = casterTeamsAwaitingDodge.Contains(teamIndex);
+            setOverlayUITextClientRpc(
+                GetDodgeGuidance(isThreatened, isCaster),
+                GetDodgeGuidancePerspective(isThreatened, isCaster),
+                NetworkHelper.ToClient(clientId)
+            );
+        }
     }
 
     // Units whose movement this round is a dodge dive (executed at diveSpeed).
@@ -1625,9 +1812,10 @@ public class GameLoop : NetworkBehaviour
         }
 
         FinishGame(
-            true,
-            next.ControllingTeamIndex,
-            $"Held the hill for {HillControlRoundsToWin} consecutive rounds."
+            MatchResult.ForWinner(
+                next.ControllingTeamIndex,
+                MatchResultReason.KingOfTheHill
+            )
         );
         return true;
     }
@@ -2548,40 +2736,47 @@ public class GameLoop : NetworkBehaviour
         if (matchEnded)
             return;
 
-        int? winner = GetWinnerTeamIndex();
-        FinishGame(winner.HasValue, winner.GetValueOrDefault(), string.Empty);
+        FinishGame(
+            ResolveEliminationResult(
+                HasLivingTeamUnits(HostTeamIndex),
+                HasLivingTeamUnits(OpponentTeamIndex)
+            )
+        );
     }
 
-    private void FinishGame(bool hasWinner, int winnerValue, string detail)
+    private void FinishGame(MatchResult result)
     {
         if (matchEnded)
             return;
+        if (!result.IsValid)
+            throw new System.ArgumentException("Cannot finish a match with an invalid result.");
 
         matchEnded = true;
+        LastMatchResult = result;
         currentPhase = "idle";
         Time.timeScale = 1f;
         SetFogOfWarEnabled(false);
         forceRevealUntil.Clear();
         SetCardsInteractableClientRpc(false);
         HideAbilityTelegraphsClientRpc();
-        EndGameClientRpc(hasWinner, winnerValue, detail ?? string.Empty);
+        EndGameClientRpc(result);
     }
 
     [ClientRpc]
-    void EndGameClientRpc(bool hasWinner, int winnerValue, string detail)
+    void EndGameClientRpc(MatchResult result)
     {
-        string status = !hasWinner
-            ? "No winner"
-            : (winnerValue == LocalTeamIndex ? "You win!" : "You lose!");
-        if (!string.IsNullOrWhiteSpace(detail))
-            status = $"{status} {detail}";
-
-        GameHUDController.Instance?.ShowResults(status, PlayAgain, ExitToMainMenu);
+        LastMatchResult = result;
+        GameHUDController.Instance?.ShowResults(
+            result,
+            LocalTeamIndex,
+            PlayAgain,
+            ExitToMainMenu
+        );
     }
 
     void PlayAgain()
     {
-        GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
+        GameHUDController.Instance?.SetResultButtonsEnabled(false, true);
         PlayAgainServerRpc();
     }
 
@@ -2744,7 +2939,7 @@ public class GameLoop : NetworkBehaviour
         }
 
         int winnerTeam = GetEnemyTeamIndex(disconnectedTeam);
-        FinishGame(winnerTeam >= 0, winnerTeam, "Opponent disconnected.");
+        FinishGame(MatchResult.ForWinner(winnerTeam, MatchResultReason.DisconnectForfeit));
     }
 
     private IEnumerator ReturnHostToJoinGameAfterShutdown()
@@ -2785,13 +2980,22 @@ public class GameLoop : NetworkBehaviour
         SceneManager.LoadScene("JoinGame");
     }
 
-    int? GetWinnerTeamIndex()
+    public static MatchResult ResolveEliminationResult(
+        bool hostTeamHasLivingUnits,
+        bool opponentTeamHasLivingUnits
+    )
     {
-        List<int> livingTeams = Enumerable
-            .Range(0, TeamCount)
-            .Where(HasLivingTeamUnits)
-            .ToList();
-        return livingTeams.Count == 1 ? livingTeams[0] : null;
+        if (hostTeamHasLivingUnits && opponentTeamHasLivingUnits)
+        {
+            throw new System.InvalidOperationException(
+                "Elimination cannot resolve while both fireteams still have living units."
+            );
+        }
+        if (hostTeamHasLivingUnits)
+            return MatchResult.ForWinner(HostTeamIndex, MatchResultReason.Elimination);
+        if (opponentTeamHasLivingUnits)
+            return MatchResult.ForWinner(OpponentTeamIndex, MatchResultReason.Elimination);
+        return MatchResult.Draw(MatchResultReason.SimultaneousElimination);
     }
 
     [ClientRpc]
@@ -3108,7 +3312,11 @@ public class GameLoop : NetworkBehaviour
     /// Wrapper function that accepts "friendly", "enemy", or "neutral" instead of specific team names
     /// </summary>
     [ClientRpc]
-    public void setOverlayUITextClientRpc(string message, MessagePerspective perspective)
+    public void setOverlayUITextClientRpc(
+        string message,
+        MessagePerspective perspective,
+        ClientRpcParams clientRpcParams = default
+    )
     {
         GameHUDController.Instance?.HideDeployment();
         GameHUDController.Instance?.SetPhase(message, perspective);

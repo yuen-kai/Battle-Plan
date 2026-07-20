@@ -11,7 +11,10 @@
         </ui:Button>
         <ui:VisualElement class="unit-card__modes">
             <ui:Button name="unit-card-move" text="MOVE" class="unit-card__mode unit-card__mode--move" tooltip="Plan movement for this unit" />
-            <ui:Button name="unit-card-ability-button" text="ABILITY" class="unit-card__mode" tooltip="Plan this unit's ability" />
+            <ui:Button name="unit-card-ability-button" class="unit-card__mode" tooltip="Plan this unit's ability">
+                <ui:Label name="unit-card-ability-action" text="ABILITY" class="unit-card__mode-label" picking-mode="Ignore" />
+                <ui:Label name="unit-card-ability-charge" text="1 USE THIS MATCH" class="unit-card__mode-charge" picking-mode="Ignore" />
+            </ui:Button>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
