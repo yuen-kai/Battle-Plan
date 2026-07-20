@@ -74,7 +74,3 @@ crashlytics-build.properties
 # Agent-generated visual artifacts
 /Assets/Screenshots/
 /Assets/Screenshots.meta
-/docs/
-
-# Local Cursor configuration and artifacts
-/.cursor/
