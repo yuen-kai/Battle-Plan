@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -64,6 +65,7 @@ public class UIToolkitAssetSmokeTests
                 "screen",
                 "roster-options",
                 "selected-roster",
+                "roster-count-label",
                 "confirm-selection-button",
                 "selection-status",
                 "mode-summary",
@@ -84,10 +86,9 @@ public class UIToolkitAssetSmokeTests
                 "match-type-label",
                 "fog-label",
                 "hill-status-label",
+                "enemy-unit-cards",
+                "enemy-contact-summary",
                 "unit-cards",
-                "unit-card-0",
-                "unit-card-1",
-                "unit-card-2",
                 "deployment-overlay",
                 "deployment-status",
                 "results-overlay",
@@ -110,8 +111,12 @@ public class UIToolkitAssetSmokeTests
                 "unit-card-select",
                 "unit-card-portrait",
                 "unit-card-name",
+                "unit-card-health",
+                "unit-card-health-fill",
+                "unit-card-health-value",
                 "unit-card-ability",
                 "unit-card-state",
+                "unit-card-modes",
                 "unit-card-move",
                 "unit-card-ability-button",
                 "unit-card-ability-charge",
@@ -172,6 +177,61 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
+    public void GameHudGeneratesCardsFromUnitsPerPlayer()
+    {
+        string markup = File.ReadAllText("Assets/UI/Game/GameHUD.uxml");
+        string controller = File.ReadAllText("Assets/Scripts/Menus/GameHUDController.cs");
+
+        Assert.That(
+            markup,
+            Does.Not.Contain("name=\"unit-card-"),
+            "The HUD asset should expose one empty card container, not a fixed set of card instances."
+        );
+        Assert.That(
+            controller,
+            Does.Contain("new UnitCardElement[RosterRules.UnitsPerPlayer]"),
+            "Runtime card capacity must derive from the authoritative roster size."
+        );
+        Assert.That(
+            controller,
+            Does.Contain("private readonly UnitCardElement[] enemyCards"),
+            "Enemy status capacity must derive from the same authoritative roster size."
+        );
+        Assert.That(
+            controller,
+            Does.Contain("for (int i = 0; i < cards.Length; i++)"),
+            "The HUD should generate every configured card at runtime."
+        );
+        Assert.That(
+            controller,
+            Does.Contain("for (int i = 0; i < enemyCards.Length; i++)"),
+            "The HUD should generate one read-only status card per enemy unit."
+        );
+        Assert.That(
+            controller,
+            Does.Contain("unitCardTemplate.Instantiate()"),
+            "Generated cards should use the authored UnitCard template."
+        );
+    }
+
+    [Test]
+    public void CharacterSelectionGeneratesSlotsFromUnitsPerPlayer()
+    {
+        string markup = File.ReadAllText("Assets/UI/Home/CharacterSelection.uxml");
+        string controller = File.ReadAllText(
+            "Assets/Scripts/Menus/CharacterSelectionUIController.cs"
+        );
+
+        Assert.That(
+            markup,
+            Does.Not.Contain("template=\"selected-slot-template\""),
+            "Character selection should expose one empty roster container, not fixed slot instances."
+        );
+        Assert.That(controller, Does.Contain("new int[UnitsPerPlayer]"));
+        Assert.That(controller, Does.Contain("for (int i = 0; i < UnitsPerPlayer; i++)"));
+    }
+
+    [Test]
     public void StyleSheetsImportWithoutMissingAssets()
     {
         foreach (string assetPath in StyleSheetPaths)
@@ -198,6 +258,31 @@ public class UIToolkitAssetSmokeTests
         Assert.That(caption.text, Does.Not.Contain("9 × 10"));
         Assert.That(preview.width, Is.EqualTo(1080));
         Assert.That(preview.height, Is.EqualTo(720));
+
+        using SHA256 sha = SHA256.Create();
+        string actualHash = System.Convert.ToBase64String(
+            sha.ComputeHash(File.ReadAllBytes(previewPath))
+        );
+        System.Type generatorType = System.Type.GetType(
+            "MapPreviewGenerator, Assembly-CSharp-Editor"
+        );
+        Assert.That(generatorType, Is.Not.Null);
+        byte[] generatedPreview = (byte[])
+            generatorType
+                .GetMethod(
+                    "BuildPreviewPng",
+                    System.Reflection.BindingFlags.Public
+                        | System.Reflection.BindingFlags.Static
+                )
+                .Invoke(null, null);
+        string generatedHash = System.Convert.ToBase64String(
+            sha.ComputeHash(generatedPreview)
+        );
+        Assert.That(
+            actualHash,
+            Is.EqualTo(generatedHash),
+            "MapPreview.png is stale. Run Battle Plan/Regenerate Map Preview."
+        );
     }
 
     [Test]

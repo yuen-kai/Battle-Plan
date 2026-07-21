@@ -6,11 +6,16 @@ public sealed class UnitCardElement : IDisposable
 {
     private readonly VisualElement container;
     private readonly VisualElement cardRoot;
+    private readonly bool enemyCard;
     private readonly Button selectButton;
     private readonly VisualElement portrait;
     private readonly Label unitName;
+    private readonly VisualElement healthRow;
+    private readonly VisualElement healthFill;
+    private readonly Label healthValue;
     private readonly Label abilityName;
     private readonly Label stateLabel;
+    private readonly VisualElement modes;
     private readonly Button moveButton;
     private readonly Button abilityButton;
     private readonly Label abilityActionLabel;
@@ -23,26 +28,36 @@ public sealed class UnitCardElement : IDisposable
     private int remainingAbilityUses;
     private string configuredAbilityName = "Ability";
     private bool isDisabled;
+    private bool enemyConfigured;
+    private bool enemyAlive = true;
     private bool interactionRequested;
     private bool disposed;
 
     public VisualElement Root => container;
+    public bool IsEnemyConfigured => enemyCard && enemyConfigured;
+    public bool IsEnemyAlive => IsEnemyConfigured && enemyAlive;
 
-    public UnitCardElement(VisualElement host, int index)
+    public UnitCardElement(VisualElement host, int index, bool isEnemyCard = false)
     {
         container = host ?? new VisualElement();
+        enemyCard = isEnemyCard;
         cardRoot =
             container.Q<VisualElement>("unit-card-root")
             ?? (container.ClassListContains("unit-card") ? container : BuildFallbackCard());
         if (cardRoot.parent == null && cardRoot != container)
             container.Add(cardRoot);
 
-        cardRoot.name = $"unit-card-{index}-root";
+        string namePrefix = enemyCard ? "enemy-unit-card" : "unit-card";
+        cardRoot.name = $"{namePrefix}-{index}-root";
         selectButton = cardRoot.Q<Button>("unit-card-select");
         portrait = cardRoot.Q<VisualElement>("unit-card-portrait");
         unitName = cardRoot.Q<Label>("unit-card-name");
+        healthRow = cardRoot.Q<VisualElement>("unit-card-health");
+        healthFill = cardRoot.Q<VisualElement>("unit-card-health-fill");
+        healthValue = cardRoot.Q<Label>("unit-card-health-value");
         abilityName = cardRoot.Q<Label>("unit-card-ability");
         stateLabel = cardRoot.Q<Label>("unit-card-state");
+        modes = cardRoot.Q<VisualElement>("unit-card-modes");
         moveButton = cardRoot.Q<Button>("unit-card-move");
         abilityButton = cardRoot.Q<Button>("unit-card-ability-button");
         abilityActionLabel = abilityButton?.Q<Label>("unit-card-ability-action");
@@ -52,8 +67,12 @@ public sealed class UnitCardElement : IDisposable
             selectButton == null
             || portrait == null
             || unitName == null
+            || healthRow == null
+            || healthFill == null
+            || healthValue == null
             || abilityName == null
             || stateLabel == null
+            || modes == null
             || moveButton == null
             || abilityButton == null
             || abilityActionLabel == null
@@ -67,20 +86,44 @@ public sealed class UnitCardElement : IDisposable
 
         if (selectButton != null)
         {
-            selectButton.name = $"unit-card-select-{index}";
-            selectButton.clicked += OnSelectClicked;
+            selectButton.name = $"{namePrefix}-select-{index}";
+            if (enemyCard)
+            {
+                selectButton.focusable = false;
+                selectButton.pickingMode = PickingMode.Ignore;
+            }
+            else
+            {
+                selectButton.clicked += OnSelectClicked;
+            }
         }
         if (moveButton != null)
         {
-            moveButton.name = $"unit-card-move-{index}";
-            moveButton.clicked += OnMoveClicked;
+            moveButton.name = $"{namePrefix}-move-{index}";
+            if (!enemyCard)
+                moveButton.clicked += OnMoveClicked;
         }
         if (abilityButton != null)
         {
-            abilityButton.name = $"unit-card-ability-{index}";
-            abilityButton.clicked += OnAbilityClicked;
+            abilityButton.name = $"{namePrefix}-ability-{index}";
+            if (!enemyCard)
+                abilityButton.clicked += OnAbilityClicked;
         }
 
+        if (enemyCard)
+        {
+            cardRoot.AddToClassList("unit-card--enemy");
+            healthRow?.RemoveFromClassList("hidden");
+            modes?.SetEnabled(false);
+            if (unitName != null)
+                unitName.text = "Enemy";
+            if (healthValue != null)
+                healthValue.text = "-- / -- HP";
+            if (abilityName != null)
+                abilityName.text = "Awaiting status";
+            if (stateLabel != null)
+                stateLabel.text = "LINKING";
+        }
         SetInteractable(false);
         SetPlanningState(false, false);
     }
@@ -94,6 +137,9 @@ public sealed class UnitCardElement : IDisposable
         Action onAbility
     )
     {
+        if (enemyCard)
+            return;
+
         selectAction = onSelect;
         moveAction = onMove;
         abilityAction = onAbility;
@@ -122,8 +168,50 @@ public sealed class UnitCardElement : IDisposable
         SetPlanningState(false, false);
     }
 
+    public void ConfigureEnemy(
+        UnitData data,
+        bool abilityPresent,
+        int abilityUses,
+        float currentHealth,
+        float maxHealth,
+        bool alive
+    )
+    {
+        if (!enemyCard)
+            return;
+
+        enemyConfigured = true;
+        enemyAlive = alive;
+        hasAbility = abilityPresent;
+        remainingAbilityUses = Mathf.Max(0, abilityUses);
+        configuredAbilityName =
+            data != null && !string.IsNullOrWhiteSpace(data.abilityName)
+                ? data.abilityName
+                : "Ability";
+
+        if (unitName != null)
+            unitName.text = data != null ? data.unitName : "Enemy";
+
+        Sprite cardSprite =
+            data != null ? (data.unitSprite != null ? data.unitSprite : data.abilitySprite) : null;
+        SetBackgroundImage(portrait, cardSprite);
+        healthRow?.RemoveFromClassList("hidden");
+        SetHealth(currentHealth, maxHealth);
+        RefreshAbilityState();
+        RefreshEnemyState();
+    }
+
     public void SetInteractable(bool interactable)
     {
+        if (enemyCard)
+        {
+            interactionRequested = false;
+            selectButton?.SetEnabled(false);
+            moveButton?.SetEnabled(false);
+            abilityButton?.SetEnabled(false);
+            return;
+        }
+
         interactionRequested = interactable;
         bool enabled = interactionRequested && !isDisabled;
         selectButton?.SetEnabled(enabled);
@@ -141,6 +229,13 @@ public sealed class UnitCardElement : IDisposable
 
     public void SetDisabled(bool disabled)
     {
+        if (enemyCard)
+        {
+            enemyAlive = !disabled;
+            RefreshEnemyState();
+            return;
+        }
+
         isDisabled = disabled;
         cardRoot.EnableInClassList("unit-card--disabled", isDisabled);
         if (stateLabel != null)
@@ -152,6 +247,12 @@ public sealed class UnitCardElement : IDisposable
 
     public void SetPlanningState(bool selected, bool abilityMode)
     {
+        if (enemyCard)
+        {
+            cardRoot.RemoveFromClassList("unit-card--selected");
+            return;
+        }
+
         selected &= !isDisabled;
         abilityMode &= AbilityAvailable;
 
@@ -164,7 +265,8 @@ public sealed class UnitCardElement : IDisposable
 
     public void Focus()
     {
-        selectButton?.Focus();
+        if (!enemyCard)
+            selectButton?.Focus();
     }
 
     private void OnSelectClicked()
@@ -184,6 +286,52 @@ public sealed class UnitCardElement : IDisposable
     }
 
     private bool AbilityAvailable => hasAbility && remainingAbilityUses > 0;
+
+    private void SetHealth(float currentHealth, float maxHealth)
+    {
+        float safeMaxHealth = Mathf.Max(0f, maxHealth);
+        float safeCurrentHealth =
+            safeMaxHealth > 0f
+                ? Mathf.Clamp(currentHealth, 0f, safeMaxHealth)
+                : Mathf.Max(0f, currentHealth);
+        float healthRatio = safeMaxHealth > 0f ? safeCurrentHealth / safeMaxHealth : 0f;
+
+        if (healthFill != null)
+            healthFill.style.width = Length.Percent(healthRatio * 100f);
+        if (healthValue != null)
+        {
+            healthValue.text =
+                safeMaxHealth > 0f
+                    ? $"{Mathf.RoundToInt(safeCurrentHealth)} / {Mathf.RoundToInt(safeMaxHealth)} HP"
+                    : "HP UNKNOWN";
+        }
+    }
+
+    private void RefreshEnemyState()
+    {
+        if (!enemyCard)
+            return;
+
+        cardRoot.EnableInClassList(
+            "unit-card--enemy-active",
+            enemyConfigured && enemyAlive
+        );
+        cardRoot.EnableInClassList(
+            "unit-card--enemy-eliminated",
+            enemyConfigured && !enemyAlive
+        );
+        cardRoot.RemoveFromClassList("unit-card--disabled");
+
+        if (stateLabel != null)
+            stateLabel.text = !enemyConfigured ? "LINKING" : (enemyAlive ? "ACTIVE" : "ELIMINATED");
+        if (selectButton != null)
+        {
+            selectButton.tooltip =
+                enemyConfigured && !enemyAlive
+                    ? "Enemy unit eliminated."
+                    : "Live enemy health and ability status.";
+        }
+    }
 
     private void RefreshAbilityState()
     {
@@ -266,17 +414,30 @@ public sealed class UnitCardElement : IDisposable
         copy.AddToClassList("unit-card__copy");
         Label name = new("Unit") { name = "unit-card-name" };
         name.AddToClassList("unit-card__name");
+        VisualElement health = new() { name = "unit-card-health" };
+        health.AddToClassList("unit-card__health");
+        health.AddToClassList("hidden");
+        VisualElement healthTrack = new();
+        healthTrack.AddToClassList("unit-card__health-track");
+        VisualElement healthFill = new() { name = "unit-card-health-fill" };
+        healthFill.AddToClassList("unit-card__health-fill");
+        Label healthValue = new("HP UNKNOWN") { name = "unit-card-health-value" };
+        healthValue.AddToClassList("unit-card__health-value");
+        healthTrack.Add(healthFill);
+        health.Add(healthTrack);
+        health.Add(healthValue);
         Label ability = new("Move only") { name = "unit-card-ability" };
         ability.AddToClassList("unit-card__ability");
         Label state = new() { name = "unit-card-state" };
         state.AddToClassList("unit-card__state");
         copy.Add(name);
+        copy.Add(health);
         copy.Add(ability);
         copy.Add(state);
         select.Add(portrait);
         select.Add(copy);
 
-        VisualElement modes = new();
+        VisualElement modes = new() { name = "unit-card-modes" };
         modes.AddToClassList("unit-card__modes");
         Button move = new() { name = "unit-card-move", text = "MOVE" };
         move.AddToClassList("unit-card__mode");

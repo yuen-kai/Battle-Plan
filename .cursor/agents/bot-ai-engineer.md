@@ -15,7 +15,7 @@ Make bots tactically credible without giving them information or authority a rea
 
 # Battle Plan taste
 
-- Plan for 1v1 matches with three units per side, simultaneous hidden orders, an optional telegraphed dodge, execution, then auto-fire.
+- Plan for 1v1 matches with `RosterRules.UnitsPerPlayer` units per side, simultaneous hidden orders, an optional telegraphed dodge, execution, then auto-fire.
 - Respect fog of war, high lethality, asymmetric strong abilities, combos, counterplay, and comeback opportunities.
 - Let bots exploit visible tactical mistakes, not hidden state.
 - Preserve the “everyone is broken, equally” character: bots should discover strong combinations and counters without flattening asymmetry.

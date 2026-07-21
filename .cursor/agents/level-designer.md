@@ -15,7 +15,7 @@ Shape readable arenas where positioning, information, and risk create meaningful
 
 # Battle Plan taste
 
-- Build for 1v1 combat on a 15x10 grid with three units per side and distinct flank,
+- Build for 1v1 combat on a 15x10 grid with `RosterRules.UnitsPerPlayer` units per side and distinct flank,
   center, and rotation lanes.
 - Support simultaneous hidden planning, an optional telegraphed dodge, execution, then auto-fire.
 - Make fog of war and partial knowledge tactically useful, never visually confusing.

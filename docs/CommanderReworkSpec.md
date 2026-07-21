@@ -170,9 +170,9 @@ Smoke inherits the shipped economy exactly:
 - `Commander.asset uses: 1`; the charge is set once at spawn (`Unit.GetInitialAbilityUses`) and consumed
   once (`Unit.TryConsumeAbilityUse` via `GameLoop`), with **no per-round recharge** anywhere in the
   round loop.
-- A King-of-the-Hill respawn does **not** restore the use: `RespawnUnit` calls
-  `Ability.ResetForRespawn()` (clears transient coroutine/VFX state only) and never increments
-  `Unit.remainingAbilityUses`.
+- KOTH casualties remain dead. The preserved generic respawn lifecycle still calls
+  `Ability.ResetForRespawn()` only to clear transient coroutine/VFX state and never restores an
+  ability use.
 - This one-use baseline is intentional and honestly labeled, **pending** a later instrumented A/B
   (once-per-match vs per-round vs capped refill) on a confound-controlled build. Smoke must be
   implemented so the economy is a single server-authoritative knob and does **not** hard-code
@@ -243,7 +243,7 @@ edit-mode tests; no reliance on human feel.
 9. **Public telegraph:** at execution start both clients render the smoke-area telegraph and then the
    smoke volume; neither is hidden from the opponent.
 10. **One use per match:** Commander uses Smoke in R1 → its card shows the ability **spent**; it has no
-    Smoke available in R2; a KOTH respawn does not restore it.
+    Smoke available in R2 if alive; if eliminated in KOTH, it remains dead.
 11. **Non-persistent:** smoke is gone at the start of the next round's combat (no lingering occluder,
     no residual collider on the `Walls`-queried LoS).
 12. **Draw non-regression:** with the gate/rework in place, a simultaneous full-team wipe still resolves

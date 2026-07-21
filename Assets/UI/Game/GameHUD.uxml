@@ -1,5 +1,4 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:Template name="unit-card-template" src="../Shared/Templates/UnitCard.uxml" />
     <ui:Style src="../Shared/BattlePlan.uss" />
     <ui:Style src="GameHUD.uss" />
     <ui:VisualElement name="screen" class="screen game-screen" picking-mode="Ignore">
@@ -35,11 +34,14 @@
                     <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
                 </ui:VisualElement>
             </ui:VisualElement>
-            <ui:VisualElement name="unit-cards" class="unit-cards">
-                <ui:Instance name="unit-card-0" template="unit-card-template" class="unit-card-host" />
-                <ui:Instance name="unit-card-1" template="unit-card-template" class="unit-card-host" />
-                <ui:Instance name="unit-card-2" template="unit-card-template" class="unit-card-host unit-card-host--last" />
+            <ui:VisualElement name="enemy-status-strip" class="enemy-status-strip">
+                <ui:VisualElement class="enemy-status-strip__header" picking-mode="Ignore">
+                    <ui:Label text="Enemy fireteam" class="enemy-status-strip__label" picking-mode="Ignore" />
+                    <ui:Label name="enemy-contact-summary" text="STATUS LINK" class="enemy-status-strip__summary" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
             </ui:VisualElement>
+            <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" />
         </ui:VisualElement>
 
         <ui:VisualElement name="deployment-overlay" class="deployment-overlay">
@@ -79,7 +81,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row control-row--last">
                             <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Fog hides enemies outside your fireteam's vision." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Fog hides enemy positions and orders. Enemy health and spent abilities remain public on contact cards." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="control-section">

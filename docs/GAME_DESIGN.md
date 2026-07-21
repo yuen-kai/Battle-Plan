@@ -9,7 +9,7 @@
 ## 1. Game Concept
 
 Battle Plan is a **1v1 simultaneous-turn positional strategy game** ("auto-battler with drawn
-movement paths"). Both players secretly plan movement paths for their 3-unit squad on a shared
+movement paths"). Both players secretly plan movement paths for their five-unit squad on a shared
 grid during a timed **planning phase**. When time expires, the round **executes simultaneously**:
 all units follow their paths, then automatically acquire targets and shoot once they stop. A player
 wins by eliminating all enemy units.
@@ -38,7 +38,7 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
 
 1. **Planning phase**
    - Server computes a shared deadline: `planningTimePerUnit × largest team size`
-     (3s/unit in `TESTING` → 9s total; 5s/unit → 15s in production mode).
+     (3s/unit in `TESTING` → 15s total; 5s/unit → 25s in production mode).
    - `StartPlanningClientRpc` starts `PlanMovement.StartPlanning` on every client. Each client
      drag-draws per-unit paths with the mouse (`PathSelection`): click your unit's cell to start,
      drag through adjacent cells (4-directional, no diagonals, no walls, no revisits, max
@@ -77,7 +77,7 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
      still; ability units stay put; dodgers run their dive path at `diveSpeed`.
    - Ability coroutines (`Ability.ExecuteAbility`) start right after movement begins; the round
      waits for `CheckStillShooting()` **and** all abilities to finish (`runningAbilities`).
-     Telegraphs are cleared at round end.
+     Dodge telegraphs are cleared before movement and abilities begin.
    - When a unit finishes its path, `Movement.transitionToShooting()` flips it into
      `Shooting.InitiateShooting()`: auto-acquire the **nearest observable enemy with line of sight**
      (projectile-radius `Physics.SphereCast` against `Walls` + enemy-team layers, within
@@ -88,8 +88,8 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
      `damage` (× `backstabMultiplier` if the impact came from behind, per `backstabAngle`), then
      despawn. `Health` replicates HP and alive-state as **NetworkVariables** (`currentHealth`,
      `isAlive`) so they survive fog hide/show; at ≤0 HP the server deactivates the unit (one frame
-     after the final state flush), clients deactivate on the `isAlive` change, and its ability card
-     is disabled.
+     after the final state flush), clients deactivate on the `isAlive` change, its friendly card is
+     disabled, and the public enemy status card updates.
    - The server loop waits until no unit is `stillShooting` (each unit stops after its current
      magazine/bullets resolve once `OrderAllowShooting(false)` is issued), then starts the next
      planning phase.
@@ -118,16 +118,17 @@ now uses Smoke Screen.
 - Conversions in `GridSystem`: `GetNearestGridCell(Vector3)` snaps world → cell-center world pos
   (y=0); `ConvertToGridCoords(Vector3)` → integer `Vector2Int`; `GameLoop.gridCoordToWorld` inverse.
 - **Walls:** `GameLoop.wallLayout` is a static `HashSet<Vector2Int>` of 18 sparse cover cells,
-  mirrored across column 7 and the map's horizontal center line. The layout breaks the three
-  spawn lanes and cross-map sightlines without sealing any region. Wall prefabs are
+  mirrored across column 7 and the map's horizontal center line. The layout breaks major
+  cross-map lanes and sightlines without sealing any region. Wall prefabs are
   network-spawned there at match start and block movement (client path validation), shooting
   line-of-sight (`Walls` physics layer), and grenade splash. Movement still treats each wall as a
   full cell, while its convex octagonal physics collider trims 0.4 world units from each corner.
   This lets a bullet-sized projectile diagonally peek one corner without weakening straight faces;
   the same physical corner tolerance applies to Grenade and Area Lock rays.
-- **Spawns:** production spawns use three back-rank lanes at columns 2, 7, and 12 (blue row 0,
-  red row 9). `GameLoop.TESTING = true` switches to compact mid-map spawns centered around
-  column 7 so automated combat still starts immediately.
+- **Spawns:** production spawns are generated from `RosterRules.UnitsPerPlayer`, distributed across
+  the back rank with a two-column edge inset when space permits (blue row 0, red row 9).
+  `GameLoop.TESTING = true` switches to compact mid-map anchors plus generated fallback cells so
+  automated combat still starts immediately at any supported roster size.
 - Movement is 4-directional cell-to-cell; distances in unit stats are in **cells** (ranges are
   multiplied by `cellSize` where world units are needed).
 - `GridSystem.DisplayGridRange(pos, dist, prefab)` instantiates a Manhattan-diamond overlay of
@@ -138,8 +139,8 @@ now uses Smoke Screen.
 Source of truth: `Assets/UnitStats/*.asset` (ScriptableObjects of `UnitData`), collected in
 `Assets/UnitStats/AllUnits.asset` (`UnitDatabase`). **Roster index order matters** (character
 select and TESTING auto-assign use it): **0 = Commander, 1 = PogoRider, 2 = Shotgunner,
-3 = Sniper, 4 = Soldier**. In TESTING mode the first client gets units {0,1,2} = Commander,
-PogoRider, Shotgunner and the second gets {2,3,4} = Shotgunner, Sniper, Soldier.
+3 = Sniper, 4 = Soldier**. The active TESTING rosters contain all five units in scenario-specific
+orders; the configured roster size comes only from `RosterRules.UnitsPerPlayer`.
 
 | Stat | Commander | PogoRider | Shotgunner | Sniper | Soldier |
 |---|---|---|---|---|---|
@@ -205,9 +206,10 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 ### GameManager/
 | Script | Responsibility |
 |---|---|
-| `GameLoop.cs` | **The intentionally-monolithic central controller** (singleton `GameLoop.Instance`, server-driven). Owns: `TESTING` flag, dev-mode flags (`devMode`, `devSpeedMultiplier`, `currentPhase`), grid constants (`cellSize`, `gridBounds`, `wallLayout`), spawns, team setup (`allTeamUnits`, `allTeamUnitObjects`, tags/layers `BlueTeam`/`RedTeam`), the round loop, path + ability-plan sanitization (`SanitizePaths`, `SanitizeAbilityPlan`), the ability dodge phase (`RunDodgePhase`, telegraphs, alert icons), **fog of war** (server visibility loop with `NetworkShow/NetworkHide` + host visual suppression, `ForceReveal` table, client-local pooled 150-tile fog overlay — §6), per-team camera placement, overlay text/flash UI RPCs, end-game UI. **Prefer adding methods here over new manager classes** (project rule). |
+| `GameLoop.cs` | **The intentionally-monolithic central controller** (singleton `GameLoop.Instance`, server-driven). Owns: `TESTING` flag, dev-mode flags (`devMode`, `devSpeedMultiplier`, `currentPhase`), grid constants (`cellSize`, `gridBounds`, `wallLayout`), spawns, team setup (`allTeamUnits`, `allTeamUnitObjects`, tags/layers `BlueTeam`/`RedTeam`), the round loop, path + ability-plan sanitization (`SanitizePaths`, `SanitizeAbilityPlan`), the ability dodge phase (`RunDodgePhase`, telegraphs, alert icons), public enemy-card status snapshots, **fog of war** (server visibility loop with `NetworkShow/NetworkHide` + host visual suppression, `ForceReveal` table, client-local pooled 150-tile fog overlay — §6), per-team camera placement, overlay text/flash UI RPCs, end-game UI. **Prefer adding methods here over new manager classes** (project rule). |
 | `DevInput.cs` | **Dev/agent no-mouse input API** (static; everything gated on `GameLoop.devMode`, which is opt-in at runtime — a human pressing Play gets the normal manual flow). `StartMatch()` turns dev mode on and hosts (the MPPM clone auto-joins via `TempMppmAutoJoin`); `SetPath`/`SetAbility`/`SetDodgePath` queue plans as grid cells; `SubmitPlans()`/`SubmitDodge()` end the (otherwise indefinite) dev planning/dodge waits; `SetSpeed` fast-forwards via `Time.timeScale`; `Dump()` snapshots phase/units/HP. Also hosts the editor-only `DevAutoHost` runner. |
-| `DevE2ETest.cs` | **The checked-in end-to-end gameplay test** (editor-only). Menu item *Battle Plan ▸ Run End-To-End Test* (or `DevE2ETest.Run()` in Play mode) drives a full 2-client match through movement, illegal-move rejection, all three ability shapes (Grenade/AreaLock/Shield), dodge phases, damage/death, speed control, and a win condition, logging `[E2E][PASS/FAIL]` per step; poll `DevE2ETest.Report` for the aggregate. Screenshots land in `Assets/Screenshots/e2e/`. |
+| `BotPlayer.cs` | Server-only, fog-bounded planning for every unit on the bot team. The bot intentionally spends at most one unit ability per planning phase regardless of roster size; this is a match rule/balance budget, not a roster-capacity limit. |
+| `DevE2ETest.cs` | **The checked-in end-to-end gameplay test** (editor-only). Menu item *Battle Plan ▸ Run End-To-End Test* (or `DevE2ETest.Run()` in Play mode) drives a full 2-client match through movement, illegal-move rejection, configured ability scenarios, dodge phases, damage/death, speed control, and a win condition, logging `[E2E][PASS/FAIL]` per step; poll `DevE2ETest.Report` for the aggregate. Screenshots land in `Assets/Screenshots/e2e/`. |
 | `PlanMovement.cs` | Client-side planning-phase controller (singleton). Collects per-unit paths into a `PathsDict` (a network-serializable `Dictionary<GameObject,(bool abilityFlag, List<Vector3> path)>`), manages unit selection via cards, move-range overlays, path visuals, countdown timer text. |
 | `PathSelection.cs` | Mouse path-drawing mechanics: start/extend/undo path, client-side validation (adjacency, bounds, walls, moveDist), path node/edge visuals. |
 | `GridSystem.cs` | Static grid math helpers + `DisplayGridRange` overlay instantiation. Also the pure fog vision math shared by server and clients: `HasGridLineOfSight` (supercover line vs `wallLayout`, permissive corners) and `ComputeVisibleCells` (Manhattan diamond ∩ LoS, clamped to the 15×10 board). |
@@ -221,7 +223,7 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 | `Movement.cs` | Server-side coroutine movement along cell paths (+dive variant), rotation, hands off to `Shooting` when done. |
 | `Shooting.cs` | Server-side auto-combat: nearest-enemy acquisition requires authoritative team visibility, then uses a projectile-radius `SphereCast` (Walls + enemy layer, `targetRange`) so a lock is only possible where the real bullet fits; target-lock laser (NetworkVariables replicate laser to clients; a lock **force-reveals the shooter to the victim's team** through fog), firing with spread, reload cycle, `stillShooting` handshake with GameLoop. All setup is in `OnNetworkSpawn` so laser state re-applies after a fog `NetworkShow`. |
 | `Bullet.cs` | Server-side projectile: applies damage + backstab check on enemy collision, despawns on any hit / max range / 8s lifetime. Bullets are always network-visible (a tracer out of fog is an intended "you're being shot from over there" cue). |
-| `Health.cs` | HP + alive tracking as server-written **NetworkVariables** (resync on fog `NetworkShow`; no health RPCs) + world-space health bar (billboarded to team camera); on death the server deactivates the root one frame after the state flush (keeps tag-based `teamSize` correct), clients deactivate via the `isAlive` callback, and the unit card is disabled. |
+| `Health.cs` | HP + alive tracking as server-written **NetworkVariables** (resync on fog `NetworkShow`) + world-space health bar (billboarded to team camera); health changes also ask `GameLoop` to refresh the opponent's public status card. On death the server deactivates the root one frame after the state flush (keeps tag-based `teamSize` correct), clients deactivate via the `isAlive` callback, and the friendly unit card is disabled. |
 | `AnimationHandler.cs` | Thin wrapper mapping logical states ("Moving"/"Aiming"/"Shoot"/"Idle") to Animator states. |
 
 ### Abilities/
@@ -247,7 +249,7 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 | `Camera/AudioManager.cs` | Stub (empty Start/Update). |
 | `Menus/TitleScreen.cs` | Title screen buttons (play → `JoinGame` scene, settings/credits/controls panels, quit). |
 | `Menus/JoinGameUIHandler.cs` | Create/Join game UI. In TESTING: bypasses Relay, plain `StartHost()`/`StartClient()` (localhost). Otherwise Relay host + join-code flow. |
-| `Menus/CharacterSelection.cs` | `HomeScreen` roster pick (3 slots per player), server collects both, then loads `Game`. Bypassed in TESTING. |
+| `Menus/CharacterSelection.cs` | `HomeScreen` roster pick (`RosterRules.UnitsPerPlayer` generated slots per player), server collects both, then loads `Game`. Bypassed in TESTING. |
 | `Menus/CardHandler.cs`, `UnitCardContainer.cs` | Unit/ability card UI widgets (image/text/button/interactable/disabled state). |
 | `Menus/QualityScript.cs`, `Uisoundeffects.cs` | Graphics quality dropdown; UI SFX. |
 | `Helper.cs` | Misc statics: collider height offset, ranged tag queries, GameObject creation. Also contains a `TempMcpBootstrap` editor-only class (MCP-for-Unity bridge auto-start — dev tooling, safe to delete later). |
@@ -276,8 +278,8 @@ Physics layers that matter: `BlueTeam`, `RedTeam`, `Walls`, `Grid`, `PathNode`, 
   The host alone sits waiting; the match auto-starts the moment client #2 connects.
 - **`GameLoop.TESTING` (compile-time const, currently `true`) changes:**
   1. Join flow: no Relay/join codes — Create Game = local host, Join Game = local client.
-  2. Character select skipped: rosters auto-assigned (client A: Commander/PogoRider/Shotgunner,
-     client B: Shotgunner/Sniper/Soldier) and `Game` loads immediately at 2 connections.
+  2. Character select skipped: complete five-unit rosters are auto-assigned in scenario-specific
+     orders and `Game` loads immediately at 2 connections.
   3. Spawns: mid-map, adjacent (combat from round 1) instead of opposite back ranks.
   4. Planning timer: 3s/unit instead of 5s/unit.
 - **Per-team view:** each client's camera rig (`teamCameraParent`) is positioned by
@@ -299,6 +301,9 @@ Physics layers that matter: `BlueTeam`, `RedTeam`, `Walls`, `Grid`, `PathNode`, 
   - **Client overlay:** each client darkens out-of-vision cells with a pooled 150-tile overlay
     (`Prefabs/Visuals/FogOverlayCell`, no collider, Ignore Raycast layer), computed locally from
     its own units only — zero server traffic, zero leak.
+  - **Public combat status:** enemy cards always show roster identity, current/max HP, alive state,
+    and remaining or spent match ability uses. These server-authored snapshots remain live through
+    fog by design, but contain no positions or planned orders.
   - **Fog-piercing by design:** ability telegraphs + dodge alerts (the counterplay window),
     grenade projectile/explosion, bullets. **Force reveals:** sniper weapon lock (to the victim's
     team, lock + 0.5s), Area Lock (to enemy clients for the ability window). Pogo jumps do NOT

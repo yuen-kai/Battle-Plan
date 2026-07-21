@@ -6,6 +6,7 @@ public enum RosterValidationReason : byte
     MissingRoster,
     IncorrectUnitCount,
     UnitCatalogUnavailable,
+    InsufficientEligibleUnits,
     UnitIndexOutOfRange,
     DuplicateUnit,
     UnitUnavailable,
@@ -61,7 +62,57 @@ public readonly struct RosterValidationResult : System.IEquatable<RosterValidati
 
 public static class RosterRules
 {
-    public const int FireteamSize = 3;
+    /// <summary>
+    /// Authoritative player roster size. Change this value to alter the number of units each
+    /// player controls; roster validation, selection UI, and match spawning consume this value.
+    /// </summary>
+    public const int UnitsPerPlayer = 5;
+
+    /// <summary>
+    /// Builds a configured roster from a preference seed. Preferred indices are used first, then
+    /// ascending indices fill any remaining slots. Catalog validation later reports if the project
+    /// does not contain enough eligible units.
+    /// </summary>
+    public static int[] BuildPreferredRoster(params int[] preferredUnitIndices)
+    {
+        if (UnitsPerPlayer <= 0)
+            throw new System.InvalidOperationException("UnitsPerPlayer must be greater than zero.");
+        if (preferredUnitIndices == null)
+            throw new System.ArgumentNullException(nameof(preferredUnitIndices));
+
+        List<int> roster = new(UnitsPerPlayer);
+        HashSet<int> selected = new();
+        foreach (int unitIndex in preferredUnitIndices)
+        {
+            if (unitIndex >= 0 && selected.Add(unitIndex))
+                roster.Add(unitIndex);
+            if (roster.Count == UnitsPerPlayer)
+                return roster.ToArray();
+        }
+
+        for (int unitIndex = 0; roster.Count < UnitsPerPlayer; unitIndex++)
+        {
+            if (selected.Add(unitIndex))
+                roster.Add(unitIndex);
+        }
+        return roster.ToArray();
+    }
+
+    public static RosterValidationResult ValidateCatalog(IReadOnlyList<UnitData> unitCatalog)
+    {
+        if (unitCatalog == null)
+            return RosterValidationResult.Invalid(RosterValidationReason.UnitCatalogUnavailable);
+
+        int eligibleCount = 0;
+        for (int unitIndex = 0; unitIndex < unitCatalog.Count; unitIndex++)
+        {
+            if (IsUnitEligible(unitCatalog, unitIndex))
+                eligibleCount++;
+        }
+        return eligibleCount >= UnitsPerPlayer
+            ? RosterValidationResult.Valid
+            : RosterValidationResult.Invalid(RosterValidationReason.InsufficientEligibleUnits);
+    }
 
     /// <summary>
     /// Validates an externally supplied fireteam. Failure priority is stable: shape, catalog,
@@ -74,10 +125,11 @@ public static class RosterRules
     {
         if (roster == null)
             return RosterValidationResult.Invalid(RosterValidationReason.MissingRoster);
-        if (roster.Count != FireteamSize)
+        if (roster.Count != UnitsPerPlayer)
             return RosterValidationResult.Invalid(RosterValidationReason.IncorrectUnitCount);
-        if (unitCatalog == null)
-            return RosterValidationResult.Invalid(RosterValidationReason.UnitCatalogUnavailable);
+        RosterValidationResult catalogValidation = ValidateCatalog(unitCatalog);
+        if (!catalogValidation.IsValid)
+            return catalogValidation;
 
         for (int slotIndex = 0; slotIndex < roster.Count; slotIndex++)
         {
@@ -137,16 +189,19 @@ public static class RosterRules
         {
             RosterValidationReason.None => string.Empty,
             RosterValidationReason.MissingRoster
-            or RosterValidationReason.IncorrectUnitCount => "Choose exactly three units.",
+            or RosterValidationReason.IncorrectUnitCount =>
+                $"Choose exactly {UnitsPerPlayer} units.",
             RosterValidationReason.UnitCatalogUnavailable =>
                 "The unit roster is unavailable. Try again.",
+            RosterValidationReason.InsufficientEligibleUnits =>
+                $"At least {UnitsPerPlayer} eligible units are required to start a match.",
             RosterValidationReason.UnitIndexOutOfRange =>
                 "One selected unit is no longer available. Choose another unit.",
             RosterValidationReason.DuplicateUnit =>
-                "Choose three different units; duplicate picks are not allowed.",
+                $"Choose {UnitsPerPlayer} different units; duplicate picks are not allowed.",
             RosterValidationReason.UnitUnavailable =>
                 "That unit is unavailable for deployment. Choose another unit.",
-            _ => "That fireteam is not valid. Choose three units again.",
+            _ => $"That fireteam is not valid. Choose {UnitsPerPlayer} units again.",
         };
     }
 }

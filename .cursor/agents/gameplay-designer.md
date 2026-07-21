@@ -15,7 +15,7 @@ Design the decisions and feedback players experience from intent through outcome
 
 ## Battle Plan taste
 
-- Battle Plan is a Unity 6000.3.1f1, 1v1 positional strategy game with three units per side.
+- Battle Plan is a Unity 6000.3.1f1, 1v1 positional strategy game with `RosterRules.UnitsPerPlayer` units per side.
 - Protect the rhythm of hidden planning, optional ability dodge, simultaneous execution, auto-combat, and fog of war in Elimination and KOTH.
 - Reward prediction, formation, timing, and readable commitments. High lethality should make position matter without turning outcomes into unfair surprises.
 - Encourage expressive ability combos, counterplay, recoverable mistakes, and asymmetric power consistent with “everyone is broken, equally.”

@@ -7,9 +7,11 @@ public class Unit : NetworkBehaviour
 {
     public List<Material> teamMaterials;
     private readonly NetworkVariable<int> teamIndex = new(-1);
+    private readonly NetworkVariable<int> rosterSlot = new(-1);
     private readonly NetworkVariable<int> remainingAbilityUses = new(0);
 
     public int TeamIndex => teamIndex.Value;
+    public int RosterSlot => rosterSlot.Value;
     public int RemainingAbilityUses => remainingAbilityUses.Value;
     public bool CanUseAbility => GetComponent<Ability>() != null && RemainingAbilityUses > 0;
     public bool IsFriendlyToLocalPlayer =>
@@ -56,6 +58,22 @@ public class Unit : NetworkBehaviour
 
         teamIndex.Value = value;
         RefreshTeamPresentation();
+    }
+
+    public void SetRosterSlot(int value)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("[Unit] Only the server may assign a roster slot.");
+            return;
+        }
+        if (value < 0 || value >= RosterRules.UnitsPerPlayer)
+        {
+            Debug.LogError($"[Unit] Invalid roster slot {value}.");
+            return;
+        }
+
+        rosterSlot.Value = value;
     }
 
     public bool TryConsumeAbilityUse()

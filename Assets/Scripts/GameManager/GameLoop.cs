@@ -266,10 +266,22 @@ public class GameLoop : NetworkBehaviour
     public const string CasterDodgeGuidance = "Opponent is dodging your ability";
     public const string NeutralDodgeGuidance = "Waiting for dodge response";
 
-    public static readonly int[] DefaultBotRoster = { 2, 3, 4 };
-    public static readonly int[] DevHostRoster = { 4, 1, 2 };
-    public static readonly int[] DevOpponentRoster = { 2, 3, 4 };
-    public static readonly int[] DevBotHostRoster = { 3, 4, 2 };
+    public static readonly int[] DefaultBotRoster = RosterRules.BuildPreferredRoster(
+        2,
+        3,
+        4,
+        0,
+        1
+    );
+    public static readonly int[] DevHostRoster = RosterRules.BuildPreferredRoster(4, 1, 2, 0, 3);
+    public static readonly int[] DevOpponentRoster = RosterRules.BuildPreferredRoster(
+        2,
+        3,
+        4,
+        0,
+        1
+    );
+    public static readonly int[] DevBotHostRoster = RosterRules.BuildPreferredRoster(3, 4, 2, 0, 1);
 
     public static List<string> teamNames = new() { "BlueTeam", "RedTeam" };
 
@@ -287,12 +299,18 @@ public class GameLoop : NetworkBehaviour
     );
     public static readonly HashSet<Vector2Int> KingOfTheHillCells = new()
     {
+        new Vector2Int(6, 3),
+        new Vector2Int(7, 3),
+        new Vector2Int(8, 3),
         new Vector2Int(6, 4),
         new Vector2Int(7, 4),
         new Vector2Int(8, 4),
         new Vector2Int(6, 5),
         new Vector2Int(7, 5),
         new Vector2Int(8, 5),
+        new Vector2Int(6, 6),
+        new Vector2Int(7, 6),
+        new Vector2Int(8, 6),
     };
 
     [SerializeField]
@@ -319,37 +337,134 @@ public class GameLoop : NetworkBehaviour
         new Vector2Int(10, 8),
     };
 
-    List<Vector2Int[]> spawns = !devMode
-        ? new List<Vector2Int[]>()
+    private readonly List<Vector2Int[]> spawns = CreateSpawnLayout(devMode);
+
+    private static List<Vector2Int[]> CreateSpawnLayout(bool useDevLayout)
+    {
+        List<Vector2Int[]> layout = new(TeamCount);
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
-            new[] //Blue Team Spawn Positions
-            {
-                new Vector2Int(2, 0),
-                new Vector2Int(7, 0),
-                new Vector2Int(12, 0),
-            },
-            new[] //Red Team Spawn Positions
-            {
-                new Vector2Int(12, 9),
-                new Vector2Int(7, 9),
-                new Vector2Int(2, 9),
-            },
+            layout.Add(
+                CreateSpawnPositions(
+                    useDevLayout,
+                    teamIndex,
+                    RosterRules.UnitsPerPlayer
+                )
+            );
         }
-        : new List<Vector2Int[]>()
+        return layout;
+    }
+
+    public static Vector2Int[] CreateSpawnPositions(
+        bool useDevLayout,
+        int teamIndex,
+        int unitCount
+    )
+    {
+        if (teamIndex < 0 || teamIndex >= TeamCount)
+            throw new System.ArgumentOutOfRangeException(nameof(teamIndex));
+        if (unitCount <= 0)
+            throw new System.ArgumentOutOfRangeException(nameof(unitCount));
+
+        return useDevLayout
+            ? CreateDevSpawnPositions(teamIndex, unitCount)
+            : CreateProductionSpawnPositions(teamIndex, unitCount);
+    }
+
+    private static Vector2Int[] CreateProductionSpawnPositions(int teamIndex, int unitCount)
+    {
+        int minimumColumn = unitCount <= GridSystem.ColumnCount - 4 ? 2 : 0;
+        int maximumColumn = GridSystem.ColumnCount - 1 - minimumColumn;
+        int availableColumns = maximumColumn - minimumColumn + 1;
+        if (unitCount > availableColumns)
         {
-            new[] //Blue Team Spawn Positions
+            throw new System.InvalidOperationException(
+                $"Cannot place {unitCount} distinct units on a {GridSystem.ColumnCount}-column deployment row."
+            );
+        }
+
+        int row = teamIndex == HostTeamIndex ? 0 : GridSystem.RowCount - 1;
+        Vector2Int[] positions = new Vector2Int[unitCount];
+        for (int index = 0; index < unitCount; index++)
+        {
+            float progress = unitCount == 1 ? 0.5f : index / (float)(unitCount - 1);
+            int column = Mathf.RoundToInt(Mathf.Lerp(minimumColumn, maximumColumn, progress));
+            if (teamIndex == OpponentTeamIndex)
+                column = GridSystem.ColumnCount - 1 - column;
+            positions[index] = new Vector2Int(column, row);
+        }
+        return positions;
+    }
+
+    private static Vector2Int[] CreateDevSpawnPositions(int teamIndex, int unitCount)
+    {
+        Vector2Int[] testAnchors =
+            teamIndex == HostTeamIndex
+                ? new[]
+                {
+                    new Vector2Int(4, 3),
+                    new Vector2Int(7, 5),
+                    new Vector2Int(10, 3),
+                    new Vector2Int(2, 2),
+                    new Vector2Int(12, 2),
+                }
+                : new[]
+                {
+                    new Vector2Int(8, 6),
+                    new Vector2Int(7, 6),
+                    new Vector2Int(6, 6),
+                    new Vector2Int(12, 7),
+                    new Vector2Int(2, 7),
+                };
+
+        List<Vector2Int> positions = new(unitCount);
+        foreach (Vector2Int anchor in testAnchors)
+        {
+            if (positions.Count == unitCount)
+                return positions.ToArray();
+            positions.Add(anchor);
+        }
+        if (positions.Count == unitCount)
+            return positions.ToArray();
+
+        int halfRow = GridSystem.RowCount / 2;
+        int preferredRow = teamIndex == HostTeamIndex ? halfRow - 2 : halfRow + 1;
+        IEnumerable<int> candidateRows =
+            teamIndex == HostTeamIndex
+                ? Enumerable.Range(0, halfRow)
+                : Enumerable.Range(halfRow, GridSystem.RowCount - halfRow);
+        candidateRows = candidateRows
+            .OrderBy(row => Mathf.Abs(row - preferredRow))
+            .ThenBy(row => row);
+        IEnumerable<int> candidateColumns = Enumerable
+            .Range(0, GridSystem.ColumnCount)
+            .OrderBy(column => Mathf.Abs(column - GridSystem.ColumnCount / 2))
+            .ThenBy(column => column);
+
+        foreach (int row in candidateRows)
+        {
+            foreach (int column in candidateColumns)
             {
-                new Vector2Int(4, 3),
-                new Vector2Int(7, 5),
-                new Vector2Int(10, 3),
-            },
-            new[] //Red Team Spawn Positions
-            {
-                new Vector2Int(8, 6),
-                new Vector2Int(7, 6),
-                new Vector2Int(6, 6),
-            },
-        };
+                Vector2Int candidate = new(column, row);
+                if (
+                    positions.Contains(candidate)
+                    || wallLayout.Contains(candidate)
+                    || KingOfTheHillCells.Contains(candidate)
+                )
+                {
+                    continue;
+                }
+
+                positions.Add(candidate);
+                if (positions.Count == unitCount)
+                    return positions.ToArray();
+            }
+        }
+
+        throw new System.InvalidOperationException(
+            $"The dev deployment area has fewer than {unitCount} valid spawn cells for team {teamIndex}."
+        );
+    }
 
     // Store camera positions and rotations as a list of (Vector3 position, Quaternion rotation) tuples
     private List<(Vector3 position, Quaternion rotation)> cameraPositions = new()
@@ -359,7 +474,7 @@ public class GameLoop : NetworkBehaviour
     };
 
     // Game Settings
-    const float planningTimePerUnit = 5f;
+    const float planningTimePerUnit = 8f;
 
     // Actions
     public static System.Action<bool> OrderAllowShooting;
@@ -591,12 +706,16 @@ public class GameLoop : NetworkBehaviour
             throw new System.ArgumentOutOfRangeException(nameof(teamIndex));
         if (participantId == BotParticipantId && teamIndex != OpponentTeamIndex)
             throw new System.ArgumentException("The bot may only occupy the opponent team.");
-        if (roster == null || roster.Length != RosterRules.FireteamSize)
-            throw new System.ArgumentException("A team roster must contain exactly three units.");
+        if (roster == null || roster.Length != RosterRules.UnitsPerPlayer)
+            throw new System.ArgumentException(
+                $"A team roster must contain exactly {RosterRules.UnitsPerPlayer} units."
+            );
         if (roster.Any(unitIndex => unitIndex < 0))
             throw new System.ArgumentException("A team roster contains an invalid unit index.");
         if (roster.Distinct().Count() != roster.Length)
-            throw new System.ArgumentException("A team roster must contain three distinct units.");
+            throw new System.ArgumentException(
+                $"A team roster must contain {RosterRules.UnitsPerPlayer} distinct units."
+            );
         if (teamParticipants.Any(entry => entry.Key != teamIndex && entry.Value == participantId))
         {
             throw new System.ArgumentException(
@@ -610,6 +729,14 @@ public class GameLoop : NetworkBehaviour
 
     private void EnsureTeamConfiguration()
     {
+        RosterValidationResult catalogValidation = RosterRules.ValidateCatalog(allUnits?.units);
+        if (!catalogValidation.IsValid)
+        {
+            throw new System.InvalidOperationException(
+                $"Unit catalog cannot support {RosterRules.UnitsPerPlayer} units per player "
+                    + $"({catalogValidation.Reason})."
+            );
+        }
         if (teamParticipants.Count == TeamCount && teamRosters.Count == TeamCount)
             return;
 
@@ -780,6 +907,7 @@ public class GameLoop : NetworkBehaviour
                 teamNames[teamIndex]
             );
         }
+        RefreshAllEnemyUnitCards();
     }
 
     void SetupUnitsAndCards(
@@ -796,6 +924,12 @@ public class GameLoop : NetworkBehaviour
         {
             throw new System.InvalidOperationException(
                 $"Team {teamIndex} has an invalid roster ({rosterValidation.Reason})."
+            );
+        }
+        if (spawnPositions == null || spawnPositions.Count != RosterRules.UnitsPerPlayer)
+        {
+            throw new System.InvalidOperationException(
+                $"Team {teamIndex} requires exactly {RosterRules.UnitsPerPlayer} spawn positions."
             );
         }
 
@@ -823,6 +957,7 @@ public class GameLoop : NetworkBehaviour
             if (unitIdentity == null)
                 throw new System.InvalidOperationException($"{unit.name} is missing Unit.");
             unitIdentity.SetTeamIndex(teamIndex);
+            unitIdentity.SetRosterSlot(i);
 
             Vector3 heightOffset = Helper.heightOffset(unit.transform);
             unit.transform.position += heightOffset;
@@ -865,6 +1000,113 @@ public class GameLoop : NetworkBehaviour
             unitData,
             hasAbility,
             remainingAbilityUses
+        );
+    }
+
+    private void RefreshAllEnemyUnitCards()
+    {
+        if (!IsServer || NetworkManager == null)
+            return;
+
+        for (int viewerTeamIndex = 0; viewerTeamIndex < TeamCount; viewerTeamIndex++)
+        {
+            if (
+                !TryGetHumanClientId(viewerTeamIndex, out ulong viewerClientId)
+                || !NetworkManager.ConnectedClients.ContainsKey(viewerClientId)
+            )
+            {
+                continue;
+            }
+
+            int enemyTeamIndex = GetEnemyTeamIndex(viewerTeamIndex);
+            foreach (GameObject enemyUnit in GetTeamUnits(enemyTeamIndex))
+                SendEnemyUnitCardStatus(enemyUnit, viewerClientId);
+        }
+    }
+
+    public void NotifyEnemyUnitStatusChanged(GameObject unit)
+    {
+        if (
+            !IsServer
+            || unit == null
+            || NetworkManager == null
+            || unit.GetComponent<Unit>() is not Unit identity
+        )
+        {
+            return;
+        }
+
+        for (int viewerTeamIndex = 0; viewerTeamIndex < TeamCount; viewerTeamIndex++)
+        {
+            if (
+                viewerTeamIndex == identity.TeamIndex
+                || !TryGetHumanClientId(viewerTeamIndex, out ulong viewerClientId)
+                || !NetworkManager.ConnectedClients.ContainsKey(viewerClientId)
+            )
+            {
+                continue;
+            }
+
+            SendEnemyUnitCardStatus(unit, viewerClientId);
+        }
+    }
+
+    private void SendEnemyUnitCardStatus(GameObject unit, ulong viewerClientId)
+    {
+        Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+        Health health = unit != null ? unit.GetComponent<Health>() : null;
+        if (
+            identity == null
+            || health == null
+            || identity.RosterSlot < 0
+            || identity.RosterSlot >= RosterRules.UnitsPerPlayer
+            || !teamRosters.TryGetValue(identity.TeamIndex, out int[] roster)
+            || roster == null
+            || identity.RosterSlot >= roster.Length
+        )
+        {
+            return;
+        }
+
+        int unitIndex = roster[identity.RosterSlot];
+        if (allUnits?.units == null || unitIndex < 0 || unitIndex >= allUnits.units.Count)
+            return;
+
+        SetEnemyUnitCardStatusClientRpc(
+            identity.RosterSlot,
+            unitIndex,
+            health.CurrentHealth,
+            health.MaxHealth,
+            health.IsAlive,
+            unit.GetComponent<Ability>() != null,
+            identity.RemainingAbilityUses,
+            NetworkHelper.ToClient(viewerClientId)
+        );
+    }
+
+    [ClientRpc]
+    private void SetEnemyUnitCardStatusClientRpc(
+        int cardIndex,
+        int unitIndex,
+        float currentHealth,
+        float maxHealth,
+        bool alive,
+        bool hasAbility,
+        int remainingAbilityUses,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        if (allUnits?.units == null || unitIndex < 0 || unitIndex >= allUnits.units.Count)
+            return;
+
+        GameHUDController.Instance?.SetEnemyCardStatus(
+            cardIndex,
+            allUnits.units[unitIndex],
+            hasAbility,
+            remainingAbilityUses,
+            currentHealth,
+            maxHealth,
+            alive
         );
     }
 
@@ -1016,6 +1258,9 @@ public class GameLoop : NetworkBehaviour
                 yield break;
             activations = ConsumeAbilityUses(activations);
 
+            // Dodge telegraphs are planning aids, not execution VFX. Clear them on every client
+            // before movement and abilities start so lines/discs cannot linger into resolution.
+            HideAbilityTelegraphsClientRpc();
             currentPhase = "executing";
             ActivateSmokeScreens(activations);
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
@@ -1050,7 +1295,7 @@ public class GameLoop : NetworkBehaviour
                 yield break;
 
             // A dead shooter is inactive, so its own shooting coroutine can no longer hold the
-            // round open. Wait on the server-wide projectile registry before scoring or reviving.
+            // round open. Wait on the server-wide projectile registry before round-end arbitration.
             while (!matchEnded && Bullet.ActiveServerBulletCount > 0)
                 yield return null;
 
@@ -1065,13 +1310,11 @@ public class GameLoop : NetworkBehaviour
             if (livingTeamCount < TeamCount)
                 break;
 
-            if (ShouldRespawnEliminatedUnits(Options.gameMode, livingTeamCount))
-            {
-                if (ResolveKingOfTheHillRound())
-                    yield break;
+            if (Options.IsKingOfTheHill && ResolveKingOfTheHillRound())
+                yield break;
 
-                RespawnEliminatedKingOfTheHillUnits();
-            }
+            if (ShouldRespawnEliminatedUnits(Options.gameMode, livingTeamCount))
+                RespawnEliminatedUnits();
         }
 
         if (matchEnded)
@@ -1347,8 +1590,10 @@ public class GameLoop : NetworkBehaviour
             }
 
             SetCardAbilityUsesClientRpc(cardIndex, remainingUses, NetworkHelper.ToClient(clientId));
-            return;
+            break;
         }
+
+        NotifyEnemyUnitStatusChanged(unit);
     }
 
     [ClientRpc]
@@ -1520,7 +1765,7 @@ public class GameLoop : NetworkBehaviour
         if (dodgeAlerted.Count == 0)
         {
             dodgeAlerted = null;
-            yield break; // Telegraphs stay up; nobody can dodge.
+            yield break; // The caller still clears telegraphs at the execution boundary.
         }
 
         // Alert icons and unit references are sent only to each threatened team's client.
@@ -1949,7 +2194,12 @@ public class GameLoop : NetworkBehaviour
         foreach (GameObject telegraph in clientTelegraphs)
         {
             if (telegraph != null)
+            {
+                // Destroy is deferred until the end of the frame; deactivate now so the planning
+                // artifact is already gone when execution begins in this frame.
+                telegraph.SetActive(false);
                 Destroy(telegraph);
+            }
         }
         clientTelegraphs.Clear();
     }
@@ -2017,9 +2267,13 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
+    // Respawning stays opt-in by mode so future modes can reuse the lifecycle without making
+    // King of the Hill casualties temporary.
+    private static readonly HashSet<GameMode> RespawnEnabledGameModes = new();
+
     public static bool ShouldRespawnEliminatedUnits(GameMode gameMode, int livingTeamCount)
     {
-        return gameMode == GameMode.KingOfTheHill && livingTeamCount == TeamCount;
+        return livingTeamCount == TeamCount && RespawnEnabledGameModes.Contains(gameMode);
     }
 
     private bool ResolveKingOfTheHillRound()
@@ -2047,7 +2301,7 @@ public class GameLoop : NetworkBehaviour
         return true;
     }
 
-    private void RespawnEliminatedKingOfTheHillUnits()
+    private void RespawnEliminatedUnits()
     {
         List<(
             GameObject unit,
@@ -2071,7 +2325,7 @@ public class GameLoop : NetworkBehaviour
                     )
                 )
                 {
-                    Debug.LogError($"[GameLoop] No KOTH spawn transform recorded for {unit.name}.");
+                    Debug.LogError($"[GameLoop] No spawn transform recorded for {unit.name}.");
                     continue;
                 }
 
@@ -2123,7 +2377,7 @@ public class GameLoop : NetworkBehaviour
         }
 
         Debug.Log(
-            $"[GameLoop] Respawned {respawned.Count} KOTH unit(s) without restoring ability charges."
+            $"[GameLoop] Respawned {respawned.Count} unit(s) without restoring ability charges."
         );
     }
 

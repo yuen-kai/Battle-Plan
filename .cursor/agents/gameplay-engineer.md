@@ -15,7 +15,7 @@ Keep Battle Plan combat deterministic, legible, and dangerous while extending th
 
 # Battle Plan taste
 
-- Preserve the 1v1 structure: three units per player, simultaneous hidden planning, optional telegraphed dodge, execution, then auto-fire.
+- Preserve the 1v1 structure: `RosterRules.UnitsPerPlayer` units per player, simultaneous hidden planning, optional telegraphed dodge, execution, then auto-fire.
 - Respect fog of war, high lethality, asymmetric strong abilities, combos, counterplay, and comeback opportunities.
 - Use “everyone is broken, equally” as a balance lens, not permission for unclear or uncounterable behavior.
 - Keep outcomes understandable: authority, phase, target, damage, death, and visibility transitions should have explicit causes.

@@ -614,7 +614,8 @@ public class SmokeScreenEditModeTests
         UnitDatabase catalog = UnityEditor.AssetDatabase.LoadAssetAtPath<UnitDatabase>(CatalogPath);
         Assert.That(catalog, Is.Not.Null, $"Could not load {CatalogPath}.");
         Assert.That(catalog.units, Is.Not.Null);
-        Assert.That(catalog.units.Count, Is.EqualTo(5), "AllUnits must stay at five units.");
+        Assert.That(catalog.units.Count, Is.GreaterThanOrEqualTo(RosterRules.UnitsPerPlayer));
+        Assert.That(RosterRules.ValidateCatalog(catalog.units).IsValid, Is.True);
 
         UnitData commander = catalog.units[0];
         Assert.That(commander, Is.Not.Null);

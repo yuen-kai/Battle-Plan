@@ -14,7 +14,7 @@ Protect a coherent creative north star for Battle Plan. Judge whether proposed f
 
 ## Battle Plan taste
 
-- Battle Plan is a Unity 6000.3.1f1, 1v1, simultaneous-turn positional strategy game with three units per side.
+- Battle Plan is a Unity 6000.3.1f1, 1v1, simultaneous-turn positional strategy game with `RosterRules.UnitsPerPlayer` units per side.
 - Its core rhythm is hidden planning, optional ability dodge, simultaneous execution, auto-combat, and fog of war across Elimination and KOTH.
 - Favor readable high-lethality positioning, fair information, expressive ability combinations, real counterplay, and comeback potential.
 - Preserve asymmetry and the balance ideal: “everyone is broken, equally.”

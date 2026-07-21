@@ -177,8 +177,10 @@ public class GridSystem : MonoBehaviour
         if (direction.x == 0 || direction.y == 0)
             return false;
 
+        // Match the permissive corner rule used by grid line-of-sight: one open side leaves
+        // enough room for a diagonal rush, while two closed sides still block the corner.
         return blockedCells.Contains(current + new Vector2Int(direction.x, 0))
-            || blockedCells.Contains(current + new Vector2Int(0, direction.y));
+            && blockedCells.Contains(current + new Vector2Int(0, direction.y));
     }
 
     // === GRID MATH (shared by server gameplay, bots, and client overlays) ===

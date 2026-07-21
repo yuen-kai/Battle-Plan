@@ -15,7 +15,7 @@ Shape Battle Plan’s numbers so every asymmetric kit can feel outrageous while 
 
 ## Battle Plan taste
 
-- Battle Plan is a Unity 6000.3.1f1, 1v1 simultaneous-turn positional strategy game with three units per side.
+- Battle Plan is a Unity 6000.3.1f1, 1v1 simultaneous-turn positional strategy game with `RosterRules.UnitsPerPlayer` units per side.
 - Account for hidden planning, optional ability dodge, simultaneous execution, auto-combat, fog of war, and both Elimination and KOTH.
 - Preserve high-lethality positioning and fair information. Powerful combos should have costs, signals, counters, or positional demands—not necessarily symmetrical kits.
 - Optimize toward “everyone is broken, equally”: comparable agency and matchup viability, not identical damage, range, safety, or complexity.

@@ -6,16 +6,20 @@ using UnityEngine.UIElements;
 [RequireComponent(typeof(UIDocument))]
 public class GameHUDController : MonoBehaviour
 {
-    private const int CardCount = 3;
-
     public static GameHUDController Instance { get; private set; }
 
-    private readonly UnitCardElement[] cards = new UnitCardElement[CardCount];
+    [SerializeField]
+    private VisualTreeAsset unitCardTemplate;
+
+    private readonly UnitCardElement[] cards = new UnitCardElement[RosterRules.UnitsPerPlayer];
+    private readonly UnitCardElement[] enemyCards =
+        new UnitCardElement[RosterRules.UnitsPerPlayer];
     private UIDocument document;
     private VisualElement root;
     private VisualElement screen;
     private VisualElement flash;
     private VisualElement cardsContainer;
+    private VisualElement enemyCardsContainer;
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
     private VisualElement resultsPanel;
@@ -28,6 +32,7 @@ public class GameHUDController : MonoBehaviour
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
+    private Label enemyContactSummary;
     private Button playAgainButton;
     private Button mainMenuButton;
     private Button controlsButton;
@@ -84,7 +89,10 @@ public class GameHUDController : MonoBehaviour
 
         foreach (UnitCardElement card in cards)
             card?.Dispose();
+        foreach (UnitCardElement card in enemyCards)
+            card?.Dispose();
         Array.Clear(cards, 0, cards.Length);
+        Array.Clear(enemyCards, 0, enemyCards.Length);
         playAgainAction = null;
         mainMenuAction = null;
 
@@ -97,6 +105,7 @@ public class GameHUDController : MonoBehaviour
         screen = RequireElement<VisualElement>("screen");
         flash = RequireElement<VisualElement>("hud-flash");
         cardsContainer = RequireElement<VisualElement>("unit-cards");
+        enemyCardsContainer = RequireElement<VisualElement>("enemy-unit-cards");
         deploymentOverlay = RequireElement<VisualElement>("deployment-overlay");
         resultsOverlay = RequireElement<VisualElement>("results-overlay");
         resultsPanel = RequireElement<VisualElement>("results-panel");
@@ -108,6 +117,7 @@ public class GameHUDController : MonoBehaviour
         hillStatusLabel = RequireElement<Label>("hill-status-label");
         deploymentStatus = RequireElement<Label>("deployment-status");
         resultsStatus = RequireElement<Label>("results-status");
+        enemyContactSummary = RequireElement<Label>("enemy-contact-summary");
         playAgainButton = RequireElement<Button>("play-again-button");
         mainMenuButton = RequireElement<Button>("main-menu-button");
         targetFeedbackLabel = root.Q<Label>("target-feedback-label");
@@ -165,22 +175,42 @@ public class GameHUDController : MonoBehaviour
 
     private void BuildCards()
     {
-        if (cardsContainer == null)
+        if (cardsContainer == null || enemyCardsContainer == null)
             return;
 
+        cardsContainer.Clear();
+        enemyCardsContainer.Clear();
+        if (unitCardTemplate == null)
+        {
+            Debug.LogError(
+                "[GameHUDController] Unit card template is not assigned; using fallback UI."
+            );
+        }
         for (int i = 0; i < cards.Length; i++)
         {
-            VisualElement host = cardsContainer.Q<VisualElement>($"unit-card-{i}");
-            if (host == null)
-            {
-                host = new VisualElement { name = $"unit-card-{i}" };
-                host.AddToClassList("unit-card-host");
-                if (i == cards.Length - 1)
-                    host.AddToClassList("unit-card-host--last");
-                cardsContainer.Add(host);
-            }
+            VisualElement host =
+                unitCardTemplate != null ? unitCardTemplate.Instantiate() : new VisualElement();
+            host.name = $"unit-card-{i}";
+            host.AddToClassList("unit-card-host");
+            if (i == cards.Length - 1)
+                host.AddToClassList("unit-card-host--last");
+            cardsContainer.Add(host);
             cards[i] = new UnitCardElement(host, i);
         }
+
+        for (int i = 0; i < enemyCards.Length; i++)
+        {
+            VisualElement host =
+                unitCardTemplate != null ? unitCardTemplate.Instantiate() : new VisualElement();
+            host.name = $"enemy-unit-card-{i}";
+            host.AddToClassList("unit-card-host");
+            host.AddToClassList("enemy-unit-card-host");
+            if (i == enemyCards.Length - 1)
+                host.AddToClassList("enemy-unit-card-host--last");
+            enemyCardsContainer.Add(host);
+            enemyCards[i] = new UnitCardElement(host, i, true);
+        }
+        RefreshEnemyContactSummary();
     }
 
     public void ConfigureCard(
@@ -201,6 +231,30 @@ public class GameHUDController : MonoBehaviour
             () => PlanMovement.Instance?.SetSelectionMode(cardIndex, false),
             () => PlanMovement.Instance?.SetSelectionMode(cardIndex, true)
         );
+    }
+
+    public void SetEnemyCardStatus(
+        int cardIndex,
+        UnitData data,
+        bool hasAbility,
+        int remainingAbilityUses,
+        float currentHealth,
+        float maxHealth,
+        bool alive
+    )
+    {
+        if (!TryGetEnemyCard(cardIndex, out UnitCardElement card))
+            return;
+
+        card.ConfigureEnemy(
+            data,
+            hasAbility,
+            remainingAbilityUses,
+            currentHealth,
+            maxHealth,
+            alive
+        );
+        RefreshEnemyContactSummary();
     }
 
     public void SetCardsInteractable(bool interactable)
@@ -520,6 +574,47 @@ public class GameHUDController : MonoBehaviour
 
         card = cards[cardIndex];
         return card != null;
+    }
+
+    private bool TryGetEnemyCard(int cardIndex, out UnitCardElement card)
+    {
+        if (cardIndex < 0 || cardIndex >= enemyCards.Length)
+        {
+            Debug.LogWarning($"[GameHUDController] Enemy card index {cardIndex} is out of range.");
+            card = null;
+            return false;
+        }
+
+        card = enemyCards[cardIndex];
+        return card != null;
+    }
+
+    private void RefreshEnemyContactSummary()
+    {
+        if (enemyContactSummary == null)
+            return;
+
+        int configured = 0;
+        int active = 0;
+        foreach (UnitCardElement card in enemyCards)
+        {
+            if (card == null || !card.IsEnemyConfigured)
+                continue;
+
+            configured++;
+            if (card.IsEnemyAlive)
+                active++;
+        }
+
+        if (configured == 0)
+        {
+            enemyContactSummary.text = "STATUS LINK";
+            return;
+        }
+
+        int eliminated = configured - active;
+        enemyContactSummary.text =
+            eliminated == 0 ? $"{active} ACTIVE" : $"{active} ACTIVE · {eliminated} DOWN";
     }
 
     private void OnGeometryChanged(GeometryChangedEvent evt)

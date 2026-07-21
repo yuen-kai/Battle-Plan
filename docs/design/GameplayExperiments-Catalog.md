@@ -55,8 +55,9 @@ The baseline for every experiment in this dossier is:
 - **18 symmetric wall cells**; movement blocks each full cell, while a convex octagonal physics
 collider trims 0.4 world units from each corner for bullet-sized diagonal peeks;
 - a centered **six-cell hill**, columns 6–8 and rows 4–5;
-- production spawns at columns 2, 7, and 12 on rows 0 and 9;
-- exactly **three distinct units per team**;
+- production spawns distributed evenly across rows 0 and 9, with a two-column edge inset when
+space permits;
+- exactly **five distinct units per team**, controlled by `RosterRules.UnitsPerPlayer`;
 - a five-unit eligible roster: Soldier, Shotgunner, Pogo Rider, Sniper, and Commander;
 - fog of war enabled unless an experiment explicitly makes fog the single variable;
 - the current Commander **Smoke Screen**: one use, target range 3, a real 3 × 3 footprint, and
@@ -79,17 +80,17 @@ Primary sources:
 
 ### 1.2 Implemented match rules
 
-- The planning deadline budget is `5 seconds × the largest living team`: nominally **15 seconds at
-3v3, 10 seconds at 2v2, and 5 seconds at 1v1**. Both valid submissions may end planning early;
+- The planning deadline budget is `5 seconds × the largest living team`: nominally **25 seconds at
+5v5**, dropping by five seconds per loss to **5 seconds at 1v1**. Both valid submissions may end
+planning early;
 the server currently accepts through `endTime + 1`, so these are client deadlines rather than
 strict phase maxima.
 - An ability replaces that unit’s normal movement order for the round.
 - Every current unit starts with **one ability use**. Uses do not recharge.
-- Elimination has no respawn and no round cap. A team wipe ends the match.
+- Eliminated units remain dead in both supported modes. The reusable respawn lifecycle is preserved
+but no current mode opts into it.
+- Elimination has no round cap. A team wipe ends the match.
 - KOTH requires **three consecutive sole-control rounds**.
-- In KOTH, an eliminated unit respawns at full health before the next round while both teams still
-have at least one survivor.
-- A KOTH respawn does **not** restore an ability charge.
 - A full-team wipe remains terminal in KOTH; simultaneous wipes draw.
 - Grenade and Area Lock can create a dodge phase. A submitted dodge replaces the unit’s original
 order and cancels that unit’s own planned ability.
@@ -155,7 +156,7 @@ actual conversion and must replace these allowances after instrumented playtests
 The user-visible symptoms are short matches, insufficient strategic depth, and uneven ability
 power/counts. Current implementation supports several plausible causes:
 
-1. **Small action budget magnifies every death.** In 3v3, the first death removes one third of a
+1. **Small action budget magnifies every death.** In 5v5, the first death removes one fifth of a
   team’s future movement, fire, vision, and ability options. The miss-allowance profile is intended
   to make that loss follow sustained exposure rather than routine first contact.
 2. **Late planning is more compressed, not less.** The client deadline budget falls from 15 to 5
@@ -233,7 +234,7 @@ The historical green report is neither an immutable regression artifact nor bala
 
 **Production-parity balance fixture**
 
-- Current 15 × 10 board, 18 walls, six-cell hill, production spawns, fog, and 3v3 baseline.
+- Current 15 × 10 board, 18 walls, six-cell hill, production spawns, fog, and 5v5 baseline.
 - Mirrored rosters and side swaps.
 - Used for pacing, balance, map, ability, and bot-outcome evidence.
 
@@ -312,7 +313,7 @@ invalid for this ratio and reported separately, never divided by zero.
 
 **Unit lifespan**
 
-- Rounds survived per unit and per archetype; KOTH lives are segmented at respawn.
+- Rounds survived per unit and per archetype; death ends that unit’s participation in current modes.
 
 **Early-alpha rate**
 
@@ -532,11 +533,11 @@ actual controlled comparison.
 **Status:** Viable experiment
 
 - **Details:** Keep the current scaling timer, but stop it from shrinking below the selected floor.
-Early 3v3 planning still gets 15 seconds and both players may submit early; only high-stakes 2v2
+Early 5v5 planning gets 25 seconds and both players may submit early; only late-game planning
 and 1v1 rounds gain more thinking time.
 - **Problem / defense:** The most consequential 1v1 rounds get a five-second client deadline budget,
 plus the current server acceptance grace. A floor can improve decision quality without changing
-early 3v3 pacing or lethality.
+early 5v5 pacing or lethality.
 - **Arms / primary variable:** Effective minimum **5 / 8 / 10 seconds**; keep
 `5 × largest living team` and early dual-submit.
 - **Controls & evidence:** Human-required; bots plan immediately and cannot validate thinking time.
@@ -553,20 +554,20 @@ pilot, then participant-block sampling under §2.2, balanced across surviving ma
 
 **Status:** Viable experiment
 
-- **Details:** Compare the live 15/10/5-second countdown with a predictable 15-second countdown in
+- **Details:** Compare the live 25/20/15/10/5-second countdown with a predictable 25-second countdown in
 every round, regardless of survivors. This asks whether consistency improves planning or merely
 adds idle time late in a match.
 - **Problem / defense:** Living-team scaling is only one cadence model. A fixed shared budget may
 improve predictability without giving peers different deadlines.
-- **Arms / primary variable:** Largest-living-team baseline versus a fixed shared **15-second**
+- **Arms / primary variable:** Largest-living-team baseline versus a fixed shared **25-second**
 client deadline budget in every living-team state. An own-team deadline is excluded because it
 needs a separate asymmetric-deadline protocol and fairness ruling.
 - **Controls & evidence:** Keep planning floor fixed. Human evidence is primary.
 - **Metrics:** Usable seconds, early submit, timeout, idle time, workload, match duration, and
 perceived fairness.
 - **Gate / protocol:** In both arms, start the server-time deadline only after the same two-client
-readiness barrier, and send both peers one deadline. Verify 15 seconds at 3v3/2v2/1v1 in the fixed
-arm, versus 15/10/5 in the live formula arm, with the same server acceptance grace.
+readiness barrier, and send both peers one deadline. Verify 25 seconds at every team size in the
+fixed arm, versus 25/20/15/10/5 in the live formula arm, with the same server acceptance grace.
 - **Dependencies / conflicts:** EXP-A05/A06. Conflicts with changing team size in the same run.
 - **Owners / files / rollback:** Gameplay + multiplayer + UI; `GameLoop.cs`,
 `GameHUDController.cs`. Configurable formula defaults to current.
@@ -599,7 +600,7 @@ both teams; opponent picks remain hidden.
 
 **Status:** Deferred
 
-- **Details:** Add a hidden pre-match deployment step where each player places their three units in
+- **Details:** Add a hidden pre-match deployment step where each player places their five units in
 approved back-row cells. Placements reveal only when the match begins, creating opening mind games
 while the server rejects overlaps, walls, and illegal cells.
 - **Problem / defense:** Player-chosen placement could diversify openings, but it introduces a new
@@ -621,12 +622,12 @@ character selection and deployment UI. Fixed slots remain the rollback profile.
 
 **Status:** Deferred
 
-- **Details:** Run complete 2v2, 3v3, and 4v4 versions with size-matched spawns, cards, planning
+- **Details:** Run complete 4v4, 5v5, and 6v6 versions with size-matched spawns, cards, planning
 budgets, and network limits. This tests whether fewer units produce cleaner reads or more units
 create the formations and combined-arms play the current matches lack.
 - **Problem / defense:** 2v2 may sharpen reads; 4v4 may create formations and combined arms. Either
 may instead worsen first-blood severity or cognitive load.
-- **Arms / primary variable:** **2 / 3 / 4 units per player**, with 3v3 protected as the default.
+- **Arms / primary variable:** **4 / 5 / 6 units per player**, with 5v5 protected as the default.
 - **Controls & evidence:** This is explicitly multi-variable: each size needs matched symmetric
 spawns, a fixed planning allowance for comparison, dynamic cards, bounded payloads, and roster
 coverage. Human evidence is mandatory.
@@ -673,7 +674,8 @@ of sustained control needed to win changes.
 comeback windows without changing scoring semantics.
 - **Arms / primary variable:** Consecutive target **2 / 3 / 4 / 5**; 3 is control and 2 is a
 short-match falsification arm.
-- **Controls & evidence:** Keep hill geometry, respawn, charges, cover, and scoring type fixed.
+- **Controls & evidence:** Keep hill geometry, no-respawn policy, charges, cover, and scoring type
+fixed.
 - **Metrics:** Rounds to win, contests, streak resets, control flips, elimination endings, and human
 “progressless” rating.
 - **Gate / protocol:** Pure transition tests for every target; paired KOTH seed blocks under §2.2
@@ -695,9 +697,9 @@ successful hold durable value. Both can produce strategic tension in different w
 - **Arms / primary variable:** A two-factor matrix: scoring semantics **consecutive / cumulative** ×
 target **3 / 4 / 5**. Consecutive-to-3 is the live control; cumulative-to-3 is retained only as the
 matched-threshold short-match falsification cell.
-- **Controls & evidence:** Respawn, charges, hill, and walls stay fixed. Estimate threshold effects
-within each scoring semantic, semantic effects at matched thresholds, and their interaction; do
-not attribute a cumulative-4/5 result to semantics alone.
+- **Controls & evidence:** No-respawn policy, charges, hill, and walls stay fixed. Estimate threshold
+effects within each scoring semantic, semantic effects at matched thresholds, and their interaction;
+do not attribute a cumulative-4/5 result to semantics alone.
 - **Metrics:** Scoring rounds, scoreless rounds, lead changes, wins from two points behind, match
 duration, and contest/reposition decisions.
 - **Gate / protocol:** Atomic score transition tests; paired KOTH seed blocks under §2.2 by roster
@@ -713,14 +715,14 @@ stratum, reporting both factors and interaction.
 **Status:** Viable experiment
 
 - **Details:** At the KOTH round boundary, restore 25% or 50% of each living unit’s missing health.
-Dead units still use the existing respawn rule, charges never return, and Elimination receives no
-healing. The test asks whether battered survivors can contest again without erasing deaths.
-- **Problem / defense:** A dead unit returns at full HP while a 1-HP survivor stays wounded. A
-between-round KOTH heal may support repeated contests without weakening a lost exchange.
+Dead units remain eliminated, charges never return, and Elimination receives no healing. The test
+asks whether battered survivors can contest again without erasing deaths.
+- **Problem / defense:** Survivors currently carry all damage forward. A between-round KOTH heal may
+support repeated contests without weakening the permanence of a lost unit.
 - **Arms / primary variable:** Heal **0 / 25 / 50% of missing HP** for living units at the KOTH
 round boundary.
-- **Controls & evidence:** KOTH only; dead units are not revived; full-health respawns do not receive
-a second heal; charges and scoring remain unchanged.
+- **Controls & evidence:** KOTH only; dead units are not revived; charges and scoring remain
+unchanged.
 - **Metrics:** HP restored, changed hit breakpoints, next-round deaths, control recovery, comeback,
 rounds, and duration.
 - **Gate / protocol:** Pure clamp/dead/terminal checks; paired seed blocks under §2.2 with
@@ -730,27 +732,29 @@ with finite lives or charge restoration initially.
 - **Owners / files / rollback:** Gameplay + balance; `Health.cs`, `GameLoop.cs`. KOTH-gated hook,
 amount 0 restores baseline.
 
-#### EXP-B10 — Finite KOTH respawn lives
+#### EXP-B10 — Opt-in finite KOTH respawn lives
 
 - [ ] **Select EXP-B10**
 
 **Status:** Deferred
 
-- **Details:** Give each unit or team a limited stock of KOTH respawns. A casualty returns normally
-while stock remains and stays dead after it is exhausted; a complete team wipe still ends the
-match immediately.
-- **Problem / defense:** Unlimited partial respawns can prolong attrition. A finite respawn budget
-may make each KOTH life meaningful while retaining the objective mode.
-- **Arms / primary variable:** Per-unit or team-pool respawn lives, tested separately; full-team wipe
-remains terminal unless a later ruling explicitly changes it.
-- **Controls & evidence:** Consecutive scoring, HP on respawn, charges, and map stay baseline.
+- **Details:** Opt KOTH into the preserved respawn lifecycle with a limited per-unit or team stock. A
+casualty returns while stock remains and stays dead after it is exhausted; a complete team wipe
+still ends the match immediately.
+- **Problem / defense:** The no-respawn baseline makes every loss permanent. A finite respawn budget
+tests whether a small number of returns improves objective play without creating unlimited
+attrition.
+- **Arms / primary variable:** No respawn versus per-unit or team-pool respawn lives, with the two
+stock models tested separately; full-team wipe remains terminal unless a later ruling explicitly
+changes it.
+- **Controls & evidence:** Consecutive scoring, HP on respawn, charges, and map stay fixed.
 - **Metrics:** Respawns, exhausted-life deaths, return-to-hill time, wipe endings, comeback, rounds,
 and objective wins.
 - **Gate / protocol:** Requires a ruling on pool ownership. Pure tests cover simultaneous deaths,
 zero-life casualties, and exactly one terminal result.
 - **Dependencies / conflicts:** Separate from cumulative score and KOTH healing.
 - **Owners / files / rollback:** Director + gameplay + multiplayer + UI; `GameLoop.cs`,
-`Health.cs`. Remove life state to restore unlimited partial respawn.
+`Health.cs`. Disable the KOTH respawn policy and remove life state to restore permanent casualties.
 
 #### EXP-B11 — Elimination survivor healing
 
@@ -854,15 +858,16 @@ blocks and a human reserve-tension check follow §2.2.
 - **Owners / files / rollback:** Gameplay + balance + UI; `Unit.cs`, `GameLoop.cs`. Remove the
 single grant hook.
 
-#### EXP-C03 — Charge restored on KOTH death
+#### EXP-C03 — Charge restored on respawn-enabled KOTH death
 
 - [ ] **Select EXP-C03**
 
 **Status:** Falsification only
 
-- **Details:** The first time a unit respawns in KOTH, restore at most one spent charge for use next
-round; later deaths restore nothing. This bounded version tests whether respawned units need their
-identity back without allowing endless Grenades or Area Locks.
+- **Details:** If KOTH is separately opted into respawning, restore at most one spent charge the
+first time a unit returns for use next round; later deaths restore nothing. This bounded version
+tests whether respawned units need their identity back without allowing endless Grenades or Area
+Locks.
 - **Problem / defense:** Restoring a charge on respawn could keep KOTH ability-rich, but it rewards
 death and can repeat Grenade 80 or Area Lock 130 indefinitely.
 - **Arms / primary variable:** Baseline no restore versus at most one restored charge per unit per
@@ -872,10 +877,11 @@ match, cap 1, available the following round.
 damage/control per restored charge, and ability-decided hill steps.
 - **Gate / protocol:** Human KOTH evidence required; reject if death becomes an economy strategy or
 restored casts dominate objective progress.
-- **Dependencies / conflicts:** Conflicts with starting count and late recharge.
+- **Dependencies / conflicts:** Requires a separately approved respawn-enabled KOTH arm. Conflicts
+with starting count and late recharge.
 - **Owners / files / rollback:** QA + balance; one bounded grant in `Unit.cs`, invoked only from
-`GameLoop.RespawnEliminatedKingOfTheHillUnits`, with card replication through the existing use
-update seam. Default-off restores the current no-restore rule.
+`GameLoop.RespawnEliminatedUnits`, with card replication through the existing use-update seam.
+Default-off preserves the current no-respawn rule.
 
 #### EXP-C04 — Per-alerted-unit dodge range isolation
 
@@ -1383,7 +1389,7 @@ threshold/value layer to restore the current class-aware selector.
 
 **Status:** Viable experiment
 
-- **Details:** Assign only one, two, or all three bot units to occupy/contest the hill while the rest
+- **Details:** Assign only one, three, or all five bot units to occupy/contest the hill while the rest
 stage, flank, or cover approaches. A separate match-point rule can trigger an all-in response when
 the opponent is one control step from victory.
 - **Problem / defense:** Every bot unit rushes/holds the hill regardless of controller, streak,
@@ -1393,7 +1399,7 @@ enemy streak reaches match point.
 - **Controls & evidence:** Hill geometry/scoring fixed; decisions use only public hill state and
 legal sightings.
 - **Metrics:** Control rounds, contest-before-loss, streak resets, clustering, damage, deaths,
-respawns, and objective wins.
+surviving units, and objective wins.
 - **Gate / protocol:** Empty/friendly/contested/enemy-match-point states produce declared quotas;
 unseen enemy changes cannot alter assignments.
 - **Dependencies / conflicts:** EXP-A04; team size fixed.
@@ -1529,7 +1535,7 @@ Server deadline stays fixed.
 - **Controls & evidence:** Never infer or reveal hidden enemy unit state.
 - **Metrics:** Ability to predict deadline, incomplete timeout submissions, idle time, and urgency
 accessibility.
-- **Gate / protocol:** Render 15/10/5 and experimental floor cases; non-color urgent cue; ≥90%
+- **Gate / protocol:** Render 25/20/15/10/5 and experimental floor cases; non-color urgent cue; ≥90%
 deadline/workload comprehension.
 - **Dependencies / conflicts:** Planning floor/policy experiments must use identical UI across rule
 arms or explicitly declare the UI arm.
@@ -1614,25 +1620,30 @@ local effect. Remove the packet/presentation while keeping existing match state.
 
 - [ ] **Select EXP-G07**
 
-**Status:** Viable for comparison; 4v4 layout deferred
+**Status:** Dynamic five-unit command dock and public enemy status rail implemented; comparison
+treatment remains viable
 
 - **Details:** Replace incomparable flavor prose with side-by-side mobility, durability, reach,
-ability shape, response, and charge information. If 4v4 is selected later, separately prototype
-four compact cards versus tabs with one expanded card so the extra unit remains manageable.
+ability shape, response, and charge information. The command dock now generates its card count from
+`RosterRules.UnitsPerPlayer` and scrolls horizontally when the full fireteam does not fit. The
+read-only enemy rail uses the same roster count and keeps identity, current/max HP, alive state, and
+remaining or spent match ability uses public without carrying positions or orders.
 - **Problem / defense:** Character selection uses prose rather than comparable mobility,
-durability, reach, shape, response, and charge information. A fourth unit would also overflow
-fixed three-card structures.
-- **Arms / primary variable:** Normalized role bands versus exact public values; separately, if team
-size is approved, four compact cards versus tabs + one expanded card.
-- **Controls & evidence:** No stat or roster visibility change; opponent picks stay hidden.
+durability, reach, shape, response, and charge information. The former fixed-card structure is no
+longer a blocker for team-size experiments.
+- **Arms / primary variable:** Normalized role bands versus exact public values; compact generated
+cards versus tabs + one expanded card.
+- **Controls & evidence:** Preserve the current public enemy roster/combat-status policy; positions
+and planned orders stay hidden.
 - **Metrics:** Pairwise stat comprehension, coherent roster rationale, selection time, skipped
 orders, dock occlusion, focus order, and workload.
-- **Gate / protocol:** Values derive from `UnitData`; all five units and responsive breakpoints;
-four-card prototype only after the team-size structural gate.
+- **Gate / protocol:** Values derive from `UnitData` and server-authored live state; all five units
+and responsive breakpoints; both generated card counts remain coupled to
+`RosterRules.UnitsPerPlayer`.
 - **Dependencies / conflicts:** Team-size probe for dynamic dock. Rich exact values vs restrained
 role bands.
 - **Owners / files / rollback:** UI + balance; character selection templates/controller and
-`GameHUD`. Remove comparison rows/dynamic path, preserving current three slots.
+`GameHUD`. Remove comparison rows while preserving runtime-generated roster slots.
 
 #### EXP-G08 — Environmental and unit glanceability
 
@@ -1803,7 +1814,7 @@ These are unordered cross-references; the registry entries contain the rationale
 - starting charges ↔ late recharge: EXP-C01/C02;
 - role-shaped miss-allowance lethality ↔ strict normalization or the prior high-lethality rollback:
   EXP-B12;
-- 2v2 ↔ 4v4: EXP-B05, with 3v3 control;
+- 4v4 ↔ 6v6: EXP-B05, with 5v5 control;
 - consecutive ↔ cumulative KOTH: EXP-B08’s matched-threshold two-factor matrix;
 - Pogo stat tuning ↔ added counterplay: EXP-C05/D03/D04;
 - Sniper four/three/two-shot breakpoints: EXP-D05 with Area Lock held independently;

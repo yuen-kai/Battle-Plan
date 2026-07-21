@@ -152,6 +152,16 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
     private static Vector2Int Cell(GameObject unit) =>
         GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
 
+    private static int FindUnitIndex(GameObject[] units, string unitName)
+    {
+        return System.Array.FindIndex(
+            units,
+            unit =>
+                unit != null
+                && unit.name.StartsWith(unitName, System.StringComparison.Ordinal)
+        );
+    }
+
     // Screenshots land outside Assets so Play mode never triggers an import/refresh cycle.
     private static void Snap(string name)
     {
@@ -186,13 +196,16 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
 
     private IEnumerator VerifyHudPointerPicking(GameObject[] humanUnits)
     {
+        int cardIndex = FindUnitIndex(humanUnits, "Soldier");
+        if (cardIndex < 0)
+            cardIndex = 0;
         yield return WaitFor(
             () =>
             {
                 UIDocument document = GameHUDController.Instance?.GetComponent<UIDocument>();
                 VisualElement root = document?.rootVisualElement;
-                VisualElement card = root?.Q<VisualElement>("unit-card-1");
-                Button selectButton = root?.Q<Button>("unit-card-select-1");
+                VisualElement card = root?.Q<VisualElement>($"unit-card-{cardIndex}");
+                Button selectButton = root?.Q<Button>($"unit-card-select-{cardIndex}");
                 return root?.panel != null
                     && card != null
                     && card.worldBound.width > 1f
@@ -210,8 +223,8 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         UIDocument document = GameHUDController.Instance.GetComponent<UIDocument>();
         VisualElement root = document.rootVisualElement;
         VisualElement screen = root.Q<VisualElement>("screen");
-        VisualElement card = root.Q<VisualElement>("unit-card-1");
-        Button selectButton = root.Q<Button>("unit-card-select-1");
+        VisualElement card = root.Q<VisualElement>($"unit-card-{cardIndex}");
+        Button selectButton = root.Q<Button>($"unit-card-select-{cardIndex}");
         IPanel panel = root.panel;
 
         Vector2 cardPanelCenter = card.worldBound.center;
@@ -243,7 +256,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             yield break;
 
         PlanMovement planner = PlanMovement.Instance;
-        GameObject cardUnit = humanUnits[1];
+        GameObject cardUnit = humanUnits[cardIndex];
         bool hadPlanBefore = planner.plans.TryGetValue(
             cardUnit,
             out (bool, List<Vector3>) beforePlan
@@ -265,10 +278,85 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             pathBefore != null
                 ? pathAfter != null && pathAfter.SequenceEqual(pathBefore)
                 : pathAfter != null && pathAfter.Count == 1 && pathAfter[0] == cardUnitCell;
-        Check(planner.selectedUnit == cardUnit, "live unit-card interaction selected slot 1");
+        Check(
+            planner.selectedUnit == cardUnit,
+            $"live unit-card interaction selected roster slot {cardIndex}"
+        );
         Check(
             pathWasNotPainted,
             $"unit-card interaction only initialized or preserved its path ({pathBefore?.Count ?? 0}->{pathAfter?.Count ?? 0})"
+        );
+    }
+
+    private void VerifyEnemyStatusCards(
+        VisualElement hudRoot,
+        IReadOnlyList<GameObject> enemyUnits,
+        string checkpoint
+    )
+    {
+        if (hudRoot == null || enemyUnits == null)
+        {
+            Check(false, $"{checkpoint} enemy status cards are available");
+            return;
+        }
+
+        int activeCount = 0;
+        for (int index = 0; index < enemyUnits.Count; index++)
+        {
+            GameObject enemy = enemyUnits[index];
+            Unit identity = enemy != null ? enemy.GetComponent<Unit>() : null;
+            Health health = enemy != null ? enemy.GetComponent<Health>() : null;
+            UnitData data = enemy != null ? enemy.GetComponent<Movement>()?.unitData : null;
+            VisualElement card = hudRoot.Q<VisualElement>($"enemy-unit-card-{index}");
+            Label healthLabel = card?.Q<Label>("unit-card-health-value");
+            Label abilityLabel = card?.Q<Label>("unit-card-ability");
+            Label stateLabel = card?.Q<Label>("unit-card-state");
+            Button selectButton = card?.Q<Button>($"enemy-unit-card-select-{index}");
+
+            bool alive = health != null && health.IsAlive;
+            if (alive)
+                activeCount++;
+            string expectedHealth =
+                health != null
+                    ? $"{Mathf.RoundToInt(health.CurrentHealth)} / {Mathf.RoundToInt(health.MaxHealth)} HP"
+                    : string.Empty;
+            bool hasAbility = enemy != null && enemy.GetComponent<Ability>() != null;
+            int remainingUses = identity != null ? identity.RemainingAbilityUses : 0;
+            string useText = remainingUses == 1 ? "1 use" : $"{remainingUses} uses";
+            string expectedAbility =
+                !hasAbility
+                    ? "Move only"
+                    : remainingUses > 0
+                        ? $"{data?.abilityName ?? "Ability"} · {useText} this match"
+                        : $"{data?.abilityName ?? "Ability"} · spent this match";
+
+            Check(
+                card != null && selectButton != null && !selectButton.enabledInHierarchy,
+                $"{checkpoint} enemy slot {index} is a read-only card"
+            );
+            Check(
+                healthLabel != null && healthLabel.text == expectedHealth,
+                $"{checkpoint} enemy slot {index} health is live (got '{healthLabel?.text ?? "<none>"}')"
+            );
+            Check(
+                abilityLabel != null && abilityLabel.text == expectedAbility,
+                $"{checkpoint} enemy slot {index} ability charge is live (got '{abilityLabel?.text ?? "<none>"}')"
+            );
+            Check(
+                stateLabel != null && stateLabel.text == (alive ? "ACTIVE" : "ELIMINATED"),
+                $"{checkpoint} enemy slot {index} alive state is live (got '{stateLabel?.text ?? "<none>"}')"
+            );
+        }
+
+        int eliminatedCount = enemyUnits.Count - activeCount;
+        string expectedSummary =
+            eliminatedCount == 0
+                ? $"{activeCount} ACTIVE"
+                : $"{activeCount} ACTIVE · {eliminatedCount} DOWN";
+        Label summary = hudRoot.Q<Label>("enemy-contact-summary");
+        Check(
+            summary != null && summary.text == expectedSummary,
+            $"{checkpoint} enemy fireteam summary is live (got '{summary?.text ?? "<none>"}')"
         );
     }
 
@@ -281,6 +369,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
 
         float deadline = Time.realtimeSinceStartup + 60f;
         bool submittedDodge = false;
+        bool checkedExecutionTelegraphs = false;
         while (
             GameLoop.currentPhase != "planning"
             && GameLoop.currentPhase != "idle"
@@ -292,6 +381,24 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                 Snap("02-dodge");
                 DevInput.SubmitDodge();
                 submittedDodge = true;
+            }
+            if (GameLoop.currentPhase == "executing" && !checkedExecutionTelegraphs)
+            {
+                bool hasActiveTelegraph = Object
+                    .FindObjectsByType<Transform>(
+                        FindObjectsInactive.Exclude,
+                        FindObjectsSortMode.None
+                    )
+                    .Any(transform =>
+                        transform.name == "AbilityTelegraphLine"
+                        || transform.name == "AbilityTelegraphMarker"
+                        || transform.name.StartsWith("SmokeTelegraphCell_")
+                    );
+                Check(
+                    !hasActiveTelegraph,
+                    "ability dodge telegraphs are inactive before execution begins"
+                );
+                checkedExecutionTelegraphs = true;
             }
             yield return null;
         }
@@ -325,8 +432,8 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                 && NetworkManager.Singleton.ConnectedClients.Count == 1
                 && GameLoop.Instance != null
                 && GameLoop.currentPhase == "planning"
-                && GameLoop.GetTeamUnits(0).Length == 3
-                && GameLoop.GetTeamUnits(1).Length == 3,
+                && GameLoop.GetTeamUnits(0).Length == RosterRules.UnitsPerPlayer
+                && GameLoop.GetTeamUnits(1).Length == RosterRules.UnitsPerPlayer,
             90f,
             "solo bot match bootstrap"
         );
@@ -337,6 +444,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         GameLoop loop = GameLoop.Instance;
         GameObject[] humanUnits = GameLoop.GetTeamUnits(GameLoop.HostTeamIndex);
         GameObject[] botUnits = GameLoop.GetTeamUnits(GameLoop.OpponentTeamIndex);
+        int soldierIndex = FindUnitIndex(humanUnits, "Soldier");
         UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
 
         Check(
@@ -365,6 +473,15 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             "replicated unit identities use distinct logical teams"
         );
         Check(
+            humanUnits
+                    .Select(unit => unit.GetComponent<Unit>().RosterSlot)
+                    .SequenceEqual(Enumerable.Range(0, RosterRules.UnitsPerPlayer))
+                && botUnits
+                    .Select(unit => unit.GetComponent<Unit>().RosterSlot)
+                    .SequenceEqual(Enumerable.Range(0, RosterRules.UnitsPerPlayer)),
+            "replicated roster slots are complete, unique, and ordered"
+        );
+        Check(
             botUnits.All(unit =>
                 unit.GetComponent<NetworkObject>().OwnerClientId == NetworkManager.ServerClientId
             ),
@@ -374,13 +491,16 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             loop.BotPlanningContributionCount == 1,
             "bot contributed exactly once to the first planning phase"
         );
+        Check(soldierIndex >= 0, "focused human roster contains Soldier");
+        if (soldierIndex < 0)
+            yield break;
 
         yield return VerifyHudPointerPicking(humanUnits);
         if (HudPickingOnly)
             yield break;
 
         // Typed HUD copy: the readout reflects the authoritative AI/Elimination match, and the
-        // slot-1 ability card advertises a match-long charge (never a per-round refresh).
+        // Soldier's ability card advertises a match-long charge (never a per-round refresh).
         UIDocument hudDocument = GameHUDController.Instance != null
             ? GameHUDController.Instance.GetComponent<UIDocument>()
             : null;
@@ -399,7 +519,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                 $"HUD fog readout reflects the seeded fog option (got '{fogLabel?.text ?? "<none>"}')"
             );
 
-            VisualElement soldierCard = hudRoot.Q<VisualElement>("unit-card-1");
+            VisualElement soldierCard = hudRoot.Q<VisualElement>($"unit-card-{soldierIndex}");
             Label soldierAbility = soldierCard?.Q<Label>("unit-card-ability");
             string abilityCopy = soldierAbility?.text ?? string.Empty;
             string abilityCopyLower = abilityCopy.ToLowerInvariant();
@@ -412,14 +532,15 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                         || abilityCopyLower.Contains("use")
                         || abilityCopyLower.Contains("move only")
                     ),
-                $"slot-1 ability card shows honest match-long copy (got '{abilityCopy}')"
+                $"Soldier ability card shows honest match-long copy (got '{abilityCopy}')"
             );
+            VerifyEnemyStatusCards(hudRoot, botUnits, "initial fog-on");
         }
         Snap("01-planning-hud");
 
-        // The focused roster puts Soldier (Grenade) in slot 1. Threaten a bot in the first round
-        // so the dodge contribution is observed before either side can eliminate the caster.
-        GameObject soldier = humanUnits[1];
+        // Threaten a bot with Soldier in the first round so the dodge contribution is observed
+        // before either side can eliminate the caster.
+        GameObject soldier = humanUnits[soldierIndex];
         GameObject nearestBot = botUnits
             .Where(unit => unit != null && unit.activeSelf)
             .OrderBy(unit =>
@@ -437,7 +558,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             if (distance <= soldier.GetComponent<Movement>().unitData.abilitySquareRange)
             {
                 Vector2Int target = Cell(nearestBot);
-                DevInput.SetAbility(0, 1, target.x, target.y);
+                DevInput.SetAbility(0, soldierIndex, target.x, target.y);
                 submittedThreat = true;
             }
         }
@@ -459,6 +580,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                 || loop.BotAbilityContributionCount > 0,
             "bot moved toward knowledge or used one legal ability"
         );
+        VerifyEnemyStatusCards(hudRoot, botUnits, "post-round fog-on");
 
         DevInput.SetFog(false);
         yield return null;
@@ -480,6 +602,33 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             loop.BotAbilityContributionCount <= loop.BotPlanningContributionCount,
             "bot never contributed more than one ability per planning phase"
         );
+
+        GameObject abilityStatusProbe = botUnits.FirstOrDefault(unit =>
+            unit != null
+            && unit.activeInHierarchy
+            && unit.GetComponent<Unit>()?.CanUseAbility == true
+        );
+        Check(abilityStatusProbe != null, "enemy status probe found an available ability charge");
+        if (abilityStatusProbe != null)
+        {
+            Unit probeIdentity = abilityStatusProbe.GetComponent<Unit>();
+            bool consumed = probeIdentity.TryConsumeAbilityUse();
+            loop.NotifyEnemyUnitStatusChanged(abilityStatusProbe);
+            yield return null;
+
+            Label probeAbility = hudRoot
+                ?.Q<VisualElement>($"enemy-unit-card-{probeIdentity.RosterSlot}")
+                ?.Q<Label>("unit-card-ability");
+            Check(consumed, "enemy status probe consumed an authoritative ability charge");
+            Check(
+                probeAbility != null
+                    && probeAbility.text.EndsWith(
+                        "spent this match",
+                        System.StringComparison.Ordinal
+                    ),
+                $"enemy status card reflected the spent charge (got '{probeAbility?.text ?? "<none>"}')"
+            );
+        }
 
         Snap("03-result-final");
     }

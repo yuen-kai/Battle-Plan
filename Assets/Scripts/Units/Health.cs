@@ -20,6 +20,7 @@ public class Health : NetworkBehaviour
 
     /// <summary>Read-only HP accessor for dev tooling/tests (server-authoritative value on host).</summary>
     public float CurrentHealth => currentHealth.Value;
+    public float MaxHealth => unitData != null ? Mathf.Max(0f, unitData.maxHealth) : 0f;
     public bool IsAlive => isAlive.Value;
 
     public override void OnNetworkSpawn()
@@ -68,10 +69,15 @@ public class Health : NetworkBehaviour
 
         currentHealth.Value = Mathf.Max(0f, currentHealth.Value - damage);
         if (currentHealth.Value > 0f)
+        {
+            GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
             return;
+        }
 
         isAlive.Value = false;
+        GetComponent<Movement>()?.ClearTemporaryMoveSpeedBoost();
         GameLoop.Instance?.DisableUnitCard(gameObject);
+        GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
 
         // Leave the NetworkObject active through this frame's network update so the final
         // NetworkVariable values can be sent before round-end arbitration.
@@ -79,8 +85,8 @@ public class Health : NetworkBehaviour
     }
 
     /// <summary>
-    /// Server-only KOTH revival. Restores health and transient movement/shooting state without
-    /// touching Unit.RemainingAbilityUses.
+    /// Server-only revival for respawn-enabled modes. Restores health and transient
+    /// movement/shooting state without touching Unit.RemainingAbilityUses.
     /// </summary>
     public bool RespawnAt(Vector3 position, Quaternion rotation)
     {
@@ -95,6 +101,7 @@ public class Health : NetworkBehaviour
         if (movement != null)
         {
             movement.PauseMovement();
+            movement.ClearTemporaryMoveSpeedBoost();
             movement.moving = false;
         }
 
@@ -108,6 +115,7 @@ public class Health : NetworkBehaviour
         currentHealth.Value = unitData.maxHealth;
         isAlive.Value = true;
         GetComponent<AnimationHandler>()?.PlayAnimation("Idle");
+        GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
         return true;
     }
 
@@ -144,7 +152,7 @@ public class Health : NetworkBehaviour
         }
 
         // The host/server controls its active state directly. Death hides the remote object;
-        // fog-authorized KOTH observers are reactivated by GameLoop after visibility is resolved.
+        // fog-authorized respawn observers are reactivated after visibility is resolved.
         if (!IsServer && !newValue)
             gameObject.SetActive(false);
     }

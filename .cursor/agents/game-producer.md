@@ -15,7 +15,7 @@ Turn an agreed Battle Plan outcome into a small, reviewable delivery path. Keep 
 
 ## Battle Plan taste
 
-- Battle Plan is a Unity 6000.3.1f1, 1v1, simultaneous-turn positional strategy game with three units per side.
+- Battle Plan is a Unity 6000.3.1f1, 1v1, simultaneous-turn positional strategy game with `RosterRules.UnitsPerPlayer` units per side.
 - The shipped experience depends on hidden planning, optional ability dodge, simultaneous execution, auto-combat, fog of war, and Elimination/KOTH.
 - Delivery decisions must protect high-lethality positioning, fair information, strong combos, counterplay, comeback potential, and “everyone is broken, equally.”
 - Optimize for a strong PC-first slice while keeping UI and interaction work responsive and mobile-ready.

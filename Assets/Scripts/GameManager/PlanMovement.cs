@@ -147,7 +147,7 @@ public class PlanMovement : MonoBehaviour
         teamCharacters = units ?? PopulateTeamCharacters();
         while (
             units == null
-            && teamCharacters.Count == 0
+            && teamCharacters.Count < RosterRules.UnitsPerPlayer
             && NetworkManager.Singleton != null
             && NetworkManager.Singleton.IsListening
             && NetworkManager.Singleton.ServerTime.Time < endTime
@@ -455,7 +455,11 @@ public class PlanMovement : MonoBehaviour
     void ClearAbilityTargetIndicator()
     {
         if (abilityTargetIndicator != null)
+        {
+            // Destroy is deferred; hide the private planning preview before the phase can advance.
+            abilityTargetIndicator.SetActive(false);
             Destroy(abilityTargetIndicator);
+        }
         abilityTargetIndicator = null;
     }
 
@@ -534,17 +538,18 @@ public class PlanMovement : MonoBehaviour
         if (localTeamIndex < 0)
             return localTeamCharacters;
 
-        foreach (
-            NetworkObject netObj in NetworkManager
+        localTeamCharacters.AddRange(
+            NetworkManager
                 .Singleton.SpawnManager.SpawnedObjectsList.Where(netObj => netObj != null)
-                .OrderBy(netObj => netObj.NetworkObjectId)
-        )
-        {
-            if (netObj.GetComponent<Unit>()?.TeamIndex == localTeamIndex)
-            {
-                localTeamCharacters.Add(netObj.gameObject);
-            }
-        }
+                .Select(netObj => netObj.GetComponent<Unit>())
+                .Where(unit =>
+                    unit != null
+                    && unit.TeamIndex == localTeamIndex
+                    && unit.RosterSlot >= 0
+                )
+                .OrderBy(unit => unit.RosterSlot)
+                .Select(unit => unit.gameObject)
+        );
 
         return localTeamCharacters;
     }

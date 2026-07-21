@@ -7,14 +7,14 @@
         <ui:VisualElement class="command-ribbon">
             <ui:VisualElement class="command-ribbon__beacon" picking-mode="Ignore" />
             <ui:Label text="MATCH OPERATIONS / ROSTER" class="command-ribbon__text" picking-mode="Ignore" />
-            <ui:Label text="FIRETEAM / SELECT 3" class="command-ribbon__route" picking-mode="Ignore" />
+            <ui:Label name="roster-count-label" text="FIRETEAM / SELECT" class="command-ribbon__route" picking-mode="Ignore" />
         </ui:VisualElement>
 
         <ui:VisualElement class="screen-frame roster-frame">
             <ui:VisualElement class="roster-header">
                 <ui:VisualElement class="roster-heading" picking-mode="Ignore">
                     <ui:Label text="Assemble your fireteam" class="title-xl" picking-mode="Ignore" />
-                    <ui:Label text="Choose three distinct eligible units. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
+                    <ui:Label name="roster-instruction" text="Choose distinct eligible units. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
                 </ui:VisualElement>
                 <ui:VisualElement class="match-summary panel panel--quiet">
                     <ui:Label text="Match brief" class="section-label" picking-mode="Ignore" />

@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 [TestFixture]
 [Category("GameplayNetwork")]
@@ -216,7 +218,11 @@ public class GameplayNetworkEditModeTests
     public void TeamMapping_SeparatesLogicalBotTeamFromHumanClient()
     {
         const ulong hostClientId = 17;
-        GameLoop.ConfigureTeam(GameLoop.HostTeamIndex, hostClientId, new[] { 0, 1, 2 });
+        GameLoop.ConfigureTeam(
+            GameLoop.HostTeamIndex,
+            hostClientId,
+            Enumerable.Range(0, RosterRules.UnitsPerPlayer).ToArray()
+        );
         GameLoop.ConfigureTeam(
             GameLoop.OpponentTeamIndex,
             GameLoop.BotParticipantId,
@@ -334,9 +340,416 @@ public class GameplayNetworkEditModeTests
                 3,
                 new HashSet<Vector2Int> { new Vector2Int(5, 4) }
             ),
-            Is.EqualTo(start),
-            "A diagonal rush cannot cut through a wall corner."
+            Is.EqualTo(new Vector2Int(7, 7)),
+            "One blocked orthogonal neighbor must not reject an otherwise open diagonal rush."
         );
+        Assert.That(
+            GridSystem.GetDirectionalDestination(
+                start,
+                new Vector2Int(1, 1),
+                3,
+                new HashSet<Vector2Int> { new Vector2Int(6, 6) }
+            ),
+            Is.EqualTo(new Vector2Int(5, 5)),
+            "A wall on the diagonal path stops the rush on its last legal cell."
+        );
+        Assert.That(
+            GridSystem.GetDirectionalDestination(
+                start,
+                new Vector2Int(1, 1),
+                3,
+                new HashSet<Vector2Int> { new Vector2Int(5, 4), new Vector2Int(4, 5) }
+            ),
+            Is.EqualTo(start),
+            "Two blocked corner-adjacent cells still close the diagonal path."
+        );
+    }
+
+    [Test]
+    public void ShieldFootprint_WidensByOneGridCellPerSide()
+    {
+        const string prefabPath = "Assets/Prefabs/Units/Shotgunner.prefab";
+        GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        Assert.That(prefab, Is.Not.Null, $"Could not load {prefabPath}.");
+        Assert.That(Shield.ShieldWidthIncreaseCellsPerSide, Is.EqualTo(1));
+
+        GameObject instance = Object.Instantiate(prefab);
+        try
+        {
+            Transform shield = instance.transform.Find("Shield");
+            Assert.That(shield, Is.Not.Null, "Shotgunner prefab must keep its Shield child.");
+            BoxCollider shieldCollider = shield.GetComponent<BoxCollider>();
+            Assert.That(
+                shieldCollider,
+                Is.Not.Null,
+                "The widened visual must retain the server-side bullet-blocking collider."
+            );
+            float widthBefore = Mathf.Abs(
+                shieldCollider.size.x * shield.lossyScale.x
+            );
+
+            Assert.That(Shield.TryExpandShieldFootprint(shield), Is.True);
+
+            float widthAfter = Mathf.Abs(
+                shieldCollider.size.x * shield.lossyScale.x
+            );
+            Assert.That(
+                widthAfter - widthBefore,
+                Is.EqualTo(
+                        Shield.ShieldWidthIncreaseCellsPerSide * 2f * GameLoop.cellSize
+                    )
+                    .Within(0.001f)
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(instance);
+        }
+    }
+
+    [TestCase(
+        GameLoop.HostTeamIndex,
+        "BlueTeam",
+        Shield.BlueShieldLayerName,
+        "Assets/Prefabs/Projectiles/BulletBlue.prefab",
+        "Assets/Prefabs/Projectiles/BulletRed.prefab"
+    )]
+    [TestCase(
+        GameLoop.OpponentTeamIndex,
+        "RedTeam",
+        Shield.RedShieldLayerName,
+        "Assets/Prefabs/Projectiles/BulletRed.prefab",
+        "Assets/Prefabs/Projectiles/BulletBlue.prefab"
+    )]
+    public void ShieldCollisionLayer_TargetingSkipsItButEnemyBulletsStillCollide(
+        int teamIndex,
+        string teamLayerName,
+        string shieldLayerName,
+        string friendlyBulletPath,
+        string enemyBulletPath
+    )
+    {
+        const string shotgunnerPrefabPath = "Assets/Prefabs/Units/Shotgunner.prefab";
+        GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            shotgunnerPrefabPath
+        );
+        GameObject friendlyBulletPrefab =
+            UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(friendlyBulletPath);
+        GameObject enemyBulletPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            enemyBulletPath
+        );
+        Assert.That(prefab, Is.Not.Null, $"Could not load {shotgunnerPrefabPath}.");
+        Assert.That(friendlyBulletPrefab, Is.Not.Null, $"Could not load {friendlyBulletPath}.");
+        Assert.That(enemyBulletPrefab, Is.Not.Null, $"Could not load {enemyBulletPath}.");
+
+        GameObject instance = Object.Instantiate(prefab);
+        try
+        {
+            int teamLayer = LayerMask.NameToLayer(teamLayerName);
+            int shieldLayer = LayerMask.NameToLayer(shieldLayerName);
+            int projectileLayer = LayerMask.NameToLayer("Projectile");
+            Assert.That(teamLayer, Is.GreaterThanOrEqualTo(0));
+            Assert.That(shieldLayer, Is.GreaterThanOrEqualTo(0));
+            Assert.That(projectileLayer, Is.GreaterThanOrEqualTo(0));
+
+            GameLoop.SetGroupLayer(instance, teamLayer);
+            Transform shield = instance.transform.Find("Shield");
+            Assert.That(shield, Is.Not.Null, "Shotgunner must keep its Shield child.");
+            BoxCollider shieldCollider = shield.GetComponent<BoxCollider>();
+            Assert.That(shieldCollider, Is.Not.Null);
+            Assert.That(shieldCollider.enabled, Is.True);
+            Assert.That(shieldCollider.isTrigger, Is.False);
+            Assert.That(
+                shield.CompareTag("Untagged"),
+                Is.True,
+                "Bullet.OnCollisionEnter must block and despawn without treating the shield as a unit."
+            );
+            Assert.That(
+                Shield.TryApplyCollisionLayer(shield, teamIndex),
+                Is.True,
+                "Replicated shield state must restore the dedicated team-shield layer."
+            );
+            shield.gameObject.SetActive(true);
+            Assert.That(shield.gameObject.activeInHierarchy, Is.True);
+            Assert.That(
+                shield.gameObject.layer,
+                Is.EqualTo(Shield.GetCollisionLayerForTeam(teamIndex))
+            );
+            Assert.That(
+                shield.gameObject.layer,
+                Is.EqualTo(shieldLayer)
+            );
+
+            int shieldLayerBit = 1 << shieldLayer;
+            int unitTargetingMask = LayerMask.GetMask("Walls", teamLayerName);
+            int boardSelectionMask = LayerMask.GetMask("Grid", "PathNode");
+            Assert.That(
+                unitTargetingMask & shieldLayerBit,
+                Is.Zero,
+                "Auto-targeting and ability unit queries must pass through an active shield."
+            );
+            Assert.That(
+                unitTargetingMask & (1 << instance.layer),
+                Is.Not.Zero,
+                "The Shotgunner body behind its own shield must remain targetable."
+            );
+            Assert.That(
+                boardSelectionMask & shieldLayerBit,
+                Is.Zero,
+                "Grid and path-node mouse picks must pass through an active shield."
+            );
+
+            SphereCollider friendlyBulletCollider =
+                friendlyBulletPrefab.GetComponentInChildren<SphereCollider>(
+                    includeInactive: true
+                );
+            SphereCollider enemyBulletCollider =
+                enemyBulletPrefab.GetComponentInChildren<SphereCollider>(includeInactive: true);
+            Assert.That(friendlyBulletCollider, Is.Not.Null);
+            Assert.That(enemyBulletCollider, Is.Not.Null);
+            Assert.That(enemyBulletCollider.isTrigger, Is.False);
+            Assert.That(enemyBulletPrefab.GetComponent<Bullet>(), Is.Not.Null);
+            Assert.That(
+                friendlyBulletCollider.excludeLayers.value & shieldLayerBit,
+                Is.Not.Zero,
+                "A team's bullets must continue to ignore its own shield."
+            );
+            Assert.That(
+                enemyBulletCollider.excludeLayers.value & shieldLayerBit,
+                Is.Zero,
+                "Enemy bullets must continue to include this shield layer."
+            );
+            Assert.That(
+                Physics.GetIgnoreLayerCollision(projectileLayer, shieldLayer),
+                Is.False,
+                "The global physics matrix must continue allowing projectile-shield contacts."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(instance);
+        }
+    }
+
+    [Test]
+    public void ShieldRushBoost_OnlySelectsNearbyLivingAllies()
+    {
+        Vector2Int casterCell = new(4, 4);
+        int casterTeamIndex = GameLoop.HostTeamIndex;
+
+        Assert.That(
+            Shield.IsEligibleAllyForSpeedBoost(
+                casterCell,
+                casterTeamIndex,
+                new Vector2Int(6, 4),
+                casterTeamIndex,
+                true,
+                false
+            ),
+            Is.True,
+            "A living ally exactly two cells away is inside the rush radius."
+        );
+        Assert.That(
+            Shield.IsEligibleAllyForSpeedBoost(
+                casterCell,
+                casterTeamIndex,
+                new Vector2Int(5, 5),
+                casterTeamIndex,
+                true,
+                false
+            ),
+            Is.True,
+            "A nearby diagonal ally is inside the radial rush boost."
+        );
+        Assert.That(
+            Shield.IsEligibleAllyForSpeedBoost(
+                casterCell,
+                casterTeamIndex,
+                casterCell,
+                casterTeamIndex,
+                true,
+                true
+            ),
+            Is.False,
+            "The caster uses its fixed dash speed and does not buff itself."
+        );
+        Assert.That(
+            Shield.IsEligibleAllyForSpeedBoost(
+                casterCell,
+                casterTeamIndex,
+                new Vector2Int(5, 4),
+                GameLoop.OpponentTeamIndex,
+                true,
+                false
+            ),
+            Is.False,
+            "Nearby enemies never receive an allied rush boost."
+        );
+        Assert.That(
+            Shield.IsEligibleAllyForSpeedBoost(
+                casterCell,
+                casterTeamIndex,
+                new Vector2Int(5, 4),
+                casterTeamIndex,
+                false,
+                false
+            ),
+            Is.False,
+            "Dead allies never receive the rush boost."
+        );
+        Assert.That(
+            Shield.IsEligibleAllyForSpeedBoost(
+                casterCell,
+                casterTeamIndex,
+                new Vector2Int(6, 6),
+                casterTeamIndex,
+                true,
+                false
+            ),
+            Is.False,
+            "Living allies outside the two-cell radius are not boosted."
+        );
+    }
+
+    [Test]
+    public void ShieldRushBoost_ExpiresAndRestoresBaseMoveSpeed()
+    {
+        const float boostStartedAt = 10f;
+        const float baseMoveSpeed = 2f;
+        Movement.TimedMoveSpeedBoost speedBoost = new();
+
+        Assert.That(Shield.AllySpeedBoostRadiusCells, Is.EqualTo(2f).Within(0.001f));
+        Assert.That(Shield.AllySpeedBoostMultiplier, Is.EqualTo(1.5f).Within(0.001f));
+        Assert.That(Shield.AllySpeedBoostDurationSeconds, Is.EqualTo(3f).Within(0.001f));
+        Assert.That(
+            speedBoost.TrySet(
+                Shield.AllySpeedBoostMultiplier,
+                Shield.AllySpeedBoostDurationSeconds,
+                boostStartedAt
+            ),
+            Is.True
+        );
+        Assert.That(
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt - 0.001f),
+            Is.EqualTo(baseMoveSpeed).Within(0.001f)
+        );
+        Assert.That(speedBoost.IsActive(boostStartedAt - 0.001f), Is.False);
+        Assert.That(
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 1f),
+            Is.EqualTo(baseMoveSpeed * Shield.AllySpeedBoostMultiplier).Within(0.001f)
+        );
+        Assert.That(speedBoost.IsActive(boostStartedAt + 1f), Is.True);
+        Assert.That(
+            speedBoost.GetEffectiveSpeed(
+                baseMoveSpeed,
+                boostStartedAt + Shield.AllySpeedBoostDurationSeconds
+            ),
+            Is.EqualTo(baseMoveSpeed).Within(0.001f),
+            "The boost restores base speed at the exact end of the shield window."
+        );
+        Assert.That(
+            speedBoost.IsActive(boostStartedAt + Shield.AllySpeedBoostDurationSeconds),
+            Is.False,
+            "The active-state decision ends exactly with the gameplay speed boost."
+        );
+        Assert.That(
+            speedBoost.TrySet(
+                Shield.AllySpeedBoostMultiplier,
+                Shield.AllySpeedBoostDurationSeconds,
+                boostStartedAt
+            ),
+            Is.True
+        );
+        speedBoost.Clear();
+        Assert.That(
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 1f),
+            Is.EqualTo(baseMoveSpeed).Within(0.001f),
+            "Respawn cleanup immediately restores base speed."
+        );
+        Assert.That(
+            speedBoost.IsActive(boostStartedAt + 1f),
+            Is.False,
+            "Explicit cleanup immediately marks the boost inactive."
+        );
+    }
+
+    [Test]
+    public void ShieldRushBoostIndicator_BuildsLocalGroundVisualWithoutColliders()
+    {
+        GameObject unit = new("Shield Rush indicator test unit");
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+        MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
+        hiddenUnitRenderer.forceRenderingOff = true;
+        try
+        {
+            SpeedBoostIndicatorVisual visual = SpeedBoostIndicatorVisual.Create(unit.transform);
+
+            Assert.That(visual, Is.Not.Null);
+            Assert.That(visual.name, Is.EqualTo(SpeedBoostIndicatorVisual.GameObjectName));
+            Assert.That(visual.IsVisible, Is.False, "The indicator starts dormant.");
+            Collider unitCollider = unit.GetComponent<Collider>();
+            Assert.That(
+                visual.transform.position.y,
+                Is.EqualTo(unitCollider.bounds.min.y + 0.08f).Within(0.001f),
+                "The visual stays just above the unit's floor contact rather than obscuring it."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Renderer>(includeInactive: true).Length,
+                Is.EqualTo(4),
+                "One ring and three directional streaks make up the indicator."
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.forceRenderingOff),
+                Is.All.True,
+                "A lazily-created indicator must inherit host fog suppression before activation."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Collider>(includeInactive: true),
+                Is.Empty,
+                "The local presentation must never affect gameplay physics."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Light>(includeInactive: true),
+                Is.Empty,
+                "The indicator must not add gameplay-scene lighting cost."
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.shadowCastingMode),
+                Is.All.EqualTo(UnityEngine.Rendering.ShadowCastingMode.Off)
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.receiveShadows),
+                Is.All.False
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.sharedMaterial.shader.name),
+                Is.All.EqualTo("BattlePlan/GroundGlow")
+            );
+            Assert.That(
+                SpeedBoostIndicatorVisual.Create(unit.transform),
+                Is.SameAs(visual),
+                "Repeated state application must reuse the runtime-local visual."
+            );
+
+            visual.SetForceRenderingOff(false);
+            visual.SetVisible(true);
+            Assert.That(visual.IsVisible, Is.True);
+            visual.SetVisible(false);
+            Assert.That(visual.IsVisible, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
     }
 
     [Test]
@@ -409,12 +822,18 @@ public class GameplayNetworkEditModeTests
     {
         HashSet<Vector2Int> expected = new()
         {
+            new Vector2Int(6, 3),
+            new Vector2Int(7, 3),
+            new Vector2Int(8, 3),
             new Vector2Int(6, 4),
             new Vector2Int(7, 4),
             new Vector2Int(8, 4),
             new Vector2Int(6, 5),
             new Vector2Int(7, 5),
             new Vector2Int(8, 5),
+            new Vector2Int(6, 6),
+            new Vector2Int(7, 6),
+            new Vector2Int(8, 6),
         };
 
         Assert.That(GridSystem.ColumnCount, Is.EqualTo(15));
@@ -424,7 +843,7 @@ public class GameplayNetworkEditModeTests
             GameLoop.gridBounds.xMax,
             Is.EqualTo((GridSystem.ColumnCount - 1) * GameLoop.cellSize + 0.1f).Within(0.001f)
         );
-        Assert.That(GameLoop.KingOfTheHillCells.Count, Is.EqualTo(6));
+        Assert.That(GameLoop.KingOfTheHillCells.Count, Is.EqualTo(12));
         CollectionAssert.AreEquivalent(expected, GameLoop.KingOfTheHillCells);
         foreach (Vector2Int cell in GameLoop.KingOfTheHillCells)
         {
@@ -538,20 +957,22 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void KingOfTheHillRespawn_RequiresSurvivorsOnBothTeams()
+    public void RespawnPolicy_CurrentModesKeepEliminatedUnitsDead()
     {
         Assert.That(
             GameLoop.ShouldRespawnEliminatedUnits(GameMode.KingOfTheHill, GameLoop.TeamCount),
-            Is.True
+            Is.False,
+            "KOTH casualties must remain dead while both teams still have survivors."
         );
         Assert.That(
             GameLoop.ShouldRespawnEliminatedUnits(GameMode.KingOfTheHill, 1),
             Is.False,
-            "A full-team wipe must still end the match before respawns."
+            "A full-team wipe must remain terminal."
         );
         Assert.That(
             GameLoop.ShouldRespawnEliminatedUnits(GameMode.Elimination, GameLoop.TeamCount),
-            Is.False
+            Is.False,
+            "Elimination must not opt into the reusable respawn lifecycle."
         );
     }
 
@@ -731,12 +1152,12 @@ public class GameplayNetworkEditModeTests
     // === Roster validation (Wave 1) ===
 
     [Test]
-    public void Roster_Validate_AcceptsDistinctEligibleTriplet()
+    public void Roster_Validate_AcceptsConfiguredDistinctEligibleRoster()
     {
-        List<UnitData> catalog = CreateCatalog(true, true, true, true);
+        List<UnitData> catalog = CreateEligibleCatalog(RosterRules.UnitsPerPlayer);
         try
         {
-            RosterValidationResult result = RosterRules.Validate(new[] { 0, 2, 3 }, catalog);
+            RosterValidationResult result = RosterRules.Validate(CreateValidRoster(), catalog);
             Assert.That(result.IsValid, Is.True);
             Assert.That(result.Reason, Is.EqualTo(RosterValidationReason.None));
             Assert.That(result.SlotIndex, Is.EqualTo(-1));
@@ -753,7 +1174,8 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void Roster_Validate_RejectsMissingWrongLengthAndMissingCatalog()
     {
-        List<UnitData> catalog = CreateCatalog(true, true, true);
+        int[] validRoster = CreateValidRoster();
+        List<UnitData> catalog = CreateEligibleCatalog(RosterRules.UnitsPerPlayer + 1);
         try
         {
             Assert.That(
@@ -761,17 +1183,22 @@ public class GameplayNetworkEditModeTests
                 Is.EqualTo(RosterValidationReason.MissingRoster)
             );
             Assert.That(
-                RosterRules.Validate(new[] { 0, 1 }, catalog).Reason,
+                RosterRules.Validate(validRoster.Take(validRoster.Length - 1).ToArray(), catalog)
+                    .Reason,
                 Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
                 "A short fireteam is rejected before any per-unit inspection."
             );
             Assert.That(
-                RosterRules.Validate(new[] { 0, 1, 2, 0 }, catalog).Reason,
+                RosterRules.Validate(
+                        validRoster.Concat(new[] { validRoster[0] }).ToArray(),
+                        catalog
+                    )
+                    .Reason,
                 Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
                 "An oversized fireteam is rejected on shape, not duplicates."
             );
             Assert.That(
-                RosterRules.Validate(new[] { 0, 1, 2 }, null).Reason,
+                RosterRules.Validate(validRoster, null).Reason,
                 Is.EqualTo(RosterValidationReason.UnitCatalogUnavailable),
                 "A correctly shaped roster still fails without a catalog to validate against."
             );
@@ -783,27 +1210,54 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void Roster_Validate_RejectsDuplicateWithStableSlotAndIndex()
+    public void Roster_ValidateCatalog_RequiresEnoughEligibleUnits()
     {
-        List<UnitData> catalog = CreateCatalog(true, true, true, true);
+        List<UnitData> shortCatalog = CreateEligibleCatalog(RosterRules.UnitsPerPlayer - 1);
         try
         {
-            RosterValidationResult early = RosterRules.Validate(new[] { 1, 1, 2 }, catalog);
+            RosterValidationResult result = RosterRules.ValidateCatalog(shortCatalog);
+            Assert.That(result.Reason, Is.EqualTo(RosterValidationReason.InsufficientEligibleUnits));
+            Assert.That(
+                RosterRules.GetUserMessage(result),
+                Is.EqualTo(
+                    $"At least {RosterRules.UnitsPerPlayer} eligible units are required to start a match."
+                )
+            );
+        }
+        finally
+        {
+            DestroyCatalog(shortCatalog);
+        }
+    }
+
+    [Test]
+    public void Roster_Validate_RejectsDuplicateWithStableSlotAndIndex()
+    {
+        int[] earlyRoster = CreateValidRoster();
+        earlyRoster[1] = earlyRoster[0];
+        int[] tailRoster = CreateValidRoster();
+        tailRoster[^1] = tailRoster[0];
+        List<UnitData> catalog = CreateEligibleCatalog(RosterRules.UnitsPerPlayer);
+        try
+        {
+            RosterValidationResult early = RosterRules.Validate(earlyRoster, catalog);
             Assert.That(early.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
             Assert.That(
                 early.SlotIndex,
                 Is.EqualTo(1),
                 "The repeated slot is reported deterministically."
             );
-            Assert.That(early.UnitIndex, Is.EqualTo(1));
+            Assert.That(early.UnitIndex, Is.EqualTo(earlyRoster[0]));
 
-            RosterValidationResult tail = RosterRules.Validate(new[] { 2, 3, 2 }, catalog);
+            RosterValidationResult tail = RosterRules.Validate(tailRoster, catalog);
             Assert.That(tail.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
-            Assert.That(tail.SlotIndex, Is.EqualTo(2));
-            Assert.That(tail.UnitIndex, Is.EqualTo(2));
+            Assert.That(tail.SlotIndex, Is.EqualTo(tailRoster.Length - 1));
+            Assert.That(tail.UnitIndex, Is.EqualTo(tailRoster[0]));
             Assert.That(
                 RosterRules.GetUserMessage(tail),
-                Is.EqualTo("Choose three different units; duplicate picks are not allowed.")
+                Is.EqualTo(
+                    $"Choose {RosterRules.UnitsPerPlayer} different units; duplicate picks are not allowed."
+                )
             );
         }
         finally
@@ -815,25 +1269,29 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void Roster_Validate_RejectsNegativeAndOutOfRangeIndices()
     {
-        List<UnitData> catalog = CreateCatalog(true, true, true);
+        int[] negativeRoster = CreateValidRoster();
+        negativeRoster[0] = -1;
+        List<UnitData> catalog = CreateEligibleCatalog(RosterRules.UnitsPerPlayer);
         try
         {
-            RosterValidationResult negative = RosterRules.Validate(new[] { -1, 0, 1 }, catalog);
+            RosterValidationResult negative = RosterRules.Validate(negativeRoster, catalog);
             Assert.That(negative.Reason, Is.EqualTo(RosterValidationReason.UnitIndexOutOfRange));
             Assert.That(negative.SlotIndex, Is.EqualTo(0));
             Assert.That(negative.UnitIndex, Is.EqualTo(-1));
 
-            RosterValidationResult tooHigh = RosterRules.Validate(
-                new[] { 0, 1, catalog.Count },
-                catalog
-            );
+            int[] tooHighRoster = CreateValidRoster();
+            tooHighRoster[^1] = catalog.Count;
+            RosterValidationResult tooHigh = RosterRules.Validate(tooHighRoster, catalog);
             Assert.That(tooHigh.Reason, Is.EqualTo(RosterValidationReason.UnitIndexOutOfRange));
-            Assert.That(tooHigh.SlotIndex, Is.EqualTo(2));
+            Assert.That(tooHigh.SlotIndex, Is.EqualTo(tooHighRoster.Length - 1));
             Assert.That(tooHigh.UnitIndex, Is.EqualTo(catalog.Count));
 
             // Range is enforced before duplicate detection, so the first illegal slot wins.
+            int[] rangeBeatsDuplicateRoster = CreateValidRoster();
+            rangeBeatsDuplicateRoster[0] = catalog.Count;
+            rangeBeatsDuplicateRoster[1] = catalog.Count;
             RosterValidationResult rangeBeatsDuplicate = RosterRules.Validate(
-                new[] { 9, 9, 0 },
+                rangeBeatsDuplicateRoster,
                 catalog
             );
             Assert.That(
@@ -852,13 +1310,15 @@ public class GameplayNetworkEditModeTests
     public void Roster_Validate_RejectsIneligibleUnitAndHonorsFailurePriority()
     {
         // Slot 1 is opted out of rosters; the rest are eligible.
-        List<UnitData> catalog = CreateCatalog(true, false, true, true);
+        bool[] eligibility = Enumerable.Repeat(true, RosterRules.UnitsPerPlayer + 1).ToArray();
+        eligibility[1] = false;
+        List<UnitData> catalog = CreateCatalog(eligibility);
         try
         {
             Assert.That(RosterRules.IsUnitEligible(catalog, 1), Is.False);
             Assert.That(RosterRules.IsUnitEligible(catalog, 0), Is.True);
 
-            RosterValidationResult ineligible = RosterRules.Validate(new[] { 0, 1, 2 }, catalog);
+            RosterValidationResult ineligible = RosterRules.Validate(CreateValidRoster(), catalog);
             Assert.That(ineligible.Reason, Is.EqualTo(RosterValidationReason.UnitUnavailable));
             Assert.That(ineligible.SlotIndex, Is.EqualTo(1));
             Assert.That(ineligible.UnitIndex, Is.EqualTo(1));
@@ -868,14 +1328,18 @@ public class GameplayNetworkEditModeTests
             );
 
             // Duplicate detection runs before availability, so a duplicate outranks an ineligible pick.
-            RosterValidationResult duplicateFirst = RosterRules.Validate(
-                new[] { 0, 0, 1 },
-                catalog
-            );
+            int[] duplicateRoster = CreateValidRoster();
+            duplicateRoster[1] = duplicateRoster[0];
+            RosterValidationResult duplicateFirst = RosterRules.Validate(duplicateRoster, catalog);
             Assert.That(duplicateFirst.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
             Assert.That(duplicateFirst.SlotIndex, Is.EqualTo(1));
 
-            Assert.That(RosterRules.Validate(new[] { 0, 2, 3 }, catalog).IsValid, Is.True);
+            int[] eligibleRoster = Enumerable
+                .Range(0, RosterRules.UnitsPerPlayer + 1)
+                .Where(index => index != 1)
+                .Take(RosterRules.UnitsPerPlayer)
+                .ToArray();
+            Assert.That(RosterRules.Validate(eligibleRoster, catalog).IsValid, Is.True);
         }
         finally
         {
@@ -884,21 +1348,35 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void UnitCatalogAsset_HasFiveEligibleUnitsWithValidDevRosters()
+    public void UnitCatalogAsset_HasEnoughEligibleUnitsWithValidDevRosters()
     {
         const string catalogPath = "Assets/UnitStats/AllUnits.asset";
         UnitDatabase catalog = UnityEditor.AssetDatabase.LoadAssetAtPath<UnitDatabase>(catalogPath);
         Assert.That(catalog, Is.Not.Null, $"Could not load {catalogPath}.");
         Assert.That(catalog.units, Is.Not.Null);
-        Assert.That(catalog.units.Count, Is.EqualTo(5), "AllUnits must stay at five units.");
+        Assert.That(catalog.units.Count, Is.GreaterThanOrEqualTo(RosterRules.UnitsPerPlayer));
+        Assert.That(RosterRules.ValidateCatalog(catalog.units).IsValid, Is.True);
         Assert.That(
             catalog.units,
             Has.None.Null,
             "The catalog must not contain null unit entries."
         );
 
+        string[] expectedCatalogOrder =
+        {
+            "Commander",
+            "PogoRider",
+            "Shotgunner",
+            "Sniper",
+            "Soldier",
+        };
+        CollectionAssert.AreEqual(
+            expectedCatalogOrder,
+            catalog.units.Take(expectedCatalogOrder.Length).Select(unit => unit.unitName).ToArray(),
+            "Roster indices are a serialized network/gameplay contract."
+        );
+
         // Serialized catalog order: the Commander sits at index 0 and is selectable with Smoke Screen.
-        Assert.That(catalog.units[0].unitName, Is.EqualTo("Commander"));
         Assert.That(
             catalog.units[0].IsRosterEligible,
             Is.True,
@@ -910,6 +1388,27 @@ public class GameplayNetworkEditModeTests
                 catalog.units[index].IsRosterEligible,
                 Is.True,
                 $"Catalog unit {index} ({catalog.units[index].unitName}) should be roster-eligible."
+            );
+        }
+
+        string networkPrefabsMarkup = File.ReadAllText(
+            "Assets/DefaultNetworkPrefabs.asset"
+        );
+        HashSet<GameObject> distinctModels = new();
+        foreach (UnitData unit in catalog.units.Where(unit => unit.IsRosterEligible))
+        {
+            Assert.That(unit.unitModel, Is.Not.Null, $"{unit.unitName} needs a unit prefab.");
+            Assert.That(
+                distinctModels.Add(unit.unitModel),
+                Is.True,
+                $"{unit.unitName} must use a distinct unit prefab."
+            );
+            string prefabPath = UnityEditor.AssetDatabase.GetAssetPath(unit.unitModel);
+            string prefabGuid = UnityEditor.AssetDatabase.AssetPathToGUID(prefabPath);
+            Assert.That(
+                networkPrefabsMarkup,
+                Does.Contain($"guid: {prefabGuid}"),
+                $"{unit.unitName} prefab must be registered for NGO spawning."
             );
         }
 
@@ -925,8 +1424,8 @@ public class GameplayNetworkEditModeTests
         {
             Assert.That(
                 roster.Length,
-                Is.EqualTo(RosterRules.FireteamSize),
-                $"{name} must field exactly three units."
+                Is.EqualTo(RosterRules.UnitsPerPlayer),
+                $"{name} must field exactly {RosterRules.UnitsPerPlayer} units."
             );
             Assert.That(
                 roster.Distinct().Count(),
@@ -939,6 +1438,238 @@ public class GameplayNetworkEditModeTests
                 Is.True,
                 $"{name} must validate against the live catalog (reason {result.Reason})."
             );
+        }
+    }
+
+    [Test]
+    public void PreferredRostersAndSpawnLayoutsTrackUnitsPerPlayer()
+    {
+        int[] preferredOrder = Enumerable
+            .Range(0, RosterRules.UnitsPerPlayer + 2)
+            .Reverse()
+            .ToArray();
+        int[] roster = RosterRules.BuildPreferredRoster(preferredOrder);
+
+        Assert.That(roster.Length, Is.EqualTo(RosterRules.UnitsPerPlayer));
+        CollectionAssert.AreEqual(
+            preferredOrder.Take(RosterRules.UnitsPerPlayer).ToArray(),
+            roster
+        );
+        int[] shortPreference = Enumerable
+            .Range(0, RosterRules.UnitsPerPlayer - 1)
+            .Reverse()
+            .ToArray();
+        int[] filledRoster = RosterRules.BuildPreferredRoster(shortPreference);
+        Assert.That(filledRoster.Length, Is.EqualTo(RosterRules.UnitsPerPlayer));
+        Assert.That(filledRoster.Distinct().Count(), Is.EqualTo(filledRoster.Length));
+        CollectionAssert.AreEqual(
+            shortPreference,
+            filledRoster.Take(shortPreference.Length).ToArray()
+        );
+
+        int[] supportedTestCounts = new[] { 1, 3, RosterRules.UnitsPerPlayer, 7 }
+            .Distinct()
+            .ToArray();
+        foreach (int unitCount in supportedTestCounts)
+        {
+            foreach (bool useDevLayout in new[] { false, true })
+            {
+                for (int teamIndex = 0; teamIndex < GameLoop.TeamCount; teamIndex++)
+                {
+                    Vector2Int[] positions = GameLoop.CreateSpawnPositions(
+                        useDevLayout,
+                        teamIndex,
+                        unitCount
+                    );
+
+                    Assert.That(positions.Length, Is.EqualTo(unitCount));
+                    Assert.That(positions.Distinct().Count(), Is.EqualTo(positions.Length));
+                    foreach (Vector2Int cell in positions)
+                    {
+                        Assert.That(cell.x, Is.InRange(0, GridSystem.ColumnCount - 1));
+                        Assert.That(cell.y, Is.InRange(0, GridSystem.RowCount - 1));
+                        Assert.That(GameLoop.wallLayout.Contains(cell), Is.False);
+                    }
+                }
+            }
+
+            Vector2Int[] hostProduction = GameLoop.CreateSpawnPositions(
+                false,
+                GameLoop.HostTeamIndex,
+                unitCount
+            );
+            Vector2Int[] opponentProduction = GameLoop.CreateSpawnPositions(
+                false,
+                GameLoop.OpponentTeamIndex,
+                unitCount
+            );
+            for (int slotIndex = 0; slotIndex < unitCount; slotIndex++)
+            {
+                Assert.That(
+                    opponentProduction[slotIndex].x,
+                    Is.EqualTo(GridSystem.ColumnCount - 1 - hostProduction[slotIndex].x)
+                );
+            }
+            Assert.That(
+                hostProduction.Intersect(opponentProduction).Any(),
+                Is.False,
+                "Production deployment rows must keep opposing teams separated."
+            );
+        }
+
+        Assert.That(
+            () =>
+                GameLoop.CreateSpawnPositions(
+                    false,
+                    GameLoop.HostTeamIndex,
+                    GridSystem.ColumnCount + 1
+                ),
+            Throws.InvalidOperationException
+        );
+    }
+
+    [Test]
+    public void GameHudBuildsOneRuntimeCardPerUnitWithoutSerializedCardInstances()
+    {
+        const string hudPath = "Assets/UI/Game/GameHUD.uxml";
+        const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
+        VisualTreeAsset hudAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(hudPath);
+        VisualTreeAsset cardAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            cardPath
+        );
+        Assert.That(hudAsset, Is.Not.Null, $"Could not load {hudPath}.");
+        Assert.That(cardAsset, Is.Not.Null, $"Could not load {cardPath}.");
+        string cardGuid = UnityEditor.AssetDatabase.AssetPathToGUID(cardPath);
+        Assert.That(
+            File.ReadAllText("Assets/Scenes/Game.unity"),
+            Does.Match($"unitCardTemplate: .*guid: {cardGuid}"),
+            "The Game scene must serialize the authored card template onto its HUD controller."
+        );
+
+        GameObject hudObject = new("Dynamic HUD test");
+        hudObject.SetActive(false);
+        try
+        {
+            UIDocument document = hudObject.AddComponent<UIDocument>();
+            document.visualTreeAsset = hudAsset;
+            GameHUDController controller = hudObject.AddComponent<GameHUDController>();
+
+            VisualElement root = document.rootVisualElement;
+            Assert.That(root, Is.Not.Null);
+            VisualElement cardsContainer = root.Q<VisualElement>("unit-cards");
+            Assert.That(cardsContainer, Is.Not.Null);
+            VisualElement enemyCardsContainer = root.Q<VisualElement>("enemy-unit-cards");
+            Assert.That(enemyCardsContainer, Is.Not.Null);
+            typeof(GameHUDController)
+                .GetField("cardsContainer", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(controller, cardsContainer);
+            typeof(GameHUDController)
+                .GetField("enemyCardsContainer", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(controller, enemyCardsContainer);
+            typeof(GameHUDController)
+                .GetField("unitCardTemplate", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(controller, cardAsset);
+            typeof(GameHUDController)
+                .GetMethod("BuildCards", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(controller, null);
+
+            for (int index = 0; index < RosterRules.UnitsPerPlayer; index++)
+            {
+                VisualElement card = root.Q<VisualElement>($"unit-card-{index}");
+                Assert.That(card, Is.Not.Null);
+                Assert.That(
+                    card.Q<VisualElement>($"unit-card-{index}-root"),
+                    Is.Not.Null
+                );
+
+                VisualElement enemyCard = root.Q<VisualElement>($"enemy-unit-card-{index}");
+                Assert.That(enemyCard, Is.Not.Null);
+                Assert.That(
+                    enemyCard.Q<VisualElement>($"enemy-unit-card-{index}-root"),
+                    Is.Not.Null
+                );
+            }
+            Assert.That(
+                root.Query<VisualElement>(className: "unit-card-host--last").ToList().Count,
+                Is.EqualTo(1)
+            );
+            Assert.That(
+                root.Query<VisualElement>(className: "enemy-unit-card-host--last").ToList().Count,
+                Is.EqualTo(1)
+            );
+            Assert.That(
+                root.Q<VisualElement>($"unit-card-{RosterRules.UnitsPerPlayer}"),
+                Is.Null,
+                "The HUD should not generate a card beyond the configured roster size."
+            );
+            Assert.That(
+                root.Q<VisualElement>($"enemy-unit-card-{RosterRules.UnitsPerPlayer}"),
+                Is.Null,
+                "The HUD should not generate an enemy card beyond the configured roster size."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(hudObject);
+        }
+    }
+
+    [Test]
+    public void EnemyUnitCardShowsLiveHealthAbilityAndEliminationState()
+    {
+        const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
+        VisualTreeAsset cardAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            cardPath
+        );
+        Assert.That(cardAsset, Is.Not.Null, $"Could not import {cardPath}.");
+
+        TemplateContainer host = cardAsset.Instantiate();
+        UnitCardElement card = new(host, 0, true);
+        UnitData data = ScriptableObject.CreateInstance<UnitData>();
+        data.unitName = "Soldier";
+        data.abilityName = "Area Lock";
+        try
+        {
+            card.ConfigureEnemy(data, true, 1, 75f, 120f, true);
+
+            Assert.That(
+                host.Q<Label>("unit-card-health-value").text,
+                Is.EqualTo("75 / 120 HP")
+            );
+            Assert.That(
+                host.Q<Label>("unit-card-ability").text,
+                Is.EqualTo("Area Lock · 1 use this match")
+            );
+            Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ACTIVE"));
+            Assert.That(
+                host.Q<VisualElement>("enemy-unit-card-0-root")
+                    .ClassListContains("unit-card--enemy-active"),
+                Is.True
+            );
+            Assert.That(host.Q<Button>("enemy-unit-card-select-0").focusable, Is.False);
+            Assert.That(
+                host.Q<Button>("enemy-unit-card-select-0").enabledInHierarchy,
+                Is.False
+            );
+
+            card.ConfigureEnemy(data, true, 0, 0f, 120f, false);
+
+            Assert.That(host.Q<Label>("unit-card-health-value").text, Is.EqualTo("0 / 120 HP"));
+            Assert.That(
+                host.Q<Label>("unit-card-ability").text,
+                Is.EqualTo("Area Lock · spent this match")
+            );
+            Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ELIMINATED"));
+            Assert.That(
+                host.Q<VisualElement>("enemy-unit-card-0-root")
+                    .ClassListContains("unit-card--enemy-eliminated"),
+                Is.True
+            );
+        }
+        finally
+        {
+            card.Dispose();
+            Object.DestroyImmediate(data);
         }
     }
 
@@ -1205,7 +1936,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void RosterAndModeConstants_HaveNoSizeOrCountDrift()
     {
-        Assert.That(RosterRules.FireteamSize, Is.EqualTo(3));
+        Assert.That(RosterRules.UnitsPerPlayer, Is.GreaterThan(0));
         Assert.That(GameLoop.TeamCount, Is.EqualTo(2));
 
         int[][] configuredRosters =
@@ -1217,10 +1948,20 @@ public class GameplayNetworkEditModeTests
         };
         foreach (int[] roster in configuredRosters)
         {
-            Assert.That(roster.Length, Is.EqualTo(RosterRules.FireteamSize));
+            Assert.That(roster.Length, Is.EqualTo(RosterRules.UnitsPerPlayer));
             Assert.That(roster.Distinct().Count(), Is.EqualTo(roster.Length));
             Assert.That(roster, Has.All.GreaterThanOrEqualTo(0));
         }
+    }
+
+    private static int[] CreateValidRoster()
+    {
+        return Enumerable.Range(0, RosterRules.UnitsPerPlayer).ToArray();
+    }
+
+    private static List<UnitData> CreateEligibleCatalog(int count)
+    {
+        return CreateCatalog(Enumerable.Repeat(true, count).ToArray());
     }
 
     private static List<UnitData> CreateCatalog(params bool[] eligibility)

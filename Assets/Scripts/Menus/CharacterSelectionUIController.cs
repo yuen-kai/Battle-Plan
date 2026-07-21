@@ -10,7 +10,7 @@ using UnityEngine.UIElements;
 [RequireComponent(typeof(UIDocument))]
 public class CharacterSelectionUIController : NetworkBehaviour
 {
-    private const int FireteamSize = RosterRules.FireteamSize;
+    private const int UnitsPerPlayer = RosterRules.UnitsPerPlayer;
     private static readonly int[] BotRoster = GameLoop.DefaultBotRoster;
 
     [SerializeField]
@@ -25,7 +25,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private readonly NetworkVariable<MatchOptions> replicatedOptions = new(MatchOptions.Default);
     private readonly NetworkVariable<int> confirmedHumanCount = new(0);
     private readonly Dictionary<ulong, int[]> teamSelections = new();
-    private readonly int[] selectedUnits = { -1, -1, -1 };
+    private readonly int[] selectedUnits = CreateEmptyRoster();
     private readonly List<UnitOptionView> optionViews = new();
     private readonly List<SelectedSlotView> slotViews = new();
 
@@ -33,6 +33,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private VisualElement root;
     private ScrollView rosterOptions;
     private VisualElement selectedRoster;
+    private Label rosterInstruction;
+    private Label rosterCountLabel;
     private Button confirmButton;
     private Label selectionStatus;
     private Label modeSummary;
@@ -44,6 +46,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private bool networkCallbacksRegistered;
     private bool disconnectRecoveryStarted;
     private string localStatusOverride;
+
+    private static int[] CreateEmptyRoster()
+    {
+        int[] roster = new int[UnitsPerPlayer];
+        Array.Fill(roster, -1);
+        return roster;
+    }
 
     private void OnEnable()
     {
@@ -114,11 +123,20 @@ public class CharacterSelectionUIController : NetworkBehaviour
     {
         rosterOptions = RequireElement<ScrollView>("roster-options");
         selectedRoster = RequireElement<VisualElement>("selected-roster");
+        rosterInstruction = RequireElement<Label>("roster-instruction");
+        rosterCountLabel = RequireElement<Label>("roster-count-label");
         confirmButton = RequireElement<Button>("confirm-selection-button");
         selectionStatus = RequireElement<Label>("selection-status");
         modeSummary = RequireElement<Label>("mode-summary");
         opponentSummary = RequireElement<Label>("opponent-summary");
         fogSummary = RequireElement<Label>("fog-summary");
+        if (rosterInstruction != null)
+        {
+            rosterInstruction.text =
+                $"Choose {UnitsPerPlayer} distinct eligible units. Select a filled slot to remove it.";
+        }
+        if (rosterCountLabel != null)
+            rosterCountLabel.text = $"FIRETEAM / SELECT {UnitsPerPlayer}";
     }
 
     private T RequireElement<T>(string elementName)
@@ -186,6 +204,12 @@ public class CharacterSelectionUIController : NetworkBehaviour
         if (allUnits?.units == null || allUnits.units.Count == 0)
         {
             SetStatus("No units are available.", true);
+            return;
+        }
+        RosterValidationResult catalogValidation = RosterRules.ValidateCatalog(allUnits.units);
+        if (!catalogValidation.IsValid)
+        {
+            SetStatus(RosterRules.GetUserMessage(catalogValidation), true);
             return;
         }
 
@@ -298,7 +322,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         if (selectedRoster == null)
             return;
 
-        for (int i = 0; i < FireteamSize; i++)
+        for (int i = 0; i < UnitsPerPlayer; i++)
         {
             int slotIndex = i;
             SelectedSlotView view = CreateSelectedSlotView(i);
@@ -519,7 +543,10 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         if (sceneLoadRequested)
         {
-            RejectSelection(sender, "That fireteam is not valid. Choose three units again.");
+            RejectSelection(
+                sender,
+                $"That fireteam is not valid. Choose {UnitsPerPlayer} units again."
+            );
             return;
         }
 
@@ -734,7 +761,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         if (!localSelectionSubmitted)
         {
             int selectedCount = selectedUnits.Count(index => index >= 0);
-            SetStatus($"{selectedCount} / {FireteamSize} selected", false);
+            SetStatus($"{selectedCount} / {UnitsPerPlayer} selected", false);
             return;
         }
 

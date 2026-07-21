@@ -15,7 +15,7 @@ Keep Battle Plan sessions authoritative, secure, and reproducible across local a
 
 # Battle Plan taste
 
-- Protect the 1v1, three-unit structure and simultaneous hidden planning.
+- Protect the 1v1 structure, `RosterRules.UnitsPerPlayer` units per side, and simultaneous hidden planning.
 - Preserve the optional telegraphed dodge, execution, auto-fire, fog of war, high lethality, asymmetric abilities, combos, counters, and comeback potential.
 - Networking should reveal only what the rules permit and make “everyone is broken, equally” outcomes server-decided and reproducible.
 

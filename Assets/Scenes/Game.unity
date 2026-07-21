@@ -21000,6 +21000,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5090ec853f6f41ec841b6daef85c5b38, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameHUDController
+  unitCardTemplate: {fileID: 9197481963319205126, guid: 93b3a58ef373463297eb75a728ec538d, type: 3}
 --- !u!114 &1402257218
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -19,8 +19,8 @@ using UnityEngine.SceneManagement;
 ///       the correct unit; declined dodge; beam kill (death + damage application)
 ///   R3  Grenade centered on defender: correct unit alerted, straight two-cell dodge dive REPLACES
 ///       the planned move (unit asserted on the dive cell), no grenade damage taken
-///   R4  Shield Rush dashes three cells and toggles the caster's Shield child on then off; a unit
-///       moves and casts on the same team in the same round
+///   R4  Shield Rush rounds a one-wall diagonal corner, widens its live shield by one cell per
+///       side, boosts and marks a nearby moving ally, and leaves a distant ally unboosted/unmarked
 ///   R5  exhausted Area Lock is rejected server-side; its charge stays spent and it deals no damage
 ///   R6+ drives chase rounds (BFS toward nearest enemy) until elimination ends the match
 ///       (win or simultaneous-wipe draw, phase idle, timeScale restored to 1)
@@ -363,6 +363,8 @@ public class DevE2ETestRunner : MonoBehaviour
                 && NetworkManager.Singleton.ConnectedClients.Count == 2
                 && GameLoop.Instance != null
                 && GameLoop.allTeamUnitObjects.Count == 2
+                && GameLoop.GetTeamUnits(0).Length == RosterRules.UnitsPerPlayer
+                && GameLoop.GetTeamUnits(1).Length == RosterRules.UnitsPerPlayer
                 && Phase == "planning",
             120f,
             "match start (host + MPPM clone join + Game scene + first planning phase)"
@@ -386,31 +388,43 @@ public class DevE2ETestRunner : MonoBehaviour
 
         GameObject bSoldier = U(0, 0),
             pogo = U(0, 1),
-            bShot = U(0, 2);
+            bShot = U(0, 2),
+            bCommander = U(0, 3),
+            bSniper = U(0, 4);
         GameObject rShot = U(1, 0),
             sniper = U(1, 1),
-            rSoldier = U(1, 2);
+            rSoldier = U(1, 2),
+            rCommander = U(1, 3),
+            rPogo = U(1, 4);
 
         Check(
             bSoldier.name.StartsWith("Soldier")
                 && pogo.name.StartsWith("PogoRider")
                 && bShot.name.StartsWith("Shotgunner")
+                && bCommander.name.StartsWith("Commander")
+                && bSniper.name.StartsWith("Sniper")
                 && rShot.name.StartsWith("Shotgunner")
                 && sniper.name.StartsWith("Sniper")
-                && rSoldier.name.StartsWith("Soldier"),
-            "R0 roster: Blue=Soldier/PogoRider/Shotgunner, Red=Shotgunner/Sniper/Soldier",
-            $"actual: {bSoldier.name},{pogo.name},{bShot.name} | {rShot.name},{sniper.name},{rSoldier.name}"
+                && rSoldier.name.StartsWith("Soldier")
+                && rCommander.name.StartsWith("Commander")
+                && rPogo.name.StartsWith("PogoRider"),
+            "R0 roster includes every configured slot for both teams",
+            $"actual: {string.Join(",", GameLoop.GetTeamUnits(0).Select(unit => unit.name))} | {string.Join(",", GameLoop.GetTeamUnits(1).Select(unit => unit.name))}"
         );
         Check(GameLoop.Instance.FogOfWarEnabled, "R0 fog of war enabled from match options");
         Check(
             Cell(bSoldier) == new Vector2Int(4, 3)
                 && Cell(pogo) == new Vector2Int(7, 5)
                 && Cell(bShot) == new Vector2Int(10, 3)
+                && Cell(bCommander) == new Vector2Int(2, 2)
+                && Cell(bSniper) == new Vector2Int(12, 2)
                 && Cell(rShot) == new Vector2Int(8, 6)
                 && Cell(sniper) == new Vector2Int(7, 6)
-                && Cell(rSoldier) == new Vector2Int(6, 6),
+                && Cell(rSoldier) == new Vector2Int(6, 6)
+                && Cell(rCommander) == new Vector2Int(12, 7)
+                && Cell(rPogo) == new Vector2Int(2, 7),
             "R0 spawns match dev layout",
-            $"blue {Cell(bSoldier)},{Cell(pogo)},{Cell(bShot)} red {Cell(rShot)},{Cell(sniper)},{Cell(rSoldier)}"
+            $"blue {string.Join(",", GameLoop.GetTeamUnits(0).Select(Cell))} red {string.Join(",", GameLoop.GetTeamUnits(1).Select(Cell))}"
         );
         Snap("r0-match-start");
 
@@ -560,14 +574,17 @@ public class DevE2ETestRunner : MonoBehaviour
         );
         Snap("r3-dodged");
 
-        // ================= R4: Shield Rush + a simultaneous safe move ============================
+        // ================= R4: diagonal Shield Rush + allied speed boost =========================
         // The blue Soldier survived R3 by assertion and is outside every red unit's weapon range.
         // Moving the already-wounded Soldier here made this check depend on nondeterministic
         // crossfire from prior rounds rather than movement correctness.
         DevInput.SetPath(0, 0, 3, 1, 3, 0);
+        // The nearby red Sniper moves while its Shotgunner casts, exercising the boost on a real
+        // ordinary-movement coroutine. The distant Commander must remain at normal speed.
+        DevInput.SetPath(1, 1, 8, 9);
         Vector2Int rushStart = Cell(rShot);
-        Vector2Int rushDirectionTarget = rushStart + Vector2Int.left;
-        Vector2Int expectedRushDestination = new(6, 8);
+        Vector2Int rushDirectionTarget = rushStart + new Vector2Int(-1, -1);
+        Vector2Int expectedRushDestination = new(6, 5);
         Unit rushIdentity = rShot.GetComponent<Unit>();
         int rushUsesBefore = rushIdentity.RemainingAbilityUses;
         Check(
@@ -575,14 +592,58 @@ public class DevE2ETestRunner : MonoBehaviour
             "R4 precondition: red Shotgunner starts at (9,8)",
             $"actual {rushStart}"
         );
+        Check(
+            Alive(sniper) && Alive(rCommander),
+            "R4 precondition: nearby and distant speed-boost probes are both alive"
+        );
+        Check(
+            GameLoop.wallLayout.Contains(new Vector2Int(7, 7))
+                && !GameLoop.wallLayout.Contains(new Vector2Int(7, 6))
+                && !GameLoop.wallLayout.Contains(new Vector2Int(8, 6)),
+            "R4 precondition: one side of the diagonal path is walled while the other side and diagonal stay open"
+        );
         DevInput.SetAbility(1, 0, rushDirectionTarget.x, rushDirectionTarget.y);
         Transform shield = rShot.transform.Find("Shield");
         Check(shield != null, "R4 red Shotgunner has a Shield child object");
+        BoxCollider shieldCollider = shield != null ? shield.GetComponent<BoxCollider>() : null;
+        GameObject shotgunnerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Prefabs/Units/Shotgunner.prefab"
+        );
+        Transform serializedShield =
+            shotgunnerPrefab != null ? shotgunnerPrefab.transform.Find("Shield") : null;
+        BoxCollider serializedShieldCollider =
+            serializedShield != null ? serializedShield.GetComponent<BoxCollider>() : null;
+        float liveShieldWidth =
+            shieldCollider != null
+                ? Mathf.Abs(shieldCollider.size.x * shield.lossyScale.x)
+                : 0f;
+        float serializedShieldWidth =
+            serializedShieldCollider != null
+                ? Mathf.Abs(serializedShieldCollider.size.x * serializedShield.lossyScale.x)
+                : 0f;
+        Check(
+            shieldCollider != null
+                && serializedShieldCollider != null
+                && Mathf.Abs(
+                    liveShieldWidth
+                        - serializedShieldWidth
+                        - Shield.ShieldWidthIncreaseCellsPerSide * 2f * GameLoop.cellSize
+                ) <= 0.001f,
+            "R4 spawned Shield visual and collider are one grid cell wider on each side",
+            $"serialized={serializedShieldWidth:F3}, live={liveShieldWidth:F3}"
+        );
+        Movement nearbyAllyMovement = sniper.GetComponent<Movement>();
+        Movement distantAllyMovement = rCommander.GetComponent<Movement>();
 
         DevInput.SubmitPlans();
         yield return WaitFor(() => Phase == "executing", 30f, "R4 execution start");
         bool shieldSeenOn = false,
-            shieldSeenOffAfterOn = false;
+            shieldSeenOffAfterOn = false,
+            nearbyBoostSeenWhileMoving = false,
+            distantBoostSeen = false,
+            nearbyBoostIndicatorSeen = false,
+            nearbyBoostIndicatorSeenOffAfterOn = false,
+            distantBoostIndicatorSeen = false;
         {
             float deadline = Time.realtimeSinceStartup + 120f;
             while (Phase != "planning" && Phase != "idle" && Time.realtimeSinceStartup < deadline)
@@ -592,17 +653,100 @@ public class DevE2ETestRunner : MonoBehaviour
                     shieldSeenOn = true;
                 else if (shieldSeenOn)
                     shieldSeenOffAfterOn = true;
+                if (
+                    nearbyAllyMovement != null
+                    && nearbyAllyMovement.moving
+                    && Mathf.Approximately(
+                        nearbyAllyMovement.CurrentMoveSpeedMultiplier,
+                        Shield.AllySpeedBoostMultiplier
+                    )
+                )
+                {
+                    nearbyBoostSeenWhileMoving = true;
+                }
+                bool nearbyBoostIndicatorActive =
+                    nearbyAllyMovement != null
+                    && nearbyAllyMovement.IsSpeedBoostIndicatorActive;
+                if (
+                    nearbyBoostIndicatorActive
+                    && Mathf.Approximately(
+                        nearbyAllyMovement.CurrentMoveSpeedMultiplier,
+                        Shield.AllySpeedBoostMultiplier
+                    )
+                )
+                {
+                    nearbyBoostIndicatorSeen = true;
+                }
+                else if (nearbyBoostIndicatorSeen && !nearbyBoostIndicatorActive)
+                {
+                    nearbyBoostIndicatorSeenOffAfterOn = true;
+                }
+                if (
+                    distantAllyMovement != null
+                    && !Mathf.Approximately(distantAllyMovement.CurrentMoveSpeedMultiplier, 1f)
+                )
+                {
+                    distantBoostSeen = true;
+                }
+                if (
+                    distantAllyMovement != null
+                    && distantAllyMovement.IsSpeedBoostIndicatorActive
+                )
+                {
+                    distantBoostIndicatorSeen = true;
+                }
                 yield return null;
             }
         }
         if (shieldSeenOn && (shield == null || !shield.gameObject.activeSelf))
             shieldSeenOffAfterOn = true;
+        if (
+            nearbyBoostIndicatorSeen
+            && (
+                nearbyAllyMovement == null
+                || !nearbyAllyMovement.IsSpeedBoostIndicatorActive
+            )
+        )
+        {
+            nearbyBoostIndicatorSeenOffAfterOn = true;
+        }
         Check(shieldSeenOn, "R4 Shield Rush activated the Shield child during execution");
         Check(shieldSeenOffAfterOn, "R4 Shield Rush deactivated again after its duration");
         Check(
             Cell(rShot) == expectedRushDestination,
-            "R4 Shield Rush reached its fixed three-cell destination",
+            "R4 Shield Rush crossed the one-wall diagonal corner and reached its three-cell destination",
             $"expected {expectedRushDestination}, actual {Cell(rShot)}"
+        );
+        Check(
+            nearbyBoostSeenWhileMoving,
+            "R4 nearby living ally received the Shield Rush speed boost while moving"
+        );
+        Check(!distantBoostSeen, "R4 distant ally remained at normal movement speed");
+        Check(
+            nearbyBoostIndicatorSeen,
+            "R4 nearby boosted ally displayed the Shield Rush speed indicator while boosted"
+        );
+        Check(
+            nearbyBoostIndicatorSeenOffAfterOn,
+            "R4 nearby ally's Shield Rush speed indicator deactivated after the boost"
+        );
+        Check(
+            !distantBoostIndicatorSeen,
+            "R4 distant unboosted ally never displayed the Shield Rush speed indicator"
+        );
+        Check(
+            nearbyAllyMovement != null
+                && distantAllyMovement != null
+                && Mathf.Approximately(nearbyAllyMovement.CurrentMoveSpeedMultiplier, 1f)
+                && Mathf.Approximately(distantAllyMovement.CurrentMoveSpeedMultiplier, 1f)
+                && !nearbyAllyMovement.IsSpeedBoostIndicatorActive
+                && !distantAllyMovement.IsSpeedBoostIndicatorActive,
+            "R4 allied movement speed and indicator state returned to normal after the shield window"
+        );
+        Check(
+            Cell(sniper) == new Vector2Int(8, 9),
+            "R4 boosted ally completed its simultaneous ordinary move",
+            $"actual {Cell(sniper)}"
         );
         Check(
             rushUsesBefore == 1 && rushIdentity.RemainingAbilityUses == 0,
