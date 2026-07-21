@@ -319,12 +319,12 @@ public class GameplayNetworkEditModeTests
         );
         Assert.That(
             GridSystem.GetDirectionalDestination(
-                new Vector2Int(7, 9),
+                new Vector2Int(13, 9),
                 Vector2Int.right,
                 3,
                 new HashSet<Vector2Int>()
             ),
-            Is.EqualTo(new Vector2Int(8, 9)),
+            Is.EqualTo(new Vector2Int(14, 9)),
             "The board edge shortens the rush."
         );
         Assert.That(
@@ -365,18 +365,65 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void ExpandedBoardLayout_IsSymmetricConnectedAndUsesFullWidth()
+    {
+        Assert.That(GridSystem.ColumnCount, Is.EqualTo(15));
+        Assert.That(GridSystem.RowCount, Is.EqualTo(10));
+        Assert.That(GameLoop.wallLayout.Count, Is.EqualTo(18));
+        Assert.That(GridSystem.IsCellInBounds(new Vector2Int(14, 9)), Is.True);
+        Assert.That(GridSystem.IsCellInBounds(new Vector2Int(15, 9)), Is.False);
+        Assert.That(
+            GameLoop.gridBounds.width,
+            Is.EqualTo(14 * GameLoop.cellSize + 0.1f).Within(0.001f)
+        );
+
+        foreach (Vector2Int wall in GameLoop.wallLayout)
+        {
+            Assert.That(GridSystem.IsCellInBounds(wall), Is.True);
+            Assert.That(
+                GameLoop.wallLayout.Contains(
+                    new Vector2Int(GridSystem.ColumnCount - 1 - wall.x, wall.y)
+                ),
+                Is.True,
+                $"{wall} has no horizontal mirror."
+            );
+            Assert.That(
+                GameLoop.wallLayout.Contains(
+                    new Vector2Int(wall.x, GridSystem.RowCount - 1 - wall.y)
+                ),
+                Is.True,
+                $"{wall} has no vertical mirror."
+            );
+        }
+
+        List<Vector2Int> reachable = GridSystem.GetReachableCells(new Vector2Int(2, 0), 999);
+        Assert.That(
+            reachable.Count,
+            Is.EqualTo(GridSystem.ColumnCount * GridSystem.RowCount - GameLoop.wallLayout.Count)
+        );
+        Assert.That(GridSystem.FindPath(new Vector2Int(2, 0), new Vector2Int(12, 9)), Is.Not.Null);
+    }
+
+    [Test]
     public void KingOfTheHillCells_AreCentralSymmetricAndTraversable()
     {
         HashSet<Vector2Int> expected = new()
         {
-            new Vector2Int(3, 4),
-            new Vector2Int(4, 4),
-            new Vector2Int(5, 4),
-            new Vector2Int(3, 5),
-            new Vector2Int(4, 5),
-            new Vector2Int(5, 5),
+            new Vector2Int(6, 4),
+            new Vector2Int(7, 4),
+            new Vector2Int(8, 4),
+            new Vector2Int(6, 5),
+            new Vector2Int(7, 5),
+            new Vector2Int(8, 5),
         };
 
+        Assert.That(GridSystem.ColumnCount, Is.EqualTo(15));
+        Assert.That(GridSystem.RowCount, Is.EqualTo(10));
+        Assert.That(GameLoop.gridBounds.xMin, Is.EqualTo(0f));
+        Assert.That(
+            GameLoop.gridBounds.xMax,
+            Is.EqualTo((GridSystem.ColumnCount - 1) * GameLoop.cellSize + 0.1f).Within(0.001f)
+        );
         Assert.That(GameLoop.KingOfTheHillCells.Count, Is.EqualTo(6));
         CollectionAssert.AreEquivalent(expected, GameLoop.KingOfTheHillCells);
         foreach (Vector2Int cell in GameLoop.KingOfTheHillCells)
@@ -384,7 +431,12 @@ public class GameplayNetworkEditModeTests
             Assert.That(GridSystem.IsCellInBounds(cell), Is.True);
             Assert.That(GameLoop.wallLayout.Contains(cell), Is.False);
             Assert.That(
-                GameLoop.KingOfTheHillCells.Contains(new Vector2Int(8 - cell.x, 9 - cell.y)),
+                GameLoop.KingOfTheHillCells.Contains(
+                    new Vector2Int(
+                        GridSystem.ColumnCount - 1 - cell.x,
+                        GridSystem.RowCount - 1 - cell.y
+                    )
+                ),
                 Is.True,
                 $"{cell} has no rotationally symmetric hill cell."
             );
@@ -402,7 +454,7 @@ public class GameplayNetworkEditModeTests
 
         Assert.That(
             GameLoop.DetermineHillControl(
-                new[] { new Vector2Int(4, 4) },
+                new[] { new Vector2Int(7, 4) },
                 new[] { new Vector2Int(0, 9) },
                 out int hostController
             ),
@@ -412,8 +464,8 @@ public class GameplayNetworkEditModeTests
 
         Assert.That(
             GameLoop.DetermineHillControl(
-                new[] { new Vector2Int(3, 5) },
-                new[] { new Vector2Int(5, 4) },
+                new[] { new Vector2Int(6, 5) },
+                new[] { new Vector2Int(8, 4) },
                 out int contestedController
             ),
             Is.EqualTo(HillControlStatus.Contested)
@@ -506,11 +558,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void HillControlState_RoundTripsAndLivesOnAlwaysVisibleGameLoop()
     {
-        HillControlState written = new(
-            HillControlStatus.Controlled,
-            GameLoop.OpponentTeamIndex,
-            2
-        );
+        HillControlState written = new(HillControlStatus.Controlled, GameLoop.OpponentTeamIndex, 2);
         using FastBufferWriter writer = new(32, Allocator.Temp);
         writer.WriteNetworkSerializable(written);
         using FastBufferReader reader = new(writer, Allocator.Temp);
@@ -530,17 +578,14 @@ public class GameplayNetworkEditModeTests
     {
         List<Vector2Int> targets = BotPlayer.GetStrategicTargets(
             GameMode.KingOfTheHill,
-            new[] { new Vector2Int(8, 0) }
+            new[] { new Vector2Int(12, 0) }
         );
         CollectionAssert.AreEqual(
-            GameLoop.KingOfTheHillCells
-                .OrderBy(cell => cell.x)
-                .ThenBy(cell => cell.y)
-                .ToList(),
+            GameLoop.KingOfTheHillCells.OrderBy(cell => cell.x).ThenBy(cell => cell.y).ToList(),
             targets
         );
 
-        Vector2Int start = new(4, 9);
+        Vector2Int start = new(7, 9);
         List<Vector2Int> approach = BotPlayer.BuildMovementPath(
             start,
             targets,
@@ -556,7 +601,7 @@ public class GameplayNetworkEditModeTests
         );
         Assert.That(endDistance, Is.LessThan(startDistance));
 
-        Vector2Int controlledCell = new(4, 5);
+        Vector2Int controlledCell = new(7, 5);
         List<Vector2Int> hold = BotPlayer.BuildMovementPath(
             controlledCell,
             targets,
@@ -569,7 +614,7 @@ public class GameplayNetworkEditModeTests
             BotPlayer.WouldAbandonHill(
                 GameMode.KingOfTheHill,
                 controlledCell,
-                new Vector2Int(4, 8)
+                new Vector2Int(7, 8)
             ),
             Is.True
         );
@@ -577,16 +622,12 @@ public class GameplayNetworkEditModeTests
             BotPlayer.WouldAbandonHill(
                 GameMode.KingOfTheHill,
                 controlledCell,
-                new Vector2Int(3, 4)
+                new Vector2Int(6, 4)
             ),
             Is.False
         );
         Assert.That(
-            BotPlayer.WouldAbandonHill(
-                GameMode.Elimination,
-                controlledCell,
-                new Vector2Int(4, 8)
-            ),
+            BotPlayer.WouldAbandonHill(GameMode.Elimination, controlledCell, new Vector2Int(7, 8)),
             Is.False
         );
     }
@@ -639,11 +680,11 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void BotDodge_SelectsReachableLegalCellOutsideAreaThreat()
+    public void BotDodge_FromGrenadeCenterSelectsStraightTwoCellEscape()
     {
         Vector2Int start = new(1, 1);
         List<Vector2Int> reachable = GridSystem.GetReachableCells(start, 2);
-        BotDodgeThreat threat = new(false, start, start, 1f);
+        BotDodgeThreat threat = new(false, start, start, 1.6f);
 
         Vector2Int chosen = BotPlayer.ChooseSafestDodgeCell(
             start,
@@ -655,7 +696,11 @@ public class GameplayNetworkEditModeTests
         Assert.That(reachable, Does.Contain(chosen));
         Assert.That(GridSystem.IsCellInBounds(chosen), Is.True);
         Assert.That(GameLoop.wallLayout.Contains(chosen), Is.False);
-        Assert.That(Vector2.Distance(chosen, start), Is.GreaterThan(1f));
+        Assert.That(Vector2.Distance(chosen, start), Is.EqualTo(2f).Within(0.001f));
+        Assert.That(
+            Mathf.Abs(chosen.x - start.x) + Mathf.Abs(chosen.y - start.y),
+            Is.EqualTo(2)
+        );
     }
 
     [Test]
@@ -745,7 +790,11 @@ public class GameplayNetworkEditModeTests
         {
             RosterValidationResult early = RosterRules.Validate(new[] { 1, 1, 2 }, catalog);
             Assert.That(early.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
-            Assert.That(early.SlotIndex, Is.EqualTo(1), "The repeated slot is reported deterministically.");
+            Assert.That(
+                early.SlotIndex,
+                Is.EqualTo(1),
+                "The repeated slot is reported deterministically."
+            );
             Assert.That(early.UnitIndex, Is.EqualTo(1));
 
             RosterValidationResult tail = RosterRules.Validate(new[] { 2, 3, 2 }, catalog);
@@ -819,7 +868,10 @@ public class GameplayNetworkEditModeTests
             );
 
             // Duplicate detection runs before availability, so a duplicate outranks an ineligible pick.
-            RosterValidationResult duplicateFirst = RosterRules.Validate(new[] { 0, 0, 1 }, catalog);
+            RosterValidationResult duplicateFirst = RosterRules.Validate(
+                new[] { 0, 0, 1 },
+                catalog
+            );
             Assert.That(duplicateFirst.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
             Assert.That(duplicateFirst.SlotIndex, Is.EqualTo(1));
 
@@ -832,21 +884,25 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void UnitCatalogAsset_HasFiveUnitsWithIneligibleCommanderAndValidDevRosters()
+    public void UnitCatalogAsset_HasFiveEligibleUnitsWithValidDevRosters()
     {
         const string catalogPath = "Assets/UnitStats/AllUnits.asset";
         UnitDatabase catalog = UnityEditor.AssetDatabase.LoadAssetAtPath<UnitDatabase>(catalogPath);
         Assert.That(catalog, Is.Not.Null, $"Could not load {catalogPath}.");
         Assert.That(catalog.units, Is.Not.Null);
         Assert.That(catalog.units.Count, Is.EqualTo(5), "AllUnits must stay at five units.");
-        Assert.That(catalog.units, Has.None.Null, "The catalog must not contain null unit entries.");
+        Assert.That(
+            catalog.units,
+            Has.None.Null,
+            "The catalog must not contain null unit entries."
+        );
 
-        // Serialized catalog order: the Commander sits at index 0 and is the availability marker.
+        // Serialized catalog order: the Commander sits at index 0 and is selectable with Smoke Screen.
         Assert.That(catalog.units[0].unitName, Is.EqualTo("Commander"));
         Assert.That(
             catalog.units[0].IsRosterEligible,
-            Is.False,
-            "Commander is opted out of player-selectable and configured fireteams."
+            Is.True,
+            "Commander must be player-selectable once Smoke Screen is configured."
         );
         for (int index = 1; index < catalog.units.Count; index++)
         {
@@ -898,7 +954,10 @@ public class GameplayNetworkEditModeTests
         Assert.That(result.HasWinner, Is.False);
         Assert.That(result.WinningTeamIndex, Is.EqualTo(GameLoop.NoHillController));
         Assert.That(result.IsValid, Is.True);
-        Assert.That(result, Is.EqualTo(MatchResult.Draw(MatchResultReason.SimultaneousElimination)));
+        Assert.That(
+            result,
+            Is.EqualTo(MatchResult.Draw(MatchResultReason.SimultaneousElimination))
+        );
         Assert.That(
             result.GetStatusForTeam(GameLoop.HostTeamIndex),
             Is.EqualTo("Draw — both fireteams eliminated.")
@@ -928,7 +987,10 @@ public class GameplayNetworkEditModeTests
         MatchResult opponentWin = GameLoop.ResolveEliminationResult(false, true);
         Assert.That(opponentWin.WinningTeamIndex, Is.EqualTo(GameLoop.OpponentTeamIndex));
         Assert.That(opponentWin.Reason, Is.EqualTo(MatchResultReason.Elimination));
-        Assert.That(opponentWin.GetStatusForTeam(GameLoop.OpponentTeamIndex), Is.EqualTo("You win!"));
+        Assert.That(
+            opponentWin.GetStatusForTeam(GameLoop.OpponentTeamIndex),
+            Is.EqualTo("You win!")
+        );
         Assert.That(opponentWin.GetStatusForTeam(GameLoop.HostTeamIndex), Is.EqualTo("You lose!"));
         Assert.That(opponentWin, Is.Not.EqualTo(hostWin));
     }
@@ -962,11 +1024,15 @@ public class GameplayNetworkEditModeTests
         );
         Assert.That(
             hillWin.GetStatusForTeam(GameLoop.HostTeamIndex),
-            Is.EqualTo($"You win! Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds.")
+            Is.EqualTo(
+                $"You win! Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds."
+            )
         );
         Assert.That(
             hillWin.GetStatusForTeam(GameLoop.OpponentTeamIndex),
-            Is.EqualTo($"You lose! Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds.")
+            Is.EqualTo(
+                $"You lose! Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds."
+            )
         );
 
         MatchResult forfeit = MatchResult.ForWinner(
@@ -1042,10 +1108,7 @@ public class GameplayNetworkEditModeTests
             Throws.ArgumentException,
             "A simultaneous elimination can never be a win."
         );
-        Assert.That(
-            () => MatchResult.Draw(MatchResultReason.None),
-            Throws.ArgumentException
-        );
+        Assert.That(() => MatchResult.Draw(MatchResultReason.None), Throws.ArgumentException);
         Assert.That(
             () => MatchResult.Draw(MatchResultReason.Elimination),
             Throws.ArgumentException,
@@ -1106,7 +1169,9 @@ public class GameplayNetworkEditModeTests
                 GameLoop.ThreatenedDodgeGuidance,
                 GameLoop.CasterDodgeGuidance,
                 GameLoop.NeutralDodgeGuidance,
-            }.Distinct().Count(),
+            }
+                .Distinct()
+                .Count(),
             Is.EqualTo(3),
             "The three dodge perspectives must map to three distinct strings."
         );

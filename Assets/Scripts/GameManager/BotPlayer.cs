@@ -32,6 +32,18 @@ public readonly struct BotDodgeThreat
     }
 }
 
+public readonly struct BotSmokeAlly
+{
+    public readonly Vector2Int Cell;
+    public readonly float ShotRange;
+
+    public BotSmokeAlly(Vector2Int cell, float shotRange)
+    {
+        Cell = cell;
+        ShotRange = Mathf.Max(0f, shotRange);
+    }
+}
+
 /// <summary>
 /// A deliberately narrow information boundary for bot decisions. Callers may submit only
 /// currently visible sightings. Hidden current positions never enter this object, so targets
@@ -292,8 +304,6 @@ public sealed class BotPlayer
         selectedUnit = null;
         target = default;
         needsTarget = false;
-        if (visibleEnemyCells.Count == 0)
-            return;
 
         List<(GameObject unit, int index, UnitData data)> candidates = botUnits
             .Select((unit, index) => (unit, index, data: unit.GetComponent<Movement>()?.unitData))
@@ -313,6 +323,47 @@ public sealed class BotPlayer
         foreach (var candidate in candidates)
         {
             Vector2Int start = GetCell(candidate.unit);
+            if (candidate.unit.GetComponent<Smoke>() != null)
+            {
+                if (!candidate.data.selectAbilitySquare || candidate.data.selectAbilityDirection)
+                    continue;
+
+                List<BotSmokeAlly> allies = botUnits
+                    .Select(unit =>
+                    {
+                        UnitData allyData = unit.GetComponent<Movement>()?.unitData;
+                        float shotRange =
+                            unit.GetComponent<Shooting>() != null && allyData != null
+                                ? allyData.targetRange
+                                : 0f;
+                        return new BotSmokeAlly(GetCell(unit), shotRange);
+                    })
+                    .ToList();
+                if (
+                    !TryChooseSmokeCenter(
+                        start,
+                        candidate.data.abilitySquareRange,
+                        allies,
+                        knowledge.GetTargetCells(),
+                        visibleEnemyCells,
+                        gameLoop.ActiveSmokeCells,
+                        out Vector2Int smokeTarget,
+                        out _
+                    )
+                )
+                {
+                    continue;
+                }
+
+                selectedUnit = candidate.unit;
+                target = smokeTarget;
+                needsTarget = true;
+                return;
+            }
+
+            if (visibleEnemyCells.Count == 0)
+                continue;
+
             if (candidate.data.selectAbilityDirection)
             {
                 foreach (
@@ -399,6 +450,166 @@ public sealed class BotPlayer
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// Selects a legal 3x3 Smoke center using only allied state, visible enemy cells, and
+    /// fog-bounded last-known enemy cells. Remembered enemies contribute possible incoming lanes,
+    /// but only currently visible enemies can count as confirmed friendly shot opportunities.
+    /// </summary>
+    public static bool TryChooseSmokeCenter(
+        Vector2Int casterCell,
+        int castRange,
+        IEnumerable<BotSmokeAlly> allies,
+        IEnumerable<Vector2Int> knownEnemyCells,
+        IEnumerable<Vector2Int> currentlyVisibleEnemyCells,
+        IEnumerable<Vector2Int> activeSmokeCells,
+        out Vector2Int selectedCenter,
+        out int selectedScore
+    )
+    {
+        List<BotSmokeAlly> allyList = (allies ?? Enumerable.Empty<BotSmokeAlly>())
+            .Where(ally => GridSystem.IsCellInBounds(ally.Cell))
+            .OrderBy(ally => ally.Cell.x)
+            .ThenBy(ally => ally.Cell.y)
+            .ThenBy(ally => ally.ShotRange)
+            .ToList();
+        List<Vector2Int> knownEnemies = (
+            knownEnemyCells ?? Enumerable.Empty<Vector2Int>()
+        )
+            .Where(GridSystem.IsCellInBounds)
+            .Distinct()
+            .OrderBy(cell => cell.x)
+            .ThenBy(cell => cell.y)
+            .ToList();
+        List<Vector2Int> visibleEnemies = (
+            currentlyVisibleEnemyCells ?? Enumerable.Empty<Vector2Int>()
+        )
+            .Where(GridSystem.IsCellInBounds)
+            .Distinct()
+            .OrderBy(cell => cell.x)
+            .ThenBy(cell => cell.y)
+            .ToList();
+        HashSet<Vector2Int> existingSmoke = new(
+            (activeSmokeCells ?? Enumerable.Empty<Vector2Int>())
+                .Where(GridSystem.IsCellInBounds)
+        );
+
+        selectedCenter = default;
+        selectedScore = 0;
+        if (
+            !GridSystem.IsCellInBounds(casterCell)
+            || allyList.Count == 0
+            || knownEnemies.Count == 0
+        )
+        {
+            return false;
+        }
+
+        int legalCastRange = Mathf.Max(0, castRange);
+        for (int column = 0; column < GridSystem.ColumnCount; column++)
+        {
+            for (int row = 0; row < GridSystem.RowCount; row++)
+            {
+                Vector2Int center = new(column, row);
+                if (
+                    GridDistance(casterCell, center) > legalCastRange
+                    || !GridSystem.IsSquareFootprintInBounds(center, Smoke.FootprintRadius)
+                    || GameLoop.wallLayout.Contains(center)
+                )
+                {
+                    continue;
+                }
+
+                int score = ScoreSmokeCenter(
+                    center,
+                    allyList,
+                    knownEnemies,
+                    visibleEnemies,
+                    existingSmoke
+                );
+                if (
+                    score <= 0
+                    || score < selectedScore
+                    || (
+                        score == selectedScore
+                        && selectedScore > 0
+                        && CompareCells(center, selectedCenter) >= 0
+                    )
+                )
+                {
+                    continue;
+                }
+
+                selectedCenter = center;
+                selectedScore = score;
+            }
+        }
+
+        return selectedScore > 0;
+    }
+
+    private static int ScoreSmokeCenter(
+        Vector2Int center,
+        IReadOnlyList<BotSmokeAlly> allies,
+        IReadOnlyList<Vector2Int> knownEnemyCells,
+        IReadOnlyList<Vector2Int> visibleEnemyCells,
+        ISet<Vector2Int> activeSmokeCells
+    )
+    {
+        HashSet<Vector2Int> footprint = new(
+            GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
+        );
+        int score = 0;
+
+        foreach (Vector2Int enemyCell in knownEnemyCells)
+        {
+            foreach (BotSmokeAlly ally in allies)
+            {
+                if (
+                    IsOpenShotLine(enemyCell, ally.Cell, activeSmokeCells)
+                    && GridSystem.DoesCellSegmentCrossCells(enemyCell, ally.Cell, footprint)
+                )
+                {
+                    score++;
+                }
+            }
+        }
+
+        foreach (Vector2Int enemyCell in visibleEnemyCells)
+        {
+            foreach (BotSmokeAlly ally in allies)
+            {
+                if (
+                    IsWithinShotRange(ally, enemyCell)
+                    && IsOpenShotLine(ally.Cell, enemyCell, activeSmokeCells)
+                    && GridSystem.DoesCellSegmentCrossCells(ally.Cell, enemyCell, footprint)
+                )
+                {
+                    score--;
+                }
+            }
+        }
+
+        return score;
+    }
+
+    private static bool IsOpenShotLine(
+        Vector2Int start,
+        Vector2Int end,
+        ISet<Vector2Int> activeSmokeCells
+    )
+    {
+        return start != end
+            && GridSystem.HasGridLineOfSight(start, end)
+            && !GridSystem.DoesCellSegmentCrossCells(start, end, activeSmokeCells);
+    }
+
+    private static bool IsWithinShotRange(BotSmokeAlly ally, Vector2Int target)
+    {
+        Vector2Int delta = target - ally.Cell;
+        float squaredDistance = delta.x * delta.x + delta.y * delta.y;
+        return squaredDistance <= ally.ShotRange * ally.ShotRange + 0.0001f;
     }
 
     /// <summary>

@@ -41,7 +41,7 @@
                 <ui:VisualElement class="map-column">
                     <ui:Label text="Deployment area" class="section-label map-label" picking-mode="Ignore" />
                     <ui:VisualElement name="map-preview" class="map-preview" picking-mode="Ignore" />
-                    <ui:Label text="INDUSTRIAL SECTOR / 9 × 10 GRID" class="map-caption" picking-mode="Ignore" />
+                    <ui:Label text="INDUSTRIAL SECTOR / 15 × 10 GRID" class="map-caption" picking-mode="Ignore" />
                 </ui:VisualElement>
             </ui:VisualElement>
 

@@ -165,21 +165,12 @@ public class Shooting : NetworkBehaviour
             return;
 
         Unit targetIdentity = target.GetComponent<Unit>();
-        if (
-            targetIdentity == null
-            || GameLoop.Instance == null
-            || !GameLoop.Instance.TryGetHumanClientId(
-                targetIdentity.TeamIndex,
-                out ulong targetClientId
-            )
-        )
-        {
+        if (targetIdentity == null || GameLoop.Instance == null)
             return;
-        }
 
-        GameLoop.Instance?.ForceReveal(
+        GameLoop.Instance.ForceRevealToTeam(
             gameObject,
-            targetClientId,
+            targetIdentity.TeamIndex,
             unitData.targetLockDuration + 0.5f
         );
     }
@@ -330,13 +321,7 @@ public class Shooting : NetworkBehaviour
             backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
         range = range == -1 ? unitData.bulletRange : range;
         backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
-        bulletPrefab =
-            bulletPrefab
-            ?? (
-                GetComponent<Unit>()?.TeamIndex == GameLoop.HostTeamIndex
-                    ? unitData.blueBulletPrefab
-                    : unitData.redBulletPrefab
-            );
+        bulletPrefab = bulletPrefab ?? ResolveBulletPrefab();
 
         // Fire bullet with spread
         Vector3 baseDirection = transform.forward;
@@ -366,6 +351,26 @@ public class Shooting : NetworkBehaviour
         {
             GetComponent<AnimationHandler>().TriggerAnimation("Shoot");
         }
+    }
+
+    private GameObject ResolveBulletPrefab()
+    {
+        return GetComponent<Unit>()?.TeamIndex == GameLoop.HostTeamIndex
+            ? unitData.blueBulletPrefab
+            : unitData.redBulletPrefab;
+    }
+
+    public static float GetProjectileCollisionRadius(GameObject bulletPrefab)
+    {
+        SphereCollider collider = bulletPrefab?.GetComponentInChildren<SphereCollider>(
+            includeInactive: true
+        );
+        if (collider == null)
+            return 0f;
+
+        Vector3 scale = collider.transform.lossyScale;
+        return collider.radius
+            * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
     }
 
     private int GetActiveBulletCount()
@@ -450,22 +455,64 @@ public class Shooting : NetworkBehaviour
 
     bool lineOfSight(GameObject enemy)
     {
-        // Check for clear line of sight within range
-        Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
+        Unit identity = GetComponent<Unit>();
         if (
-            Physics.Raycast(
+            GameLoop.Instance != null
+            && identity != null
+            && !GameLoop.Instance.CanTeamObserveUnit(identity.TeamIndex, enemy)
+        )
+        {
+            return false;
+        }
+
+        if (
+            GameLoop.Instance != null
+            && GameLoop.Instance.DoesWorldSegmentCrossActiveSmoke(
                 transform.position,
-                directionToEnemy,
-                out RaycastHit hit,
-                unitData.targetRange * GameLoop.cellSize,
-                LayerMask.GetMask("Walls", enemyTeam)
+                enemy.transform.position
             )
         )
         {
-            if (hit.collider.gameObject == enemy)
-            {
-                return true;
-            }
+            return false;
+        }
+
+        // Check for clear line of sight within range
+        Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
+        float projectileRadius = GetProjectileCollisionRadius(ResolveBulletPrefab());
+        RaycastHit hit;
+        bool hitSomething;
+        if (projectileRadius > 0f)
+        {
+            hitSomething = Physics.SphereCast(
+                transform.position,
+                projectileRadius,
+                directionToEnemy,
+                out hit,
+                unitData.targetRange * GameLoop.cellSize,
+                LayerMask.GetMask("Walls", enemyTeam),
+                QueryTriggerInteraction.Ignore
+            );
+        }
+        else
+        {
+            hitSomething = Physics.Raycast(
+                transform.position,
+                directionToEnemy,
+                out hit,
+                unitData.targetRange * GameLoop.cellSize,
+                LayerMask.GetMask("Walls", enemyTeam),
+                QueryTriggerInteraction.Ignore
+            );
+        }
+        if (
+            hitSomething
+            && (
+                hit.collider.gameObject == enemy
+                || hit.collider.transform.IsChildOf(enemy.transform)
+            )
+        )
+        {
+            return true;
         }
         return false;
     }

@@ -22,10 +22,10 @@ you control big-picture movement, not the characters"*.
 - **Audience:** 12–24, teens/young adults.
 - **Match structure:** repeated plan → execute rounds until one team is wiped out.
 - **Implemented July 2026:** planning-phase move-or-ability choice with an opponent "dodge/dive"
-  response window at execution start (§2), and **fog of war** (§6) with a matching damage
-  rebalance (§4, §9).
-- **Planned but not currently functional** (see §8): the Commander's Reroute ability; additional
-  game modes (control point, escort, etc.).
+  response window at execution start (§2), **fog of war** (§6), Commander Smoke Screen, and the
+  current combat profile (§4, §9).
+- **Planned but not currently functional** (see §8): additional game modes such as escort.
+  Reroute is retained only as design history; Smoke Screen is the Commander's live ability.
 
 The original 1-sheet pitch lived in `BattlePlan 1 Sheet Pitch.txt` (deleted from working tree, in
 git history) and a pitch-level roster summary lives in `Overview.md` at the repo root. **Treat both
@@ -49,7 +49,7 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
      In ability mode the range overlay shows `abilitySquareRange` and a click picks the target
      square (Manhattan diamond; wall cells disallowed except for line abilities, where the square
      is a direction anchor). Self-targeted abilities (Shield) need no square. Units without a
-     compiled `Ability` component (Commander — Reroute is still disabled) cannot toggle.
+     compiled `Ability` component cannot toggle; all five current roster units have one.
      The plan rides in `PathsDict` as `(true, [startCell, targetSquare])`.
    - At deadline each client sends its `PathsDict` via `SendPathsToServerRpc`; the server
      re-validates every path (ownership, grid-snapping, adjacency, bounds, walls, moveDist cap)
@@ -79,11 +79,11 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
      waits for `CheckStillShooting()` **and** all abilities to finish (`runningAbilities`).
      Telegraphs are cleared at round end.
    - When a unit finishes its path, `Movement.transitionToShooting()` flips it into
-     `Shooting.InitiateShooting()`: auto-acquire the **nearest enemy with line of sight**
-     (`Physics.Raycast` against `Walls` + enemy-team layers, within `targetRange`), rotate to face
-     it, then fire bullets with spread on a `timeBetweenShots` cadence, reloading after each
-     magazine. Snipers additionally have a visible "target lock" laser that charges for
-     `targetLockDuration` before the shot.
+     `Shooting.InitiateShooting()`: auto-acquire the **nearest observable enemy with line of sight**
+     (projectile-radius `Physics.SphereCast` against `Walls` + enemy-team layers, within
+     `targetRange`), rotate to face it, then fire bullets with spread on a `timeBetweenShots`
+     cadence, reloading after each magazine. Snipers additionally have a visible "target lock"
+     laser that charges for `targetLockDuration` before the shot.
    - Bullets (`Bullet.cs`) are server-simulated physics projectiles; on hitting an enemy they apply
      `damage` (× `backstabMultiplier` if the impact came from behind, per `backstabAngle`), then
      despawn. `Health` replicates HP and alive-state as **NetworkVariables** (`currentHealth`,
@@ -103,23 +103,31 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
 the move-or-ability choice happens **during planning**, and the enemy dodge/response window runs
 **at the start of execution**. `ActivateAbility.cs` remains commented out as a historical
 reference; the live pipeline is in `GameLoop` (`RunDodgePhase`, `CollectAbilityActivations`,
-`SanitizeAbilityPlan`, `RunAbility`) and `PlanMovement.AbilitySelection`. `Reroute.cs`
-(Commander) is still disabled — a mid-execution re-plan conflicts with plan-then-execute and
-needs a redesign.
+`SanitizeAbilityPlan`, `RunAbility`) and `PlanMovement.AbilitySelection`. `Reroute.cs` remains
+disabled history because a mid-execution re-plan conflicts with plan-then-execute; the Commander
+now uses Smoke Screen.
 
 ## 3. Grid & Coordinate System
 
-- Logical grid of **9 × 10 cells** (columns x = 0..8, rows y = 0..9), origin at the **bottom-left**.
+- Logical grid of **15 × 10 cells** (columns x = 0..14, rows y = 0..9), origin at the
+  **bottom-left**. The July 2026 horizontal expansion keeps the 10-row engagement depth while
+  creating distinct left, center, and right lanes: center-to-edge is now seven cells, so flanks
+  and rotations require real commitments instead of every unit covering most of the board.
 - `GameLoop.cellSize = 2.7` world units per cell. `GameLoop.gridBounds` is a `Rect` from (0,0) to
-  `(8,9) * cellSize` (+0.1 slack), used for bounds checks.
+  `(14,9) * cellSize` (+0.1 slack), used for bounds checks.
 - Conversions in `GridSystem`: `GetNearestGridCell(Vector3)` snaps world → cell-center world pos
   (y=0); `ConvertToGridCoords(Vector3)` → integer `Vector2Int`; `GameLoop.gridCoordToWorld` inverse.
-- **Walls:** `GameLoop.wallLayout` is a static `HashSet<Vector2Int>` of 12 cells, mirrored across
-  the map's horizontal center line; wall prefabs are network-spawned there at match start. Walls
-  block movement (client path validation), shooting line-of-sight (`Walls` physics layer), and
-  grenade splash.
-- **Spawns:** production spawns are back ranks (blue row 0, red row 9). `GameLoop.TESTING = true`
-  switches to mid-map spawns a couple of cells apart so combat starts immediately.
+- **Walls:** `GameLoop.wallLayout` is a static `HashSet<Vector2Int>` of 18 sparse cover cells,
+  mirrored across column 7 and the map's horizontal center line. The layout breaks the three
+  spawn lanes and cross-map sightlines without sealing any region. Wall prefabs are
+  network-spawned there at match start and block movement (client path validation), shooting
+  line-of-sight (`Walls` physics layer), and grenade splash. Movement still treats each wall as a
+  full cell, while its convex octagonal physics collider trims 0.4 world units from each corner.
+  This lets a bullet-sized projectile diagonally peek one corner without weakening straight faces;
+  the same physical corner tolerance applies to Grenade and Area Lock rays.
+- **Spawns:** production spawns use three back-rank lanes at columns 2, 7, and 12 (blue row 0,
+  red row 9). `GameLoop.TESTING = true` switches to compact mid-map spawns centered around
+  column 7 so automated combat still starts immediately.
 - Movement is 4-directional cell-to-cell; distances in unit stats are in **cells** (ranges are
   multiplied by `cellSize` where world units are needed).
 - `GridSystem.DisplayGridRange(pos, dist, prefab)` instantiates a Manhattan-diamond overlay of
@@ -136,52 +144,58 @@ PogoRider, Shotgunner and the second gets {2,3,4} = Shotgunner, Sniper, Soldier.
 | Stat | Commander | PogoRider | Shotgunner | Sniper | Soldier |
 |---|---|---|---|---|---|
 | Role (pitch) | Support | Mobility/flanker | Initiator/tank | Area control | All-rounder |
-| **Damage/bullet** | **12** | **30** | **18** (per pellet) | **110** | **25** |
-| Max health | 100 | 100 | **200** | **50** | 100 |
+| **Damage/bullet** | **8** | **12** | **8** (per pellet) | **50** | **10** |
+| Max health | **120** | **120** | **160** | **80** | **120** |
 | Magazine | 5 | 3 | 10 (one burst) | 1 | 5 |
 | Time between shots (s) | 0.3 | 0.5 | 0.01 | 0 | 0.3 |
 | Reload (s) | 2 | 1 | 2 | 2.5 | 2 |
 | Spread (±deg) | 3 | 3 | 25 | 0.5 | 3 |
 | Bullet speed (cells/s) | 3 | 5 | 2 | 15 | 3 |
-| Target range (cells) | 5 | 7 | 2 | 7 | 4 |
-| **Vision range (cells)** | **6** | **7** | **3** | **8** | **5** |
+| Target range (cells) | 5 | 7 | 2 | 5 | 4 |
+| **Vision range (cells)** | **6** | **7** | **3** | **7** | **5** |
 | Bullet range (cells) | 7 | 7 | 3 | 14 | 8 |
-| Move dist (cells) | 3 | 8 | 3 | 3 | 3 |
+| Move dist (cells) | 3 | 5 | 3 | 3 | 3 |
 | Move speed (cells/s) | 1 | 2 | 1 | 1 | 1 |
 | Backstab multiplier | 1 | **2** | 1 | 1 | 1 |
 | Target lock (s) | 0 | 0 | 0 | **2** (+0.3 find) | 0 |
-| Ability | Reroute | Pogo (jump) | Shield | Area Lock | Grenade |
-| Ability uses/round | 1 | 1 | 1 | 1 | 1 |
+| Ability | Smoke Screen | Pogo (jump) | Shield Rush | Area Lock | Grenade |
+| Ability uses/match | 1 | 1 | 1 | 1 | 1 |
 
-Notes (post-rebalance, July 2026 — see §9 for rationale and tuning levers):
+Notes (miss-allowance profile, July 2026 — see §9 for rationale and tuning levers):
 - Vision ranges are Manhattan distances used by fog of war (§6); every unit's `visionRange` is
-  at least its `targetRange`, so a unit never auto-fires at an enemy its team can't see.
+  at least its `targetRange`, and authoritative target acquisition additionally rejects enemies
+  outside the team's visible cells.
 - The Shotgunner's magazine of 10 with 0.01s between shots effectively fires a **10-pellet burst**
-  (up to 180 damage point-blank), spread ±25°, then reloads 2s. 6 landing pellets kill a 100 HP
-  unit.
-- Sniper: 1-round magazine, 2s visible lock-on laser before each shot, 2.5s reload — 110 damage
-  per hit (**one-shots every 100 HP unit and other Snipers; 2-taps the Shotgunner**). The lock
-  laser force-reveals the sniper to the victim's team through fog (§6) — that window is the
-  counterplay.
-- Kill matrix (frontal hits vs 100 HP): Soldier 4, Pogo 4 (2 backstab), Commander 9, shotgun
-  burst ≥6 pellets, Sniper 1.
+  (up to 80 landed damage point-blank), spread ±25°, then reloads 2s. A 120 HP standard target
+  requires 15 landing pellets, or 1.5 perfect bursts; the provisional miss allowance raises that
+  to 2.5 fired-burst equivalents.
+- Sniper: 1-round magazine, 2s visible lock-on laser before each shot, 2.5s reload — 50 damage
+  per hit (**three hits against a 120 HP standard unit; four against the Shotgunner**). The lock
+  laser force-reveals the sniper to the victim's team through fog (§6).
+- Clean landed-magazine equivalents vs 120 HP are Commander 3, Pogo 3.33 frontal / 1.67 backstab,
+  Shotgunner 1.5 point-blank bursts, Sniper 3, and Soldier 2.4. Applying the provisional
+  weapon-specific miss allowances yields 3.75 / 4 / 2 / 2.5 / 3.33 / 3 respectively.
 
 **Ability behavior as implemented** (server-side `Ability` subclasses in `Assets/Scripts/Abilities/`,
 invoked by the planning-phase move-or-ability pipeline in `GameLoop` — see §2):
-- `Grenade` (Soldier): lobbed arc to a chosen square over 1s, AoE (`abilityRadius` 2 cells) with
+- `Grenade` (Soldier): lobbed arc to a chosen square over 1s, AoE (`abilityRadius` 1.6 cells) with
   wall-blocked splash, flat **80** damage (serialized on the component/`Soldier.prefab`, not from
-  UnitData). Leaves a full-HP standard unit at 20 — the dodge phase stays meaningful.
+  UnitData). A unit at the blast center can clear every current unit collider with a straight
+  two-cell dive, but not with one step; a turned two-step path remains inside the blast. It kills
+  the 80 HP Sniper exactly and leaves a full-HP standard unit at 40.
 - `Shield` (Shotgunner): activates a child "Shield" object for 3s that blocks shots from the
   front. Shield state is a **NetworkVariable** so a unit revealed mid-shield renders correctly.
 - `Pogo` (PogoRider): 1s ballistic jump to any square within `abilitySquareRange` 5, ignoring
   terrain (collider disabled mid-flight), then resumes shooting. Deliberately does NOT
   force-reveal through fog — jump-behind-lines is the marquee fog play.
 - `AreaLock` (Sniper): snaps to nearest cell, projects a laser line toward a chosen square for up
-  to 3s; the first enemy crossing the ray takes `damage × 2` (**220**) via an animated beam rush.
-  Force-reveals the caster to enemy clients for the ability window (its object-scoped ClientRpcs
-  would otherwise be dropped for clients it's hidden from).
-- `Reroute` (Commander): re-plan paths for allies within 7 cells mid-execution — **fully commented
-  out** (`Reroute.cs` is 100% commented).
+  to 3s; the first enemy crossing the ray takes a flat **130** damage via an animated beam rush.
+  Ability damage is deliberately independent from the Sniper rifle's direct-fire damage.
+  Force-reveals the caster to enemy teams for the ability window (its object-scoped ClientRpcs
+  would otherwise be dropped for clients it's hidden from, and bots use the same reveal deadline
+  for targeting).
+- `Smoke` (Commander): creates a public 3×3 screen for the execution round. Interior crossings
+  block direct shots, projectiles, Area Lock, and fog sightlines without blocking movement.
 
 ## 5. Script Architecture Map
 
@@ -191,12 +205,12 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 ### GameManager/
 | Script | Responsibility |
 |---|---|
-| `GameLoop.cs` | **The intentionally-monolithic central controller** (singleton `GameLoop.Instance`, server-driven). Owns: `TESTING` flag, dev-mode flags (`devMode`, `devSpeedMultiplier`, `currentPhase`), grid constants (`cellSize`, `gridBounds`, `wallLayout`), spawns, team setup (`allTeamUnits`, `allTeamUnitObjects`, tags/layers `BlueTeam`/`RedTeam`), the round loop, path + ability-plan sanitization (`SanitizePaths`, `SanitizeAbilityPlan`), the ability dodge phase (`RunDodgePhase`, telegraphs, alert icons), **fog of war** (server visibility loop with `NetworkShow/NetworkHide` + host visual suppression, `ForceReveal` table, client-local pooled 90-tile fog overlay — §6), per-team camera placement, overlay text/flash UI RPCs, end-game UI. **Prefer adding methods here over new manager classes** (project rule). |
+| `GameLoop.cs` | **The intentionally-monolithic central controller** (singleton `GameLoop.Instance`, server-driven). Owns: `TESTING` flag, dev-mode flags (`devMode`, `devSpeedMultiplier`, `currentPhase`), grid constants (`cellSize`, `gridBounds`, `wallLayout`), spawns, team setup (`allTeamUnits`, `allTeamUnitObjects`, tags/layers `BlueTeam`/`RedTeam`), the round loop, path + ability-plan sanitization (`SanitizePaths`, `SanitizeAbilityPlan`), the ability dodge phase (`RunDodgePhase`, telegraphs, alert icons), **fog of war** (server visibility loop with `NetworkShow/NetworkHide` + host visual suppression, `ForceReveal` table, client-local pooled 150-tile fog overlay — §6), per-team camera placement, overlay text/flash UI RPCs, end-game UI. **Prefer adding methods here over new manager classes** (project rule). |
 | `DevInput.cs` | **Dev/agent no-mouse input API** (static; everything gated on `GameLoop.devMode`, which is opt-in at runtime — a human pressing Play gets the normal manual flow). `StartMatch()` turns dev mode on and hosts (the MPPM clone auto-joins via `TempMppmAutoJoin`); `SetPath`/`SetAbility`/`SetDodgePath` queue plans as grid cells; `SubmitPlans()`/`SubmitDodge()` end the (otherwise indefinite) dev planning/dodge waits; `SetSpeed` fast-forwards via `Time.timeScale`; `Dump()` snapshots phase/units/HP. Also hosts the editor-only `DevAutoHost` runner. |
 | `DevE2ETest.cs` | **The checked-in end-to-end gameplay test** (editor-only). Menu item *Battle Plan ▸ Run End-To-End Test* (or `DevE2ETest.Run()` in Play mode) drives a full 2-client match through movement, illegal-move rejection, all three ability shapes (Grenade/AreaLock/Shield), dodge phases, damage/death, speed control, and a win condition, logging `[E2E][PASS/FAIL]` per step; poll `DevE2ETest.Report` for the aggregate. Screenshots land in `Assets/Screenshots/e2e/`. |
 | `PlanMovement.cs` | Client-side planning-phase controller (singleton). Collects per-unit paths into a `PathsDict` (a network-serializable `Dictionary<GameObject,(bool abilityFlag, List<Vector3> path)>`), manages unit selection via cards, move-range overlays, path visuals, countdown timer text. |
 | `PathSelection.cs` | Mouse path-drawing mechanics: start/extend/undo path, client-side validation (adjacency, bounds, walls, moveDist), path node/edge visuals. |
-| `GridSystem.cs` | Static grid math helpers + `DisplayGridRange` overlay instantiation. Also the pure fog vision math shared by server and clients: `HasGridLineOfSight` (supercover line vs `wallLayout`, permissive corners) and `ComputeVisibleCells` (Manhattan diamond ∩ LoS, clamped to the 9×10 board). |
+| `GridSystem.cs` | Static grid math helpers + `DisplayGridRange` overlay instantiation. Also the pure fog vision math shared by server and clients: `HasGridLineOfSight` (supercover line vs `wallLayout`, permissive corners) and `ComputeVisibleCells` (Manhattan diamond ∩ LoS, clamped to the 15×10 board). |
 
 ### Units/
 | Script | Responsibility |
@@ -205,7 +219,7 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 | `UnitDatabase.cs` | ScriptableObject list of `UnitData` (`AllUnits.asset`) — roster indices come from here. |
 | `Unit.cs` | Per-unit team-indicator material setup (owner sees blue, opponent red). |
 | `Movement.cs` | Server-side coroutine movement along cell paths (+dive variant), rotation, hands off to `Shooting` when done. |
-| `Shooting.cs` | Server-side auto-combat: nearest-enemy acquisition with `lineOfSight()` raycast (Walls + enemy layer, `targetRange`), target-lock laser (NetworkVariables replicate laser to clients; a lock **force-reveals the shooter to the victim's team** through fog), firing with spread, reload cycle, `stillShooting` handshake with GameLoop. All setup is in `OnNetworkSpawn` so laser state re-applies after a fog `NetworkShow`. |
+| `Shooting.cs` | Server-side auto-combat: nearest-enemy acquisition requires authoritative team visibility, then uses a projectile-radius `SphereCast` (Walls + enemy layer, `targetRange`) so a lock is only possible where the real bullet fits; target-lock laser (NetworkVariables replicate laser to clients; a lock **force-reveals the shooter to the victim's team** through fog), firing with spread, reload cycle, `stillShooting` handshake with GameLoop. All setup is in `OnNetworkSpawn` so laser state re-applies after a fog `NetworkShow`. |
 | `Bullet.cs` | Server-side projectile: applies damage + backstab check on enemy collision, despawns on any hit / max range / 8s lifetime. Bullets are always network-visible (a tracer out of fog is an intended "you're being shot from over there" cue). |
 | `Health.cs` | HP + alive tracking as server-written **NetworkVariables** (resync on fog `NetworkShow`; no health RPCs) + world-space health bar (billboarded to team camera); on death the server deactivates the root one frame after the state flush (keeps tag-based `teamSize` correct), clients deactivate via the `isAlive` callback, and the unit card is disabled. |
 | `AnimationHandler.cs` | Thin wrapper mapping logical states ("Moving"/"Aiming"/"Shoot"/"Idle") to Animator states. |
@@ -214,9 +228,9 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 | Script | Responsibility |
 |---|---|
 | `BaseAbility.cs` | `abstract class Ability : NetworkBehaviour` with `ExecuteAbility(square, radius)` coroutine. |
-| `Grenade/Shield/Pogo/AreaLock.cs` | Implementations (see §4). Live; invoked by `GameLoop.RunAbility` when a unit's plan is flagged as an ability (§2). |
+| `Grenade/Shield/Pogo/AreaLock/Smoke.cs` | Implementations (see §4). Live; invoked by `GameLoop.RunAbility` when a unit's plan is flagged as an ability (§2). |
 | `ActivateAbility.cs` | **Entirely commented out — historical.** The original mid-execution activation pipeline; superseded (July 2026) by the planning-phase choice + execution-start dodge window living in `GameLoop` (§2). |
-| `Reroute.cs` | **Entirely commented out** (Commander ability — still disabled; the Commander cannot enter ability mode). |
+| `Reroute.cs` | **Entirely commented out — historical.** Smoke Screen replaced the abandoned Commander re-plan. |
 
 ### Multiplayer/
 | Script | Responsibility |
@@ -282,7 +296,7 @@ Physics layers that matter: `BlueTeam`, `RedTeam`, `Walls`, `Grid`, `PathNode`, 
     presentation only (`Renderer.forceRenderingOff` + `UnitCanvas` canvas toggle — preserves
     Shield/laser/variant renderer states); host memory inherently has all data (accepted for
     client-hosted).
-  - **Client overlay:** each client darkens out-of-vision cells with a pooled 90-tile overlay
+  - **Client overlay:** each client darkens out-of-vision cells with a pooled 150-tile overlay
     (`Prefabs/Visuals/FogOverlayCell`, no collider, Ignore Raycast layer), computed locally from
     its own units only — zero server traffic, zero leak.
   - **Fog-piercing by design:** ability telegraphs + dodge alerts (the counterplay window),
@@ -331,10 +345,11 @@ damage work) should be checked against these:
    have during planning is a resource. (This is precisely why fog of war fits — now implemented,
    §6: it makes the *information* dimension explicit instead of giving both players perfect
    knowledge.)
-3. **Punish poor positioning, decisively.** "Chess with guns": getting caught in the open, crossing
-   a sniper lane, or getting flanked should *lose you the piece*, not shave 10% off a health bar.
-   Deadly, legible consequences make planning matter. (Motivated the July 2026 damage rebalance,
-   §4/§9: roughly one clean enemy magazine now kills a standard unit.)
+3. **Punish repeated exposure, preserve counterplay.** Ordinary fire in its intended range should
+   defeat a standard unit in roughly **3 ± 1 magazines after a miss allowance**. Point-blank
+   specialist fire, a successful backstab, or a telegraphed one-use ability can resolve faster;
+   weak frontal fire into a tank can take longer. Players get time to read an exchange, but
+   repeatedly losing position remains fatal.
 4. **Asymmetric roles, rock-paper-scissors ranges.** Every unit is strong in one band (Shotgunner
    ≤2 cells, Soldier mid, Sniper long) and weak elsewhere. Buffs/nerfs should sharpen these bands,
    not flatten them.
@@ -351,9 +366,8 @@ damage work) should be checked against these:
 
 Code-level (from reading, not speculation):
 - ~~The entire ability activation pipeline is disabled.~~ **Implemented July 2026** as the
-  planning-phase move-or-ability choice + execution-start dodge window (see §2). Remaining gaps:
-  the Commander's Reroute is still disabled (`Reroute.cs` commented out; the Commander cannot
-  enter ability mode), and `ActivateAbility.cs` is retained commented-out as history.
+  planning-phase move-or-ability choice + execution-start dodge window (see §2). The Commander
+  now uses Smoke Screen; `Reroute.cs` and `ActivateAbility.cs` remain commented-out history.
 - ~~Server path sanitizer doesn't check walls.~~ Fixed: `SanitizePaths` now rejects wall cells
   server-side, matching the client's `PathSelection.ValidMove`.
 - ~~`Health.TakeDamage` reads `currentHealth` immediately after `SetHealthClientRpc` (host-inline
@@ -370,32 +384,46 @@ Code-level (from reading, not speculation):
 - A re-shown (fog) unit re-runs client `OnNetworkSpawn`, but one-time setup RPCs
   (`SetGroupLayerClientRpc`) are not replayed — harmless today because clients don't rely on
   enemy team layers; would need networked team identity if that changes.
-- `GridSystem.gridWidth/gridHeight` (10×10) are dead serialized fields; the real size comes from
-  `GameLoop.gridBounds` (9×10).
+- `GridSystem.gridWidth/gridHeight` (15×10) are dead serialized fields kept in sync for Inspector
+  clarity; the authoritative size comes from `GridSystem.ColumnCount/RowCount` and
+  `GameLoop.gridBounds`.
 - `AudioManager.cs` is an empty stub.
-- Pitch/Overview.md drift: Sniper's "Target Lock" passive is implemented as `targetLockDuration`,
-  only PogoRider has a backstab bonus, Commander deals 5 (not "minimal-ish") damage, Shotgunner has
-  200 HP (not in pitch).
+- Pitch/Overview.md drift: Sniper's "Target Lock" is implemented as `targetLockDuration`, only
+  PogoRider has a backstab bonus, and Overview still labels the now-eligible Smoke Commander
+  unavailable. §4 and the serialized assets are authoritative.
 
-Verification status: the end-to-end suite (`DevE2ETest`, §6) passed 33/33 on July 17 2026 against
-the pre-fog build, and **34/34 after the fog-of-war + damage rebalance landed** (same day; two
-expectations were deliberately updated for the new balance — grenade damage assertion 50→80, and
-the R1/R2 scenario retreats the red Sniper so the rebalanced 110-damage shot doesn't kill the
-PogoRider before its scripted beam-dodge scene). Baseline pre-rework screenshots:
-`Assets/Screenshots/baseline-pretest/`; E2E evidence screenshots: `Assets/Screenshots/e2e/`.
+Historical verification: `DevE2ETest` passed 33/33 on July 17 2026 against the pre-fog build and
+34/34 after the original fog/damage rebalance. For the July 20 miss-allowance profile, Unity
+compiled with zero console errors and all **111/111 EditMode tests passed**, including three
+combat-breakpoint tests, four wall-corner targeting/physics tests, and two Grenade center-escape
+tests. A two-client E2E attempt was stopped before gameplay because the required MPPM virtual
+player was inactive (host listening with one connected client). Area Lock's runtime 120-HP Pogo
+kill and the higher-TTK 12-round chase cap therefore remain pending. Baseline
+pre-rework screenshots: `Assets/Screenshots/baseline-pretest/`; historical E2E screenshots:
+`Assets/Screenshots/e2e/`.
 
-## 9. Fog of War + Damage Rebalance (implemented July 2026)
+## 9. Fog of War + Combat Rebalance (updated July 2026)
 
 The design spec (vision model, hiding mechanism, damage rationale) lives in
 `docs/design/FogOfWar-and-DamageRebalance.md`; the as-applied reconciliation against the ability
 rework, exact edits, and verification plan live in `docs/design/FogOfWar-ImplementationPlan.md`.
-Current behavior is documented in §4 (stats), §6 (networking/fog), and §5 (code map).
+Current behavior is documented in §4 (stats), §6 (networking/fog), and §5 (code map). The earlier
+one-clean-magazine profile in the historical fog documents is superseded by the July 20
+miss-allowance profile.
 
-Applied damage numbers: Commander 5→**12**, PogoRider 15→**30**, Shotgunner 10→**18**/pellet,
-Sniper 70→**110**, Soldier 10→**25**, Grenade 50→**80**, Area Lock stays ×2 (now **220**).
-Max HP values unchanged.
+The deterministic base metric is **landed magazine equivalents**:
+`ceil(target HP / effective damage per hit) / magazine size`. A partial lethal magazine remains
+fractional and overkill does not transfer. To reserve room for misses before telemetry exists, the
+profile divides that result by explicit design hit-conversion allowances: Commander/Soldier 80%,
+Pogo 5/6, Shotgunner 60% at intended close range, and Sniper 90%. These are provisional design
+allowances, **not measured accuracy**; fired/landed outcomes must replace them after playtests.
 
-Tuning levers flagged for playtesting (from the spec, in priority order): Sniper 110 vs 90
-(one-shot feel), shotgun pellet 15–20, Grenade 70–100, all `visionRange` values (especially
-Sniper 8 vs 7, Shotgunner 3 vs 4), Pogo `backstabMultiplier` 2 → 1.75 if the fog-flank
-dominates, Shotgunner 200 → 150 HP if it's an unkillable brawler.
+Current health tiers are **80 glass / 120 standard / 160 tank**. Clean magazine damage is
+Commander 40, Pogo 36 frontal / 72 rear, Shotgunner 80 point-blank, Sniper 50, and Soldier 50.
+Against a standard target the provisional miss-adjusted equivalents are 3.75 / 4 / 2 / 2.5 /
+3.33 / 3, averaging 3.1. Area Lock remains a separate flat 130-damage, one-use exception: it kills
+a standard unit but leaves the 160-HP Shotgunner at 30 HP. Grenade remains 80.
+
+Tuning levers flagged for playtesting: observed fired-vs-landed magazine inflation by weapon,
+Shotgunner pellet damage 8→7 if point-blank conversion is oppressive, Pogo backstab 2→1.5 if rear
+attacks lack answerability, and execution-window reload opportunities before changing base damage.

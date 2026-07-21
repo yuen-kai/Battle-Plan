@@ -28,9 +28,7 @@ public enum MatchResultReason : byte
     DisconnectForfeit,
 }
 
-public struct MatchResult
-    : INetworkSerializable,
-        System.IEquatable<MatchResult>
+public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
 {
     public MatchOutcome Outcome;
     public MatchResultReason Reason;
@@ -40,22 +38,18 @@ public struct MatchResult
     public bool IsValid =>
         Outcome switch
         {
-            MatchOutcome.Win =>
-                (WinningTeamIndex == GameLoop.HostTeamIndex
-                    || WinningTeamIndex == GameLoop.OpponentTeamIndex)
+            MatchOutcome.Win => (
+                WinningTeamIndex == GameLoop.HostTeamIndex
+                || WinningTeamIndex == GameLoop.OpponentTeamIndex
+            )
                 && Reason != MatchResultReason.None
                 && Reason != MatchResultReason.SimultaneousElimination,
-            MatchOutcome.Draw =>
-                WinningTeamIndex == GameLoop.NoHillController
+            MatchOutcome.Draw => WinningTeamIndex == GameLoop.NoHillController
                 && Reason == MatchResultReason.SimultaneousElimination,
             _ => false,
         };
 
-    private MatchResult(
-        MatchOutcome outcome,
-        MatchResultReason reason,
-        int winningTeamIndex
-    )
+    private MatchResult(MatchOutcome outcome, MatchResultReason reason, int winningTeamIndex)
     {
         Outcome = outcome;
         Reason = reason;
@@ -66,7 +60,9 @@ public struct MatchResult
     {
         MatchResult result = new(MatchOutcome.Win, reason, winningTeamIndex);
         if (!result.IsValid)
-            throw new System.ArgumentException("Winner and result reason must describe a valid win.");
+            throw new System.ArgumentException(
+                "Winner and result reason must describe a valid win."
+            );
         return result;
     }
 
@@ -140,9 +136,7 @@ public enum HillControlStatus : byte
     Controlled,
 }
 
-public struct HillControlState
-    : INetworkSerializable,
-        System.IEquatable<HillControlState>
+public struct HillControlState : INetworkSerializable, System.IEquatable<HillControlState>
 {
     public HillControlStatus Status;
     public int ControllingTeamIndex;
@@ -243,8 +237,15 @@ public class GameLoop : NetworkBehaviour
     private int maxDiveRangeThisRound;
     private int runningAbilities;
 
-    // Client-side telegraph visuals spawned by ShowAbilityTelegraphClientRpc.
+    // Server-authored round state. Smoke never enters wallLayout, physics, or pathing.
+    private readonly HashSet<Vector2Int> activeSmokeCells = new();
+    private bool acceptingSmokeRegistrations;
+
+    // Client-side public smoke mirror plus telegraph visuals spawned by client RPCs.
+    private readonly HashSet<Vector2Int> clientSmokeCells = new();
     private readonly List<GameObject> clientTelegraphs = new();
+    private GameObject clientSmokeVisualRoot;
+    private Material clientSmokeVisualMaterial;
 
     public UnitDatabase allUnits;
 
@@ -261,8 +262,7 @@ public class GameLoop : NetworkBehaviour
     public const ulong BotParticipantId = ulong.MaxValue;
     public const int NoHillController = -1;
     public const int HillControlRoundsToWin = 3;
-    public const string ThreatenedDodgeGuidance =
-        "DODGE now — drag flashing units to safety";
+    public const string ThreatenedDodgeGuidance = "DODGE now — drag flashing units to safety";
     public const string CasterDodgeGuidance = "Opponent is dodging your ability";
     public const string NeutralDodgeGuidance = "Waiting for dodge response";
 
@@ -282,34 +282,41 @@ public class GameLoop : NetworkBehaviour
     public static float cellSize = 2.7f;
     public static Rect gridBounds = new(
         new Vector2(0, 0),
-        new Vector2(8, 9) * cellSize + new Vector2(0.1f, 0.1f)
+        new Vector2(GridSystem.ColumnCount - 1, GridSystem.RowCount - 1) * cellSize
+            + new Vector2(0.1f, 0.1f)
     );
     public static readonly HashSet<Vector2Int> KingOfTheHillCells = new()
     {
-        new Vector2Int(3, 4),
-        new Vector2Int(4, 4),
-        new Vector2Int(5, 4),
-        new Vector2Int(3, 5),
-        new Vector2Int(4, 5),
-        new Vector2Int(5, 5),
+        new Vector2Int(6, 4),
+        new Vector2Int(7, 4),
+        new Vector2Int(8, 4),
+        new Vector2Int(6, 5),
+        new Vector2Int(7, 5),
+        new Vector2Int(8, 5),
     };
 
     [SerializeField]
     private GameObject wallPrefab;
     public static HashSet<Vector2Int> wallLayout = new()
     {
-        new Vector2Int(3, 2),
-        new Vector2Int(5, 2),
+        new Vector2Int(4, 1),
+        new Vector2Int(10, 1),
+        new Vector2Int(7, 2),
         new Vector2Int(2, 3),
-        new Vector2Int(6, 3),
+        new Vector2Int(5, 3),
+        new Vector2Int(9, 3),
+        new Vector2Int(12, 3),
         new Vector2Int(0, 4),
-        new Vector2Int(8, 4),
-        new Vector2Int(3, 7),
-        new Vector2Int(5, 7),
-        new Vector2Int(2, 6),
-        new Vector2Int(6, 6),
+        new Vector2Int(14, 4),
         new Vector2Int(0, 5),
-        new Vector2Int(8, 5),
+        new Vector2Int(14, 5),
+        new Vector2Int(2, 6),
+        new Vector2Int(5, 6),
+        new Vector2Int(9, 6),
+        new Vector2Int(12, 6),
+        new Vector2Int(7, 7),
+        new Vector2Int(4, 8),
+        new Vector2Int(10, 8),
     };
 
     List<Vector2Int[]> spawns = !devMode
@@ -317,38 +324,38 @@ public class GameLoop : NetworkBehaviour
         {
             new[] //Blue Team Spawn Positions
             {
-                new Vector2Int(0, 0),
-                new Vector2Int(4, 0),
-                new Vector2Int(8, 0),
+                new Vector2Int(2, 0),
+                new Vector2Int(7, 0),
+                new Vector2Int(12, 0),
             },
             new[] //Red Team Spawn Positions
             {
-                new Vector2Int(8, 9),
-                new Vector2Int(4, 9),
-                new Vector2Int(0, 9),
+                new Vector2Int(12, 9),
+                new Vector2Int(7, 9),
+                new Vector2Int(2, 9),
             },
         }
         : new List<Vector2Int[]>()
         {
             new[] //Blue Team Spawn Positions
             {
-                new Vector2Int(1, 3),
-                new Vector2Int(4, 5),
-                new Vector2Int(7, 3),
+                new Vector2Int(4, 3),
+                new Vector2Int(7, 5),
+                new Vector2Int(10, 3),
             },
             new[] //Red Team Spawn Positions
             {
-                new Vector2Int(5, 6),
-                new Vector2Int(4, 6),
-                new Vector2Int(3, 6),
+                new Vector2Int(8, 6),
+                new Vector2Int(7, 6),
+                new Vector2Int(6, 6),
             },
         };
 
     // Store camera positions and rotations as a list of (Vector3 position, Quaternion rotation) tuples
     private List<(Vector3 position, Quaternion rotation)> cameraPositions = new()
     {
-        (new Vector3(11.93f, 24.4f, 3.4f), new Quaternion(0.59543306f, 0f, 0f, 0.8034049f)),
-        (new Vector3(11.93f, 24.4f, 21.0f), new Quaternion(0f, 0.80340505f, -0.5954329f, 0f)),
+        (new Vector3(18.9f, 24.4f, 3.4f), new Quaternion(0.59543306f, 0f, 0f, 0.8034049f)),
+        (new Vector3(18.9f, 24.4f, 21.0f), new Quaternion(0f, 0.80340505f, -0.5954329f, 0f)),
     };
 
     // Game Settings
@@ -411,14 +418,15 @@ public class GameLoop : NetworkBehaviour
     private readonly NetworkVariable<ulong> teamOneParticipant = new(BotParticipantId);
     private readonly NetworkVariable<bool> fogOfWarEnabled = new(true);
 
-    // Server: per-(unit, viewer client) temporary visibility overrides (locks and abilities).
+    // Server: temporary visibility overrides by client (NGO) and team (targeting/bots).
     private readonly Dictionary<(GameObject unit, ulong clientId), double> forceRevealUntil = new();
-    private const float AbilityActivationRevealSeconds = 1.75f;
+    private readonly Dictionary<(GameObject unit, int teamIndex), double> forceRevealToTeamUntil =
+        new();
     private readonly Dictionary<GameObject, Vector2Int> lastFogCells = new();
     private bool serverFogDirty = true;
     private Coroutine serverFogCoroutine;
 
-    // Client: pooled 90-tile dark overlay computed purely from local-owned units.
+    // Client: pooled 150-tile dark overlay from local-owned units plus the public smoke mirror.
     private readonly Dictionary<Vector2Int, Renderer> fogOverlayTiles = new();
     private MaterialPropertyBlock fogOverlayProperties;
     private GameObject fogOverlayRoot;
@@ -437,6 +445,10 @@ public class GameLoop : NetworkBehaviour
     public int BotAbilityContributionCount => botPlayer?.AbilityContributionCount ?? 0;
     public bool BotLastPlanUsedAbility => botPlayer?.LastPlanUsedAbility ?? false;
     public int RoundNumber => roundNumber;
+
+    /// <summary>Deterministically ordered snapshot; callers cannot mutate the authoritative set.</summary>
+    public IReadOnlyList<Vector2Int> ActiveSmokeCells =>
+        activeSmokeCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x).ToArray();
     public HillControlState HillControl => replicatedHillControl.Value;
     public MatchResult? LastMatchResult { get; private set; }
 #if UNITY_EDITOR
@@ -468,6 +480,8 @@ public class GameLoop : NetworkBehaviour
         matchEnded = false;
         LastMatchResult = null;
         disconnectRecoveryStarted = false;
+        activeSmokeCells.Clear();
+        ClearSmokeScreenVisualsLocal();
 
         if (IsServer)
         {
@@ -534,9 +548,11 @@ public class GameLoop : NetworkBehaviour
             NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
         StopServerFog(false);
         forceRevealUntil.Clear();
+        forceRevealToTeamUntil.Clear();
         StopClientFog();
         ClearKingOfTheHillOverlay();
         unitSpawnTransforms.Clear();
+        ClearActiveSmokeCells(notifyClients: false);
 
         if (Instance == this)
             Instance = null;
@@ -563,6 +579,7 @@ public class GameLoop : NetworkBehaviour
 
     public static void ResetMatchState()
     {
+        Instance?.ClearActiveSmokeCells();
         allTeamUnitObjects.Clear();
         teamParticipants.Clear();
         teamRosters.Clear();
@@ -774,10 +791,7 @@ public class GameLoop : NetworkBehaviour
         string team
     )
     {
-        RosterValidationResult rosterValidation = RosterRules.Validate(
-            teamUnits,
-            allUnits?.units
-        );
+        RosterValidationResult rosterValidation = RosterRules.Validate(teamUnits, allUnits?.units);
         if (!rosterValidation.IsValid)
         {
             throw new System.InvalidOperationException(
@@ -882,11 +896,7 @@ public class GameLoop : NetworkBehaviour
                 continue;
             }
 
-            SetCardDisabledClientRpc(
-                unitIndexInTeam,
-                disabled,
-                NetworkHelper.ToClient(clientId)
-            );
+            SetCardDisabledClientRpc(unitIndexInTeam, disabled, NetworkHelper.ToClient(clientId));
             return;
         }
     }
@@ -907,11 +917,9 @@ public class GameLoop : NetworkBehaviour
             yield break;
         yield return null;
 
-        while (
-            !matchEnded
-            && Enumerable.Range(0, TeamCount).All(HasLivingTeamUnits)
-        )
+        while (!matchEnded && Enumerable.Range(0, TeamCount).All(HasLivingTeamUnits))
         {
+            ClearActiveSmokeCells();
             roundNumber++;
             submittedTeamPaths.Clear();
             devEndPlanningNow = false;
@@ -1009,6 +1017,7 @@ public class GameLoop : NetworkBehaviour
             activations = ConsumeAbilityUses(activations);
 
             currentPhase = "executing";
+            ActivateSmokeScreens(activations);
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
 
             ExecuteMoves(paths);
@@ -1070,6 +1079,203 @@ public class GameLoop : NetworkBehaviour
 
         currentPhase = "idle";
         EndGame();
+    }
+
+    private void ActivateSmokeScreens(
+        IEnumerable<(GameObject unit, Vector3 square, UnitData data)> activations
+    )
+    {
+        bool registeredAny = false;
+        acceptingSmokeRegistrations = true;
+        try
+        {
+            foreach (var activation in activations)
+            {
+                Smoke smoke =
+                    activation.unit != null ? activation.unit.GetComponent<Smoke>() : null;
+                registeredAny |= smoke != null && smoke.RegisterTargetFootprint(activation.square);
+            }
+        }
+        finally
+        {
+            acceptingSmokeRegistrations = false;
+        }
+
+        if (registeredAny)
+        {
+            RefreshServerFogForSmokeChange();
+            ShowSmokeScreenClientRpc(
+                activeSmokeCells
+                    .OrderBy(cell => cell.y)
+                    .ThenBy(cell => cell.x)
+                    .Select(gridCoordToWorld)
+                    .ToArray()
+            );
+        }
+    }
+
+    /// <summary>
+    /// Server-only mutation seam used by Smoke during the post-dodge, pre-movement activation window.
+    /// </summary>
+    public bool TryRegisterSmokeFootprint(Vector2Int center)
+    {
+        if (
+            !IsServer
+            || matchEnded
+            || currentPhase != "executing"
+            || !acceptingSmokeRegistrations
+            || !GridSystem.IsSquareFootprintInBounds(center, Smoke.FootprintRadius)
+        )
+        {
+            return false;
+        }
+
+        foreach (Vector2Int cell in GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius))
+        {
+            activeSmokeCells.Add(cell);
+        }
+        return true;
+    }
+
+    public bool IsSmokeCellActive(Vector2Int cell)
+    {
+        return activeSmokeCells.Contains(cell);
+    }
+
+    public bool DoesCellSegmentCrossActiveSmoke(Vector2Int start, Vector2Int end)
+    {
+        return GridSystem.DoesCellSegmentCrossCells(start, end, activeSmokeCells);
+    }
+
+    public bool DoesWorldSegmentCrossActiveSmoke(Vector3 start, Vector3 end)
+    {
+        return GridSystem.DoesWorldSegmentCrossCells(start, end, activeSmokeCells);
+    }
+
+    private void RefreshServerFogForSmokeChange()
+    {
+        serverFogDirty = true;
+        if (
+            !IsServer
+            || !IsSpawned
+            || !FogOfWarEnabled
+            || NetworkManager == null
+            || !NetworkManager.IsListening
+            || NetworkManager.ShutdownInProgress
+        )
+        {
+            return;
+        }
+
+        RefreshFogCellCache();
+        RemoveExpiredForceReveals();
+        UpdateAllUnitVisibility();
+        serverFogDirty = false;
+    }
+
+    private void ClearActiveSmokeCells(bool notifyClients = true)
+    {
+        acceptingSmokeRegistrations = false;
+        bool hadActiveSmoke = activeSmokeCells.Count > 0;
+        activeSmokeCells.Clear();
+        if (hadActiveSmoke)
+            RefreshServerFogForSmokeChange();
+
+        bool canNotifyClients =
+            notifyClients
+            && IsServer
+            && IsSpawned
+            && NetworkManager != null
+            && NetworkManager.IsListening
+            && !NetworkManager.ShutdownInProgress;
+        if (canNotifyClients)
+            HideSmokeScreenClientRpc();
+        else
+        {
+            ClearSmokeScreenVisualsLocal();
+            RefreshClientFogForSmokeChange();
+        }
+    }
+
+    [ClientRpc]
+    private void ShowSmokeScreenClientRpc(Vector3[] cellWorldPositions)
+    {
+        ClearSmokeScreenVisualsLocal();
+        if (!IsClient)
+            return;
+        if (cellWorldPositions == null || cellWorldPositions.Length == 0)
+        {
+            RefreshClientFogForSmokeChange();
+            return;
+        }
+
+        clientSmokeVisualRoot = new GameObject("SmokeScreenVisuals");
+        clientSmokeVisualRoot.transform.SetParent(transform, true);
+        clientSmokeVisualMaterial = new Material(Shader.Find("Sprites/Default"))
+        {
+            name = "Smoke Screen Visual (Runtime)",
+            color = new Color(0.55f, 0.65f, 0.68f, 0.46f),
+        };
+
+        foreach (Vector3 cellWorldPosition in cellWorldPositions)
+        {
+            Vector2Int cell = GridSystem.ConvertToGridCoords(cellWorldPosition);
+            clientSmokeCells.Add(cell);
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            marker.name = $"SmokeCell_{cell.x}_{cell.y}";
+            marker.layer = 0;
+            marker.transform.SetParent(clientSmokeVisualRoot.transform, true);
+            marker.transform.position = cellWorldPosition + Vector3.up * 0.22f;
+            marker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            marker.transform.localScale = Vector3.one * (cellSize * 0.92f);
+
+            Collider markerCollider = marker.GetComponent<Collider>();
+            if (markerCollider != null)
+            {
+                markerCollider.enabled = false;
+                Destroy(markerCollider);
+            }
+
+            Renderer markerRenderer = marker.GetComponent<Renderer>();
+            markerRenderer.sharedMaterial = clientSmokeVisualMaterial;
+            markerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            markerRenderer.receiveShadows = false;
+        }
+
+        RefreshClientFogForSmokeChange();
+    }
+
+    [ClientRpc]
+    private void HideSmokeScreenClientRpc()
+    {
+        ClearSmokeScreenVisualsLocal();
+        RefreshClientFogForSmokeChange();
+    }
+
+    private void ClearSmokeScreenVisualsLocal()
+    {
+        clientSmokeCells.Clear();
+
+        if (clientSmokeVisualRoot != null)
+        {
+            clientSmokeVisualRoot.SetActive(false);
+            Destroy(clientSmokeVisualRoot);
+            clientSmokeVisualRoot = null;
+        }
+
+        if (clientSmokeVisualMaterial != null)
+        {
+            Destroy(clientSmokeVisualMaterial);
+            clientSmokeVisualMaterial = null;
+        }
+    }
+
+    private void RefreshClientFogForSmokeChange()
+    {
+        if (!IsClient || !IsSpawned || !FogOfWarEnabled || fogOverlayTiles.Count == 0)
+            return;
+
+        UpdateClientFogOverlay();
     }
 
     /// <summary>
@@ -1162,7 +1368,6 @@ public class GameLoop : NetworkBehaviour
 
         NetworkObject networkObject = unit.GetComponent<NetworkObject>();
         Unit identity = unit.GetComponent<Unit>();
-        ForceRevealToEnemyClients(unit, AbilityActivationRevealSeconds);
         if (networkObject != null && networkObject.IsSpawned)
         {
             ShowAbilityActivationFxClientRpc(
@@ -1263,7 +1468,8 @@ public class GameLoop : NetworkBehaviour
                 telegraphOrigin,
                 effectSquare,
                 data.abilityRadius,
-                data.responseDistLine
+                data.responseDistLine,
+                unit.GetComponent<Smoke>() != null
             );
         }
 
@@ -1327,8 +1533,7 @@ public class GameLoop : NetworkBehaviour
         HashSet<int> casterTeamsAwaitingDodge = activations
             .Select(activation => activation.unit.GetComponent<Unit>())
             .Where(identity =>
-                identity != null
-                && dodgeAlerted.ContainsKey(GetEnemyTeamIndex(identity.TeamIndex))
+                identity != null && dodgeAlerted.ContainsKey(GetEnemyTeamIndex(identity.TeamIndex))
             )
             .Select(identity => identity.TeamIndex)
             .ToHashSet();
@@ -1425,10 +1630,7 @@ public class GameLoop : NetworkBehaviour
         return isCaster ? CasterDodgeGuidance : NeutralDodgeGuidance;
     }
 
-    public static MessagePerspective GetDodgeGuidancePerspective(
-        bool isThreatened,
-        bool isCaster
-    )
+    public static MessagePerspective GetDodgeGuidancePerspective(bool isThreatened, bool isCaster)
     {
         if (isThreatened)
             return MessagePerspective.Enemy;
@@ -1662,7 +1864,8 @@ public class GameLoop : NetworkBehaviour
         Vector3 casterPos,
         Vector3 square,
         float radiusCells,
-        bool line
+        bool line,
+        bool isSmokeScreen
     )
     {
         if (line)
@@ -1694,10 +1897,41 @@ public class GameLoop : NetworkBehaviour
             lr.SetPosition(1, end);
             clientTelegraphs.Add(laserObject);
         }
+        else if (isSmokeScreen)
+        {
+            Vector2Int center = GridSystem.ConvertToGridCoords(square);
+            foreach (
+                Vector2Int cell in GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
+            )
+            {
+                GameObject marker = new($"SmokeTelegraphCell_{cell.x}_{cell.y}");
+                LineRenderer lineRenderer = marker.AddComponent<LineRenderer>();
+                lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+                lineRenderer.startColor = lineRenderer.endColor = new Color(1f, 0.5f, 0f, 0.85f);
+                lineRenderer.startWidth = lineRenderer.endWidth = 0.08f;
+                lineRenderer.loop = true;
+                lineRenderer.positionCount = 4;
+
+                Vector3 cellCenter = gridCoordToWorld(cell) + Vector3.up * 0.17f;
+                float halfSize = cellSize * 0.46f;
+                lineRenderer.SetPositions(
+                    new[]
+                    {
+                        cellCenter + new Vector3(-halfSize, 0f, -halfSize),
+                        cellCenter + new Vector3(-halfSize, 0f, halfSize),
+                        cellCenter + new Vector3(halfSize, 0f, halfSize),
+                        cellCenter + new Vector3(halfSize, 0f, -halfSize),
+                    }
+                );
+                clientTelegraphs.Add(marker);
+            }
+        }
         else
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            Destroy(marker.GetComponent<Collider>());
+            Collider markerCollider = marker.GetComponent<Collider>();
+            markerCollider.enabled = false;
+            Destroy(markerCollider);
             marker.name = "AbilityTelegraphMarker";
             float diameter = Mathf.Max(1f, 2f * radiusCells * cellSize);
             marker.transform.position = square + new Vector3(0, 0.15f, 0);
@@ -1728,10 +1962,12 @@ public class GameLoop : NetworkBehaviour
         out int controllingTeamIndex
     )
     {
-        bool hostPresent = (hostTeamCells ?? Enumerable.Empty<Vector2Int>())
-            .Any(KingOfTheHillCells.Contains);
-        bool opponentPresent = (opponentTeamCells ?? Enumerable.Empty<Vector2Int>())
-            .Any(KingOfTheHillCells.Contains);
+        bool hostPresent = (hostTeamCells ?? Enumerable.Empty<Vector2Int>()).Any(
+            KingOfTheHillCells.Contains
+        );
+        bool opponentPresent = (opponentTeamCells ?? Enumerable.Empty<Vector2Int>()).Any(
+            KingOfTheHillCells.Contains
+        );
 
         if (hostPresent && opponentPresent)
         {
@@ -1763,10 +1999,7 @@ public class GameLoop : NetworkBehaviour
     {
         if (
             status != HillControlStatus.Controlled
-            || (
-                controllingTeamIndex != HostTeamIndex
-                && controllingTeamIndex != OpponentTeamIndex
-            )
+            || (controllingTeamIndex != HostTeamIndex && controllingTeamIndex != OpponentTeamIndex)
         )
         {
             return new HillControlState(status, NoHillController, 0);
@@ -1774,7 +2007,7 @@ public class GameLoop : NetworkBehaviour
 
         int nextStreak =
             previous.Status == HillControlStatus.Controlled
-                && previous.ControllingTeamIndex == controllingTeamIndex
+            && previous.ControllingTeamIndex == controllingTeamIndex
                 ? previous.Streak + 1
                 : 1;
         return new HillControlState(
@@ -1803,34 +2036,26 @@ public class GameLoop : NetworkBehaviour
         );
         replicatedHillControl.Value = next;
 
-        if (
-            next.Status != HillControlStatus.Controlled
-            || next.Streak < HillControlRoundsToWin
-        )
+        if (next.Status != HillControlStatus.Controlled || next.Streak < HillControlRoundsToWin)
         {
             return false;
         }
 
         FinishGame(
-            MatchResult.ForWinner(
-                next.ControllingTeamIndex,
-                MatchResultReason.KingOfTheHill
-            )
+            MatchResult.ForWinner(next.ControllingTeamIndex, MatchResultReason.KingOfTheHill)
         );
         return true;
     }
 
     private void RespawnEliminatedKingOfTheHillUnits()
     {
-        List<
-            (
-                GameObject unit,
-                int teamIndex,
-                NetworkObject networkObject,
-                Vector3 position,
-                Quaternion rotation
-            )
-        > respawned = new();
+        List<(
+            GameObject unit,
+            int teamIndex,
+            NetworkObject networkObject,
+            Vector3 position,
+            Quaternion rotation
+        )> respawned = new();
         foreach (var team in allTeamUnitObjects.OrderBy(entry => entry.Key))
         {
             foreach (GameObject unit in team.Value ?? System.Array.Empty<GameObject>())
@@ -1853,19 +2078,12 @@ public class GameLoop : NetworkBehaviour
                 if (!health.RespawnAt(spawn.position, spawn.rotation))
                     continue;
 
-                foreach (
-                    var reveal in forceRevealUntil.Keys.Where(key => key.unit == unit).ToList()
-                )
-                {
-                    forceRevealUntil.Remove(reveal);
-                }
+                ClearForceReveals(unit);
                 lastFogCells.Remove(unit);
                 NetworkObject networkObject = unit.GetComponent<NetworkObject>();
                 if (networkObject != null && networkObject.IsSpawned)
                 {
-                    respawned.Add(
-                        (unit, team.Key, networkObject, spawn.position, spawn.rotation)
-                    );
+                    respawned.Add((unit, team.Key, networkObject, spawn.position, spawn.rotation));
                 }
                 SetUnitCardDisabled(unit, false);
             }
@@ -1997,9 +2215,7 @@ public class GameLoop : NetworkBehaviour
         hillOverlayProperties = new MaterialPropertyBlock();
 
         foreach (
-            Vector2Int cell in KingOfTheHillCells
-                .OrderBy(cell => cell.y)
-                .ThenBy(cell => cell.x)
+            Vector2Int cell in KingOfTheHillCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x)
         )
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -2012,8 +2228,7 @@ public class GameLoop : NetworkBehaviour
 
             Renderer markerRenderer = marker.GetComponent<Renderer>();
             markerRenderer.sharedMaterial = hillOverlayMaterial;
-            markerRenderer.shadowCastingMode =
-                UnityEngine.Rendering.ShadowCastingMode.Off;
+            markerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             markerRenderer.receiveShadows = false;
             hillOverlayRenderers.Add(markerRenderer);
         }
@@ -2270,7 +2485,24 @@ public class GameLoop : NetworkBehaviour
         foreach (var key in expired)
             forceRevealUntil.Remove(key);
 
-        return expired.Count > 0;
+        List<(GameObject unit, int teamIndex)> expiredTeams = forceRevealToTeamUntil
+            .Where(entry => entry.Key.unit == null || entry.Value <= now)
+            .Select(entry => entry.Key)
+            .ToList();
+
+        foreach (var key in expiredTeams)
+            forceRevealToTeamUntil.Remove(key);
+
+        return expired.Count > 0 || expiredTeams.Count > 0;
+    }
+
+    private void ClearForceReveals(GameObject unit)
+    {
+        foreach (var key in forceRevealUntil.Keys.Where(key => key.unit == unit).ToList())
+            forceRevealUntil.Remove(key);
+
+        foreach (var key in forceRevealToTeamUntil.Keys.Where(key => key.unit == unit).ToList())
+            forceRevealToTeamUntil.Remove(key);
     }
 
     private void UpdateAllUnitVisibility()
@@ -2414,7 +2646,7 @@ public class GameLoop : NetworkBehaviour
             );
         }
 
-        return GridSystem.ComputeVisibleCells(viewers);
+        return GridSystem.ComputeVisibleCells(viewers, activeSmokeCells);
     }
 
     /// <summary>
@@ -2433,6 +2665,34 @@ public class GameLoop : NetworkBehaviour
                 allCells.Add(new Vector2Int(column, row));
         }
         return allCells;
+    }
+
+    public bool CanTeamObserveUnit(int observerTeamIndex, GameObject target)
+    {
+        if (target == null)
+            return false;
+
+        Vector2Int targetCell = GridSystem.ConvertToGridCoords(target.transform.position);
+        HashSet<Vector2Int> visibleCells =
+            FogOfWarEnabled ? ComputeVisibleCellsForTeam(observerTeamIndex) : null;
+        return IsTargetObservable(
+            FogOfWarEnabled,
+            visibleCells,
+            targetCell,
+            IsForceRevealedToTeam(target, observerTeamIndex)
+        );
+    }
+
+    public static bool IsTargetObservable(
+        bool fogEnabled,
+        ISet<Vector2Int> visibleCells,
+        Vector2Int targetCell,
+        bool forceRevealed
+    )
+    {
+        return !fogEnabled
+            || forceRevealed
+            || (visibleCells != null && visibleCells.Contains(targetCell));
     }
 
     public List<BotEnemySighting> GetVisibleEnemySightingsForTeam(
@@ -2494,15 +2754,23 @@ public class GameLoop : NetworkBehaviour
             && NetworkManager.Singleton.ServerTime.Time < until;
     }
 
+    private bool IsForceRevealedToTeam(GameObject unit, int teamIndex)
+    {
+        return NetworkManager.Singleton != null
+            && forceRevealToTeamUntil.TryGetValue((unit, teamIndex), out double until)
+            && NetworkManager.Singleton.ServerTime.Time < until;
+    }
+
     public void ForceReveal(GameObject unit, ulong toClientId, float seconds)
     {
+        int observerTeamIndex = GetTeamIndexForClient(toClientId);
         if (
             !IsServer
             || unit == null
             || seconds <= 0f
             || NetworkManager.Singleton == null
             || IsBotParticipant(toClientId)
-            || GetTeamIndexForClient(toClientId) < 0
+            || observerTeamIndex < 0
             || !NetworkManager.Singleton.ConnectedClients.ContainsKey(toClientId)
         )
             return;
@@ -2511,6 +2779,14 @@ public class GameLoop : NetworkBehaviour
         var key = (unit, toClientId);
         if (!forceRevealUntil.TryGetValue(key, out double existing) || until > existing)
             forceRevealUntil[key] = until;
+        var teamKey = (unit, observerTeamIndex);
+        if (
+            !forceRevealToTeamUntil.TryGetValue(teamKey, out double existingTeam)
+            || until > existingTeam
+        )
+        {
+            forceRevealToTeamUntil[teamKey] = until;
+        }
 
         serverFogDirty = true;
 
@@ -2524,7 +2800,31 @@ public class GameLoop : NetworkBehaviour
         UpdateUnitVisibilityForClient(toClientId);
     }
 
-    public void ForceRevealToEnemyClients(GameObject unit, float seconds)
+    public void ForceRevealToTeam(GameObject unit, int observerTeamIndex, float seconds)
+    {
+        if (
+            !IsServer
+            || unit == null
+            || observerTeamIndex < 0
+            || observerTeamIndex >= TeamCount
+            || seconds <= 0f
+            || NetworkManager.Singleton == null
+        )
+        {
+            return;
+        }
+
+        double until = NetworkManager.Singleton.ServerTime.Time + seconds;
+        var key = (unit, observerTeamIndex);
+        if (!forceRevealToTeamUntil.TryGetValue(key, out double existing) || until > existing)
+            forceRevealToTeamUntil[key] = until;
+
+        serverFogDirty = true;
+        if (TryGetHumanClientId(observerTeamIndex, out ulong clientId))
+            ForceReveal(unit, clientId, seconds);
+    }
+
+    public void ForceRevealToEnemyTeams(GameObject unit, float seconds)
     {
         if (!IsServer || unit == null)
             return;
@@ -2535,13 +2835,8 @@ public class GameLoop : NetworkBehaviour
 
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
-            if (
-                teamIndex != identity.TeamIndex
-                && TryGetHumanClientId(teamIndex, out ulong clientId)
-            )
-            {
-                ForceReveal(unit, clientId, seconds);
-            }
+            if (teamIndex != identity.TeamIndex)
+                ForceRevealToTeam(unit, teamIndex, seconds);
         }
     }
 
@@ -2685,7 +2980,10 @@ public class GameLoop : NetworkBehaviour
             );
         }
 
-        HashSet<Vector2Int> visibleCells = GridSystem.ComputeVisibleCells(viewers);
+        HashSet<Vector2Int> visibleCells = GridSystem.ComputeVisibleCells(
+            viewers,
+            clientSmokeCells
+        );
         foreach (var tile in fogOverlayTiles)
         {
             Renderer tileRenderer = tile.Value;
@@ -2755,8 +3053,10 @@ public class GameLoop : NetworkBehaviour
         LastMatchResult = result;
         currentPhase = "idle";
         Time.timeScale = 1f;
+        ClearActiveSmokeCells();
         SetFogOfWarEnabled(false);
         forceRevealUntil.Clear();
+        forceRevealToTeamUntil.Clear();
         SetCardsInteractableClientRpc(false);
         HideAbilityTelegraphsClientRpc();
         EndGameClientRpc(result);
@@ -2766,12 +3066,7 @@ public class GameLoop : NetworkBehaviour
     void EndGameClientRpc(MatchResult result)
     {
         LastMatchResult = result;
-        GameHUDController.Instance?.ShowResults(
-            result,
-            LocalTeamIndex,
-            PlayAgain,
-            ExitToMainMenu
-        );
+        GameHUDController.Instance?.ShowResults(result, LocalTeamIndex, PlayAgain, ExitToMainMenu);
     }
 
     void PlayAgain()
@@ -3143,15 +3438,18 @@ public class GameLoop : NetworkBehaviour
 
         Vector3 square = GridSystem.GetNearestGridCell(submitted[^1]);
         bool inBounds = gridBounds.Contains(new Vector2(square.x, square.z));
+        Vector2Int targetCell = GridSystem.ConvertToGridCoords(square);
+        bool footprintInBounds =
+            unit.GetComponent<Smoke>() == null
+            || GridSystem.IsSquareFootprintInBounds(targetCell, Smoke.FootprintRadius);
 
         if (data.selectAbilityDirection)
         {
             Vector2Int startCell = GridSystem.ConvertToGridCoords(start);
-            Vector2Int selectedCell = GridSystem.ConvertToGridCoords(square);
             bool validDirection =
                 data.abilityFixedDistance > 0
-                && GridSystem.TryGetAdjacentDirection(startCell, selectedCell, out _);
-            return inBounds && validDirection
+                && GridSystem.TryGetAdjacentDirection(startCell, targetCell, out _);
+            return inBounds && footprintInBounds && validDirection
                 ? (true, new List<Vector3> { start, square })
                 : (false, new List<Vector3> { start });
         }
@@ -3163,7 +3461,7 @@ public class GameLoop : NetworkBehaviour
         bool wallOk =
             data.responseDistLine || !wallLayout.Contains(GridSystem.ConvertToGridCoords(square));
 
-        if (!inBounds || !inRange || !wallOk)
+        if (!inBounds || !footprintInBounds || !inRange || !wallOk)
             return (false, new List<Vector3> { start });
 
         return (true, new List<Vector3> { start, square });

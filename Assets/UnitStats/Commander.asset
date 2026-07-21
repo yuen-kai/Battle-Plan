@@ -16,8 +16,8 @@ MonoBehaviour:
   unitName: Commander
   unitDescription: He wishes to one day to become the player
   unitSprite: {fileID: 21300000, guid: efe6b964de0374f779044295d25d8995, type: 3}
-  unavailableForRoster: 1
-  abilityName: Reroute
+  unavailableForRoster: 0
+  abilityName: Smoke Screen
   abilitySprite: {fileID: 21300000, guid: efe6b964de0374f779044295d25d8995, type: 3}
   moveDist: 3
   moveSpeed: 1
@@ -32,20 +32,22 @@ MonoBehaviour:
   bulletSpeed: 3
   targetRange: 5
   bulletRange: 7
-  damage: 12
+  damage: 8
   backstabMultiplier: 1
   backstabAngle: 90
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 270
   visionRange: 6
-  maxHealth: 100
+  maxHealth: 120
   abilityCardSprite: {fileID: 0}
-  selectAbilitySquare: 0
+  selectAbilitySquare: 1
   abilitySquareRange: 3
-  abilityRadius: 0
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
+  abilityRadius: 1.5
   selectTime: 4
-  responseRange: 5
+  responseRange: 0
   responseDistLine: 0
   timeDivePerUnit: 3
   diveRange: 2

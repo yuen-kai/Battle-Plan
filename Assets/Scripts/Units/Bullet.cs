@@ -50,9 +50,16 @@ public class Bullet : NetworkBehaviour
 
     void Update()
     {
+        if (IsPathBlockedBySmoke(transform.position))
+        {
+            NetworkHelper.Instance.Despawn(gameObject);
+            return;
+        }
+
         if (Vector3.Distance(startPosition, transform.position) > range || timeElapsed > maxLifetime)
         {
             NetworkHelper.Instance.Despawn(gameObject);
+            return;
         }
         timeElapsed += Time.deltaTime;
     }
@@ -65,13 +72,22 @@ public class Bullet : NetworkBehaviour
             return;
         }
         GameObject hitObject = other.gameObject;
-        if (hitObject.CompareTag(enemyTeam))
+        if (
+            hitObject.CompareTag(enemyTeam)
+            && !IsPathBlockedBySmoke(hitObject.transform.position)
+        )
         {
             float finalDamage = !CheckBackstab(hitObject) ? damage : damage * backstabMultiplier;
             hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
         }
 
         NetworkHelper.Instance.Despawn(gameObject);
+    }
+
+    private bool IsPathBlockedBySmoke(Vector3 destination)
+    {
+        return GameLoop.Instance != null
+            && GameLoop.Instance.DoesWorldSegmentCrossActiveSmoke(startPosition, destination);
     }
 
     private bool CheckBackstab(GameObject hitObject)

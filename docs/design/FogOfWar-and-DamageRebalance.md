@@ -12,8 +12,8 @@ These were verified by reading the code; the implementer should not re-litigate 
 
 | Fact | Where |
 |---|---|
-| Grid is 9×10 cells (x: 0–8, y: 0–9), `cellSize = 2.7` | `GameLoop.cellSize`, `GameLoop.gridBounds` |
-| 12 static wall cells in `GameLoop.wallLayout` (a `static HashSet<Vector2Int>`); walls never change during a match | `GameLoop.wallLayout`, spawned in `GameLoop.StartGame()` on layer `"Walls"` |
+| Grid is 15×10 cells (x: 0–14, y: 0–9), `cellSize = 2.7` | `GridSystem.ColumnCount/RowCount`, `GameLoop.cellSize`, `GameLoop.gridBounds` |
+| 18 static wall cells in `GameLoop.wallLayout` (a `static HashSet<Vector2Int>`); walls never change during a match | `GameLoop.wallLayout`, spawned in `GameLoop.StartGame()` on layer `"Walls"` |
 | Round loop: planning timer → `ExecuteMoves()` → shooting loop, all in `GameLoop.GameLoopTemp()` (server coroutine) | `GameLoop.GameLoopTemp()` |
 | Both players plan **simultaneously**; plan path visuals are **purely local** (`Instantiate` in `PlanMovement`/`PathSelection`, never networked). Enemy plans are already invisible — fog does not need to hide them | `PlanMovement.InitializeVisuals()`, `PathSelection.AddPathSectionVisual()` |
 | Unit prefab has a `NetworkTransform` → **positions replicate to every client by default**. Hiding renderers alone would still leak positions in network traffic | `Assets/Prefabs/Units/Unit.prefab` |
@@ -52,7 +52,7 @@ Add `public int visionRange` to `UnitData` (new `[Header("=== VISION PARAMETERS 
 |---|---|---|---|
 | Soldier | 4 | **5** | Duelist baseline; sees slightly past his engagement range. |
 | Shotgunner | 2 | **3** | Initiator with the shortest sight — must push blind into fog, which is his job; makes Shield Rush entries a real gamble for the enemy. |
-| Sniper | 7 | **8** | Controller — the team's eyes. 8 Manhattan on a 9×10 board is a huge lane of vision but wall occlusion (12 wall cells form two choke rings) still carves shadows to flank through. Deliberately NOT map-wide. |
+| Sniper | 7 | **8** | Controller — the team's eyes. 8 Manhattan on a 15×10 board covers one lane but not both deep flanks; wall occlusion (18 sparse cover cells across three lanes) still carves shadows to rotate through. Deliberately NOT map-wide. |
 | PogoRider | 7 | **7** | Scout/flanker; equal to weapon range. Jump behind lines doubles as vision denial-breaking. |
 | Commander | 5 | **6** | Support awareness; sees more than he can shoot so Override (when re-enabled) has information to work with. |
 
@@ -88,7 +88,7 @@ Two independent layers:
 
 1. **Fog tile overlay (client-local, cosmetic).** Each client darkens non-visible cells:
    - Reuse the `DisplayGridRange` pattern: a semi-transparent dark quad prefab per cell (create `fogOverlayCellPrefab`, styled like `moveOverlayCellPrefab`, alpha ≈ 0.45, y ≈ 0.15 — below plan visuals at 0.1+ but above ground; pick a y that doesn't z-fight with move overlays, e.g. 0.05, and verify in editor).
-   - **Pool all 90 tiles once** at game start under a `"FogOverlay"` parent; per update just `SetActive` per cell. Do NOT instantiate/destroy per tick like `DisplayGridRange` does — this runs every tick, not once per selection.
+   - **Pool all 150 tiles once** at game start under a `"FogOverlay"` parent; per update just `SetActive` per cell. Do NOT instantiate/destroy per tick like `DisplayGridRange` does — this runs every tick, not once per selection.
    - The client computes its own team's visible set **locally** from its own units (found via ownership, same pattern as `PlanMovement.PopulateTeamCharacters()`) + `wallLayout` + the same static vision function. Zero server traffic, zero leak (inputs are all client-known).
 2. **Enemy unit hiding (authoritative).** Enemy units not in your vision are hidden at the network layer (§1.5). Their renderers, health bars (`UnitCanvas`), and lasers disappear as a side effect of the NetworkObject being hidden — no per-renderer fiddling on remote clients.
 
@@ -245,8 +245,8 @@ Ordered; steps 1–2 are prerequisites.
 | 1 | `Assets/Scripts/Units/Health.cs` | `currentHealth` → `NetworkVariable<float>`; add `NetworkVariable<bool> isAlive`; remove `SetHealthClientRpc`/`SetHealthBarClientRpc` in favor of `OnValueChanged` + local `OnNetworkSpawn` init (§1.6). |
 | 2 | `Assets/Scripts/Units/UnitData.cs` | Add `public int visionRange` with tooltip + header. |
 | 3 | `Assets/UnitStats/{Soldier,Shotgunner,Sniper,PogoRider,Commander}.asset` | `visionRange`: 5/3/8/7/6. `damage`: 25/18/110/30/12 (§2.2). Edit via Unity Inspector or careful YAML edit; **do not touch GUIDs/meta files**. |
-| 4 | `Assets/Scripts/GameManager/GridSystem.cs` | Add `static bool HasGridLineOfSight(Vector2Int, Vector2Int)` (supercover vs `GameLoop.wallLayout`, permissive corners) and `static HashSet<Vector2Int> ComputeVisibleCells(IEnumerable<(Vector2Int, int)>)` (Manhattan diamond ∩ LoS, clamped to grid 0–8 × 0–9). |
-| 5 | `Assets/Scripts/GameManager/GameLoop.cs` | Server: visibility coroutine (0.15 s tick) with `NetworkShow/NetworkHide` per enemy client + host-local `SetUnitVisualsLocal` renderer/UnitCanvas toggle; `forceRevealUntil` table + `ForceReveal(unit, clientId, seconds)`; initial pass after `StartGame()`; stop loop at `EndGame()` (re-show everything). Client: pooled 90-tile fog overlay updated from local team vision (`fogOverlayCellPrefab` serialized field); overlay active from `OnNetworkSpawn` until end-game UI. |
+| 4 | `Assets/Scripts/GameManager/GridSystem.cs` | Add `static bool HasGridLineOfSight(Vector2Int, Vector2Int)` (supercover vs `GameLoop.wallLayout`, permissive corners) and `static HashSet<Vector2Int> ComputeVisibleCells(IEnumerable<(Vector2Int, int)>)` (Manhattan diamond ∩ LoS, clamped to grid 0–14 × 0–9). |
+| 5 | `Assets/Scripts/GameManager/GameLoop.cs` | Server: visibility coroutine (0.15 s tick) with `NetworkShow/NetworkHide` per enemy client + host-local `SetUnitVisualsLocal` renderer/UnitCanvas toggle; `forceRevealUntil` table + `ForceReveal(unit, clientId, seconds)`; initial pass after `StartGame()`; stop loop at `EndGame()` (re-show everything). Client: pooled 150-tile fog overlay updated from local team vision (`fogOverlayCellPrefab` serialized field); overlay active from `OnNetworkSpawn` until end-game UI. |
 | 6 | `Assets/Scripts/Units/Shooting.cs` | Sniper target-lock hook: when `targetLockDuration > 0` lock begins on a new target, call `GameLoop.Instance.ForceReveal(gameObject, targetOwnerClientId, unitData.targetLockDuration + 0.5f)` (§1.7). |
 | 7 | `Assets/Scripts/Abilities/AreaLock.cs` | At `ExecuteAbility` start, force-reveal caster to all enemy clients for `abilityTime + 1f` **before** `ShowLaserClientRpc` (§1.7). |
 | 8 | `Assets/Scripts/Abilities/Grenade.cs` | `damage = 50f` → `80f`. |

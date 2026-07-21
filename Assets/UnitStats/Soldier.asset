@@ -31,18 +31,18 @@ MonoBehaviour:
   bulletSpeed: 3
   targetRange: 4
   bulletRange: 8
-  damage: 25
+  damage: 10
   backstabMultiplier: 1
   backstabAngle: 90
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 270
   visionRange: 5
-  maxHealth: 100
+  maxHealth: 120
   abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1
   abilitySquareRange: 5
-  abilityRadius: 2
+  abilityRadius: 1.6
   selectTime: 4
   responseRange: 3
   responseDistLine: 0

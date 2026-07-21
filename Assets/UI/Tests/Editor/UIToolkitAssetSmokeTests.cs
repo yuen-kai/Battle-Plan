@@ -69,6 +69,7 @@ public class UIToolkitAssetSmokeTests
                 "mode-summary",
                 "opponent-summary",
                 "fog-summary",
+                "map-preview",
             },
         },
         new object[]
@@ -178,6 +179,25 @@ public class UIToolkitAssetSmokeTests
             StyleSheet styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>(assetPath);
             Assert.That(styleSheet, Is.Not.Null, $"Could not import {assetPath}.");
         }
+    }
+
+    [Test]
+    public void CharacterSelectionPreviewMatchesExpandedMap()
+    {
+        const string assetPath = "Assets/UI/Home/CharacterSelection.uxml";
+        const string previewPath = "Assets/Images/MapPreview.png";
+        VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
+        Texture2D preview = AssetDatabase.LoadAssetAtPath<Texture2D>(previewPath);
+        Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
+        Assert.That(preview, Is.Not.Null, $"Could not import {previewPath}.");
+
+        TemplateContainer tree = asset.Instantiate();
+        Label caption = tree.Q<Label>(className: "map-caption");
+        Assert.That(caption, Is.Not.Null);
+        Assert.That(caption.text, Does.Contain("15 × 10"));
+        Assert.That(caption.text, Does.Not.Contain("9 × 10"));
+        Assert.That(preview.width, Is.EqualTo(1080));
+        Assert.That(preview.height, Is.EqualTo(720));
     }
 
     [Test]

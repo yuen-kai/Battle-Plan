@@ -238,6 +238,14 @@ public class PlanMovement : MonoBehaviour
             GameLoop.gridBounds.Contains(new Vector2(square.x, square.z)),
             GameLoop.wallLayout.Contains(selectedCell)
         );
+        if (
+            validation == AbilityTargetValidationReason.Valid
+            && selectedUnit.GetComponent<Smoke>() != null
+            && !GridSystem.IsSquareFootprintInBounds(selectedCell, Smoke.FootprintRadius)
+        )
+        {
+            validation = AbilityTargetValidationReason.OutOfBounds;
+        }
 
         if (validation == AbilityTargetValidationReason.TargetNotRequired)
         {
@@ -340,6 +348,12 @@ public class PlanMovement : MonoBehaviour
         ClearAbilityTargetIndicator();
         abilityTargetIndicator = new GameObject("AbilityTargetIndicator");
 
+        if (selectedUnit != null && selectedUnit.GetComponent<Smoke>() != null)
+        {
+            CreateSmokeTargetIndicator(square);
+            return;
+        }
+
         if (
             unitData.selectAbilityDirection
             && GridSystem.TryGetAdjacentDirection(
@@ -399,6 +413,42 @@ public class PlanMovement : MonoBehaviour
             Renderer rend = marker.GetComponent<Renderer>();
             rend.material = new Material(Shader.Find("Sprites/Default"));
             rend.material.color = new Color(1f, 0.8f, 0f, 0.5f);
+        }
+    }
+
+    void CreateSmokeTargetIndicator(Vector3 square)
+    {
+        Vector2Int center = GridSystem.ConvertToGridCoords(
+            GridSystem.GetNearestGridCell(square)
+        );
+        Material previewMaterial = new(Shader.Find("Sprites/Default"));
+        Color previewColor = new(1f, 0.8f, 0f, 0.9f);
+        float halfCell = cellSize * 0.46f;
+        float lineWidth = Mathf.Max(0.04f, cellSize * 0.04f);
+
+        foreach (
+            Vector2Int cell in GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
+        )
+        {
+            GameObject cellOutline = new($"SmokePreviewCell_{cell.x}_{cell.y}");
+            cellOutline.transform.SetParent(abilityTargetIndicator.transform, true);
+
+            Vector3 cellCenter = GameLoop.gridCoordToWorld(cell) + new Vector3(0, 0.15f, 0);
+            LineRenderer outline = cellOutline.AddComponent<LineRenderer>();
+            outline.material = previewMaterial;
+            outline.startColor = outline.endColor = previewColor;
+            outline.startWidth = outline.endWidth = lineWidth;
+            outline.positionCount = 5;
+            outline.SetPositions(
+                new[]
+                {
+                    cellCenter + new Vector3(-halfCell, 0, -halfCell),
+                    cellCenter + new Vector3(-halfCell, 0, halfCell),
+                    cellCenter + new Vector3(halfCell, 0, halfCell),
+                    cellCenter + new Vector3(halfCell, 0, -halfCell),
+                    cellCenter + new Vector3(-halfCell, 0, -halfCell),
+                }
+            );
         }
     }
 

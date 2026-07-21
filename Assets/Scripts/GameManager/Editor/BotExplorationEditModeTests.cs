@@ -9,8 +9,17 @@ using UnityEngine;
 public class BotExplorationEditModeTests
 {
     private const int ProductionMoveDistance = 3;
+    private const int RightColumn = GridSystem.ColumnCount - 1;
+    private const int CenterColumn = GridSystem.ColumnCount / 2;
+    private const int TopRow = GridSystem.RowCount - 1;
+    private const int SpawnInset = 2;
 
-    private static readonly Vector2Int[] ProductionBotSpawns = { new(8, 9), new(4, 9), new(0, 9) };
+    private static readonly Vector2Int[] ProductionBotSpawns =
+    {
+        new(RightColumn - SpawnInset, TopRow),
+        new(CenterColumn, TopRow),
+        new(SpawnInset, TopRow),
+    };
 
     [Test]
     public void ProductionSpawns_MoveWithoutEnemyKnowledge()
@@ -43,12 +52,17 @@ public class BotExplorationEditModeTests
     [Test]
     public void Exploration_IsDeterministicAcrossObservationAndBlockerOrdering()
     {
-        Vector2Int start = new(4, 9);
+        Vector2Int start = new(CenterColumn, TopRow);
         List<Vector2Int> observed = CreateProductionBotObservation()
             .OrderBy(cell => cell.x)
             .ThenBy(cell => cell.y)
             .ToList();
-        Vector2Int[] blockers = { new(8, 9), new(0, 9), new(4, 8) };
+        Vector2Int[] blockers =
+        {
+            new(RightColumn, TopRow),
+            new(0, TopRow),
+            new(CenterColumn, TopRow - 1),
+        };
 
         List<Vector2Int> first = BotPlayer.BuildMovementPath(
             start,
@@ -74,14 +88,14 @@ public class BotExplorationEditModeTests
     [Test]
     public void Exploration_PathStaysInBoundsAndAvoidsKnownBlockers()
     {
-        Vector2Int start = new(8, 9);
+        Vector2Int start = new(RightColumn, TopRow);
         HashSet<Vector2Int> blocked = new()
         {
-            new Vector2Int(8, 8),
-            new Vector2Int(6, 9),
-            new Vector2Int(4, 8),
-            new Vector2Int(4, 7),
-            new Vector2Int(2, 9),
+            new Vector2Int(RightColumn, TopRow - 1),
+            new Vector2Int(RightColumn - 2, TopRow),
+            new Vector2Int(CenterColumn, TopRow - 1),
+            new Vector2Int(CenterColumn, TopRow - 2),
+            new Vector2Int(2, TopRow),
         };
         const int maxSteps = 20;
 
@@ -101,10 +115,14 @@ public class BotExplorationEditModeTests
     [Test]
     public void ObservationBoundary_FiltersDifferentHiddenEnemyCoordinates()
     {
-        Vector2Int visibleCell = new(4, 4);
+        Vector2Int visibleCell = new(CenterColumn, 4);
         HashSet<Vector2Int> observableCells = new() { visibleCell };
         BotEnemySighting[] hiddenOnLeft = { new(1, visibleCell), new(2, new Vector2Int(0, 0)) };
-        BotEnemySighting[] hiddenOnRight = { new(1, visibleCell), new(2, new Vector2Int(8, 9)) };
+        BotEnemySighting[] hiddenOnRight =
+        {
+            new(1, visibleCell),
+            new(2, new Vector2Int(RightColumn, TopRow)),
+        };
 
         List<BotEnemySighting> leftResult = GameLoop.FilterObservableEnemySightings(
             hiddenOnLeft,
@@ -128,10 +146,14 @@ public class BotExplorationEditModeTests
     [Test]
     public void LastKnownTarget_TakesPriorityOverExplorationFrontier()
     {
-        Vector2Int start = new(4, 9);
-        Vector2Int lastKnownTarget = new(8, 0);
+        Vector2Int start = new(CenterColumn, TopRow);
+        Vector2Int lastKnownTarget = new(RightColumn, 0);
         HashSet<Vector2Int> observed = CreateProductionBotObservation();
-        HashSet<Vector2Int> knownOccupied = new() { new Vector2Int(8, 9), new Vector2Int(0, 9) };
+        HashSet<Vector2Int> knownOccupied = new()
+        {
+            new Vector2Int(RightColumn, TopRow),
+            new Vector2Int(0, TopRow),
+        };
 
         Assert.That(observed.Contains(lastKnownTarget), Is.False);
         List<Vector2Int> path = BotPlayer.BuildMovementPath(
@@ -144,14 +166,14 @@ public class BotExplorationEditModeTests
         );
 
         Assert.That(path.Count, Is.EqualTo(ProductionMoveDistance + 1));
-        Assert.That(path[1], Is.EqualTo(new Vector2Int(5, 9)));
+        Assert.That(path[1], Is.EqualTo(new Vector2Int(CenterColumn + 1, TopRow)));
         AssertLegalPath(path, start, knownOccupied, ProductionMoveDistance);
     }
 
     [Test]
     public void FullCoverage_PatrolsLeastRecentlyObservedRegion()
     {
-        Vector2Int start = new(4, 9);
+        Vector2Int start = new(CenterColumn, TopRow);
         Vector2Int staleTarget = new(0, 0);
         HashSet<Vector2Int> observed = AllTraversableCells();
         Dictionary<Vector2Int, int> observationEpochs = observed.ToDictionary(
@@ -182,7 +204,7 @@ public class BotExplorationEditModeTests
     public void SequentialReservations_PreventCrossingAndSwapCollisions()
     {
         Vector2Int[] starts = { new(0, 0), new(0, 1) };
-        Vector2Int target = new(8, 1);
+        Vector2Int target = new(RightColumn, 1);
         HashSet<Vector2Int> reserved = new(starts);
         List<List<Vector2Int>> paths = new();
 
@@ -209,13 +231,13 @@ public class BotExplorationEditModeTests
     [Test]
     public void ObservationBoundary_HonorsFogFlagAndDropsAllHiddenSightings()
     {
-        Vector2Int visibleCell = new(4, 4);
+        Vector2Int visibleCell = new(CenterColumn, 4);
         HashSet<Vector2Int> observable = new() { visibleCell };
         BotEnemySighting[] sightings =
         {
             new(2, new Vector2Int(0, 0)),
             new(1, visibleCell),
-            new(3, new Vector2Int(8, 9)),
+            new(3, new Vector2Int(RightColumn, TopRow)),
         };
 
         // Fog on: only the sighting standing on an observable cell survives.
@@ -253,9 +275,9 @@ public class BotExplorationEditModeTests
         return GridSystem.ComputeVisibleCells(
             new[]
             {
-                (new Vector2Int(8, 9), 3),
-                (new Vector2Int(4, 9), 8),
-                (new Vector2Int(0, 9), 5),
+                (ProductionBotSpawns[0], 3),
+                (ProductionBotSpawns[1], 8),
+                (ProductionBotSpawns[2], 5),
             }
         );
     }

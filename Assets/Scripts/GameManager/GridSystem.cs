@@ -9,7 +9,7 @@ public class GridSystem : MonoBehaviour
     public static float CellSize => GameLoop.cellSize; // Size of each grid cell
 
     [SerializeField]
-    private int gridWidth = 10; // Width of the grid
+    private int gridWidth = 15; // Width of the grid
 
     [SerializeField]
     private int gridHeight = 10; // Height of the grid
@@ -181,9 +181,9 @@ public class GridSystem : MonoBehaviour
             || blockedCells.Contains(current + new Vector2Int(0, direction.y));
     }
 
-    // === FOG OF WAR VISION MATH (pure/static, shared by server visibility + client overlay) ===
+    // === GRID MATH (shared by server gameplay, bots, and client overlays) ===
 
-    public const int ColumnCount = 9;
+    public const int ColumnCount = 15;
     public const int RowCount = 10;
     private static readonly Vector2Int[] CardinalDirections =
     {
@@ -196,6 +196,143 @@ public class GridSystem : MonoBehaviour
     public static bool IsCellInBounds(Vector2Int cell)
     {
         return cell.x >= 0 && cell.x < ColumnCount && cell.y >= 0 && cell.y < RowCount;
+    }
+
+    /// <summary>
+    /// Returns a square footprint in deterministic row-major order (bottom row to top row,
+    /// left to right within each row). A negative radius has no footprint.
+    /// </summary>
+    public static List<Vector2Int> GetSquareFootprint(Vector2Int center, int radius)
+    {
+        List<Vector2Int> footprint = new();
+        if (radius < 0)
+            return footprint;
+
+        for (int rowOffset = -radius; rowOffset <= radius; rowOffset++)
+        {
+            for (int columnOffset = -radius; columnOffset <= radius; columnOffset++)
+            {
+                footprint.Add(center + new Vector2Int(columnOffset, rowOffset));
+            }
+        }
+        return footprint;
+    }
+
+    /// <summary>True only when every cell in the requested square footprint is on the board.</summary>
+    public static bool IsSquareFootprintInBounds(Vector2Int center, int radius)
+    {
+        if (radius < 0)
+            return false;
+
+        foreach (Vector2Int cell in GetSquareFootprint(center, radius))
+        {
+            if (!IsCellInBounds(cell))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Tests a segment expressed in continuous cell coordinates against whole-cell blockers.
+    /// Endpoint cells do not block, allowing a unit at a cloud edge to shoot out or be targeted.
+    /// Cell interiors are used so merely touching a cell corner or edge is not a crossing.
+    /// </summary>
+    public static bool DoesCellSegmentCrossCells(Vector2 start, Vector2 end, ISet<Vector2Int> cells)
+    {
+        if (cells == null || cells.Count == 0 || start == end)
+            return false;
+
+        // Canonical endpoint ordering makes the calculation exactly symmetric when callers swap
+        // shooter and target.
+        if (start.x > end.x || (start.x == end.x && start.y > end.y))
+            (start, end) = (end, start);
+
+        Vector2Int startCell = GetContainingCell(start);
+        Vector2Int endCell = GetContainingCell(end);
+        foreach (Vector2Int cell in cells)
+        {
+            if (cell == startCell || cell == endCell)
+                continue;
+            if (DoesSegmentCrossCellInterior(start, end, cell))
+                return true;
+        }
+        return false;
+    }
+
+    public static bool DoesCellSegmentCrossCells(
+        Vector2Int start,
+        Vector2Int end,
+        ISet<Vector2Int> cells
+    )
+    {
+        return DoesCellSegmentCrossCells(
+            new Vector2(start.x, start.y),
+            new Vector2(end.x, end.y),
+            cells
+        );
+    }
+
+    /// <summary>
+    /// World-space wrapper for <see cref="DoesCellSegmentCrossCells"/> using the board origin and
+    /// current cell size. Only X/Z coordinates participate in the test.
+    /// </summary>
+    public static bool DoesWorldSegmentCrossCells(
+        Vector3 start,
+        Vector3 end,
+        ISet<Vector2Int> cells
+    )
+    {
+        if (CellSize <= 0f)
+            return false;
+
+        Vector2 origin = new(GameLoop.gridBounds.xMin, GameLoop.gridBounds.yMin);
+        Vector2 startCellPosition = (new Vector2(start.x, start.z) - origin) / CellSize;
+        Vector2 endCellPosition = (new Vector2(end.x, end.z) - origin) / CellSize;
+        return DoesCellSegmentCrossCells(startCellPosition, endCellPosition, cells);
+    }
+
+    private static Vector2Int GetContainingCell(Vector2 position)
+    {
+        return new Vector2Int(
+            Mathf.FloorToInt(position.x + 0.5f),
+            Mathf.FloorToInt(position.y + 0.5f)
+        );
+    }
+
+    private static bool DoesSegmentCrossCellInterior(Vector2 start, Vector2 end, Vector2Int cell)
+    {
+        const float interiorInset = 0.0001f;
+        const float halfCell = 0.5f - interiorInset;
+        Vector2 minimum = new(cell.x - halfCell, cell.y - halfCell);
+        Vector2 maximum = new(cell.x + halfCell, cell.y + halfCell);
+        Vector2 delta = end - start;
+        float enter = 0f;
+        float exit = 1f;
+
+        return ClipSegmentToAxis(start.x, delta.x, minimum.x, maximum.x, ref enter, ref exit)
+            && ClipSegmentToAxis(start.y, delta.y, minimum.y, maximum.y, ref enter, ref exit);
+    }
+
+    private static bool ClipSegmentToAxis(
+        float start,
+        float delta,
+        float minimum,
+        float maximum,
+        ref float enter,
+        ref float exit
+    )
+    {
+        if (Mathf.Abs(delta) <= Mathf.Epsilon)
+            return start >= minimum && start <= maximum;
+
+        float first = (minimum - start) / delta;
+        float second = (maximum - start) / delta;
+        if (first > second)
+            (first, second) = (second, first);
+
+        enter = Mathf.Max(enter, first);
+        exit = Mathf.Min(exit, second);
+        return enter <= exit;
     }
 
     /// <summary>
@@ -298,6 +435,8 @@ public class GridSystem : MonoBehaviour
         return reachable;
     }
 
+    // === FOG OF WAR VISION MATH (pure/static, shared by server visibility + client overlay) ===
+
     /// <summary>
     /// Grid line-of-sight over wallLayout using a supercover line walk. Endpoints never block.
     /// When the ideal line crosses exactly through a cell corner, sight is blocked only if BOTH
@@ -367,10 +506,12 @@ public class GridSystem : MonoBehaviour
 
     /// <summary>
     /// Union of every viewer's visible cell set: Manhattan diamond of the viewer's range,
-    /// intersected with grid LoS, clamped to the board.
+    /// intersected with grid LoS and optional transient whole-cell blockers, clamped to the
+    /// board. Transient endpoint cells do not block, and edge/corner grazes remain clear.
     /// </summary>
     public static HashSet<Vector2Int> ComputeVisibleCells(
-        IEnumerable<(Vector2Int cell, int range)> viewers
+        IEnumerable<(Vector2Int cell, int range)> viewers,
+        ISet<Vector2Int> transientBlockingCells = null
     )
     {
         HashSet<Vector2Int> visible = new();
@@ -392,8 +533,13 @@ public class GridSystem : MonoBehaviour
                     Vector2Int target = new(viewerCell.x + columnOffset, viewerCell.y + rowOffset);
                     if (!IsCellInBounds(target))
                         continue;
-                    if (HasGridLineOfSight(viewerCell, target))
+                    if (
+                        HasGridLineOfSight(viewerCell, target)
+                        && !DoesCellSegmentCrossCells(viewerCell, target, transientBlockingCells)
+                    )
+                    {
                         visible.Add(target);
+                    }
                 }
             }
         }

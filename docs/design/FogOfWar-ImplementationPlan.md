@@ -44,7 +44,7 @@ The key distinction is the NetworkBehaviour that owns the RPC:
 | Existing death `NetworkHelper.SetActiveClientRpc` with unit reference | Scene object with hidden unit reference | Hidden client cannot resolve; a later show could produce stale state. | Remove from death path; use `isAlive`. |
 | `Shooting` laser NetworkVariables | Unit NetworkObject | Values resync on show, but current renderer setup does not reliably apply initial values. | Retain variables; repair `OnNetworkSpawn` initialization/application. |
 | `Shield.ToggleShieldClientRpc` | Hidden unit NetworkObject | Dropped; active shield state can be wrong on reveal. | Replace with `shieldActive` NetworkVariable. |
-| `AreaLock.ShowLaserClientRpc`, `StartRushClientRpc`, `HideLaserClientRpc` | Hidden sniper NetworkObject | All can be dropped. The rush/cleanup may outlast the spec’s simple `abilityTime + 1` estimate. | Call `ForceRevealToEnemyClients` before any delay/RPC for `delayForDodge + abilityTime + 1.5f` (5 seconds with current constants). The initial orange GameLoop line remains independently visible during dodge. |
+| `AreaLock.ShowLaserClientRpc`, `StartRushClientRpc`, `HideLaserClientRpc` | Hidden sniper NetworkObject | All can be dropped. The rush/cleanup may outlast the spec’s simple `abilityTime + 1` estimate. | Call `ForceRevealToEnemyTeams` before any delay/RPC for `delayForDodge + abilityTime + 1.5f` (5 seconds with current constants). The team-aware deadline drives bot targeting too; the initial orange GameLoop line remains independently visible during dodge. |
 | Grenade projectile and explosion | Independent spawned NetworkObjects; camera shake is scene-scoped | Visible globally even if caster is hidden. | Keep; blind grenade cues are intentional. |
 | Pogo movement | Unit NetworkTransform | Hidden clients receive no transform; a reveal respawns/syncs current position. | Keep. No forced reveal on landing. |
 | `SetGroupLayerClientRpc` / `SyncHeightAdjustedPositionClientRpc` | Scene objects with references | Initial calls happen before the first delayed fog pass. They are not state containers. | Keep initial order. NetworkTransform handles position on show. Team-layer replay is a documented low-risk gap. |
@@ -231,7 +231,7 @@ weapon target range.
 Add these constants and methods. Existing grid snapping/range-display methods stay unchanged.
 
 ```csharp
-    public const int ColumnCount = 9;
+    public const int ColumnCount = 15;
     public const int RowCount = 10;
 
     public static bool IsCellInBounds(Vector2Int cell)
@@ -349,7 +349,7 @@ Pure-function verification cases:
 - one wall strictly between horizontal/vertical endpoints: blocked;
 - exact diagonal corner with one adjacent wall: visible;
 - exact diagonal corner with both adjacent walls: blocked;
-- returned cells never leave x 0–8 or y 0–9.
+- returned cells never leave x 0–14 or y 0–9.
 
 ### Step 5 — `Assets/Scripts/GameManager/GameLoop.cs`
 
@@ -629,19 +629,19 @@ flattening, ability collection, and fast-forward behavior remain byte-for-byte i
         UpdateUnitVisibilityForClient(toClientId);
     }
 
-    public void ForceRevealToEnemyClients(GameObject unit, float seconds)
+    public void ForceRevealToEnemyTeams(GameObject unit, float seconds)
     {
         if (!IsServer || unit == null)
             return;
 
-        NetworkObject netObj = unit.GetComponent<NetworkObject>();
-        if (netObj == null)
+        Unit identity = unit.GetComponent<Unit>();
+        if (identity == null)
             return;
 
-        foreach (ulong clientId in allTeamUnits.Keys.ToList())
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
-            if (clientId != netObj.OwnerClientId)
-                ForceReveal(unit, clientId, seconds);
+            if (teamIndex != identity.TeamIndex)
+                ForceRevealToTeam(unit, teamIndex, seconds);
         }
     }
 
@@ -1124,7 +1124,7 @@ Replace only `ExecuteAbility` with this full body:
     {
         // Cover the pre-laser delay, rotation, full active window, rush, and cleanup RPC.
         // This happens before every object-scoped AreaLock ClientRpc.
-        GameLoop.Instance?.ForceRevealToEnemyClients(
+        GameLoop.Instance?.ForceRevealToEnemyTeams(
             gameObject,
             delayForDodge + abilityTime + 1.5f
         );
@@ -1223,7 +1223,7 @@ On the GameManager’s `GameLoop` component:
 - new: assign `Assets/Prefabs/Visuals/FogOverlayCell.prefab`.
 
 Make this assignment through the Unity editor/MCP and save the scene. Do not hand-author a GUID.
-No hierarchy object is added; the 90-cell `FogOverlay` hierarchy is client-local at runtime.
+No hierarchy object is added; the 150-cell `FogOverlay` hierarchy is client-local at runtime.
 
 ### Step 12 — documentation after successful verification
 
@@ -1347,8 +1347,8 @@ steps when resumed:
 
 Run on the main editor with no Play-mode dependency where possible:
 
-- `ComputeVisibleCells` returns exactly cells inside the 9×10 board.
-- A viewer at `(4,4)` with range 0 sees `(4,4)` only.
+- `ComputeVisibleCells` returns exactly cells inside the 15×10 board.
+- A viewer at `(7,4)` with range 0 sees `(7,4)` only.
 - Manhattan distance `range + 1` is absent.
 - A known wall strictly between viewer/target blocks.
 - Endpoint wall remains visible.
@@ -1396,7 +1396,7 @@ Then execute observations in that instance, not the main editor:
 - after server movement reveals one enemy, exactly that unit appears with current transform and
   UnitData;
 - after it leaves vision, it disappears from the spawn table again;
-- `FogOverlay` has exactly 90 pooled children;
+- `FogOverlay` has exactly 150 pooled children;
 - `FogCell_x_y.activeSelf` is false for locally visible cells and true otherwise.
 
 On a non-host client, “hidden renderers off” is not the primary assertion because the stronger

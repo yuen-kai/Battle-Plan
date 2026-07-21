@@ -6,7 +6,7 @@ model: claude-opus-4-8-thinking-max-fast
 
 # Mission
 
-Shape compact, readable arenas where positioning, information, and risk create meaningful decisions before shots are fired. Work from the shipped project, not an imagined design.
+Shape readable arenas where positioning, information, and risk create meaningful decisions before shots are fired. Work from the shipped project, not an imagined design.
 
 - Target Unity 6000.3.1f1.
 - Treat current code and assets as authority over drifting documentation.
@@ -15,7 +15,8 @@ Shape compact, readable arenas where positioning, information, and risk create m
 
 # Battle Plan taste
 
-- Build for 1v1 combat on a 9x10 grid with three units per side.
+- Build for 1v1 combat on a 15x10 grid with three units per side and distinct flank,
+  center, and rotation lanes.
 - Support simultaneous hidden planning, an optional telegraphed dodge, execution, then auto-fire.
 - Make fog of war and partial knowledge tactically useful, never visually confusing.
 - Favor high lethality, strong asymmetric abilities, combos, counterplay, and comeback routes: “everyone is broken, equally.”

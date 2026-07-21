@@ -17,12 +17,11 @@ using UnityEngine.SceneManagement;
 ///       on BOTH teams (unit switching), speed control (SetSpeed 30 during execution, back to 6)
 ///   R2  non-adjacent (illegal) move rejected; AreaLock (line ability) telegraph + dodge alert on
 ///       the correct unit; declined dodge; beam kill (death + damage application)
-///   R3  Grenade (targeted ability) dodge phase: correct unit alerted, dodge dive REPLACES the
-///       planned move (unit asserted on the dive cell), no grenade damage taken
+///   R3  Grenade centered on defender: correct unit alerted, straight two-cell dodge dive REPLACES
+///       the planned move (unit asserted on the dive cell), no grenade damage taken
 ///   R4  Shield Rush dashes three cells and toggles the caster's Shield child on then off; a unit
 ///       moves and casts on the same team in the same round
-///   R5  Grenade damage application on a non-dodging target (HP drop >= 80 or death; grenade
-///       damage rebalanced 50 -> 80)
+///   R5  exhausted Area Lock is rejected server-side; its charge stays spent and it deals no damage
 ///   R6+ drives chase rounds (BFS toward nearest enemy) until elimination ends the match
 ///       (win or simultaneous-wipe draw, phase idle, timeScale restored to 1)
 ///
@@ -263,7 +262,7 @@ public class DevE2ETestRunner : MonoBehaviour
         return nearest;
     }
 
-    /// <summary>4-directional BFS over the 9x10 grid avoiding walls; returns start..goal cells.</summary>
+    /// <summary>4-directional BFS over the configured grid avoiding walls; returns start..goal cells.</summary>
     static List<Vector2Int> BfsPath(Vector2Int start, Vector2Int goal)
     {
         var cameFrom = new Dictionary<Vector2Int, Vector2Int> { [start] = start };
@@ -279,7 +278,7 @@ public class DevE2ETestRunner : MonoBehaviour
             foreach (Vector2Int dir in dirs)
             {
                 Vector2Int next = cell + dir;
-                if (next.x < 0 || next.x > 8 || next.y < 0 || next.y > 9)
+                if (!GridSystem.IsCellInBounds(next))
                     continue;
                 if (GameLoop.wallLayout.Contains(next) || cameFrom.ContainsKey(next))
                     continue;
@@ -404,30 +403,30 @@ public class DevE2ETestRunner : MonoBehaviour
         );
         Check(GameLoop.Instance.FogOfWarEnabled, "R0 fog of war enabled from match options");
         Check(
-            Cell(bSoldier) == new Vector2Int(1, 3)
-                && Cell(pogo) == new Vector2Int(4, 5)
-                && Cell(bShot) == new Vector2Int(7, 3)
-                && Cell(rShot) == new Vector2Int(5, 6)
-                && Cell(sniper) == new Vector2Int(4, 6)
-                && Cell(rSoldier) == new Vector2Int(3, 6),
+            Cell(bSoldier) == new Vector2Int(4, 3)
+                && Cell(pogo) == new Vector2Int(7, 5)
+                && Cell(bShot) == new Vector2Int(10, 3)
+                && Cell(rShot) == new Vector2Int(8, 6)
+                && Cell(sniper) == new Vector2Int(7, 6)
+                && Cell(rSoldier) == new Vector2Int(6, 6),
             "R0 spawns match dev layout",
             $"blue {Cell(bSoldier)},{Cell(pogo)},{Cell(bShot)} red {Cell(rShot)},{Cell(sniper)},{Cell(rSoldier)}"
         );
         Snap("r0-match-start");
 
         // ================= R1: movement (legal + illegal wall step), both teams, speed =========
-        // Blue Soldier: legal 3-step (1,3)->(1,2)->(0,2)->(0,1).
-        DevInput.SetPath(0, 0, 1, 2, 0, 2, 0, 1);
-        // PogoRider: legal 5-step escape straight down column 4 to (4,0) (beam lane for R2).
-        DevInput.SetPath(0, 1, 4, 4, 4, 3, 4, 2, 4, 1, 4, 0);
-        // Blue Shotgunner: (8,3) legal, then (8,4) is a WALL -> must be truncated at (8,3).
-        DevInput.SetPath(0, 2, 8, 3, 8, 4);
+        // Blue Soldier: legal 3-step (4,3)->(4,2)->(3,2)->(3,1).
+        DevInput.SetPath(0, 0, 4, 2, 3, 2, 3, 1);
+        // PogoRider: legal 5-step escape down the clear column-8 lane to (8,1).
+        DevInput.SetPath(0, 1, 8, 5, 8, 4, 8, 3, 8, 2, 8, 1);
+        // Blue Shotgunner: (11,3) legal, then (12,3) is a WALL -> truncate at (11,3).
+        DevInput.SetPath(0, 2, 11, 3, 12, 3);
         // Red Shotgunner: legal 3-step away from the Pogo escape lane (also proves dev input
         // drives BOTH teams / all unit indices -- the no-mouse analog of unit switching).
-        DevInput.SetPath(1, 0, 5, 5, 6, 5, 7, 5);
-        // Red Sniper: retreat up the lane to (4,9), keeping the Pogo out of the new weapon range
-        // (9 > 5 at (4,0)) while leaving it on the beam lane for R2.
-        DevInput.SetPath(1, 1, 4, 7, 4, 8, 4, 9);
+        DevInput.SetPath(1, 0, 8, 7, 9, 7, 9, 8);
+        // Red Sniper follows into column 8 and retreats to row 8, outside auto-fire range while
+        // preserving a clear vertical Area Lock lane to the PogoRider for R2.
+        DevInput.SetPath(1, 1, 8, 6, 8, 7, 8, 8);
 
         DevInput.SubmitPlans();
         yield return WaitFor(() => Phase == "executing", 30f, "R1 execution start");
@@ -445,33 +444,33 @@ public class DevE2ETestRunner : MonoBehaviour
         Check(Mathf.Approximately(Time.timeScale, 6f), "R1 SetSpeed(6) restored");
 
         Check(
-            Cell(bSoldier) == new Vector2Int(0, 1),
-            "R1 legal 3-step path executed (blue Soldier at (0,1))",
+            Cell(bSoldier) == new Vector2Int(3, 1),
+            "R1 legal 3-step path executed (blue Soldier at (3,1))",
             $"actual {Cell(bSoldier)}"
         );
         Check(
-            Cell(pogo) == new Vector2Int(4, 0),
-            "R1 legal 5-step path executed (PogoRider at (4,0))",
+            Cell(pogo) == new Vector2Int(8, 1),
+            "R1 legal 5-step path executed (PogoRider at (8,1))",
             $"actual {Cell(pogo)}"
         );
         Check(
-            Cell(bShot) == new Vector2Int(8, 3),
-            "R1 illegal wall step (8,4) rejected by server sanitizer (Shotgunner stopped at (8,3))",
+            Cell(bShot) == new Vector2Int(11, 3),
+            "R1 illegal wall step (12,3) rejected by server sanitizer (Shotgunner stopped at (11,3))",
             $"actual {Cell(bShot)}"
         );
         Check(
-            Cell(rShot) == new Vector2Int(7, 5),
-            "R1 red-team unit moved by dev input (RedShotgunner at (7,5))",
+            Cell(rShot) == new Vector2Int(9, 8),
+            "R1 red-team unit moved by dev input (RedShotgunner at (9,8))",
             $"actual {Cell(rShot)}"
         );
         Check(
-            Cell(sniper) == new Vector2Int(4, 9),
-            "R1 red Sniper retreated to (4,9) (out of weapon range of the pogo lane)",
+            Cell(sniper) == new Vector2Int(8, 8),
+            "R1 red Sniper retreated to (8,8) (out of weapon range of the Pogo lane)",
             $"actual {Cell(sniper)}"
         );
         Check(
-            Cell(rSoldier) == new Vector2Int(3, 6),
-            "R1 auto-filled unit stayed put (Soldier (3,6))",
+            Cell(rSoldier) == new Vector2Int(6, 6),
+            "R1 auto-filled unit stayed put (Soldier (6,6))",
             $"actual {Cell(rSoldier)}"
         );
         Info(
@@ -479,12 +478,14 @@ public class DevE2ETestRunner : MonoBehaviour
         );
         Snap("r1-movement");
 
-        // ================= R2: illegal non-adjacent move + AreaLock line ability + death =======
-        // Blue Soldier submits a NON-ADJACENT jump (0,1)->(2,1): must be rejected (stay put).
-        DevInput.SetPath(0, 0, 2, 1);
-        // Sniper line ability straight down column 4 at the PogoRider -- a dodge alert must fire
+        // ================= R2: movement validation + AreaLock line ability + death ==============
+        // Reposition the Blue Soldier to the center-target fixture used by R3.
+        DevInput.SetPath(0, 0, 3, 2, 4, 2, 5, 2);
+        // Blue Shotgunner submits a NON-ADJACENT jump (11,3)->(13,3): reject and stay put.
+        DevInput.SetPath(0, 2, 13, 3);
+        // Sniper line ability straight down column 8 at the PogoRider -- a dodge alert must fire
         // for the PogoRider; we DECLINE the dodge, so the beam kills it (death + damage proof).
-        DevInput.SetAbility(1, 1, 4, 0);
+        DevInput.SetAbility(1, 1, 8, 1);
         yield return RunRoundToCompletion(
             "R2",
             true,
@@ -513,18 +514,24 @@ public class DevE2ETestRunner : MonoBehaviour
             $"alive={Alive(pogo)}"
         );
         Check(
-            Cell(bSoldier) == new Vector2Int(0, 1),
-            "R2 illegal non-adjacent move rejected (blue Soldier still at (0,1))",
+            Cell(bSoldier) == new Vector2Int(5, 2),
+            "R2 legal reposition completed (blue Soldier at the R3 grenade center)",
             $"actual {Cell(bSoldier)}"
+        );
+        Check(
+            Cell(bShot) == new Vector2Int(11, 3),
+            "R2 illegal non-adjacent move rejected (blue Shotgunner still at (11,3))",
+            $"actual {Cell(bShot)}"
         );
         Snap("r2-arealock-kill");
 
         // ================= R3: Grenade + dodge dive that REPLACES the planned move ==============
-        // Soldier (3,6) throws a grenade at (1,3): Manhattan 5 = max range, radius 2, response 3.
-        // Blue Soldier (0,1) is within response range of the square -> alerted, then dives 2 cells
-        // to (1,0), outside radius 2: must end on the dive cell without taking grenade damage.
+        // Soldier (6,6) throws at the Blue Soldier's exact cell (5,2): Manhattan 5 = max range.
+        // The defender replaces its planned move with a straight two-cell dive to (3,2), proving
+        // that the 1.6-cell blast can be escaped from its center.
         float bSoldierHpBeforeR3 = HP(bSoldier);
-        DevInput.SetAbility(1, 2, 1, 3);
+        DevInput.SetPath(0, 0, 6, 2);
+        DevInput.SetAbility(1, 2, 5, 2);
         yield return RunRoundToCompletion(
             "R3",
             true,
@@ -536,14 +543,14 @@ public class DevE2ETestRunner : MonoBehaviour
                     "R3 grenade dodge alert targeted exactly the blue Soldier",
                     "alerted: " + string.Join(",", alerted.Select(u => u.name))
                 );
-                DevInput.SetDodgePath(0, 0, 0, 0, 1, 0); // (0,1) -> (0,0) -> (1,0)
+                DevInput.SetDodgePath(0, 0, 4, 2, 3, 2); // (5,2) -> (4,2) -> (3,2)
                 Snap("r3-grenade-telegraph");
                 DevInput.SubmitDodge();
             }
         );
         Check(
-            Cell(bSoldier) == new Vector2Int(1, 0),
-            "R3 dodge dive replaced the planned move (blue Soldier ended on dive cell (1,0))",
+            Cell(bSoldier) == new Vector2Int(3, 2),
+            "R3 center-target dive replaced the planned move and ended two cells away at (3,2)",
             $"actual {Cell(bSoldier)}"
         );
         Check(
@@ -557,15 +564,15 @@ public class DevE2ETestRunner : MonoBehaviour
         // The blue Soldier survived R3 by assertion and is outside every red unit's weapon range.
         // Moving the already-wounded Soldier here made this check depend on nondeterministic
         // crossfire from prior rounds rather than movement correctness.
-        DevInput.SetPath(0, 0, 2, 0);
+        DevInput.SetPath(0, 0, 3, 1, 3, 0);
         Vector2Int rushStart = Cell(rShot);
         Vector2Int rushDirectionTarget = rushStart + Vector2Int.left;
-        Vector2Int expectedRushDestination = new(4, 5);
+        Vector2Int expectedRushDestination = new(6, 8);
         Unit rushIdentity = rShot.GetComponent<Unit>();
         int rushUsesBefore = rushIdentity.RemainingAbilityUses;
         Check(
-            rushStart == new Vector2Int(7, 5),
-            "R4 precondition: red Shotgunner starts at (7,5)",
+            rushStart == new Vector2Int(9, 8),
+            "R4 precondition: red Shotgunner starts at (9,8)",
             $"actual {rushStart}"
         );
         DevInput.SetAbility(1, 0, rushDirectionTarget.x, rushDirectionTarget.y);
@@ -603,8 +610,8 @@ public class DevE2ETestRunner : MonoBehaviour
             $"uses {rushUsesBefore} -> {rushIdentity.RemainingAbilityUses}"
         );
         Check(
-            Cell(bSoldier) == new Vector2Int(2, 0),
-            "R4 blue Soldier completed its simultaneous move to (2,0)",
+            Cell(bSoldier) == new Vector2Int(3, 0),
+            "R4 blue Soldier completed its simultaneous move to (3,0)",
             $"actual {Cell(bSoldier)}"
         );
         Snap("r4-shield-rush");
@@ -677,14 +684,13 @@ public class DevE2ETestRunner : MonoBehaviour
         );
         MatchResult? finalResult = GameLoop.Instance?.LastMatchResult;
         bool simultaneousWipe = blueLeft == 0 && redLeft == 0;
-        int expectedWinner =
-            blueLeft == 0 ? GameLoop.OpponentTeamIndex : GameLoop.HostTeamIndex;
-        bool resultMatchesElimination = finalResult.HasValue
+        int expectedWinner = blueLeft == 0 ? GameLoop.OpponentTeamIndex : GameLoop.HostTeamIndex;
+        bool resultMatchesElimination =
+            finalResult.HasValue
             && (
                 simultaneousWipe
                     ? finalResult.Value.Outcome == MatchOutcome.Draw
-                        && finalResult.Value.Reason
-                            == MatchResultReason.SimultaneousElimination
+                        && finalResult.Value.Reason == MatchResultReason.SimultaneousElimination
                     : finalResult.Value.Outcome == MatchOutcome.Win
                         && finalResult.Value.Reason == MatchResultReason.Elimination
                         && finalResult.Value.WinningTeamIndex == expectedWinner

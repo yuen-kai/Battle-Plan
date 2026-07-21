@@ -4,11 +4,12 @@ using UnityEngine;
 
 public class AreaLock : Ability
 {
+    public const float AbilityDamage = 130f;
+
     float abilityTime = 3;
     float rotationSpeed = 720f; // Degrees per second
     public GameObject superBulletBlue;
     public GameObject superBulletRed;
-    float damageMultiplier = 2f;
     float delayForDodge = 0.5f;
 
     // Threat-red laser regardless of team: it reads as "danger line" to both players.
@@ -31,6 +32,11 @@ public class AreaLock : Ability
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
+        GameLoop.Instance?.ForceRevealToEnemyTeams(
+            gameObject,
+            delayForDodge + abilityTime + 1.5f
+        );
+
         transform.GetComponent<Movement>().PauseMovement();
         transform.GetComponent<Movement>().moving = false;
 
@@ -124,6 +130,17 @@ public class AreaLock : Ability
             GameObject target = hit.collider.gameObject;
             if (target.tag == enemyTeam)
             {
+                if (
+                    GameLoop.Instance != null
+                    && GameLoop.Instance.DoesWorldSegmentCrossActiveSmoke(
+                        start,
+                        target.transform.position
+                    )
+                )
+                {
+                    return false;
+                }
+
                 FireSuperDamageBullet(target);
                 return true;
             }
@@ -177,9 +194,7 @@ public class AreaLock : Ability
         ImpactShockwave.Spawn(endPos, LaserGlow, 3f);
         CameraEffects.Instance?.CameraShakeClientRpc();
 
-        target
-            .GetComponent<Health>()
-            ?.TakeDamage(transform.GetComponent<Shooting>().unitData.damage * damageMultiplier);
+        target.GetComponent<Health>()?.TakeDamage(AbilityDamage);
 
         StartCoroutine(cleanup());
     }
