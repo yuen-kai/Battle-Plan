@@ -712,10 +712,6 @@ public class GameLoop : NetworkBehaviour
             );
         if (roster.Any(unitIndex => unitIndex < 0))
             throw new System.ArgumentException("A team roster contains an invalid unit index.");
-        if (roster.Distinct().Count() != roster.Length)
-            throw new System.ArgumentException(
-                $"A team roster must contain {RosterRules.UnitsPerPlayer} distinct units."
-            );
         if (teamParticipants.Any(entry => entry.Key != teamIndex && entry.Value == participantId))
         {
             throw new System.ArgumentException(
@@ -2149,36 +2145,17 @@ public class GameLoop : NetworkBehaviour
                 Vector2Int cell in GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
             )
             {
-                GameObject marker = new($"SmokeTelegraphCell_{cell.x}_{cell.y}");
-                LineRenderer lineRenderer = marker.AddComponent<LineRenderer>();
-                lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
-                lineRenderer.startColor = lineRenderer.endColor = new Color(1f, 0.5f, 0f, 0.85f);
-                lineRenderer.startWidth = lineRenderer.endWidth = 0.08f;
-                lineRenderer.loop = true;
-                lineRenderer.positionCount = 4;
-
-                Vector3 cellCenter = gridCoordToWorld(cell) + Vector3.up * 0.17f;
-                float halfSize = cellSize * 0.46f;
-                lineRenderer.SetPositions(
-                    new[]
-                    {
-                        cellCenter + new Vector3(-halfSize, 0f, -halfSize),
-                        cellCenter + new Vector3(-halfSize, 0f, halfSize),
-                        cellCenter + new Vector3(halfSize, 0f, halfSize),
-                        cellCenter + new Vector3(halfSize, 0f, -halfSize),
-                    }
-                );
-                clientTelegraphs.Add(marker);
+                CreateTelegraphCellOutline(cell);
             }
         }
-        else
+        else if (radiusCells > 0f)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Collider markerCollider = marker.GetComponent<Collider>();
             markerCollider.enabled = false;
             Destroy(markerCollider);
             marker.name = "AbilityTelegraphMarker";
-            float diameter = Mathf.Max(1f, 2f * radiusCells * cellSize);
+            float diameter = 2f * radiusCells * cellSize;
             marker.transform.position = square + new Vector3(0, 0.15f, 0);
             marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
             var rend = marker.GetComponent<Renderer>();
@@ -2186,6 +2163,39 @@ public class GameLoop : NetworkBehaviour
             rend.material.color = new Color(1f, 0.5f, 0f, 0.5f);
             clientTelegraphs.Add(marker);
         }
+        else
+        {
+            // Point-target abilities (no blast radius, e.g. the Pogo Rider's Jump) have nothing
+            // to show as a disc; outline the single target cell instead so the telegraph reads
+            // clearly for the opponent too.
+            CreateTelegraphCellOutline(GridSystem.ConvertToGridCoords(square));
+        }
+    }
+
+    // Shared single-cell square outline for ability telegraphs (Smoke's per-cell footprint and
+    // any zero-radius point-target ability, e.g. Pogo's Jump).
+    void CreateTelegraphCellOutline(Vector2Int cell)
+    {
+        GameObject marker = new($"AbilityTelegraphCell_{cell.x}_{cell.y}");
+        LineRenderer lineRenderer = marker.AddComponent<LineRenderer>();
+        lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        lineRenderer.startColor = lineRenderer.endColor = new Color(1f, 0.5f, 0f, 0.85f);
+        lineRenderer.startWidth = lineRenderer.endWidth = 0.08f;
+        lineRenderer.loop = true;
+        lineRenderer.positionCount = 4;
+
+        Vector3 cellCenter = gridCoordToWorld(cell) + Vector3.up * 0.17f;
+        float halfSize = cellSize * 0.46f;
+        lineRenderer.SetPositions(
+            new[]
+            {
+                cellCenter + new Vector3(-halfSize, 0f, -halfSize),
+                cellCenter + new Vector3(-halfSize, 0f, halfSize),
+                cellCenter + new Vector3(halfSize, 0f, halfSize),
+                cellCenter + new Vector3(halfSize, 0f, -halfSize),
+            }
+        );
+        clientTelegraphs.Add(marker);
     }
 
     [ClientRpc]

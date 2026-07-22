@@ -254,24 +254,36 @@ edit-mode tests; no reliance on human feel.
 
 ## 14. Balance guardrails
 
+**Update (repeat units shipped):** fireteam selection no longer requires distinct units — a side may
+field the same unit, including the Commander, in more than one slot. Every guardrail below that
+assumed "unique rosters mean at most one Commander per side" was written before this change and is
+now an **open balance risk, not a verified-safe config**. In particular a 5x-Commander fireteam can
+put multiple simultaneous Smoke Screens on the board per round, which directly contradicts "No
+permanent safe zone" below. Re-validate with a multi-Commander roster before trusting these
+guardrails; a per-unit repeat cap (e.g. limit Commander to 1) is the straightforward rollback if
+stacking proves dominant.
+
 - **No permanent safe zone:** duration bounded to the round; one use per match already caps frequency
-  (and unique rosters mean at most one Commander → one smoke per side per match).
+  (previously relied on unique rosters capping this at one Commander → one smoke per side per match;
+  repeats can now exceed that — see update note above).
 - **Symmetry enforced:** never ship an enemy-only occlusion; it must block both teams equally.
 - **Parity, not oppression:** with Commander enabled, no roster's side-adjusted win rate should exceed
   ~60% or fall below ~40% (align with the audits' >60% rejection guardrail); the Commander must be
-  neither a trap pick nor a must-pick.
-- **Single-variable rollout:** ship/measure Smoke on a build where the other prerequisites (unique
-  rosters, path/FPS-invariant fire budget, per-ability counterplay) are already controlled; do not bundle
+  neither a trap pick nor a must-pick. Re-check this specifically for multi-Commander rosters now that
+  repeats are allowed.
+- **Single-variable rollout:** ship/measure Smoke on a build where the other prerequisites
+  (path/FPS-invariant fire budget, per-ability counterplay) are already controlled; do not bundle
   Smoke tuning with the ability-economy A/B or Grenade-radius experiment.
-- **Rollback:** if Smoke proves dominant or degenerate, re-gate the Commander (re-add the server
-  rejection + hide the option) without touching other systems.
+- **Rollback:** if Smoke proves dominant or degenerate, either re-gate the Commander entirely (re-add
+  the server rejection + hide the option) or add a per-unit repeat cap (e.g. Commander capped at 1)
+  without touching other systems.
 
 ## 15. Dependencies
 
 - **Character-select gate** (`CharacterSelectionUIController`: `BuildRosterOptions`, `SelectUnit`,
   `ConfirmSelectionServerRpc`) — hide Commander option and reject rosters containing index 0 until DoD.
-- **Distinct-roster enforcement** (same controller) — Smoke's "one Commander per side" assumption relies
-  on distinct rosters.
+- **Distinct-roster enforcement** (same controller) — **removed** so players can select repeat units;
+  Smoke's original "one Commander per side" assumption no longer holds (see §14 update note).
 - **Ability activation pipeline** (`GameLoop.CollectAbilityActivations`, `SanitizeAbilityPlan`,
   `RunDodgePhase`, `ShowAbilityTelegraphClientRpc`, `ExecuteMoves`, `TryConsumeAbilityUse`).
 - **Shared shot-LoS mechanism** (`Shooting.lineOfSight`, `Grenade`/`AreaLock` Walls-mask raycasts,

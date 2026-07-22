@@ -133,7 +133,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         if (rosterInstruction != null)
         {
             rosterInstruction.text =
-                $"Choose {UnitsPerPlayer} distinct eligible units. Select a filled slot to remove it.";
+                $"Choose {UnitsPerPlayer} eligible units. Repeats are allowed. Select a filled slot to remove it.";
         }
         if (rosterCountLabel != null)
             rosterCountLabel.text = $"FIRETEAM / SELECT {UnitsPerPlayer}";
@@ -426,13 +426,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
             return;
         }
 
-        if (Array.IndexOf(selectedUnits, unitIndex) >= 0)
-        {
-            localStatusOverride = "That unit is already selected. Choose a different unit.";
-            UpdateSelectionState();
-            return;
-        }
-
         int emptySlot = Array.IndexOf(selectedUnits, -1);
         if (emptySlot < 0)
         {
@@ -482,12 +475,12 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         for (int unitIndex = 0; unitIndex < optionViews.Count; unitIndex++)
         {
-            bool selected = Array.IndexOf(selectedUnits, unitIndex) >= 0;
+            int pickedCount = selectedUnits.Count(index => index == unitIndex);
             bool eligible = RosterRules.IsUnitEligible(allUnits?.units, unitIndex);
             optionViews[unitIndex].Configure(
-                selected,
+                pickedCount,
                 eligible,
-                canEdit && !selectionComplete && !selected && eligible
+                canEdit && !selectionComplete && eligible
             );
         }
 
@@ -826,8 +819,9 @@ public class CharacterSelectionUIController : NetworkBehaviour
             this.optionStatus = optionStatus;
         }
 
-        public void Configure(bool selected, bool eligible, bool canChoose)
+        public void Configure(int pickedCount, bool eligible, bool canChoose)
         {
+            bool selected = pickedCount > 0;
             Root.EnableInClassList("unit-option--selected", selected);
             Root.EnableInClassList("unit-option--unavailable", !eligible);
             Button.EnableInClassList("unit-option--selected", selected);
@@ -837,7 +831,9 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
             if (optionStatus != null)
             {
-                optionStatus.text = !eligible ? "Unavailable" : (selected ? "Selected" : string.Empty);
+                optionStatus.text = !eligible
+                    ? "Unavailable"
+                    : (pickedCount > 1 ? $"Selected \u00d7{pickedCount}" : (selected ? "Selected" : string.Empty));
                 optionStatus.EnableInClassList("hidden", eligible && !selected);
             }
 
@@ -846,9 +842,9 @@ public class CharacterSelectionUIController : NetworkBehaviour
             Button.tooltip = !eligible
                 ? $"{unitName} is unavailable for deployment"
                 : (
-                    selected
-                        ? $"{unitName} is already selected"
-                        : (canChoose ? $"Add {unitName} to the fireteam" : "Fireteam selection is locked")
+                    canChoose
+                        ? (selected ? $"Add another {unitName} to the fireteam" : $"Add {unitName} to the fireteam")
+                        : "Fireteam selection is locked"
                 );
         }
 

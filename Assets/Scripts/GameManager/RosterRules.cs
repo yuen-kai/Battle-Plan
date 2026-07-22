@@ -8,7 +8,6 @@ public enum RosterValidationReason : byte
     UnitCatalogUnavailable,
     InsufficientEligibleUnits,
     UnitIndexOutOfRange,
-    DuplicateUnit,
     UnitUnavailable,
 }
 
@@ -116,7 +115,8 @@ public static class RosterRules
 
     /// <summary>
     /// Validates an externally supplied fireteam. Failure priority is stable: shape, catalog,
-    /// index range, duplicates, then per-unit availability.
+    /// index range, then per-unit availability. Repeated picks of the same unit are allowed —
+    /// a fireteam may field the same unit in more than one slot.
     /// </summary>
     public static RosterValidationResult Validate(
         IReadOnlyList<int> roster,
@@ -138,20 +138,6 @@ public static class RosterRules
             {
                 return RosterValidationResult.Invalid(
                     RosterValidationReason.UnitIndexOutOfRange,
-                    slotIndex,
-                    unitIndex
-                );
-            }
-        }
-
-        HashSet<int> selected = new();
-        for (int slotIndex = 0; slotIndex < roster.Count; slotIndex++)
-        {
-            int unitIndex = roster[slotIndex];
-            if (!selected.Add(unitIndex))
-            {
-                return RosterValidationResult.Invalid(
-                    RosterValidationReason.DuplicateUnit,
                     slotIndex,
                     unitIndex
                 );
@@ -197,8 +183,6 @@ public static class RosterRules
                 $"At least {UnitsPerPlayer} eligible units are required to start a match.",
             RosterValidationReason.UnitIndexOutOfRange =>
                 "One selected unit is no longer available. Choose another unit.",
-            RosterValidationReason.DuplicateUnit =>
-                $"Choose {UnitsPerPlayer} different units; duplicate picks are not allowed.",
             RosterValidationReason.UnitUnavailable =>
                 "That unit is unavailable for deployment. Choose another unit.",
             _ => $"That fireteam is not valid. Choose {UnitsPerPlayer} units again.",

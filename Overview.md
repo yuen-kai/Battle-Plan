@@ -2,7 +2,7 @@ Two players simultaneously plan movement paths for their five-unit fireteams and
 
 Elimination is won by defeating the opposing fireteam. In King of the Hill, a central 3×4 block of twelve cells forms a control zone; a team wins by holding sole control at the end of three consecutive rounds. Eliminated units remain dead in both modes. Eliminating the entire opposing fireteam wins immediately; if both fireteams are wiped in the same round, the match is a draw.
 
-**Current rules.** Each ability has **one use per match**: charges are set at deployment and do not recharge between rounds. This one-use baseline is intentional and honestly labeled, pending a later instrumented A/B test — it is not a permanent decision. A fireteam is exactly **five distinct** characters drawn from the eligible roster. The Commander is available with Smoke Screen.
+**Current rules.** Each ability has **one use per match**: charges are set at deployment and do not recharge between rounds. This one-use baseline is intentional and honestly labeled, pending a later instrumented A/B test — it is not a permanent decision. A fireteam is exactly **five** characters drawn from the eligible roster; repeats are allowed, so the same character can fill more than one slot. The Commander is available with Smoke Screen.
 
 
 | Character           | Role                   | Weapon                                                                                       | Ability (one use per match)                                                                         | Strengths                               | Weaknesses                                    |

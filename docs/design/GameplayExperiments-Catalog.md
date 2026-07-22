@@ -57,7 +57,8 @@ collider trims 0.4 world units from each corner for bullet-sized diagonal peeks;
 - a centered **six-cell hill**, columns 6–8 and rows 4–5;
 - production spawns distributed evenly across rows 0 and 9, with a two-column edge inset when
 space permits;
-- exactly **five distinct units per team**, controlled by `RosterRules.UnitsPerPlayer`;
+- exactly **five units per team**, controlled by `RosterRules.UnitsPerPlayer`; repeats are allowed,
+so a team may field the same unit in more than one slot;
 - a five-unit eligible roster: Soldier, Shotgunner, Pogo Rider, Sniper, and Commander;
 - fog of war enabled unless an experiment explicitly makes fog the single variable;
 - the current Commander **Smoke Screen**: one use, target range 3, a real 3 × 3 footprint, and

@@ -339,9 +339,17 @@ public class PlanMovement : MonoBehaviour
         GameHUDController.Instance?.SetTargetFeedback(GetAbilityTargetFeedback(reason), true);
     }
 
-    // Runtime-generated ability target visuals (marker + AOE disc, or preview line), mirroring
-    // how AreaLock builds its laser at runtime — no prefab/scene references needed.
+    // Runtime-generated ability target visuals (AOE disc, single/multi-cell square outline, or
+    // preview line), mirroring how AreaLock builds its laser at runtime — no prefab/scene
+    // references needed.
     private GameObject abilityTargetIndicator;
+
+    // MoveOverlayCell's root plane is opaque (URP Lit, ZWrite on) at world y=0.2, and its "Inner"
+    // highlight sits at y=0.227; both are shown under the target cell whenever an ability's range
+    // is displayed. A transparent marker placed at or below that height fails the depth test
+    // against the opaque tile and is fully hidden, even at full alpha. Keep ability target
+    // markers clearly above both so they render on top of the range overlay.
+    private const float AbilityIndicatorHeight = 0.26f;
 
     void UpdateAbilityTargetIndicator(Vector3 start, Vector3 square, UnitData unitData)
     {
@@ -350,7 +358,7 @@ public class PlanMovement : MonoBehaviour
 
         if (selectedUnit != null && selectedUnit.GetComponent<Smoke>() != null)
         {
-            CreateSmokeTargetIndicator(square);
+            CreateSquareFootprintIndicator(square, Smoke.FootprintRadius);
             return;
         }
 
@@ -402,21 +410,28 @@ public class PlanMovement : MonoBehaviour
             lr.SetPosition(0, casterPos);
             lr.SetPosition(1, end);
         }
-        else
+        else if (unitData.abilityRadius > 0f)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Destroy(marker.GetComponent<Collider>());
             marker.transform.parent = abilityTargetIndicator.transform;
-            float diameter = Mathf.Max(1f, 2f * unitData.abilityRadius * cellSize);
-            marker.transform.position = square + new Vector3(0, 0.15f, 0);
+            float diameter = 2f * unitData.abilityRadius * cellSize;
+            marker.transform.position = square + new Vector3(0, AbilityIndicatorHeight, 0);
             marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
             Renderer rend = marker.GetComponent<Renderer>();
             rend.material = new Material(Shader.Find("Sprites/Default"));
             rend.material.color = new Color(1f, 0.8f, 0f, 0.5f);
         }
+        else
+        {
+            // Point-target abilities have no blast radius to draw as an AOE disc (e.g. the Pogo
+            // Rider's Jump — it lands on exactly one cell). Outline that single target square
+            // instead so the selection reads clearly, matching the other units' visible markers.
+            CreateSquareFootprintIndicator(square, 0);
+        }
     }
 
-    void CreateSmokeTargetIndicator(Vector3 square)
+    void CreateSquareFootprintIndicator(Vector3 square, int radius)
     {
         Vector2Int center = GridSystem.ConvertToGridCoords(
             GridSystem.GetNearestGridCell(square)
@@ -426,14 +441,13 @@ public class PlanMovement : MonoBehaviour
         float halfCell = cellSize * 0.46f;
         float lineWidth = Mathf.Max(0.04f, cellSize * 0.04f);
 
-        foreach (
-            Vector2Int cell in GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
-        )
+        foreach (Vector2Int cell in GridSystem.GetSquareFootprint(center, radius))
         {
-            GameObject cellOutline = new($"SmokePreviewCell_{cell.x}_{cell.y}");
+            GameObject cellOutline = new($"AbilityTargetCell_{cell.x}_{cell.y}");
             cellOutline.transform.SetParent(abilityTargetIndicator.transform, true);
 
-            Vector3 cellCenter = GameLoop.gridCoordToWorld(cell) + new Vector3(0, 0.15f, 0);
+            Vector3 cellCenter =
+                GameLoop.gridCoordToWorld(cell) + new Vector3(0, AbilityIndicatorHeight, 0);
             LineRenderer outline = cellOutline.AddComponent<LineRenderer>();
             outline.material = previewMaterial;
             outline.startColor = outline.endColor = previewColor;

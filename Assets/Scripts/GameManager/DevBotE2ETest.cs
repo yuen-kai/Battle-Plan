@@ -393,6 +393,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                         transform.name == "AbilityTelegraphLine"
                         || transform.name == "AbilityTelegraphMarker"
                         || transform.name.StartsWith("SmokeTelegraphCell_")
+                        || transform.name.StartsWith("AbilityTelegraphCell_")
                     );
                 Check(
                     !hasActiveTelegraph,

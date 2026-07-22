@@ -14,7 +14,7 @@
             <ui:VisualElement class="roster-header">
                 <ui:VisualElement class="roster-heading" picking-mode="Ignore">
                     <ui:Label text="Assemble your fireteam" class="title-xl" picking-mode="Ignore" />
-                    <ui:Label name="roster-instruction" text="Choose distinct eligible units. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
+                    <ui:Label name="roster-instruction" text="Choose eligible units. Repeats are allowed. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
                 </ui:VisualElement>
                 <ui:VisualElement class="match-summary panel panel--quiet">
                     <ui:Label text="Match brief" class="section-label" picking-mode="Ignore" />

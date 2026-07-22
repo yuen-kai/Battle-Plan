@@ -57,7 +57,9 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
      invalid ability plans degrade to stay-put moves).
 1.5. **Ability dodge phase** (start of execution, when applicable — `GameLoop.RunDodgePhase`)
    - Every activation is telegraphed to both clients (`ShowAbilityTelegraphClientRpc`:
-     runtime-generated AOE disc, or caster→square line for `responseDistLine` abilities).
+     runtime-generated AOE disc for `abilityRadius > 0`, caster→square line for
+     `responseDistLine` abilities, or a single/multi-cell square outline otherwise — Smoke's
+     footprint and zero-radius point-target abilities like the Pogo Rider's Jump).
    - The server computes threatened enemies per activation: within `responseRange` cells of the
      target square (`Helper.GetObjectsInRange`), or of the line (`GetUnitsInRangeOfLine`).
      Threatened units get their `UnitCanvas/Alert` icon enabled network-wide.

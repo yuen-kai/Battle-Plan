@@ -244,6 +244,25 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void ConfigureTeam_AcceptsRosterWithRepeatedUnitIndices()
+    {
+        // A fireteam may field the same unit in more than one slot; ConfigureTeam only rejects
+        // wrong-length rosters and negative indices, not repeats.
+        const ulong hostClientId = 23;
+        int[] repeatedRoster = Enumerable.Repeat(0, RosterRules.UnitsPerPlayer).ToArray();
+
+        Assert.That(
+            () => GameLoop.ConfigureTeam(GameLoop.HostTeamIndex, hostClientId, repeatedRoster),
+            Throws.Nothing
+        );
+        Assert.That(
+            GameLoop.TryGetConfiguredParticipantId(GameLoop.HostTeamIndex, out ulong mappedHost),
+            Is.True
+        );
+        Assert.That(mappedHost, Is.EqualTo(hostClientId));
+    }
+
+    [Test]
     public void DirectionalAbilityTargeting_AcceptsEightAdjacentCellsOnly()
     {
         Vector2Int start = new(4, 4);
@@ -1152,7 +1171,7 @@ public class GameplayNetworkEditModeTests
     // === Roster validation (Wave 1) ===
 
     [Test]
-    public void Roster_Validate_AcceptsConfiguredDistinctEligibleRoster()
+    public void Roster_Validate_AcceptsConfiguredEligibleRoster()
     {
         List<UnitData> catalog = CreateEligibleCatalog(RosterRules.UnitsPerPlayer);
         try
@@ -1195,7 +1214,7 @@ public class GameplayNetworkEditModeTests
                     )
                     .Reason,
                 Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
-                "An oversized fireteam is rejected on shape, not duplicates."
+                "An oversized fireteam is rejected on shape."
             );
             Assert.That(
                 RosterRules.Validate(validRoster, null).Reason,
@@ -1231,33 +1250,24 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void Roster_Validate_RejectsDuplicateWithStableSlotAndIndex()
+    public void Roster_Validate_AcceptsRosterWithRepeatedUnits()
     {
-        int[] earlyRoster = CreateValidRoster();
-        earlyRoster[1] = earlyRoster[0];
-        int[] tailRoster = CreateValidRoster();
-        tailRoster[^1] = tailRoster[0];
+        // Repeats are an intentional feature: a fireteam may field the same unit in more than
+        // one slot, up to and including every slot.
+        int[] earlyRepeat = CreateValidRoster();
+        earlyRepeat[1] = earlyRepeat[0];
+        int[] tailRepeat = CreateValidRoster();
+        tailRepeat[^1] = tailRepeat[0];
+        int[] allSameUnit = Enumerable.Repeat(0, RosterRules.UnitsPerPlayer).ToArray();
         List<UnitData> catalog = CreateEligibleCatalog(RosterRules.UnitsPerPlayer);
         try
         {
-            RosterValidationResult early = RosterRules.Validate(earlyRoster, catalog);
-            Assert.That(early.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
+            Assert.That(RosterRules.Validate(earlyRepeat, catalog).IsValid, Is.True);
+            Assert.That(RosterRules.Validate(tailRepeat, catalog).IsValid, Is.True);
             Assert.That(
-                early.SlotIndex,
-                Is.EqualTo(1),
-                "The repeated slot is reported deterministically."
-            );
-            Assert.That(early.UnitIndex, Is.EqualTo(earlyRoster[0]));
-
-            RosterValidationResult tail = RosterRules.Validate(tailRoster, catalog);
-            Assert.That(tail.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
-            Assert.That(tail.SlotIndex, Is.EqualTo(tailRoster.Length - 1));
-            Assert.That(tail.UnitIndex, Is.EqualTo(tailRoster[0]));
-            Assert.That(
-                RosterRules.GetUserMessage(tail),
-                Is.EqualTo(
-                    $"Choose {RosterRules.UnitsPerPlayer} different units; duplicate picks are not allowed."
-                )
+                RosterRules.Validate(allSameUnit, catalog).IsValid,
+                Is.True,
+                "A fireteam of five copies of the same unit is a valid repeat pick."
             );
         }
         finally
@@ -1285,20 +1295,6 @@ public class GameplayNetworkEditModeTests
             Assert.That(tooHigh.Reason, Is.EqualTo(RosterValidationReason.UnitIndexOutOfRange));
             Assert.That(tooHigh.SlotIndex, Is.EqualTo(tooHighRoster.Length - 1));
             Assert.That(tooHigh.UnitIndex, Is.EqualTo(catalog.Count));
-
-            // Range is enforced before duplicate detection, so the first illegal slot wins.
-            int[] rangeBeatsDuplicateRoster = CreateValidRoster();
-            rangeBeatsDuplicateRoster[0] = catalog.Count;
-            rangeBeatsDuplicateRoster[1] = catalog.Count;
-            RosterValidationResult rangeBeatsDuplicate = RosterRules.Validate(
-                rangeBeatsDuplicateRoster,
-                catalog
-            );
-            Assert.That(
-                rangeBeatsDuplicate.Reason,
-                Is.EqualTo(RosterValidationReason.UnitIndexOutOfRange)
-            );
-            Assert.That(rangeBeatsDuplicate.SlotIndex, Is.EqualTo(0));
         }
         finally
         {
@@ -1326,13 +1322,6 @@ public class GameplayNetworkEditModeTests
                 RosterRules.GetUserMessage(ineligible),
                 Is.EqualTo("That unit is unavailable for deployment. Choose another unit.")
             );
-
-            // Duplicate detection runs before availability, so a duplicate outranks an ineligible pick.
-            int[] duplicateRoster = CreateValidRoster();
-            duplicateRoster[1] = duplicateRoster[0];
-            RosterValidationResult duplicateFirst = RosterRules.Validate(duplicateRoster, catalog);
-            Assert.That(duplicateFirst.Reason, Is.EqualTo(RosterValidationReason.DuplicateUnit));
-            Assert.That(duplicateFirst.SlotIndex, Is.EqualTo(1));
 
             int[] eligibleRoster = Enumerable
                 .Range(0, RosterRules.UnitsPerPlayer + 1)
