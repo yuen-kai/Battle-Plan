@@ -7,6 +7,16 @@ using UnityEngine.UIElements;
 public class GameHUDController : MonoBehaviour
 {
     public static GameHUDController Instance { get; private set; }
+    private const string PlanningReadyHelp =
+        "Choose orders, then lock in. You can unlock while waiting.";
+    private static readonly string[] PlanningCommitStateClasses =
+    {
+        "planning-commit--ready",
+        "planning-commit--sending",
+        "planning-commit--waiting",
+        "planning-commit--unlocking",
+        "planning-commit--locked",
+    };
 
     [SerializeField]
     private VisualTreeAsset unitCardTemplate;
@@ -20,24 +30,29 @@ public class GameHUDController : MonoBehaviour
     private VisualElement flash;
     private VisualElement cardsContainer;
     private VisualElement enemyCardsContainer;
+    private VisualElement hudDock;
+    private VisualElement hillStatusReadout;
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
     private VisualElement resultsPanel;
     private Label phaseLabel;
     private Label timerLabel;
     private Label planningHelp;
-    private Label matchTypeLabel;
-    private Label fogLabel;
     private Label hillStatusLabel;
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
     private Label enemyContactSummary;
+    private VisualElement planningCommit;
+    private Label planningCommitStatus;
+    private Button lockInButton;
     private Button playAgainButton;
     private Button mainMenuButton;
     private Button controlsButton;
     private VisualElement controlsOverlay;
+    private VisualElement controlsPanel;
     private Button controlsCloseButton;
+    private VisualElement activeOverlay;
     private Action playAgainAction;
     private Action mainMenuAction;
     private Coroutine flashCoroutine;
@@ -69,9 +84,11 @@ public class GameHUDController : MonoBehaviour
         CacheElements();
         RegisterCallbacks();
         BuildCards();
+        ConsoleUiNavigation.ConfigureButtons(root);
         HideResults();
         CloseControlsOverlay(false);
         ClearTargetFeedback();
+        HidePlanningCommit();
         ShowDeployment();
         SetCardsInteractable(false);
         SetMatchSummary(MatchOptions.Current);
@@ -95,6 +112,7 @@ public class GameHUDController : MonoBehaviour
         Array.Clear(enemyCards, 0, enemyCards.Length);
         playAgainAction = null;
         mainMenuAction = null;
+        activeOverlay = null;
 
         if (Instance == this)
             Instance = null;
@@ -106,14 +124,14 @@ public class GameHUDController : MonoBehaviour
         flash = RequireElement<VisualElement>("hud-flash");
         cardsContainer = RequireElement<VisualElement>("unit-cards");
         enemyCardsContainer = RequireElement<VisualElement>("enemy-unit-cards");
+        hudDock = RequireElement<VisualElement>("hud-dock");
         deploymentOverlay = RequireElement<VisualElement>("deployment-overlay");
         resultsOverlay = RequireElement<VisualElement>("results-overlay");
         resultsPanel = RequireElement<VisualElement>("results-panel");
         phaseLabel = RequireElement<Label>("phase-label");
         timerLabel = RequireElement<Label>("timer-label");
         planningHelp = RequireElement<Label>("planning-help");
-        matchTypeLabel = RequireElement<Label>("match-type-label");
-        fogLabel = RequireElement<Label>("fog-label");
+        hillStatusReadout = RequireElement<VisualElement>("hill-status-readout");
         hillStatusLabel = RequireElement<Label>("hill-status-label");
         deploymentStatus = RequireElement<Label>("deployment-status");
         resultsStatus = RequireElement<Label>("results-status");
@@ -121,8 +139,12 @@ public class GameHUDController : MonoBehaviour
         playAgainButton = RequireElement<Button>("play-again-button");
         mainMenuButton = RequireElement<Button>("main-menu-button");
         targetFeedbackLabel = root.Q<Label>("target-feedback-label");
+        planningCommit = root.Q<VisualElement>("planning-commit");
+        planningCommitStatus = root.Q<Label>("planning-commit-status");
+        lockInButton = root.Q<Button>("lock-in-button");
         controlsButton = root.Q<Button>("controls-button");
         controlsOverlay = root.Q<VisualElement>("controls-overlay");
+        controlsPanel = controlsOverlay?.Q<VisualElement>(className: "controls-panel");
         controlsCloseButton = root.Q<Button>("controls-close-button");
     }
 
@@ -151,8 +173,15 @@ public class GameHUDController : MonoBehaviour
             controlsButton.clicked += ShowControlsOverlay;
         if (controlsCloseButton != null)
             controlsCloseButton.clicked += HideControlsOverlay;
+        if (lockInButton != null)
+            lockInButton.clicked += OnLockInClicked;
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         root.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+        root.RegisterCallback<NavigationCancelEvent>(
+            OnNavigationCancel,
+            TrickleDown.TrickleDown
+        );
+        root.RegisterCallback<FocusInEvent>(OnFocusIn, TrickleDown.TrickleDown);
         callbacksRegistered = true;
     }
 
@@ -168,8 +197,15 @@ public class GameHUDController : MonoBehaviour
             controlsButton.clicked -= ShowControlsOverlay;
         if (controlsCloseButton != null)
             controlsCloseButton.clicked -= HideControlsOverlay;
+        if (lockInButton != null)
+            lockInButton.clicked -= OnLockInClicked;
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         root.UnregisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+        root.UnregisterCallback<NavigationCancelEvent>(
+            OnNavigationCancel,
+            TrickleDown.TrickleDown
+        );
+        root.UnregisterCallback<FocusInEvent>(OnFocusIn, TrickleDown.TrickleDown);
         callbacksRegistered = false;
     }
 
@@ -217,7 +253,7 @@ public class GameHUDController : MonoBehaviour
         int cardIndex,
         UnitData data,
         bool hasAbility,
-        int remainingAbilityUses
+        int cooldownRoundsRemaining
     )
     {
         if (!TryGetCard(cardIndex, out UnitCardElement card))
@@ -226,10 +262,8 @@ public class GameHUDController : MonoBehaviour
         card.Configure(
             data,
             hasAbility,
-            remainingAbilityUses,
-            () => PlanMovement.Instance?.SelectUnit(cardIndex),
-            () => PlanMovement.Instance?.SetSelectionMode(cardIndex, false),
-            () => PlanMovement.Instance?.SetSelectionMode(cardIndex, true)
+            cooldownRoundsRemaining,
+            () => PlanMovement.Instance?.TryActivateUnitCard(cardIndex)
         );
     }
 
@@ -237,7 +271,7 @@ public class GameHUDController : MonoBehaviour
         int cardIndex,
         UnitData data,
         bool hasAbility,
-        int remainingAbilityUses,
+        int cooldownRoundsRemaining,
         float currentHealth,
         float maxHealth,
         bool alive
@@ -249,7 +283,7 @@ public class GameHUDController : MonoBehaviour
         card.ConfigureEnemy(
             data,
             hasAbility,
-            remainingAbilityUses,
+            cooldownRoundsRemaining,
             currentHealth,
             maxHealth,
             alive
@@ -264,9 +298,7 @@ public class GameHUDController : MonoBehaviour
 
         ClearTargetFeedback();
         SetPlanningHelp(
-            interactable
-                ? "Select a unit, then choose Move or Ability."
-                : "Orders locked while the round resolves."
+            interactable ? PlanningReadyHelp : "Orders locked while the round resolves."
         );
     }
 
@@ -274,6 +306,116 @@ public class GameHUDController : MonoBehaviour
     {
         if (planningHelp != null)
             planningHelp.text = message ?? string.Empty;
+    }
+
+    public void ShowPlanningCommitReady()
+    {
+        SetPlanningCommitState(
+            "READY",
+            "Lock in",
+            true,
+            PlanningReadyHelp,
+            "Lock current orders"
+        );
+    }
+
+    public void ShowPlanningCommitSending()
+    {
+        SetPlanningCommitState(
+            "SENDING",
+            "Locking…",
+            false,
+            "Sending orders…",
+            "Sending orders"
+        );
+    }
+
+    public void ShowPlanningCommitWaiting()
+    {
+        SetPlanningCommitState(
+            "WAITING",
+            "Unlock",
+            true,
+            "Orders locked. Unlock to edit while waiting.",
+            "Unlock to edit orders"
+        );
+    }
+
+    public void ShowPlanningCommitUnlocking()
+    {
+        SetPlanningCommitState(
+            "UNLOCKING",
+            "Unlocking…",
+            false,
+            "Unlocking orders…",
+            "Unlocking orders"
+        );
+    }
+
+    public void ShowPlanningCommitLocked()
+    {
+        SetPlanningCommitState(
+            "LOCKED",
+            "Locked",
+            false,
+            "Orders final. Round starting.",
+            "Orders are final"
+        );
+    }
+
+    public void HidePlanningCommit()
+    {
+        planningCommit?.AddToClassList("hidden");
+        lockInButton?.SetEnabled(false);
+    }
+
+    private void SetPlanningCommitState(
+        string status,
+        string buttonText,
+        bool buttonEnabled,
+        string help,
+        string tooltip
+    )
+    {
+        if (planningCommit != null)
+        {
+            foreach (string existingClass in PlanningCommitStateClasses)
+                planningCommit.RemoveFromClassList(existingClass);
+
+            string nextStateClass = status switch
+            {
+                "READY" => "planning-commit--ready",
+                "SENDING" => "planning-commit--sending",
+                "WAITING" => "planning-commit--waiting",
+                "UNLOCKING" => "planning-commit--unlocking",
+                "LOCKED" => "planning-commit--locked",
+                _ => string.Empty,
+            };
+            if (!string.IsNullOrEmpty(nextStateClass))
+                planningCommit.AddToClassList(nextStateClass);
+        }
+        if (planningCommitStatus != null)
+            planningCommitStatus.text = status;
+        if (lockInButton != null)
+        {
+            lockInButton.text = buttonText;
+            lockInButton.tooltip = tooltip;
+            lockInButton.SetEnabled(buttonEnabled);
+        }
+        planningCommit?.RemoveFromClassList("hidden");
+        SetPlanningHelp(help);
+    }
+
+    private void OnLockInClicked()
+    {
+        PlanMovement planner = PlanMovement.Instance;
+        if (planner == null)
+            return;
+
+        if (planner.CanUnlockPlan)
+            planner.TryUnlock();
+        else
+            planner.TryLockIn();
     }
 
     public void SetTargetFeedback(string message, bool isError = true)
@@ -304,7 +446,7 @@ public class GameHUDController : MonoBehaviour
             return;
 
         targetFeedbackUsesPlanningHelp = false;
-        planningHelp.text = "Select a unit, then choose Move or Ability.";
+        planningHelp.text = PlanningReadyHelp;
         planningHelp.RemoveFromClassList("target-feedback--visible");
         planningHelp.RemoveFromClassList("target-feedback--error");
         planningHelp.RemoveFromClassList("target-feedback--success");
@@ -317,10 +459,10 @@ public class GameHUDController : MonoBehaviour
             card.SetDisabled(disabled);
     }
 
-    public void SetCardAbilityUses(int cardIndex, int remainingUses)
+    public void SetCardAbilityCooldown(int cardIndex, int remainingRounds)
     {
         if (TryGetCard(cardIndex, out UnitCardElement card))
-            card.SetAbilityUses(remainingUses);
+            card.SetAbilityCooldown(remainingRounds);
     }
 
     public void SetCardPlanningState(int cardIndex, bool selected, bool abilityMode)
@@ -375,7 +517,7 @@ public class GameHUDController : MonoBehaviour
                 ? new Color(0.12f, 0.5f, 0.78f, 0.18f)
                 : (
                     perspective == MessagePerspective.Enemy
-                        ? new Color(0.8f, 0.12f, 0.16f, 0.2f)
+                        ? new Color(0.8f, 0.12f, 0.16f, 0.1f)
                         : new Color(0.8f, 0.65f, 0.3f, 0.14f)
                 );
         flash.style.backgroundColor = color;
@@ -396,23 +538,13 @@ public class GameHUDController : MonoBehaviour
     public void SetMatchSummary(MatchOptions options)
     {
         options = options.Sanitized();
-        if (matchTypeLabel != null)
+        bool showHillStatus = options.IsKingOfTheHill;
+        hillStatusReadout?.EnableInClassList("hidden", !showHillStatus);
+        if (showHillStatus && hillStatusLabel != null)
         {
-            string opponent = options.IsBotMatch ? "AI" : "PLAYER";
-            matchTypeLabel.text = $"{options.GameModeDisplayName.ToUpperInvariant()} / {opponent}";
-        }
-        if (fogLabel != null)
-            fogLabel.text = options.fogOfWar ? "FOG ON" : "FOG OFF";
-
-        if (hillStatusLabel != null)
-        {
-            hillStatusLabel.EnableInClassList("hidden", !options.IsKingOfTheHill);
-            if (options.IsKingOfTheHill)
-            {
-                SetHillControl(
-                    GameLoop.Instance != null ? GameLoop.Instance.HillControl : HillControlState.Empty
-                );
-            }
+            SetHillControl(
+                GameLoop.Instance != null ? GameLoop.Instance.HillControl : HillControlState.Empty
+            );
         }
     }
 
@@ -437,12 +569,12 @@ public class GameHUDController : MonoBehaviour
 
         hillStatusLabel.text = state.Status switch
         {
-            HillControlStatus.Contested => "CONTESTED · STREAK RESET",
+            HillControlStatus.Contested => "Contested · streak reset",
             HillControlStatus.Controlled =>
-                $"{(hostControlled ? "BLUE" : "RED")} CONTROL · "
+                $"{(hostControlled ? "Blue" : "Red")} control · "
                 + $"{Mathf.Clamp(state.Streak, 0, GameLoop.HillControlRoundsToWin)}/"
                 + GameLoop.HillControlRoundsToWin,
-            _ => "NO CONTROL · 0/" + GameLoop.HillControlRoundsToWin,
+            _ => "No control · 0/" + GameLoop.HillControlRoundsToWin,
         };
     }
 
@@ -451,16 +583,18 @@ public class GameHUDController : MonoBehaviour
         if (deploymentStatus != null)
         {
             deploymentStatus.text = string.IsNullOrWhiteSpace(status)
-                ? "Synchronizing both players and preparing the battlefield."
+                ? "Preparing the battlefield and both fireteams."
                 : status;
         }
         deploymentOverlay?.RemoveFromClassList("hidden");
         deploymentOverlay?.BringToFront();
+        ActivateOverlay(deploymentOverlay, deploymentOverlay);
     }
 
     public void HideDeployment()
     {
         deploymentOverlay?.AddToClassList("hidden");
+        ClearActiveOverlay(deploymentOverlay, null);
     }
 
     public void ShowResults(
@@ -481,20 +615,41 @@ public class GameHUDController : MonoBehaviour
         playAgainAction = onPlayAgain;
         mainMenuAction = onMainMenu;
         SetResultButtonsEnabled(true, true);
+        CloseControlsOverlay(false);
+        HideDeployment();
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
-        root?.schedule.Execute(() => playAgainButton?.Focus());
+        ActivateOverlay(resultsOverlay, playAgainButton);
     }
 
     public void HideResults()
     {
         resultsOverlay?.AddToClassList("hidden");
+        ClearActiveOverlay(resultsOverlay, null);
         playAgainAction = null;
         mainMenuAction = null;
     }
 
     public void SetResultButtonsEnabled(bool playAgainEnabled, bool mainMenuEnabled)
     {
+        if (playAgainEnabled)
+            playAgainButton?.SetEnabled(true);
+        if (mainMenuEnabled)
+            mainMenuButton?.SetEnabled(true);
+
+        VisualElement focused = root?.focusController?.focusedElement as VisualElement;
+        if (
+            !playAgainEnabled
+            && focused == playAgainButton
+        )
+        {
+            (mainMenuEnabled ? mainMenuButton : resultsPanel)?.Focus();
+        }
+        else if (!mainMenuEnabled && focused == mainMenuButton)
+        {
+            (playAgainEnabled ? playAgainButton : resultsPanel)?.Focus();
+        }
+
         playAgainButton?.SetEnabled(playAgainEnabled);
         mainMenuButton?.SetEnabled(mainMenuEnabled);
     }
@@ -515,11 +670,14 @@ public class GameHUDController : MonoBehaviour
 
     private void ShowControlsOverlay()
     {
-        if (controlsOverlay == null)
+        if (
+            controlsOverlay == null
+            || (resultsOverlay != null && !resultsOverlay.ClassListContains("hidden"))
+        )
             return;
         controlsOverlay.RemoveFromClassList("hidden");
         controlsOverlay.BringToFront();
-        root?.schedule.Execute(() => controlsCloseButton?.Focus());
+        ActivateOverlay(controlsOverlay, controlsCloseButton);
     }
 
     private void HideControlsOverlay()
@@ -530,8 +688,120 @@ public class GameHUDController : MonoBehaviour
     private void CloseControlsOverlay(bool restoreFocus)
     {
         controlsOverlay?.AddToClassList("hidden");
-        if (restoreFocus)
-            root?.schedule.Execute(() => controlsButton?.Focus());
+        ClearActiveOverlay(controlsOverlay, restoreFocus ? controlsButton : null);
+    }
+
+    private void ActivateOverlay(VisualElement overlay, VisualElement focusTarget)
+    {
+        if (overlay == null)
+            return;
+
+        activeOverlay = overlay;
+        hudDock?.SetEnabled(false);
+        root?.schedule.Execute(() =>
+        {
+            if (
+                !isActiveAndEnabled
+                || activeOverlay != overlay
+                || overlay.panel == null
+                || overlay.ClassListContains("hidden")
+            )
+            {
+                return;
+            }
+
+            ResolveOverlayFocusTarget(overlay, focusTarget)?.Focus();
+        });
+    }
+
+    private void ClearActiveOverlay(VisualElement overlay, VisualElement restoreFocusTarget)
+    {
+        if (activeOverlay != overlay)
+            return;
+
+        activeOverlay = null;
+        hudDock?.SetEnabled(true);
+        if (restoreFocusTarget == null)
+            return;
+
+        root?.schedule.Execute(() =>
+        {
+            if (
+                !isActiveAndEnabled
+                || activeOverlay != null
+                || restoreFocusTarget.panel == null
+                || !restoreFocusTarget.enabledInHierarchy
+                || !restoreFocusTarget.canGrabFocus
+            )
+            {
+                return;
+            }
+
+            restoreFocusTarget.Focus();
+        });
+    }
+
+    private VisualElement ResolveOverlayFocusTarget(
+        VisualElement overlay,
+        VisualElement preferredTarget
+    )
+    {
+        if (CanGrabFocus(preferredTarget))
+            return preferredTarget;
+
+        if (overlay == resultsOverlay)
+        {
+            if (CanGrabFocus(playAgainButton))
+                return playAgainButton;
+            if (CanGrabFocus(mainMenuButton))
+                return mainMenuButton;
+            if (CanGrabFocus(resultsPanel))
+                return resultsPanel;
+        }
+        else if (overlay == controlsOverlay)
+        {
+            if (CanGrabFocus(controlsCloseButton))
+                return controlsCloseButton;
+            if (CanGrabFocus(controlsPanel))
+                return controlsPanel;
+        }
+
+        return CanGrabFocus(overlay) ? overlay : null;
+    }
+
+    private static bool CanGrabFocus(VisualElement element)
+    {
+        return element != null
+            && element.panel != null
+            && element.enabledInHierarchy
+            && element.canGrabFocus;
+    }
+
+    private void OnFocusIn(FocusInEvent evt)
+    {
+        VisualElement focused = evt.target as VisualElement;
+        if (
+            activeOverlay == null
+            || activeOverlay.ClassListContains("hidden")
+            || focused == null
+            || focused == activeOverlay
+            || activeOverlay.Contains(focused)
+        )
+        {
+            return;
+        }
+
+        evt.StopImmediatePropagation();
+        VisualElement overlay = activeOverlay;
+        root?.schedule.Execute(() =>
+        {
+            if (activeOverlay != overlay || overlay.ClassListContains("hidden"))
+                return;
+
+            VisualElement target =
+                ResolveOverlayFocusTarget(overlay, null);
+            target?.Focus();
+        });
     }
 
     private void OnKeyDown(KeyDownEvent evt)
@@ -539,6 +809,20 @@ public class GameHUDController : MonoBehaviour
         if (
             evt.keyCode != KeyCode.Escape
             || controlsOverlay == null
+            || controlsOverlay.ClassListContains("hidden")
+        )
+        {
+            return;
+        }
+
+        HideControlsOverlay();
+        evt.StopImmediatePropagation();
+    }
+
+    private void OnNavigationCancel(NavigationCancelEvent evt)
+    {
+        if (
+            controlsOverlay == null
             || controlsOverlay.ClassListContains("hidden")
         )
         {
@@ -621,9 +905,9 @@ public class GameHUDController : MonoBehaviour
     {
         float width = evt.newRect.width;
         float height = evt.newRect.height;
-        root.EnableInClassList("compact", width < 1500f);
-        root.EnableInClassList("narrow", width < 1000f);
-        root.EnableInClassList("phone", width < 680f);
-        root.EnableInClassList("short", height < 800f);
+        root.EnableInClassList("compact", width < 1700f);
+        root.EnableInClassList("narrow", width < 1280f);
+        root.EnableInClassList("phone", width < 1120f);
+        root.EnableInClassList("short", height < 960f);
     }
 }

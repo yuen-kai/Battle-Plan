@@ -160,29 +160,271 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void AbilityCharges_ClampAndCannotBeConsumedPastZero()
+    public void AbilityCooldowns_StartTickAndSaturateDeterministically()
     {
         UnitData data = ScriptableObject.CreateInstance<UnitData>();
         try
         {
-            data.uses = -3;
-            Assert.That(Unit.GetInitialAbilityUses(data, true), Is.Zero);
-            data.uses = 2;
-            Assert.That(Unit.GetInitialAbilityUses(data, false), Is.Zero);
+            data.abilityCooldownRounds = -3;
+            Assert.That(Unit.GetConfiguredAbilityCooldownRounds(data, true), Is.EqualTo(1));
+            data.abilityCooldownRounds = 2;
+            Assert.That(Unit.GetConfiguredAbilityCooldownRounds(data, false), Is.Zero);
 
-            int remaining = Unit.GetInitialAbilityUses(data, true);
+            int remaining = 0;
+            Assert.That(
+                Unit.TryStartAbilityCooldown(
+                    ref remaining,
+                    Unit.GetConfiguredAbilityCooldownRounds(data, true),
+                    true
+                ),
+                Is.True
+            );
             Assert.That(remaining, Is.EqualTo(2));
-            Assert.That(Unit.TryConsumeAbilityCharge(ref remaining), Is.True);
+            Assert.That(Unit.TryStartAbilityCooldown(ref remaining, 2, true), Is.False);
+            Assert.That(remaining, Is.EqualTo(2));
+            Assert.That(Unit.TickAbilityCooldownRound(ref remaining), Is.True);
             Assert.That(remaining, Is.EqualTo(1));
-            Assert.That(Unit.TryConsumeAbilityCharge(ref remaining), Is.True);
+            Assert.That(Unit.TickAbilityCooldownRound(ref remaining), Is.True);
             Assert.That(remaining, Is.Zero);
-            Assert.That(Unit.TryConsumeAbilityCharge(ref remaining), Is.False);
+            Assert.That(Unit.TickAbilityCooldownRound(ref remaining), Is.False);
             Assert.That(remaining, Is.Zero);
+            Assert.That(Unit.TryStartAbilityCooldown(ref remaining, 2, false), Is.False);
         }
         finally
         {
             Object.DestroyImmediate(data);
         }
+    }
+
+    [TestCase(5, 30f)]
+    [TestCase(4, 24f)]
+    [TestCase(3, 18f)]
+    [TestCase(2, 12f)]
+    [TestCase(1, 12f)]
+    [TestCase(0, 12f)]
+    public void PlanningDuration_ScalesDownWithLivingFireteam(int livingUnits, float expectedSeconds)
+    {
+        Assert.That(GameLoop.GetPlanningDurationSeconds(livingUnits), Is.EqualTo(expectedSeconds));
+    }
+
+    [Test]
+    public void PlanningSession_RejectsSupersededSubmissionAndRosterRefresh()
+    {
+        GameObject gameObject = new("PlanningSessionVersionTest");
+        try
+        {
+            PlanMovement planning = gameObject.AddComponent<PlanMovement>();
+            GameObject marker = new("CurrentDodgeRosterMarker");
+            marker.transform.SetParent(gameObject.transform);
+            FieldInfo versionField = typeof(PlanMovement).GetField(
+                "planningSessionVersion",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            FieldInfo activeField = typeof(PlanMovement).GetField(
+                "planningActive",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            FieldInfo submittedField = typeof(PlanMovement).GetField(
+                "planningSubmitted",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            FieldInfo teamCharactersField = typeof(PlanMovement).GetField(
+                "teamCharacters",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo submitMethod = typeof(PlanMovement).GetMethod(
+                "SubmitCurrentPlan",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo refreshMethod = typeof(PlanMovement).GetMethod(
+                "TryRefreshTeamCharactersForSession",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            Assert.That(versionField, Is.Not.Null);
+            Assert.That(activeField, Is.Not.Null);
+            Assert.That(submittedField, Is.Not.Null);
+            Assert.That(teamCharactersField, Is.Not.Null);
+            Assert.That(submitMethod, Is.Not.Null);
+            Assert.That(refreshMethod, Is.Not.Null);
+
+            versionField.SetValue(planning, 7);
+            activeField.SetValue(planning, true);
+            submittedField.SetValue(planning, false);
+            List<GameObject> currentDodgeRoster = new() { marker };
+            teamCharactersField.SetValue(planning, currentDodgeRoster);
+
+            Assert.That(refreshMethod.Invoke(planning, new object[] { 6 }), Is.False);
+            Assert.That(teamCharactersField.GetValue(planning), Is.SameAs(currentDodgeRoster));
+            submitMethod.Invoke(planning, new object[] { 6 });
+
+            Assert.That(activeField.GetValue(planning), Is.True);
+            Assert.That(submittedField.GetValue(planning), Is.False);
+
+            planning.EndPlanningSession();
+            Assert.That(versionField.GetValue(planning), Is.EqualTo(8));
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    [Test]
+    public void PlanningCommitRpcs_DeriveTeamFromSenderAndCarryRoundAndRevisionTokens()
+    {
+        MethodInfo submitRpc = typeof(GameLoop).GetMethod(
+            "SendPathsToServerRpc",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        MethodInfo retractRpc = typeof(GameLoop).GetMethod(
+            "RetractPathsServerRpc",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+
+        Assert.That(submitRpc, Is.Not.Null);
+        Assert.That(retractRpc, Is.Not.Null);
+
+        ParameterInfo[] submitParameters = submitRpc.GetParameters();
+        Assert.That(submitParameters, Has.Length.EqualTo(4));
+        Assert.That(submitParameters[0].ParameterType, Is.EqualTo(typeof(PathsDict)));
+        Assert.That(submitParameters[1].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(submitParameters[2].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(submitParameters[3].ParameterType, Is.EqualTo(typeof(ServerRpcParams)));
+        Assert.That(
+            submitParameters.Any(parameter => parameter.Name.Contains("team")),
+            Is.False,
+            "The client must never provide its logical team index."
+        );
+
+        ParameterInfo[] retractParameters = retractRpc.GetParameters();
+        Assert.That(retractParameters, Has.Length.EqualTo(3));
+        Assert.That(retractParameters[0].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(retractParameters[1].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(retractParameters[2].ParameterType, Is.EqualTo(typeof(ServerRpcParams)));
+        Assert.That(
+            retractParameters.Any(parameter => parameter.Name.Contains("team")),
+            Is.False,
+            "An unlock request must derive its logical team from the authenticated sender."
+        );
+    }
+
+    [Test]
+    public void PlanningUnlock_AcceptsOnlyCurrentRoundAndCommitRevision()
+    {
+        GameObject gameObject = new("PlanningUnlockStateTest");
+        try
+        {
+            PlanMovement planning = gameObject.AddComponent<PlanMovement>();
+            SetPrivateField(planning, "planningActive", true);
+            SetPrivateField(planning, "planningInitialized", true);
+            SetPrivateField(planning, "planningSubmitted", true);
+            SetPrivateField(planning, "planningLockPending", false);
+            SetPrivateField(planning, "planningUnlockPending", false);
+            SetPrivateField(planning, "lockInAvailable", true);
+            SetPrivateField(planning, "planningRoundToken", 12);
+            SetPrivateField(planning, "planningCommitVersion", 3);
+
+            int requestedRevision = -1;
+            SetPrivateField(
+                planning,
+                "planningUnlockCallback",
+                (System.Action<int>)(revision => requestedRevision = revision)
+            );
+
+            Assert.That(planning.CanUnlockPlan, Is.True);
+            Assert.That(planning.TryUnlock(), Is.True);
+            Assert.That(requestedRevision, Is.EqualTo(3));
+            Assert.That(planning.CanUnlockPlan, Is.False);
+            Assert.That(planning.CanEditPlan, Is.False);
+
+            planning.NotifyPlanningCommitRetracted(11, 3);
+            planning.NotifyPlanningCommitRetracted(12, 2);
+            Assert.That(planning.CanEditPlan, Is.False, "Stale acknowledgements must be ignored.");
+
+            planning.NotifyPlanningCommitRetracted(12, 3);
+            Assert.That(planning.CanEditPlan, Is.True);
+            Assert.That(planning.CanUnlockPlan, Is.False);
+
+            planning.NotifyPlanningCommitFinalized(12);
+            Assert.That(planning.CanEditPlan, Is.False);
+            Assert.That(planning.CanUnlockPlan, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    [Test]
+    public void PlanningUnlock_StaleRevisionCannotRemoveRelockedOrders()
+    {
+        GameObject gameObject = new("PlanningUnlockRevisionTest");
+        try
+        {
+            GameLoop gameLoop = gameObject.AddComponent<GameLoop>();
+            var paths = (Dictionary<int, PathsDict>)
+                GetPrivateField(gameLoop, "submittedTeamPaths");
+            var versions = (Dictionary<int, int>)
+                GetPrivateField(gameLoop, "latestTeamPlanVersions");
+            var fallbacks = (Dictionary<int, PathsDict>)
+                GetPrivateField(gameLoop, "retractedTeamPathFallbacks");
+            MethodInfo retractMethod = typeof(GameLoop).GetMethod(
+                "TryRetractPlanningSubmission",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo newerVersionMethod = typeof(GameLoop).GetMethod(
+                "IsNewerPlanningCommitVersion",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo restoreFallbacksMethod = typeof(GameLoop).GetMethod(
+                "RestoreRetractedPlanningFallbacks",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            Assert.That(retractMethod, Is.Not.Null);
+            Assert.That(newerVersionMethod, Is.Not.Null);
+            Assert.That(restoreFallbacksMethod, Is.Not.Null);
+            paths[0] = new PathsDict();
+            versions[0] = 4;
+            paths[1] = new PathsDict();
+            versions[1] = 7;
+
+            Assert.That(retractMethod.Invoke(gameLoop, new object[] { 0, 3 }), Is.False);
+            Assert.That(paths.ContainsKey(0), Is.True);
+            Assert.That(versions[0], Is.EqualTo(4));
+
+            Assert.That(retractMethod.Invoke(gameLoop, new object[] { 0, 4 }), Is.True);
+            Assert.That(paths.ContainsKey(0), Is.False);
+            Assert.That(versions[0], Is.EqualTo(4), "Revision high-water mark must survive unlock.");
+            Assert.That(fallbacks.ContainsKey(0), Is.True);
+            Assert.That(newerVersionMethod.Invoke(gameLoop, new object[] { 0, 4 }), Is.False);
+            Assert.That(newerVersionMethod.Invoke(gameLoop, new object[] { 0, 5 }), Is.True);
+            Assert.That(paths.ContainsKey(1), Is.True, "Unlock must not remove another team.");
+
+            restoreFallbacksMethod.Invoke(gameLoop, null);
+            Assert.That(paths.ContainsKey(0), Is.True, "Finalization must retain last locked orders.");
+            Assert.That(fallbacks, Is.Empty);
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    [TestCase(9.99d, 10d, false)]
+    [TestCase(10d, 10d, true)]
+    [TestCase(10.01d, 10d, true)]
+    public void PlanningUnlock_DeadlineComparisonIsDeterministic(
+        double serverTime,
+        double deadline,
+        bool expectedElapsed
+    )
+    {
+        Assert.That(
+            PlanMovement.HasPlanningDeadlineElapsed(serverTime, deadline),
+            Is.EqualTo(expectedElapsed)
+        );
     }
 
     [Test]
@@ -1604,6 +1846,135 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void FriendlyUnitCardForwardsActivationAndShowsCooldownInFlipIndicator()
+    {
+        const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
+        VisualTreeAsset cardAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            cardPath
+        );
+        Assert.That(cardAsset, Is.Not.Null, $"Could not import {cardPath}.");
+
+        TemplateContainer host = cardAsset.Instantiate();
+        UnityEditor.EditorWindow window =
+            ScriptableObject.CreateInstance<UnityEditor.EditorWindow>();
+        window.Show();
+        window.rootVisualElement.Add(host);
+        UnitCardElement card = new(host, 0);
+        UnitData data = ScriptableObject.CreateInstance<UnitData>();
+        data.unitName = "Commander";
+        data.abilityName = "Smoke Screen";
+        int activationRequests = 0;
+        Button selectButton = host.Q<Button>("unit-card-select-0");
+        System.Action submitCard = () =>
+        {
+            using NavigationSubmitEvent submitEvent = new() { target = selectButton };
+            selectButton.SendEvent(submitEvent);
+        };
+
+        try
+        {
+            Assert.That(selectButton, Is.Not.Null);
+            Assert.That(selectButton.panel, Is.Not.Null);
+            card.Configure(
+                data,
+                true,
+                0,
+                () => activationRequests++
+            );
+            card.SetInteractable(true);
+
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(1),
+                "The card forwards its first activation to the planner."
+            );
+
+            card.SetPlanningState(true, false);
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(2),
+                "The selected movement face forwards reactivation to the planner."
+            );
+
+            card.SetPlanningState(true, true);
+            VisualElement root = host.Q<VisualElement>("unit-card-0-root");
+            Assert.That(root.ClassListContains("unit-card--ability"), Is.True);
+            Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Smoke Screen"));
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("hidden"),
+                Is.False
+            );
+
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(3),
+                "The selected ability face forwards reactivation to the planner."
+            );
+
+            card.SetPlanningState(true, false);
+            card.SetAbilityCooldown(2);
+
+            Label cooldown = host.Q<Label>("unit-card-cooldown");
+            Assert.That(cooldown.text, Is.EqualTo("2"));
+            Assert.That(cooldown.ClassListContains("hidden"), Is.False);
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("unit-card__flip-indicator--cooldown"),
+                Is.True
+            );
+
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(4),
+                "A cooling card still reaches the planner so it can explain why it is unavailable."
+            );
+
+            card.SetPlanningState(true, true);
+            Assert.That(
+                root.ClassListContains("unit-card--ability"),
+                Is.False,
+                "Cooldown prevents the ability face from becoming active."
+            );
+
+            card.SetAbilityCooldown(0);
+            card.SetPlanningState(true, true);
+            card.SetDisabled(true);
+            Assert.That(root.ClassListContains("unit-card--selected"), Is.False);
+            Assert.That(root.ClassListContains("unit-card--ability"), Is.False);
+            Assert.That(selectButton.enabledInHierarchy, Is.False);
+            int requestsBeforeDisabledSubmit = activationRequests;
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(requestsBeforeDisabledSubmit),
+                "Disabled cards must ignore keyboard submit."
+            );
+
+            card.Configure(data, false, 0, () => activationRequests++);
+            card.SetPlanningState(true, true);
+            Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Move only"));
+            Assert.That(root.ClassListContains("unit-card--ability"), Is.False);
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("hidden"),
+                Is.True,
+                "Move-only units must not advertise a card flip."
+            );
+        }
+        finally
+        {
+            card.Dispose();
+            window.Close();
+            Object.DestroyImmediate(data);
+        }
+    }
+
+    [Test]
     public void EnemyUnitCardShowsLiveHealthAbilityAndEliminationState()
     {
         const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
@@ -1619,7 +1990,7 @@ public class GameplayNetworkEditModeTests
         data.abilityName = "Area Lock";
         try
         {
-            card.ConfigureEnemy(data, true, 1, 75f, 120f, true);
+            card.ConfigureEnemy(data, true, 0, 75f, 120f, true);
 
             Assert.That(
                 host.Q<Label>("unit-card-health-value").text,
@@ -1627,7 +1998,7 @@ public class GameplayNetworkEditModeTests
             );
             Assert.That(
                 host.Q<Label>("unit-card-ability").text,
-                Is.EqualTo("Area Lock · 1 use this match")
+                Is.EqualTo("Area Lock · ready")
             );
             Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ACTIVE"));
             Assert.That(
@@ -1640,13 +2011,19 @@ public class GameplayNetworkEditModeTests
                 host.Q<Button>("enemy-unit-card-select-0").enabledInHierarchy,
                 Is.False
             );
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("hidden"),
+                Is.True,
+                "Enemy status cards must not expose the friendly mode indicator."
+            );
 
-            card.ConfigureEnemy(data, true, 0, 0f, 120f, false);
+            card.ConfigureEnemy(data, true, 2, 0f, 120f, false);
 
             Assert.That(host.Q<Label>("unit-card-health-value").text, Is.EqualTo("0 / 120 HP"));
             Assert.That(
                 host.Q<Label>("unit-card-ability").text,
-                Is.EqualTo("Area Lock · spent this match")
+                Is.EqualTo("Area Lock · ready in 2 rounds")
             );
             Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ELIMINATED"));
             Assert.That(
@@ -1951,6 +2328,24 @@ public class GameplayNetworkEditModeTests
     private static List<UnitData> CreateEligibleCatalog(int count)
     {
         return CreateCatalog(Enumerable.Repeat(true, count).ToArray());
+    }
+
+    private static void SetPrivateField(object target, string fieldName, object value)
+    {
+        FieldInfo field = target
+            .GetType()
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field {fieldName}.");
+        field.SetValue(target, value);
+    }
+
+    private static object GetPrivateField(object target, string fieldName)
+    {
+        FieldInfo field = target
+            .GetType()
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field {fieldName}.");
+        return field.GetValue(target);
     }
 
     private static List<UnitData> CreateCatalog(params bool[] eligibility)

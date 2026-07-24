@@ -41,11 +41,11 @@ MonoBehaviour:
   maxHealth: 120
   abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1
-  abilitySquareRange: 5
+  abilitySquareRange: 6
   abilityRadius: 0
   selectTime: 4
   responseRange: 0
   responseDistLine: 0
   timeDivePerUnit: 3
   diveRange: 2
-  uses: 1
+  abilityCooldownRounds: 2

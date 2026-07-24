@@ -196,7 +196,23 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
 
     private IEnumerator VerifyHudPointerPicking(GameObject[] humanUnits)
     {
-        int cardIndex = FindUnitIndex(humanUnits, "Soldier");
+        GameObject initiallySelected = PlanMovement.Instance?.selectedUnit;
+        int cardIndex = -1;
+        for (int index = 0; index < humanUnits.Length; index++)
+        {
+            GameObject candidate = humanUnits[index];
+            if (
+                candidate != null
+                && candidate != initiallySelected
+                && candidate.GetComponent<Unit>()?.CanUseAbility == true
+            )
+            {
+                cardIndex = index;
+                break;
+            }
+        }
+        if (cardIndex < 0)
+            cardIndex = FindUnitIndex(humanUnits, "Soldier");
         if (cardIndex < 0)
             cardIndex = 0;
         yield return WaitFor(
@@ -263,6 +279,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         );
         List<Vector3> pathBefore =
             hadPlanBefore && beforePlan.Item2 != null ? new List<Vector3>(beforePlan.Item2) : null;
+        bool abilityModeBefore = hadPlanBefore && beforePlan.Item1;
         selectButton.Focus();
         using (NavigationSubmitEvent submitEvent = new() { target = selectButton })
             selectButton.SendEvent(submitEvent);
@@ -286,6 +303,90 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             pathWasNotPainted,
             $"unit-card interaction only initialized or preserved its path ({pathBefore?.Count ?? 0}->{pathAfter?.Count ?? 0})"
         );
+        Check(
+            hasPlanAfter && afterPlan.Item1 == abilityModeBefore,
+            "first activation of an unselected card preserves its existing order mode"
+        );
+
+        bool canToggleAbility = cardUnit.GetComponent<Unit>()?.CanUseAbility == true;
+        Check(canToggleAbility, "HUD toggle regression target has a ready ability");
+        if (canToggleAbility)
+        {
+            using (NavigationSubmitEvent submitEvent = new() { target = selectButton })
+                selectButton.SendEvent(submitEvent);
+            yield return null;
+
+            bool toggled = planner.plans.TryGetValue(
+                cardUnit,
+                out (bool, List<Vector3>) toggledPlan
+            );
+            Check(
+                toggled && toggledPlan.Item1 != abilityModeBefore,
+                "reselecting the selected card toggles its planner-owned order mode"
+            );
+
+            using (NavigationSubmitEvent submitEvent = new() { target = selectButton })
+                selectButton.SendEvent(submitEvent);
+            yield return null;
+
+            bool restored = planner.plans.TryGetValue(
+                cardUnit,
+                out (bool, List<Vector3>) restoredPlan
+            );
+            Check(
+                restored && restoredPlan.Item1 == abilityModeBefore,
+                "reselecting again returns to the original order mode"
+            );
+            pathAfter = restored ? restoredPlan.Item2 : null;
+        }
+
+        Button lockInButton = root.Q<Button>("lock-in-button");
+        PathsDict draftContainer = planner.plans;
+        List<Vector3> draftPath =
+            pathAfter != null ? new List<Vector3>(pathAfter) : new List<Vector3>();
+        Check(lockInButton != null, "reversible Lock In button is present");
+        Check(planner.TryLockIn(), "normal planning accepts Lock In");
+        yield return WaitFor(
+            () =>
+                planner.CanUnlockPlan
+                && lockInButton != null
+                && lockInButton.enabledInHierarchy
+                && lockInButton.text == "Unlock",
+            3f,
+            "server acknowledgement for reversible Lock In"
+        );
+        Check(!timedOut, "locked orders expose an enabled Unlock action");
+        if (timedOut)
+            yield break;
+
+        Check(planner.TryUnlock(), "locked orders request server-authoritative unlock");
+        yield return WaitFor(
+            () =>
+                planner.CanEditPlan
+                && lockInButton != null
+                && lockInButton.enabledInHierarchy
+                && lockInButton.text == "Lock in",
+            3f,
+            "server acknowledgement for planning unlock"
+        );
+        Check(!timedOut, "unlock restores editing before the shared deadline");
+        if (timedOut)
+            yield break;
+
+        bool draftPreserved =
+            ReferenceEquals(planner.plans, draftContainer)
+            && planner.plans.TryGetValue(cardUnit, out (bool, List<Vector3>) unlockedPlan)
+            && unlockedPlan.Item2 != null
+            && unlockedPlan.Item2.SequenceEqual(draftPath);
+        Check(draftPreserved, "unlock preserves the exact local draft and path");
+
+        Check(planner.TryLockIn(), "unlocked orders can be locked again");
+        yield return WaitFor(
+            () => planner.CanUnlockPlan && lockInButton != null && lockInButton.text == "Unlock",
+            3f,
+            "server acknowledgement for relocked orders"
+        );
+        Check(!timedOut, "relocked orders advance to the reversible waiting state");
     }
 
     private void VerifyEnemyStatusCards(
@@ -321,14 +422,14 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                     ? $"{Mathf.RoundToInt(health.CurrentHealth)} / {Mathf.RoundToInt(health.MaxHealth)} HP"
                     : string.Empty;
             bool hasAbility = enemy != null && enemy.GetComponent<Ability>() != null;
-            int remainingUses = identity != null ? identity.RemainingAbilityUses : 0;
-            string useText = remainingUses == 1 ? "1 use" : $"{remainingUses} uses";
+            int cooldown = identity != null ? identity.AbilityCooldownRoundsRemaining : 0;
+            string cooldownText = cooldown == 1 ? "1 round" : $"{cooldown} rounds";
             string expectedAbility =
                 !hasAbility
                     ? "Move only"
-                    : remainingUses > 0
-                        ? $"{data?.abilityName ?? "Ability"} · {useText} this match"
-                        : $"{data?.abilityName ?? "Ability"} · spent this match";
+                    : cooldown == 0
+                        ? $"{data?.abilityName ?? "Ability"} · ready"
+                        : $"{data?.abilityName ?? "Ability"} · ready in {cooldownText}";
 
             Check(
                 card != null && selectButton != null && !selectButton.enabledInHierarchy,
@@ -340,7 +441,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             );
             Check(
                 abilityLabel != null && abilityLabel.text == expectedAbility,
-                $"{checkpoint} enemy slot {index} ability charge is live (got '{abilityLabel?.text ?? "<none>"}')"
+                $"{checkpoint} enemy slot {index} ability cooldown is live (got '{abilityLabel?.text ?? "<none>"}')"
             );
             Check(
                 stateLabel != null && stateLabel.text == (alive ? "ACTIVE" : "ELIMINATED"),
@@ -500,8 +601,8 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         if (HudPickingOnly)
             yield break;
 
-        // Typed HUD copy: the readout reflects the authoritative AI/Elimination match, and the
-        // Soldier's ability card advertises a match-long charge (never a per-round refresh).
+        // The HUD omits setup options once play begins, while the Soldier's ability card
+        // advertises its current cooldown state.
         UIDocument hudDocument = GameHUDController.Instance != null
             ? GameHUDController.Instance.GetComponent<UIDocument>()
             : null;
@@ -509,15 +610,10 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         Check(hudRoot != null, "live Game HUD root is available for typed copy checks");
         if (hudRoot != null)
         {
-            Label matchTypeLabel = hudRoot.Q<Label>("match-type-label");
             Check(
-                matchTypeLabel != null && matchTypeLabel.text == "ELIMINATION / AI",
-                $"HUD match readout reflects the typed AI elimination match (got '{matchTypeLabel?.text ?? "<none>"}')"
-            );
-            Label fogLabel = hudRoot.Q<Label>("fog-label");
-            Check(
-                fogLabel != null && fogLabel.text == "FOG ON",
-                $"HUD fog readout reflects the seeded fog option (got '{fogLabel?.text ?? "<none>"}')"
+                hudRoot.Q<Label>("match-type-label") == null
+                    && hudRoot.Q<Label>("fog-label") == null,
+                "HUD omits static match settings during play"
             );
 
             VisualElement soldierCard = hudRoot.Q<VisualElement>($"unit-card-{soldierIndex}");
@@ -526,14 +622,12 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             string abilityCopyLower = abilityCopy.ToLowerInvariant();
             Check(
                 soldierAbility != null
-                    && !abilityCopyLower.Contains("per round")
-                    && !abilityCopyLower.Contains("per turn")
                     && (
-                        abilityCopyLower.Contains("match")
-                        || abilityCopyLower.Contains("use")
+                        abilityCopyLower.Contains("ready")
+                        || abilityCopyLower.Contains("round")
                         || abilityCopyLower.Contains("move only")
                     ),
-                $"Soldier ability card shows honest match-long copy (got '{abilityCopy}')"
+                $"Soldier ability card shows authoritative cooldown copy (got '{abilityCopy}')"
             );
             VerifyEnemyStatusCards(hudRoot, botUnits, "initial fog-on");
         }
@@ -609,25 +703,26 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             && unit.activeInHierarchy
             && unit.GetComponent<Unit>()?.CanUseAbility == true
         );
-        Check(abilityStatusProbe != null, "enemy status probe found an available ability charge");
+        Check(abilityStatusProbe != null, "enemy status probe found a ready ability");
         if (abilityStatusProbe != null)
         {
             Unit probeIdentity = abilityStatusProbe.GetComponent<Unit>();
-            bool consumed = probeIdentity.TryConsumeAbilityUse();
+            bool startedCooldown = probeIdentity.TryStartAbilityCooldown();
             loop.NotifyEnemyUnitStatusChanged(abilityStatusProbe);
             yield return null;
 
             Label probeAbility = hudRoot
                 ?.Q<VisualElement>($"enemy-unit-card-{probeIdentity.RosterSlot}")
                 ?.Q<Label>("unit-card-ability");
-            Check(consumed, "enemy status probe consumed an authoritative ability charge");
+            string expectedSuffix =
+                probeIdentity.AbilityCooldownRoundsRemaining == 1
+                    ? "ready in 1 round"
+                    : $"ready in {probeIdentity.AbilityCooldownRoundsRemaining} rounds";
+            Check(startedCooldown, "enemy status probe started an authoritative cooldown");
             Check(
                 probeAbility != null
-                    && probeAbility.text.EndsWith(
-                        "spent this match",
-                        System.StringComparison.Ordinal
-                    ),
-                $"enemy status card reflected the spent charge (got '{probeAbility?.text ?? "<none>"}')"
+                    && probeAbility.text.EndsWith(expectedSuffix, System.StringComparison.Ordinal),
+                $"enemy status card reflected the cooldown (got '{probeAbility?.text ?? "<none>"}')"
             );
         }
 

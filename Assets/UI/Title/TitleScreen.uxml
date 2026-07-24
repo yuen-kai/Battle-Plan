@@ -1,27 +1,41 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Style src="../Shared/BattlePlan.uss" />
+    <ui:Style src="../Shared/TacticalToybox.uss" />
     <ui:Style src="TitleScreen.uss" />
-    <ui:VisualElement name="screen" class="screen title-screen">
-        <ui:VisualElement class="command-ribbon">
-            <ui:VisualElement class="command-ribbon__beacon" picking-mode="Ignore" />
-            <ui:Label text="BATTLE PLAN / COMMAND TERMINAL" class="command-ribbon__text" picking-mode="Ignore" />
-            <ui:Label text="TITLE / STANDBY" class="command-ribbon__route" picking-mode="Ignore" />
-        </ui:VisualElement>
-
+    <ui:VisualElement name="screen" class="screen toybox-screen toybox-ui title-screen">
         <ui:VisualElement class="screen-frame title-layout">
-            <ui:VisualElement class="title-identity">
-                <ui:VisualElement name="game-logo" class="brand-mark title-logo" picking-mode="Ignore" />
-                <ui:VisualElement class="title-rule" picking-mode="Ignore" />
+            <ui:VisualElement class="title-board toy-panel">
+                <ui:Label name="game-logo" text="Battle Plan" class="title-wordmark" picking-mode="Ignore" />
+                <ui:VisualElement class="plan-path title-plan-path" picking-mode="Ignore">
+                    <ui:VisualElement class="plan-path__start" />
+                    <ui:VisualElement class="plan-path__line" />
+                    <ui:VisualElement class="plan-path__stop" />
+                </ui:VisualElement>
+                <ui:VisualElement class="title-actions">
+                    <ui:Button name="play-button" class="button button--primary title-action title-play">
+                        <ui:VisualElement class="toy-icon toy-icon--play" picking-mode="Ignore" />
+                        <ui:Label text="Play" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:VisualElement class="title-action-row">
+                        <ui:Button name="controls-button" class="button title-action title-action--half">
+                            <ui:VisualElement class="toy-icon toy-icon--controls" picking-mode="Ignore" />
+                            <ui:Label text="Controls" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                        </ui:Button>
+                        <ui:Button name="settings-button" class="button title-action title-action--half title-action--row-last">
+                            <ui:VisualElement class="toy-icon toy-icon--settings" picking-mode="Ignore" />
+                            <ui:Label text="Settings" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                        </ui:Button>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="title-action-row title-action-row--quiet">
+                        <ui:Button name="credits-button" class="button button--flat title-action title-action--half">
+                            <ui:VisualElement class="toy-icon toy-icon--credits" picking-mode="Ignore" />
+                            <ui:Label text="Credits" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                        </ui:Button>
+                        <ui:Button name="quit-button" text="Quit" class="button button--flat title-action title-action--half title-action--row-last" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
-
-            <ui:VisualElement class="title-actions panel">
-                <ui:Label text="Command menu" class="section-label" picking-mode="Ignore" />
-                <ui:Button name="play-button" text="Play" class="button button--primary title-action" />
-                <ui:Button name="controls-button" text="Controls" class="button title-action" />
-                <ui:Button name="settings-button" text="Settings" class="button title-action" />
-                <ui:Button name="credits-button" text="Credits" class="button title-action" />
-                <ui:Button name="quit-button" text="Quit" class="button button--flat title-action title-action--last" />
-            </ui:VisualElement>
+            <ui:VisualElement class="title-model-stage" picking-mode="Ignore" />
         </ui:VisualElement>
 
         <ui:VisualElement name="settings-modal" class="modal-shade hidden">
@@ -30,52 +44,51 @@
                 <ui:VisualElement class="divider" picking-mode="Ignore" />
                 <ui:Label text="Graphics quality" class="section-label" picking-mode="Ignore" />
                 <ui:DropdownField name="quality-dropdown" class="quality-dropdown" />
-                <ui:Label text="Quality changes apply immediately." class="label label--muted settings-note" picking-mode="Ignore" />
                 <ui:Button name="settings-close-button" text="Close" class="button button--primary modal-close" />
             </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement name="controls-modal" class="modal-shade hidden">
             <ui:VisualElement name="controls-modal-panel" class="modal controls-panel" focusable="true" tabindex="-1">
-                <ui:Label text="Controls" class="title-lg" picking-mode="Ignore" />
+                <ui:Label text="How to play" class="title-lg" picking-mode="Ignore" />
                 <ui:VisualElement class="divider" picking-mode="Ignore" />
                 <ui:ScrollView mode="Vertical" class="controls-scroll">
                     <ui:VisualElement class="control-section">
-                        <ui:Label text="ROUND FLOW" class="control-section__label" picking-mode="Ignore" />
+                        <ui:Label text="Round flow" class="control-section__label" picking-mode="Ignore" />
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Planning" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Both players plan at the same time. Enemy orders stay hidden until execution." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Both players choose orders at the same time." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Select a unit, then choose Move or Ability." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Select a unit. Select its card again to switch between movement and its ability." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
-                            <ui:Label text="Ability charge" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Each ability has one use per match. It replaces that unit's move for the round." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Abilities replace movement and recharge after their listed cooldown." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
-                            <ui:Label text="Commit" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Current orders commit automatically when the planning timer ends." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Lock in" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Lock in early. You can unlock while waiting; otherwise orders submit with the timer." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
-                            <ui:Label text="DODGE" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="If threatened during DODGE, drag each flashing unit to safety." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Dodge" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Drag threatened units to safety." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row control-row--last">
                             <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Fog hides enemies outside your fireteam's vision." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Enemies disappear outside your vision." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="control-section">
-                        <ui:Label text="WIN CONDITIONS" class="control-section__label" picking-mode="Ignore" />
+                        <ui:Label text="Win conditions" class="control-section__label" picking-mode="Ignore" />
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Wipe out the enemy fireteam." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Knock out the other fireteam." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row control-row--last">
-                            <ui:Label text="KOTH" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Hold the hill for three consecutive rounds. A contested round resets the streak." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="King of the Hill" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Hold the hill for three rounds in a row." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:ScrollView>

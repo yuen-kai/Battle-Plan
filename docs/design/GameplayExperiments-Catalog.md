@@ -14,7 +14,7 @@ The winner should be determined by the better sequence of decisions rather than 
 The working hypothesis combines structure with a bounded lethality budget:
 
 - center ordinary standard-target kills on **3 ± 1 magazines after explicit provisional miss
-  allowances**, with faster specialist flanks and telegraphed one-use abilities;
+  allowances**, with faster specialist flanks and telegraphed cooldown-gated abilities;
 - protect hidden simultaneous planning, fog, telegraphed counterplay, asymmetric range bands, and
 server authority;
 - lengthen the decision arc through pacing, objectives, ability economy, positioning, and clearer
@@ -61,8 +61,8 @@ space permits;
 so a team may field the same unit in more than one slot;
 - a five-unit eligible roster: Soldier, Shotgunner, Pogo Rider, Sniper, and Commander;
 - fog of war enabled unless an experiment explicitly makes fog the single variable;
-- the current Commander **Smoke Screen**: one use, target range 3, a real 3 × 3 footprint, and
-one-round sight/fire denial without changing movement or wall data. A segment is blocked only
+- the current Commander **Smoke Screen**: two-round cooldown, target range 3, a real 3 × 3 footprint,
+ and one-round sight/fire denial without changing movement or wall data. A segment is blocked only
 when it crosses a cloud cell interior; shooter and target endpoint cells are deliberately exempt.
 - the current combat prototype: **80 glass / 120 standard / 160 tank HP**, with ordinary standard
 target outcomes centered on **3 ± 1 provisional miss-adjusted magazine equivalents**.
@@ -81,13 +81,13 @@ Primary sources:
 
 ### 1.2 Implemented match rules
 
-- The planning deadline budget is `5 seconds × the largest living team`: nominally **25 seconds at
-5v5**, dropping by five seconds per loss to **5 seconds at 1v1**. Both valid submissions may end
-planning early;
-the server currently accepts through `endTime + 1`, so these are client deadlines rather than
-strict phase maxima.
+- The planning deadline is `max(12 seconds, 6 seconds × the largest living team)`: **30 seconds at
+5v5**, then 24/18/12/12 seconds. Lock In is reversible while planning remains open. Once both teams
+are locked, a three-second undo window may end planning early; the server accepts final automatic
+submissions through `endTime + 1`, so these are client deadlines rather than strict phase maxima.
 - An ability replaces that unit’s normal movement order for the round.
-- Every current unit starts with **one ability use**. Uses do not recharge.
+- Every current unit starts ready. A valid post-dodge activation starts a per-kit cooldown:
+  Pogo 2, Shield Rush 2, Smoke Screen 2, Grenade 3, and Area Lock 4 full rounds.
 - Eliminated units remain dead in both supported modes. The reusable respawn lifecycle is preserved
 but no current mode opts into it.
 - Elimination has no round cap. A team wipe ends the match.
@@ -109,7 +109,7 @@ These are the serialized values that experiments must use as the control:
 - Grenade: target range 5, radius 1.6, 80 damage, response range 3, dive range 2. A straight
 two-cell dive clears the blast from its center for every current unit collider; one step or a
 turned two-step path does not.
-- One ability use.
+- Three-round ability cooldown.
 
 **Shotgunner**
 
@@ -117,15 +117,15 @@ turned two-step path does not.
 - Target range 2; bullet range 3.
 - 8 damage × 10-round burst = 80 theoretical clean-magazine damage, with 25° spread.
 - Shield Rush: fixed distance 3; no dodge response.
-- One ability use.
+- Two-round ability cooldown.
 
 **Pogo Rider**
 
 - 120 HP; move 5; vision 7.
 - Target and bullet range 7.
 - 12 damage × 3-round magazine = 36 frontal or 72 theoretical backstab damage.
-- Backstab multiplier 2; jump range 5; no dodge response.
-- One ability use.
+- Backstab multiplier 2; jump range 6; no dodge response.
+- Two-round ability cooldown.
 
 **Sniper**
 
@@ -133,7 +133,7 @@ turned two-step path does not.
 - Target range 5; bullet range 14.
 - 50 damage × 1-round magazine; two-second target lock; 2.5-second reload.
 - Area Lock target-anchor range 99, line response, and flat damage **130**, independent of the rifle.
-- One ability use.
+- Four-round ability cooldown.
 
 **Commander**
 
@@ -141,7 +141,7 @@ turned two-step path does not.
 - Target range 5; bullet range 7.
 - 8 damage × 5-round magazine = 40 theoretical clean-magazine damage.
 - Smoke Screen: target range 3; nine-cell footprint; no dodge response.
-- One ability use.
+- Two-round ability cooldown.
 
 The deterministic base metric is
 `ceil(target HP / effective landed damage per hit) / magazine size`. A partial lethal magazine is
@@ -812,11 +812,15 @@ tiers and flat Area Lock 130.
 
 ### Ability economy and counterplay
 
+**Current control update (July 22, 2026):** EXP-C01/C02 describe the superseded finite-charge
+baseline. The live control is now the per-kit recurring cooldown schedule documented in §1.2.
+Retain these entries only as rollback/history arms; do not treat them as the current implementation.
+
 #### EXP-C01 — Per-kit starting charges
 
 - [ ] **Select EXP-C01**
 
-**Status:** Viable experiment
+**Status:** Superseded rollback arm
 
 - **Details:** Change one class at a time from its current single starting charge to zero or two.
 This can reveal whether a powerful ability should be rarer, whether a utility ability deserves
@@ -840,7 +844,7 @@ Restore that asset to 1.
 
 - [ ] **Select EXP-C02**
 
-**Status:** Viable experiment
+**Status:** Superseded rollback arm
 
 - **Details:** Keep one starting charge, then grant one additional charge at the start of round 4 or
 5 if that unit has room to store it. A player who hoarded the original charge receives no extra
@@ -1009,7 +1013,7 @@ magazine size in each arm. The test separates “reaches every important cell to
 - **Problem / defense:** Pogo combines the highest move and target range, reaches the hill from the
 center spawn in round one, and ignores walls during its jump.
 - **Arms / primary variable:** Move **4 / 5 / 6**; target range 5/7/8; bullet range 5/7/9; jump
-range **4 / 5 / 6**; magazine 2/3/4. One field per arm.
+range **5 / 6 / 7**; magazine 2/3/4. One field per arm.
 - **Controls & evidence:** Backstab multiplier and landing counterplay remain fixed.
 - **Metrics:** Turn-one hill reach, route distance saved, flank attempts, first control, first blood,
 range-band kills, and Pogo roster win contribution.
@@ -1301,10 +1305,10 @@ have zero, one, or two immediate counter-sightlines onto it. This tests whether 
 access is fair when it carries a visible positional risk.
 - **Problem / defense:** Pogo can reach the hill on round one. The design question is whether that is
 a risky mobility edge or a free objective.
-- **Arms / primary variable:** Keep the same range-5 hill landing and relocate walls at fixed count
+- **Arms / primary variable:** Keep the same range-6 hill landing and relocate walls at fixed count
 to expose that landing to **0 / 1 / 2** defender round-one counter-sightlines.
 - **Controls & evidence:** Spawns, hill, Pogo stats, score, and non-Pogo shortest path distances stay
-fixed. Moving the hill/spawn beyond range 5 is removed from this map arm; jump-range 4/5/6 belongs
+fixed. Moving the hill/spawn beyond range 6 is removed from this map arm; jump-range 5/6/7 belongs
 to EXP-D03.
 - **Metrics:** Turn-one hill entries, walk-vs-jump choice, survival through next exchange, first
 control, backstabs, and Pogo roster wins.
@@ -1366,17 +1370,17 @@ target without adding manual aim; test 1/2/3 living allies.
 **Status:** Viable experiment
 
 - **Details:** Keep the bot’s existing class-specific legality and Smoke/Shield/Pogo logic, but
-require a minimum projected value before spending a one-use ability. Higher thresholds make bots
-hold charges for stronger damage, prevention, positioning, or objective opportunities.
+require a minimum projected value before spending a ready ability. Higher thresholds make bots
+hold availability for stronger damage, prevention, positioning, or objective opportunities.
 - **Problem / defense:** The current selector is already class-aware: it has dedicated Smoke
 scoring, Shield engagement checks, Pogo hill-abandon checks, and shape-based ordering. It still
 returns the first eligible candidate in that ordering without a shared projected-value threshold.
 - **Arms / primary variable:** Current class-aware heuristic control versus the same heuristic plus
 a threshold of **0 / 0.5 / 1 projected unit value**. A later arm may compare revised per-class
 value functions with the selected threshold fixed.
-- **Controls & evidence:** No ability/stat/charge changes. Include Commander and Pogo in mirrored
+- **Controls & evidence:** No ability/stat/cooldown changes. Include Commander and Pogo in mirrored
 rosters.
-- **Metrics:** Use round, unused charge at death, damage/prevention, friendly shots denied by Smoke,
+- **Metrics:** Use round, unused ready opportunity at death, damage/prevention, friendly shots denied by Smoke,
 survival/objective swing, and win rate.
 - **Gate / protocol:** Preserve current Smoke/Shield/Pogo legal checks; no hidden-plan read, no
 second use, deterministic ties; per-class seed blocks follow §2.2.
@@ -1461,7 +1465,7 @@ full-route `HashSet`.
 abandoning position, or canceling its own ability. It may deliberately keep an order against a
 nonlethal threat and prioritize escape when the hit would kill.
 - **Problem / defense:** Bots instantly maximize geometric clearance without weighing HP, expected
-damage, hill loss, or cancellation of their own one-use action, overstating counterplay.
+damage, hill loss, or cancellation of their own cooldown-gated action, overstating counterplay.
 - **Arms / primary variable:** Clearance-first control versus expected damage avoided minus tactical
 cost weights **0 / 0.5 / 1**.
 - **Controls & evidence:** Only public activation data and own-team state; no hidden plans.
@@ -1578,7 +1582,7 @@ presentation. Remove dodge-only strip/ledger.
 shapes for confirmed incoming danger, a distinct cell pattern for Smoke, and dark uncertainty for
 fog. Richer threat envelopes may appear only for information the player is already allowed to know.
 - **Problem / defense:** Own intent, incoming threat, Smoke, and unknown fog lack a consistent
-provenance language; friendly attack range and enemy danger both use warm hues.
+provenance language; friendly order paths and enemy danger both use warm hues.
 - **Arms / primary variable:** Restrained shape/pattern semantics; then richer visible-unit threat
 envelopes. Reserve cool treatment for own intent and hot treatment for confirmed danger. Treat
 Smoke as a temporary cell-bounded obstruction distinct from ambient fog.
@@ -1628,7 +1632,7 @@ treatment remains viable
 ability shape, response, and charge information. The command dock now generates its card count from
 `RosterRules.UnitsPerPlayer` and scrolls horizontally when the full fireteam does not fit. The
 read-only enemy rail uses the same roster count and keeps identity, current/max HP, alive state, and
-remaining or spent match ability uses public without carrying positions or orders.
+authoritative ability cooldown public without carrying positions or orders.
 - **Problem / defense:** Character selection uses prose rather than comparable mobility,
 durability, reach, shape, response, and charge information. The former fixed-card structure is no
 longer a blocker for team-size experiments.
@@ -1884,7 +1888,7 @@ conflict index and in each entry’s controls, dependencies, and evidence limits
 
 Battle Plan now has a coherent miss-allowance numeric prototype, not evidence that the prototype
 alone solves pacing. The implementation still points to a connected structural problem: three
-pieces, shrinking late-game planning, one-use abilities, objective cadence, execution-window
-coupling, and incomplete tactical feedback. The catalog leaves the remaining viable directions
-unranked. Its prerequisite labels and dependency edges state what evidence a later experiment would
+pieces, shrinking late-game planning, cooldown-gated ability cadence, objective cadence,
+execution-window coupling, and incomplete tactical feedback. The catalog leaves the remaining viable
+directions unranked. Its prerequisite labels and dependency edges state what evidence a later experiment would
 need to support a credible conclusion.

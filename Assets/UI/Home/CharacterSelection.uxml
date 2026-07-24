@@ -2,59 +2,65 @@
     <ui:Template name="unit-option-template" src="../Shared/Templates/UnitOption.uxml" />
     <ui:Template name="selected-slot-template" src="../Shared/Templates/SelectedSlot.uxml" />
     <ui:Style src="../Shared/BattlePlan.uss" />
-    <ui:Style src="CharacterSelection.uss" />
-    <ui:VisualElement name="screen" class="screen roster-screen">
-        <ui:VisualElement class="command-ribbon">
-            <ui:VisualElement class="command-ribbon__beacon" picking-mode="Ignore" />
-            <ui:Label text="MATCH OPERATIONS / ROSTER" class="command-ribbon__text" picking-mode="Ignore" />
-            <ui:Label name="roster-count-label" text="FIRETEAM / SELECT" class="command-ribbon__route" picking-mode="Ignore" />
-        </ui:VisualElement>
-
-        <ui:VisualElement class="screen-frame roster-frame">
+    <ui:Style src="../Shared/TacticalToybox.uss" />
+    <ui:Style src="CharacterSelectionToybox.uss" />
+    <ui:VisualElement name="screen" class="screen toybox-screen toybox-ui roster-screen">
+        <ui:ScrollView mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="screen-frame roster-frame">
             <ui:VisualElement class="roster-header">
-                <ui:VisualElement class="roster-heading" picking-mode="Ignore">
+                <ui:VisualElement class="roster-heading toy-panel toy-panel--cream" picking-mode="Ignore">
                     <ui:Label text="Assemble your fireteam" class="title-xl" picking-mode="Ignore" />
                     <ui:Label name="roster-instruction" text="Choose eligible units. Repeats are allowed. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:VisualElement class="match-summary panel panel--quiet">
-                    <ui:Label text="Match brief" class="section-label" picking-mode="Ignore" />
+                <ui:VisualElement class="match-summary toy-panel">
+                    <ui:Label name="roster-count-label" text="Pick 5 units" class="roster-count-label" picking-mode="Ignore" />
                     <ui:VisualElement class="summary-row" picking-mode="Ignore">
-                        <ui:Label text="MODE" class="summary-row__key" picking-mode="Ignore" />
+                        <ui:Label text="Mode" class="summary-row__key" picking-mode="Ignore" />
                         <ui:Label name="mode-summary" text="Elimination" class="summary-row__value" picking-mode="Ignore" />
                     </ui:VisualElement>
                     <ui:VisualElement class="summary-row" picking-mode="Ignore">
-                        <ui:Label text="OPPONENT" class="summary-row__key" picking-mode="Ignore" />
+                        <ui:Label text="Opponent" class="summary-row__key" picking-mode="Ignore" />
                         <ui:Label name="opponent-summary" text="Player" class="summary-row__value" picking-mode="Ignore" />
                     </ui:VisualElement>
                     <ui:VisualElement class="summary-row" picking-mode="Ignore">
-                        <ui:Label text="VISIBILITY" class="summary-row__key" picking-mode="Ignore" />
+                        <ui:Label text="Visibility" class="summary-row__key" picking-mode="Ignore" />
                         <ui:Label name="fog-summary" text="Fog on" class="summary-row__value" picking-mode="Ignore" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement class="roster-body">
-                <ui:VisualElement class="unit-library panel">
-                    <ui:Label text="Deployment roster" class="section-label" picking-mode="Ignore" />
-                    <ui:ScrollView name="roster-options" mode="Horizontal" class="roster-options" />
-                </ui:VisualElement>
-                <ui:VisualElement class="map-column">
-                    <ui:Label text="Deployment area" class="section-label map-label" picking-mode="Ignore" />
-                    <ui:VisualElement name="map-preview" class="map-preview" picking-mode="Ignore" />
-                    <ui:Label text="INDUSTRIAL SECTOR / 15 × 10 GRID" class="map-caption" picking-mode="Ignore" />
+            <ui:VisualElement class="roster-model-stage" picking-mode="Ignore">
+                <ui:VisualElement class="plan-path roster-stage-path">
+                    <ui:VisualElement class="plan-path__start" />
+                    <ui:VisualElement class="plan-path__line" />
+                    <ui:VisualElement class="plan-path__stop" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement class="selection-dock panel panel--blue">
+            <ui:VisualElement class="roster-body">
+                <ui:VisualElement class="unit-library toy-panel">
+                    <ui:Label text="Pick your crew" class="section-label" picking-mode="Ignore" />
+                    <ui:ScrollView name="roster-options" mode="Horizontal" horizontal-scroller-visibility="Auto" vertical-scroller-visibility="Hidden" class="roster-options" />
+                </ui:VisualElement>
+                <ui:VisualElement class="map-column toy-panel">
+                    <ui:Label text="The board" class="section-label map-label" picking-mode="Ignore" />
+                    <ui:VisualElement name="map-preview" class="map-preview" picking-mode="Ignore" />
+                    <ui:Label text="Industrial sector · 15 × 10" class="map-caption" picking-mode="Ignore" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="selection-dock toy-panel">
                 <ui:VisualElement class="selection-column">
-                    <ui:Label text="Selected fireteam" class="section-label" picking-mode="Ignore" />
+                    <ui:Label text="Your fireteam" class="section-label" picking-mode="Ignore" />
                     <ui:VisualElement name="selected-roster" class="selected-roster" />
                 </ui:VisualElement>
                 <ui:VisualElement class="confirm-column">
                     <ui:Label name="selection-status" class="label label--muted selection-status" />
-                    <ui:Button name="confirm-selection-button" text="Confirm fireteam" enabled="false" class="button button--primary confirm-button" />
+                    <ui:Button name="confirm-selection-button" enabled="false" class="button button--primary confirm-button">
+                        <ui:VisualElement class="toy-icon toy-icon--check" picking-mode="Ignore" />
+                        <ui:Label text="Confirm fireteam" class="toy-button__label confirm-button__label" picking-mode="Ignore" />
+                    </ui:Button>
                 </ui:VisualElement>
             </ui:VisualElement>
-        </ui:VisualElement>
+        </ui:ScrollView>
     </ui:VisualElement>
 </ui:UXML>

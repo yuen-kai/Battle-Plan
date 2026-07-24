@@ -631,13 +631,13 @@ public class SmokeScreenEditModeTests
             "The catalog's first unit must be the Commander asset."
         );
 
-        // Smoke Screen ability card contract: cell-square targeting, no direction, one use.
+        // Smoke Screen ability card contract: cell-square targeting, no direction, two-round cooldown.
         Assert.That(commander.abilityName, Is.EqualTo("Smoke Screen"));
         Assert.That(commander.selectAbilitySquare, Is.True);
         Assert.That(commander.selectAbilityDirection, Is.False);
         Assert.That(commander.abilitySquareRange, Is.EqualTo(3));
         Assert.That(commander.abilityFixedDistance, Is.EqualTo(0));
-        Assert.That(commander.uses, Is.EqualTo(1));
+        Assert.That(commander.abilityCooldownRounds, Is.EqualTo(2));
         // abilityRadius drives the visual/target preview; the placed cloud is cell-quantized by
         // Smoke.FootprintRadius, so both values are part of the contract.
         Assert.That(commander.abilityRadius, Is.EqualTo(1.5f).Within(0.0001f));

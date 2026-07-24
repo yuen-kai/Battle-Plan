@@ -1,0 +1,87 @@
+:root {
+    /* Palette and semantic states */
+    --toy-ink: rgb(27, 25, 39);
+    --toy-playmat: rgb(45, 46, 67);
+    --toy-playmat-raised: rgb(58, 59, 82);
+    --toy-playmat-hover: rgb(71, 72, 98);
+    --toy-playmat-pressed: rgb(40, 40, 58);
+    --toy-playmat-quiet: rgb(38, 36, 52);
+    --toy-cream: rgb(245, 236, 216);
+    --toy-cream-copy: rgb(232, 224, 210);
+    --toy-cream-border: rgba(245, 236, 216, 0.2);
+    --toy-cream-wash: rgba(245, 236, 216, 0.1);
+    --toy-body-copy: rgb(213, 205, 218);
+    --toy-dark-copy: rgb(48, 45, 56);
+    --toy-orange: rgb(242, 165, 74);
+    --toy-orange-hover: rgb(255, 186, 92);
+    --toy-orange-pressed: rgb(224, 143, 54);
+    --toy-orange-copy: rgb(255, 196, 116);
+    --toy-teal: rgb(85, 178, 157);
+    --toy-teal-hover: rgb(104, 198, 176);
+    --toy-teal-pressed: rgb(69, 158, 139);
+    --toy-sky: rgb(132, 211, 230);
+    --toy-tomato: rgb(233, 104, 93);
+    --toy-tomato-hover: rgb(247, 126, 115);
+    --toy-tomato-pressed: rgb(207, 83, 75);
+    --toy-tomato-copy: rgb(255, 184, 176);
+    --toy-muted: rgb(189, 182, 201);
+    --toy-muted-dark: rgb(91, 87, 107);
+    --toy-divider: rgb(78, 76, 99);
+    --toy-disabled-surface: rgb(43, 43, 58);
+    --toy-disabled-border: rgb(75, 73, 91);
+    --toy-shade: rgba(18, 17, 28, 0.88);
+    --toy-panel: rgba(45, 46, 67, 0.97);
+    --toy-transparent: rgba(0, 0, 0, 0);
+
+    /* Spacing */
+    --toy-space-xs: 4px;
+    --toy-space-sm: 8px;
+    --toy-space-md: 12px;
+    --toy-space-lg: 20px;
+    --toy-space-xl: 32px;
+    --toy-space-control-x: 16px;
+    --toy-space-control-top: 10px;
+    --toy-space-control-bottom: 12px;
+    --toy-space-control-active-top: 13px;
+    --toy-space-control-active-bottom: 9px;
+    --toy-space-panel: 24px;
+    --toy-space-panel-compact: 18px;
+    --toy-space-modal: 28px;
+    --toy-space-modal-phone: 20px;
+
+    /* Shape and target sizes */
+    --toy-radius-sm: 6px;
+    --toy-radius-md: 10px;
+    --toy-radius-lg: 14px;
+
+    --toy-target-status: 28px;
+    --toy-target-compact: 44px;
+    --toy-target: 52px;
+    --toy-target-phone: 56px;
+    --toy-icon-size: 24px;
+    --toy-icon-gap: 11px;
+    --toy-scroll-size: 14px;
+
+    /* Structural depth */
+    --toy-stroke-thin: 2px;
+    --toy-stroke: 3px;
+    --toy-depth-rest: 6px;
+    --toy-depth-pressed: 3px;
+    --toy-depth-panel: 5px;
+    --toy-depth-modal: 7px;
+    --toy-focus-width: 3px;
+    --toy-focus-emphasis: 5px;
+
+    /* Type scale */
+    --toy-type-display: 38px;
+    --toy-type-title-lg: 28px;
+    --toy-type-title: 20px;
+    --toy-type-body-lg: 16px;
+    --toy-type-body: 15px;
+    --toy-type-label: 13px;
+    --toy-type-caption: 12px;
+    --toy-type-mono: 20px;
+
+    /* Interaction timing */
+    --toy-motion-fast: 0.1s;
+}

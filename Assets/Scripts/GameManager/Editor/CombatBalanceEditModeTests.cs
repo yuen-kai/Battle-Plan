@@ -30,6 +30,34 @@ public class CombatBalanceEditModeTests
     }
 
     [Test]
+    public void UnitAssets_UseStrengthBasedAbilityCooldowns()
+    {
+        Assert.That(LoadUnit("PogoRider").abilityCooldownRounds, Is.EqualTo(2));
+        Assert.That(LoadUnit("Shotgunner").abilityCooldownRounds, Is.EqualTo(2));
+        Assert.That(LoadUnit("Commander").abilityCooldownRounds, Is.EqualTo(2));
+        Assert.That(LoadUnit("Soldier").abilityCooldownRounds, Is.EqualTo(3));
+        Assert.That(LoadUnit("Sniper").abilityCooldownRounds, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void PogoJump_UsesSixCellRangeAndRejectsTheSeventhCell()
+    {
+        UnitData pogo = LoadUnit("PogoRider");
+        Assert.That(pogo.abilitySquareRange, Is.EqualTo(6));
+        Assert.That(pogo.abilityCooldownRounds, Is.EqualTo(2));
+
+        Vector2Int start = new(1, 1);
+        Assert.That(
+            PlanMovement.ValidateAbilityTarget(pogo, start, new Vector2Int(7, 1), true, false),
+            Is.EqualTo(AbilityTargetValidationReason.Valid)
+        );
+        Assert.That(
+            PlanMovement.ValidateAbilityTarget(pogo, start, new Vector2Int(8, 1), true, false),
+            Is.EqualTo(AbilityTargetValidationReason.OutOfRange)
+        );
+    }
+
+    [Test]
     public void StandardTarget_ProvisionalMissAllowancesStayWithinTwoToFourMagazines()
     {
         UnitData commander = LoadUnit("Commander");

@@ -26,11 +26,11 @@ Material:
     m_Ints: []
     m_Floats:
     - _EdgeSoftness: 0.9
-    - _Intensity: 0.25
-    - _PulseAmount: 0.3
+    - _Intensity: 0.14
+    - _PulseAmount: 0.08
     - _PulseSpeed: 0
     - _RingWidth: 1
     m_Colors:
-    - _GlowColor: {r: 0.28, g: 0.29, b: 0.3, a: 1}
+    - _GlowColor: {r: 0.21, g: 0.56, b: 0.53, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

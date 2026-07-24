@@ -32,6 +32,12 @@ public class PathSelection : MonoBehaviour
 
     public void MovementSelection(int moveDist)
     {
+        if (PlanMovement.Instance?.CanEditPlan != true)
+        {
+            pathDragActive = false;
+            return;
+        }
+
         moveDist =
             moveDist == -1 ? SelectedUnit.GetComponent<Movement>().unitData.moveDist : moveDist;
         if (Input.GetMouseButtonDown(0))
@@ -50,8 +56,19 @@ public class PathSelection : MonoBehaviour
 
     public bool TryStartPath()
     {
+        if (PlanMovement.Instance?.CanEditPlan != true)
+        {
+            pathDragActive = false;
+            return false;
+        }
+
         pathDragActive = StartPath();
         return pathDragActive;
+    }
+
+    public void CancelCurrentDrag()
+    {
+        pathDragActive = false;
     }
 
     bool StartPath()

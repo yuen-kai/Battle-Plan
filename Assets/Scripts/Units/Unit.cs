@@ -8,12 +8,15 @@ public class Unit : NetworkBehaviour
     public List<Material> teamMaterials;
     private readonly NetworkVariable<int> teamIndex = new(-1);
     private readonly NetworkVariable<int> rosterSlot = new(-1);
-    private readonly NetworkVariable<int> remainingAbilityUses = new(0);
+    private readonly NetworkVariable<int> abilityCooldownRoundsRemaining = new(0);
 
     public int TeamIndex => teamIndex.Value;
     public int RosterSlot => rosterSlot.Value;
-    public int RemainingAbilityUses => remainingAbilityUses.Value;
-    public bool CanUseAbility => GetComponent<Ability>() != null && RemainingAbilityUses > 0;
+    public int ConfiguredAbilityCooldownRounds =>
+        GetConfiguredAbilityCooldownRounds(GetUnitData(), GetComponent<Ability>() != null);
+    public int AbilityCooldownRoundsRemaining => abilityCooldownRoundsRemaining.Value;
+    public bool CanUseAbility =>
+        GetComponent<Ability>() != null && AbilityCooldownRoundsRemaining == 0;
     public bool IsFriendlyToLocalPlayer =>
         GameLoop.Instance != null
         && GameLoop.Instance.LocalTeamIndex >= 0
@@ -25,14 +28,6 @@ public class Unit : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        if (IsServer)
-        {
-            UnitData data = GetUnitData();
-            remainingAbilityUses.Value = GetInitialAbilityUses(
-                data,
-                GetComponent<Ability>() != null
-            );
-        }
         teamIndex.OnValueChanged += OnTeamIndexChanged;
         RefreshTeamPresentation();
     }
@@ -76,30 +71,66 @@ public class Unit : NetworkBehaviour
         rosterSlot.Value = value;
     }
 
-    public bool TryConsumeAbilityUse()
+    public bool TryStartAbilityCooldown()
     {
-        if (!IsServer || GetComponent<Ability>() == null)
+        if (!IsServer)
             return false;
 
-        int remaining = remainingAbilityUses.Value;
-        if (!TryConsumeAbilityCharge(ref remaining))
+        int remaining = abilityCooldownRoundsRemaining.Value;
+        if (
+            !TryStartAbilityCooldown(
+                ref remaining,
+                ConfiguredAbilityCooldownRounds,
+                GetComponent<Ability>() != null
+            )
+        )
+        {
             return false;
+        }
 
-        remainingAbilityUses.Value = remaining;
+        abilityCooldownRoundsRemaining.Value = remaining;
         return true;
     }
 
-    public static int GetInitialAbilityUses(UnitData data, bool abilityPresent)
+    public bool TickAbilityCooldownRound()
     {
-        return abilityPresent && data != null ? Mathf.Max(0, data.uses) : 0;
-    }
-
-    public static bool TryConsumeAbilityCharge(ref int remainingUses)
-    {
-        if (remainingUses <= 0)
+        if (!IsServer)
             return false;
 
-        remainingUses--;
+        int remaining = abilityCooldownRoundsRemaining.Value;
+        if (!TickAbilityCooldownRound(ref remaining))
+            return false;
+
+        abilityCooldownRoundsRemaining.Value = remaining;
+        return true;
+    }
+
+    public static int GetConfiguredAbilityCooldownRounds(UnitData data, bool hasAbility)
+    {
+        return hasAbility ? Mathf.Max(1, data != null ? data.abilityCooldownRounds : 1) : 0;
+    }
+
+    public static bool TryStartAbilityCooldown(
+        ref int remainingRounds,
+        int configuredRounds,
+        bool hasAbility
+    )
+    {
+        remainingRounds = Mathf.Max(0, remainingRounds);
+        if (!hasAbility || remainingRounds > 0)
+            return false;
+
+        remainingRounds = Mathf.Max(1, configuredRounds);
+        return true;
+    }
+
+    public static bool TickAbilityCooldownRound(ref int remainingRounds)
+    {
+        remainingRounds = Mathf.Max(0, remainingRounds);
+        if (remainingRounds == 0)
+            return false;
+
+        remainingRounds--;
         return true;
     }
 
@@ -138,8 +169,8 @@ public class Unit : NetworkBehaviour
         // Alphas stay low: cones are additive and overlap, so they sum up fast.
         cone.SetColor(
             IsFriendlyToLocalPlayer
-                ? new Color(0.92f, 0.95f, 1f, 0.15f)
-                : new Color(1f, 0.3f, 0.32f, 0.08f)
+                ? new Color(0.92f, 0.95f, 1f, 0.18f)
+                : new Color(1f, 0.3f, 0.32f, 0.10f)
         );
 
         // The flashlight is the weapon envelope, not fog vision:

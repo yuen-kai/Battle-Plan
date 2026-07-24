@@ -5,6 +5,11 @@ with Smoke Screen and the miss-allowance combat profile. The original pre-implem
 acceptance checklist remain below as design history; release readiness still requires the runtime
 checks in §17.
 
+**Economy update (July 22, 2026):** the former one-use baseline was replaced by authoritative
+per-kit round cooldowns. Smoke Screen now starts a **2-full-round cooldown** after a valid
+post-dodge activation. Historical pre-implementation references to one-use charges below are
+superseded where they conflict with §§2, 10, 13, 16, and 17 as updated here.
+
 ## 0. Why this exists (evidence)
 
 Pre-rework baseline, verified against source when this spec was written:
@@ -24,8 +29,7 @@ Pre-rework baseline, verified against source when this spec was written:
 The converged recommendation from the completed gameplay and systems-balance audits was to **gate
 the Commander and rework it as a plan-committed "Smoke Screen" support ability.** Both audits converge on Smoke
 Screen as the primary proposal (with a "Rally Beacon" concept as the documented fallback). This spec
-adopts Smoke Screen and treats the shipped state — abilities are **one use per match**, honestly
-labeled — as the external baseline pending a later instrumented A/B.
+adopts Smoke Screen within the shipped strength-based cooldown economy.
 
 ## 1. Player purpose
 
@@ -51,10 +55,10 @@ It slots into the existing flow used by all live abilities:
    both clients (`ShowAbilityTelegraphClientRpc`) and grants dodge windows. Smoke is a placement, not a
    struck target, so it does **not** itself alert dodgers (`responseRange = 0`); other activations in
    the same round still telegraph and grant dodges as today.
-3. **Execution.** After `ExecuteMoves`, abilities run via
-   `unit.GetComponent<Ability>().ExecuteAbility(square, data.abilityRadius)` and the charge is consumed
-   by `identity.TryConsumeAbilityUse()`. Smoke's occlusion is applied for the round's combat window and
-   then removed.
+3. **Execution.** After the dodge window, a surviving valid activation starts its server-authored
+   cooldown through `identity.TryStartAbilityCooldown()`. Abilities then run via
+   `unit.GetComponent<Ability>().ExecuteAbility(square, data.abilityRadius)`. Smoke's occlusion is
+   applied for the round's combat window and then removed.
 
 No new phase, no pause, no second planning pass.
 
@@ -77,8 +81,7 @@ Fixed behavior (requirements):
 
 Invalid input handling: an out-of-range or unreachable target is clamped/rejected by the existing
 `SanitizeAbilityPlan` path (consistent with other abilities); if no valid target exists the activation
-is dropped and the charge is **not** consumed (matches `TryConsumeAbilityUse` being called only at
-execution of a valid activation).
+is dropped and the cooldown is **not** started.
 
 ## 4. Authoritative timing (resolution order)
 
@@ -163,20 +166,16 @@ mutating map geometry** (`GameLoop.wallLayout`) and without changing pathfinding
 (`GridSystem.FindPath`). Engineering owns the exact structure; the requirement is only that "a shot line
 crossing an active smoke cell fails the same LoS check that walls fail."
 
-## 10. One-use-per-match baseline
+## 10. Two-round cooldown
 
-Smoke inherits the shipped economy exactly:
+Smoke inherits the shipped server-authored cooldown economy:
 
-- `Commander.asset uses: 1`; the charge is set once at spawn (`Unit.GetInitialAbilityUses`) and consumed
-  once (`Unit.TryConsumeAbilityUse` via `GameLoop`), with **no per-round recharge** anywhere in the
-  round loop.
-- KOTH casualties remain dead. The preserved generic respawn lifecycle still calls
-  `Ability.ResetForRespawn()` only to clear transient coroutine/VFX state and never restores an
-  ability use.
-- This one-use baseline is intentional and honestly labeled, **pending** a later instrumented A/B
-  (once-per-match vs per-round vs capped refill) on a confound-controlled build. Smoke must be
-  implemented so the economy is a single server-authoritative knob and does **not** hard-code
-  once-per-match assumptions that would block that experiment.
+- `Commander.asset abilityCooldownRounds: 2`; every deployed Commander starts ready.
+- A valid post-dodge activation starts a two-round cooldown. The activation round does not consume
+  one of those full rounds: Smoke used in R1 is blocked in R2 and R3, then ready in R4.
+- Invalid and dodge-cancelled plans do not start cooldown.
+- KOTH casualties remain dead. The preserved generic respawn lifecycle clears transient
+  coroutine/VFX state but never resets or pauses cooldown progress.
 
 ## 11. Bot candidate-generation & scoring needs
 
@@ -201,7 +200,7 @@ The bot evaluator must add, for Smoke:
    tie-breaking consistent with existing helpers (`CompareCells`, index/round-robin ordering) so bot
    behavior is reproducible under a fixed seed.
 4. **Fallback:** if no placement has positive value, the Commander plans a normal move (no forced,
-   wasteful smoke) — the bot should not spend its one charge on a zero-value cloud.
+   wasteful smoke) — the bot should not start a cooldown for a zero-value cloud.
 
 ## 12. Tunable handoffs (systems-balance owns values)
 
@@ -242,8 +241,9 @@ edit-mode tests; no reliance on human feel.
    round resolves from the plan-time commitment; `Time.timeScale` stays 1 during execution.
 9. **Public telegraph:** at execution start both clients render the smoke-area telegraph and then the
    smoke volume; neither is hidden from the opponent.
-10. **One use per match:** Commander uses Smoke in R1 → its card shows the ability **spent**; it has no
-    Smoke available in R2 if alive; if eliminated in KOTH, it remains dead.
+10. **Cooldown:** Commander uses Smoke in R1 → its card shows **ready in 2 rounds**; it is unavailable
+    in R2 and R3, then ready in R4. If eliminated in KOTH, it remains dead while the cooldown still
+    advances at ordinary round boundaries.
 11. **Non-persistent:** smoke is gone at the start of the next round's combat (no lingering occluder,
     no residual collider on the `Walls`-queried LoS).
 12. **Draw non-regression:** with the gate/rework in place, a simultaneous full-team wipe still resolves
@@ -263,9 +263,9 @@ permanent safe zone" below. Re-validate with a multi-Commander roster before tru
 guardrails; a per-unit repeat cap (e.g. limit Commander to 1) is the straightforward rollback if
 stacking proves dominant.
 
-- **No permanent safe zone:** duration bounded to the round; one use per match already caps frequency
-  (previously relied on unique rosters capping this at one Commander → one smoke per side per match;
-  repeats can now exceed that — see update note above).
+- **No permanent safe zone:** duration is bounded to the round and each Commander has a two-round
+  cooldown. Repeat rosters can still stagger multiple screens, so the multi-Commander risk above
+  remains active.
 - **Symmetry enforced:** never ship an enemy-only occlusion; it must block both teams equally.
 - **Parity, not oppression:** with Commander enabled, no roster's side-adjusted win rate should exceed
   ~60% or fall below ~40% (align with the audits' >60% rejection guardrail); the Commander must be
@@ -285,7 +285,7 @@ stacking proves dominant.
 - **Distinct-roster enforcement** (same controller) — **removed** so players can select repeat units;
   Smoke's original "one Commander per side" assumption no longer holds (see §14 update note).
 - **Ability activation pipeline** (`GameLoop.CollectAbilityActivations`, `SanitizeAbilityPlan`,
-  `RunDodgePhase`, `ShowAbilityTelegraphClientRpc`, `ExecuteMoves`, `TryConsumeAbilityUse`).
+  `RunDodgePhase`, `ShowAbilityTelegraphClientRpc`, `StartAbilityCooldowns`, `ExecuteMoves`).
 - **Shared shot-LoS mechanism** (`Shooting.lineOfSight`, `Grenade`/`AreaLock` Walls-mask raycasts,
   `Bullet`) — the occluder must be honored by this test.
 - **Respawn/economy** (`Unit`, `Health.RespawnAt`, `GameLoop` respawn path, `Ability.ResetForRespawn`).
@@ -300,9 +300,9 @@ stacking proves dominant.
 - **Ability name:** rename `Commander.asset abilityName` from the dead "Reroute" to **"Smoke Screen"**;
   it surfaces in the selection card (`CharacterSelectionUIController` `unit-option-ability`) and the HUD
   unit card (`UnitCardElement`).
-- **Card economy text (honest, unchanged pattern):** `UnitCardElement.RefreshAbilityState` shows
-  `"Smoke Screen · 1 use"` then `"Smoke Screen · spent"`, and the ability button shows `"ABILITY · 1"`
-  then `"SPENT"` — consistent with the one-use-per-match baseline (do **not** label it "per round").
+- **Card economy text:** `UnitCardElement.RefreshAbilityState` shows `"Smoke Screen · ready"`, then
+  `"Smoke Screen · ready in 2 rounds"` / `"ready in 1 round"`; the ability rail shows `READY` or
+  `COOLDOWN · 2R`.
 - **While gated:** the Commander is not shown as a selectable option; if surfaced anywhere it reads
   *"Unavailable — rework in progress."*
 - **Tooltip / short primer line (target copy):** "Smoke Screen — block a sightline so allies can move
@@ -317,16 +317,17 @@ one build (broker barrier: freeze writes, import once, zero relevant compile err
 
 - [ ] **Server implementation:** authoritative Smoke `Ability` that commits at plan time, applies
       symmetric shot-LoS occlusion for the round via the shared LoS mechanism, resolves with no
-      mid-execution replanning, consumes exactly one use, and clears at end of round (§§2–4, 9, 10).
+      mid-execution replanning, starts its two-round cooldown only after dodge, and clears at end
+      of round (§§2–4, 9, 10).
       Compiles with zero errors; no client-authority or replication violations.
 - [ ] **VFX / telegraph:** public area telegraph at execution start plus a readable, fog-correct smoke
       volume distinct from walls and fog (§5).
 - [ ] **Bot evaluator:** fog-bounded candidate generation and scoring for the support/denial ability,
       deterministic under seed, respecting the one-ability-per-round budget (§11).
-- [ ] **UI contract:** selection eligibility, ability name, and honest one-use card copy wired
+- [ ] **UI contract:** selection eligibility, ability name, and authoritative cooldown copy wired
       (§16); Commander option ungated only here.
 - [ ] **Tests pass:** edit-mode tests for the selection gate, distinct/eligible rosters, LoS
-      block + symmetry, push-through, one-use/no-recharge, non-persistence, and draw non-regression;
+      block + symmetry, push-through, two-round cooldown, non-persistence, and draw non-regression;
       plus a scripted bot/dev run covering the §13 acceptance scenarios.
 
 Only after all boxes are checked: re-enable Commander selection (client + server), correct

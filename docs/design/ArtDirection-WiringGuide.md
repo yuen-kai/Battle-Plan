@@ -33,8 +33,8 @@ self-contained URP HLSL. Quick smoke test: drop a Quad in a scene, assign
 - `Assets/Prefabs/Map/Wall.prefab`: `Wall` → `Map_WallDark`.
 - `GridCellOutline`: raise value to ~`#3D4A66` at ~35% alpha — on a dark floor the outline must
   be lighter than the fill.
-- Re-check planning overlays (`MoveOverlayCell`, `AttackOverlay`, `AOEoverlay`,
-  `AbilityRangeCell`) for contrast against the dark floor; expect alpha bumps.
+- Re-check planning overlays (`MoveOverlayCell`, `AOEoverlay`, `AbilityRangeCell`) for contrast
+  against the dark floor; expect alpha bumps.
 
 ## 3. Team glow accents
 - In `Assets/Scripts/Units/Unit.cs` `SetTeamIndicators`, swap the assigned materials to

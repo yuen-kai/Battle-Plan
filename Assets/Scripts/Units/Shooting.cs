@@ -373,6 +373,42 @@ public class Shooting : NetworkBehaviour
             * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
     }
 
+    private bool TryProjectileCast(
+        Vector3 origin,
+        Vector3 direction,
+        float distance,
+        int layerMask,
+        out RaycastHit hit
+    )
+    {
+        if (direction.sqrMagnitude <= Mathf.Epsilon || distance <= 0f)
+        {
+            hit = default;
+            return false;
+        }
+
+        direction.Normalize();
+        float projectileRadius = GetProjectileCollisionRadius(ResolveBulletPrefab());
+        return projectileRadius > 0f
+            ? Physics.SphereCast(
+                origin,
+                projectileRadius,
+                direction,
+                out hit,
+                distance,
+                layerMask,
+                QueryTriggerInteraction.Ignore
+            )
+            : Physics.Raycast(
+                origin,
+                direction,
+                out hit,
+                distance,
+                layerMask,
+                QueryTriggerInteraction.Ignore
+            );
+    }
+
     private int GetActiveBulletCount()
     {
         bullets.RemoveAll(bullet => bullet == null);
@@ -478,32 +514,13 @@ public class Shooting : NetworkBehaviour
 
         // Check for clear line of sight within range
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
-        float projectileRadius = GetProjectileCollisionRadius(ResolveBulletPrefab());
-        RaycastHit hit;
-        bool hitSomething;
-        if (projectileRadius > 0f)
-        {
-            hitSomething = Physics.SphereCast(
-                transform.position,
-                projectileRadius,
-                directionToEnemy,
-                out hit,
-                unitData.targetRange * GameLoop.cellSize,
-                LayerMask.GetMask("Walls", enemyTeam),
-                QueryTriggerInteraction.Ignore
-            );
-        }
-        else
-        {
-            hitSomething = Physics.Raycast(
-                transform.position,
-                directionToEnemy,
-                out hit,
-                unitData.targetRange * GameLoop.cellSize,
-                LayerMask.GetMask("Walls", enemyTeam),
-                QueryTriggerInteraction.Ignore
-            );
-        }
+        bool hitSomething = TryProjectileCast(
+            transform.position,
+            directionToEnemy,
+            unitData.targetRange * GameLoop.cellSize,
+            LayerMask.GetMask("Walls", enemyTeam),
+            out RaycastHit hit
+        );
         if (
             hitSomething
             && (

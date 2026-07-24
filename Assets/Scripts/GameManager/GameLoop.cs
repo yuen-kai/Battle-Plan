@@ -474,7 +474,9 @@ public class GameLoop : NetworkBehaviour
     };
 
     // Game Settings
-    const float planningTimePerUnit = 8f;
+    const float planningTimePerUnit = 6f;
+    const float minimumPlanningTime = 12f;
+    const float planningUndoGraceSeconds = 3f;
 
     // Actions
     public static System.Action<bool> OrderAllowShooting;
@@ -482,12 +484,16 @@ public class GameLoop : NetworkBehaviour
     public static System.Action OrderContinueShooting;
 
     private readonly Dictionary<int, PathsDict> submittedTeamPaths = new();
+    private readonly Dictionary<int, int> latestTeamPlanVersions = new();
+    private readonly Dictionary<int, PathsDict> retractedTeamPathFallbacks = new();
     private readonly Dictionary<
         GameObject,
         (Vector3 position, Quaternion rotation)
     > unitSpawnTransforms = new();
     private BotPlayer botPlayer;
     private int roundNumber;
+    private bool planningChangesOpen;
+    private double planningDeadline;
 
     // === KING OF THE HILL ===
     // Atomic, server-authored objective state on the always-visible GameLoop object. Keeping this
@@ -972,7 +978,7 @@ public class GameLoop : NetworkBehaviour
                 SetUnitCardClientRpc(
                     i,
                     teamUnits[i],
-                    unitIdentity.RemainingAbilityUses,
+                    unitIdentity.AbilityCooldownRoundsRemaining,
                     NetworkHelper.ToClient(participantId)
                 );
             }
@@ -983,7 +989,7 @@ public class GameLoop : NetworkBehaviour
     void SetUnitCardClientRpc(
         int cardIndex,
         int unitIndex,
-        int remainingAbilityUses,
+        int cooldownRoundsRemaining,
         ClientRpcParams clientRpcParams = default
     )
     {
@@ -995,7 +1001,7 @@ public class GameLoop : NetworkBehaviour
             cardIndex,
             unitData,
             hasAbility,
-            remainingAbilityUses
+            cooldownRoundsRemaining
         );
     }
 
@@ -1075,7 +1081,7 @@ public class GameLoop : NetworkBehaviour
             health.MaxHealth,
             health.IsAlive,
             unit.GetComponent<Ability>() != null,
-            identity.RemainingAbilityUses,
+            identity.AbilityCooldownRoundsRemaining,
             NetworkHelper.ToClient(viewerClientId)
         );
     }
@@ -1088,7 +1094,7 @@ public class GameLoop : NetworkBehaviour
         float maxHealth,
         bool alive,
         bool hasAbility,
-        int remainingAbilityUses,
+        int cooldownRoundsRemaining,
         ClientRpcParams clientRpcParams = default
     )
     {
@@ -1099,7 +1105,7 @@ public class GameLoop : NetworkBehaviour
             cardIndex,
             allUnits.units[unitIndex],
             hasAbility,
-            remainingAbilityUses,
+            cooldownRoundsRemaining,
             currentHealth,
             maxHealth,
             alive
@@ -1149,6 +1155,14 @@ public class GameLoop : NetworkBehaviour
         GameHUDController.Instance?.SetCardDisabled(unitIndex, disabled);
     }
 
+    public static float GetPlanningDurationSeconds(int largestLivingTeamSize)
+    {
+        return Mathf.Max(
+            minimumPlanningTime,
+            planningTimePerUnit * Mathf.Max(0, largestLivingTeamSize)
+        );
+    }
+
     IEnumerator GameLoopTemp()
     {
         if (!IsServer)
@@ -1160,6 +1174,10 @@ public class GameLoop : NetworkBehaviour
             ClearActiveSmokeCells();
             roundNumber++;
             submittedTeamPaths.Clear();
+            latestTeamPlanVersions.Clear();
+            retractedTeamPathFallbacks.Clear();
+            planningChangesOpen = false;
+            planningDeadline = 0d;
             devEndPlanningNow = false;
             currentPhase = "planning";
 
@@ -1169,9 +1187,13 @@ public class GameLoop : NetworkBehaviour
             SetCardsInteractableClientRpc(true);
             OrderStillShooting?.Invoke(true);
 
-            float timerLength = planningTimePerUnit * teamNames.Max(teamSize);
+            int largestLivingTeamSize = Enumerable
+                .Range(0, TeamCount)
+                .Max(teamIndex => GetTeamUnits(teamIndex).Count(IsLivingUnit));
+            float timerLength = GetPlanningDurationSeconds(largestLivingTeamSize);
             double startTime = NetworkManager.Singleton.ServerTime.Time;
             double endTime = startTime + timerLength;
+            planningDeadline = endTime;
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Friendly);
             setOverlayUITextClientRpc("Planning", MessagePerspective.Friendly);
@@ -1183,6 +1205,7 @@ public class GameLoop : NetworkBehaviour
                     botPlans,
                     botPlayer.TeamIndex
                 );
+                latestTeamPlanVersions[botPlayer.TeamIndex] = 0;
             }
 
             if (devMode)
@@ -1200,26 +1223,52 @@ public class GameLoop : NetworkBehaviour
             }
             else
             {
-                StartPlanningClientRpc(endTime);
+                planningChangesOpen = true;
+                StartPlanningClientRpc(endTime, roundNumber);
 
+                double allTeamsCommittedAt = -1d;
                 while (
-                    submittedTeamPaths.Count < TeamCount
-                    && !matchEnded
+                    !matchEnded
+                    && NetworkManager.Singleton != null
                     && NetworkManager.Singleton.ServerTime.Time < endTime + 1
                 )
                 {
+                    double now = NetworkManager.Singleton.ServerTime.Time;
+                    if (submittedTeamPaths.Count >= TeamCount)
+                    {
+                        if (allTeamsCommittedAt < 0d)
+                            allTeamsCommittedAt = now;
+                        else if (now - allTeamsCommittedAt >= planningUndoGraceSeconds)
+                            break;
+                    }
+                    else
+                    {
+                        allTeamsCommittedAt = -1d;
+                    }
                     yield return null;
                 }
             }
+            planningChangesOpen = false;
 
-            if (matchEnded)
+            if (
+                matchEnded
+                || !IsSpawned
+                || NetworkManager.Singleton == null
+                || !NetworkManager.Singleton.IsListening
+            )
+            {
                 yield break;
+            }
 
+            if (!devMode)
+                SetPlanningCommitLockedForHumanTeams();
+            FinishPlanningClientRpc();
             lastPlanningSeconds = (float)(NetworkManager.Singleton.ServerTime.Time - startTime);
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Neutral);
             SetCardsInteractableClientRpc(false);
 
+            RestoreRetractedPlanningFallbacks();
             PathsDict paths = new();
             foreach (
                 PathsDict teamPaths in submittedTeamPaths
@@ -1252,7 +1301,8 @@ public class GameLoop : NetworkBehaviour
             }
             if (matchEnded)
                 yield break;
-            activations = ConsumeAbilityUses(activations);
+            HashSet<Unit> cooldownsStartedThisRound = new();
+            activations = StartAbilityCooldowns(activations, cooldownsStartedThisRound);
 
             // Dodge telegraphs are planning aids, not execution VFX. Clear them on every client
             // before movement and abilities start so lines/discs cannot linger into resolution.
@@ -1299,6 +1349,7 @@ public class GameLoop : NetworkBehaviour
                 yield break;
 
             HideAbilityTelegraphsClientRpc();
+            TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
             // path resolves a survivor or simultaneous-wipe draw.
@@ -1551,24 +1602,53 @@ public class GameLoop : NetworkBehaviour
         return activations;
     }
 
-    private List<(GameObject unit, Vector3 square, UnitData data)> ConsumeAbilityUses(
-        IEnumerable<(GameObject unit, Vector3 square, UnitData data)> activations
+    private List<(GameObject unit, Vector3 square, UnitData data)> StartAbilityCooldowns(
+        IEnumerable<(GameObject unit, Vector3 square, UnitData data)> activations,
+        ISet<Unit> startedThisRound
     )
     {
-        List<(GameObject unit, Vector3 square, UnitData data)> consumed = new();
+        List<(GameObject unit, Vector3 square, UnitData data)> started = new();
         foreach (var activation in activations)
         {
             Unit identity = activation.unit != null ? activation.unit.GetComponent<Unit>() : null;
-            if (identity == null || !identity.TryConsumeAbilityUse())
+            if (identity == null || !identity.TryStartAbilityCooldown())
                 continue;
 
-            consumed.Add(activation);
-            NotifyAbilityUsesChanged(activation.unit, identity.RemainingAbilityUses);
+            started.Add(activation);
+            startedThisRound?.Add(identity);
+            NotifyAbilityCooldownChanged(
+                activation.unit,
+                identity.AbilityCooldownRoundsRemaining
+            );
         }
-        return consumed;
+        return started;
     }
 
-    private void NotifyAbilityUsesChanged(GameObject unit, int remainingUses)
+    private void TickAbilityCooldownsAfterRound(ISet<Unit> startedThisRound)
+    {
+        if (!IsServer)
+            return;
+
+        foreach (var teamEntry in allTeamUnitObjects.OrderBy(entry => entry.Key))
+        {
+            foreach (GameObject unit in teamEntry.Value ?? System.Array.Empty<GameObject>())
+            {
+                Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+                if (
+                    identity == null
+                    || (startedThisRound != null && startedThisRound.Contains(identity))
+                    || !identity.TickAbilityCooldownRound()
+                )
+                {
+                    continue;
+                }
+
+                NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
+            }
+        }
+    }
+
+    private void NotifyAbilityCooldownChanged(GameObject unit, int remainingRounds)
     {
         if (!IsServer || unit == null || NetworkManager == null)
             return;
@@ -1585,7 +1665,11 @@ public class GameLoop : NetworkBehaviour
                 continue;
             }
 
-            SetCardAbilityUsesClientRpc(cardIndex, remainingUses, NetworkHelper.ToClient(clientId));
+            SetCardAbilityCooldownClientRpc(
+                cardIndex,
+                remainingRounds,
+                NetworkHelper.ToClient(clientId)
+            );
             break;
         }
 
@@ -1593,13 +1677,13 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void SetCardAbilityUsesClientRpc(
+    private void SetCardAbilityCooldownClientRpc(
         int cardIndex,
-        int remainingUses,
+        int remainingRounds,
         ClientRpcParams clientRpcParams = default
     )
     {
-        GameHUDController.Instance?.SetCardAbilityUses(cardIndex, remainingUses);
+        GameHUDController.Instance?.SetCardAbilityCooldown(cardIndex, remainingRounds);
     }
 
     IEnumerator RunAbility(GameObject unit, Vector3 square, UnitData data)
@@ -1693,6 +1777,7 @@ public class GameLoop : NetworkBehaviour
     )
     {
         currentPhase = "dodging";
+        HidePlanningCommitClientRpc();
 
         // Telegraph every activation to all clients (both players see what's coming — the
         // counterplay window is the point; the Sniper's lock laser is the model).
@@ -1968,7 +2053,12 @@ public class GameLoop : NetworkBehaviour
         StartCoroutine(
             transform
                 .GetComponent<PlanMovement>()
-                .StartPlanning(paths => SendDodgePathsToServerRpc(paths), endTime, units, diveRange)
+                .StartPlanning(
+                    (paths, _) => SendDodgePathsToServerRpc(paths),
+                    endTime,
+                    units,
+                    diveRange
+                )
         );
     }
 
@@ -2387,7 +2477,7 @@ public class GameLoop : NetworkBehaviour
         }
 
         Debug.Log(
-            $"[GameLoop] Respawned {respawned.Count} unit(s) without restoring ability charges."
+            $"[GameLoop] Respawned {respawned.Count} unit(s) without resetting ability cooldowns."
         );
     }
 
@@ -2559,7 +2649,7 @@ public class GameLoop : NetworkBehaviour
                     Vector2Int cell = GridSystem.ConvertToGridCoords(unit.transform.position);
                     return $"{unit.name}@{cell} active={unit.gameObject.activeSelf} "
                         + $"alive={health != null && health.IsAlive} "
-                        + $"uses={unit.RemainingAbilityUses} "
+                        + $"cooldown={unit.AbilityCooldownRoundsRemaining} "
                         + $"collider={unitCollider == null || unitCollider.enabled}";
                 })
         );
@@ -3558,7 +3648,7 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    void StartPlanningClientRpc(double endTime)
+    void StartPlanningClientRpc(double endTime, int planningRound)
     {
         if (LocalTeamIndex < 0)
             return;
@@ -3566,12 +3656,81 @@ public class GameLoop : NetworkBehaviour
         StartCoroutine(
             transform
                 .GetComponent<PlanMovement>()
-                .StartPlanning(paths => SendPathsToServerRpc(paths), endTime)
+                .StartPlanning(
+                    (paths, commitVersion) =>
+                        SendPathsToServerRpc(paths, planningRound, commitVersion),
+                    endTime,
+                    allowLockIn: true,
+                    unlockCallback: commitVersion =>
+                        RetractPathsServerRpc(planningRound, commitVersion),
+                    planningRound: planningRound
+                )
         );
     }
 
+    [ClientRpc]
+    void FinishPlanningClientRpc()
+    {
+        // Clear editing immediately, but leave the acknowledged LOCKED state visible for one
+        // rendered frame. Dodge also hides it synchronously before dodge planning begins.
+        transform.GetComponent<PlanMovement>()?.EndPlanningSession(hideCommit: false);
+        StartCoroutine(HidePlanningCommitAfterFrame());
+    }
+
+    private IEnumerator HidePlanningCommitAfterFrame()
+    {
+        yield return null;
+        GameHUDController.Instance?.HidePlanningCommit();
+    }
+
+    [ClientRpc]
+    void HidePlanningCommitClientRpc()
+    {
+        GameHUDController.Instance?.HidePlanningCommit();
+    }
+
+    [ClientRpc]
+    void SetPlanningCommitWaitingClientRpc(
+        int planningRound,
+        int commitVersion,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        transform
+            .GetComponent<PlanMovement>()
+            ?.NotifyPlanningCommitAccepted(planningRound, commitVersion);
+    }
+
+    [ClientRpc]
+    void SetPlanningCommitRetractedClientRpc(
+        int planningRound,
+        int commitVersion,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        transform
+            .GetComponent<PlanMovement>()
+            ?.NotifyPlanningCommitRetracted(planningRound, commitVersion);
+    }
+
+    [ClientRpc]
+    void SetPlanningCommitLockedClientRpc(
+        int planningRound,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        transform
+            .GetComponent<PlanMovement>()
+            ?.NotifyPlanningCommitFinalized(planningRound);
+    }
+
     [ServerRpc(RequireOwnership = false)]
-    void SendPathsToServerRpc(PathsDict paths, ServerRpcParams rpcParams = default)
+    void SendPathsToServerRpc(
+        PathsDict paths,
+        int planningRound,
+        int commitVersion,
+        ServerRpcParams rpcParams = default
+    )
     {
         // In dev mode DevInput drives all input; ignore mouse-driven client submissions so they
         // can't overwrite dev plans (this leaves normal gameplay untouched when devMode is off).
@@ -3580,10 +3739,141 @@ public class GameLoop : NetworkBehaviour
 
         ulong senderClientId = rpcParams.Receive.SenderClientId;
         int senderTeamIndex = GetTeamIndexForClient(senderClientId);
-        if (senderTeamIndex < 0 || IsBotTeam(senderTeamIndex))
+        if (
+            currentPhase != "planning"
+            || planningRound != roundNumber
+            || commitVersion <= 0
+            || !planningChangesOpen
+            || NetworkManager == null
+            || !NetworkManager.ConnectedClients.ContainsKey(senderClientId)
+            || senderTeamIndex < 0
+            || IsBotTeam(senderTeamIndex)
+            || submittedTeamPaths.ContainsKey(senderTeamIndex)
+            || !IsNewerPlanningCommitVersion(senderTeamIndex, commitVersion)
+        )
+        {
+            return;
+        }
+
+        submittedTeamPaths[senderTeamIndex] = SanitizePaths(
+            paths ?? new PathsDict(),
+            senderTeamIndex
+        );
+        latestTeamPlanVersions[senderTeamIndex] = commitVersion;
+        retractedTeamPathFallbacks.Remove(senderTeamIndex);
+        NotifyPlanningCommitAccepted(senderTeamIndex, commitVersion);
+    }
+
+    private bool IsNewerPlanningCommitVersion(int teamIndex, int commitVersion)
+    {
+        return !latestTeamPlanVersions.TryGetValue(teamIndex, out int latestVersion)
+            || commitVersion > latestVersion;
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    void RetractPathsServerRpc(
+        int planningRound,
+        int commitVersion,
+        ServerRpcParams rpcParams = default
+    )
+    {
+        if (devMode)
             return;
 
-        submittedTeamPaths[senderTeamIndex] = SanitizePaths(paths, senderTeamIndex);
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+        int senderTeamIndex = GetTeamIndexForClient(senderClientId);
+        bool senderIsValid =
+            NetworkManager != null
+            && NetworkManager.ConnectedClients.ContainsKey(senderClientId)
+            && senderTeamIndex >= 0
+            && !IsBotTeam(senderTeamIndex);
+        if (
+            !senderIsValid
+            || currentPhase != "planning"
+            || planningRound != roundNumber
+            || commitVersion <= 0
+            || !planningChangesOpen
+            || NetworkManager.Singleton == null
+            || NetworkManager.Singleton.ServerTime.Time >= planningDeadline
+        )
+        {
+            if (senderIsValid)
+            {
+                SetPlanningCommitLockedClientRpc(
+                    planningRound,
+                    NetworkHelper.ToClient(senderClientId)
+                );
+            }
+            return;
+        }
+
+        if (!TryRetractPlanningSubmission(senderTeamIndex, commitVersion))
+            return;
+
+        SetPlanningCommitRetractedClientRpc(
+            planningRound,
+            commitVersion,
+            NetworkHelper.ToClient(senderClientId)
+        );
+    }
+
+    private bool TryRetractPlanningSubmission(int teamIndex, int commitVersion)
+    {
+        if (
+            !latestTeamPlanVersions.TryGetValue(teamIndex, out int submittedVersion)
+            || submittedVersion != commitVersion
+            || !submittedTeamPaths.TryGetValue(teamIndex, out PathsDict submittedPaths)
+        )
+        {
+            return false;
+        }
+
+        retractedTeamPathFallbacks[teamIndex] = submittedPaths;
+        return submittedTeamPaths.Remove(teamIndex);
+    }
+
+    private void RestoreRetractedPlanningFallbacks()
+    {
+        foreach (var entry in retractedTeamPathFallbacks)
+        {
+            if (!submittedTeamPaths.ContainsKey(entry.Key))
+                submittedTeamPaths[entry.Key] = entry.Value;
+        }
+        retractedTeamPathFallbacks.Clear();
+    }
+
+    private void NotifyPlanningCommitAccepted(int senderTeamIndex, int commitVersion)
+    {
+        if (
+            TryGetHumanClientId(senderTeamIndex, out ulong senderClientId)
+            && NetworkManager != null
+            && NetworkManager.ConnectedClients.ContainsKey(senderClientId)
+        )
+        {
+            SetPlanningCommitWaitingClientRpc(
+                roundNumber,
+                commitVersion,
+                NetworkHelper.ToClient(senderClientId)
+            );
+        }
+    }
+
+    private void SetPlanningCommitLockedForHumanTeams()
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (
+                TryGetHumanClientId(teamIndex, out ulong clientId)
+                && NetworkManager != null
+                && NetworkManager.ConnectedClients.ContainsKey(clientId)
+            )
+            {
+                SetPlanningCommitLockedClientRpc(
+                    roundNumber,
+                    NetworkHelper.ToClient(clientId)
+                );
+            }
+        }
     }
 
     /// <summary>

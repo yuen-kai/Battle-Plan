@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-23T15:55:00Z",
+  "title": "Design System: Battle Plan",
+  "extensions": {
+    "colorMeta": {
+      "toybox-ink": {
+        "role": "neutral",
+        "displayName": "Toybox Ink",
+        "canonical": "#1B1927",
+        "tonalRamp": ["#15131E", "#1B1927", "#29263A", "#3B374E", "#575168", "#7B7489", "#ABA5B4", "#EEEAF1"]
+      },
+      "playmat": {
+        "role": "neutral",
+        "displayName": "Playmat",
+        "canonical": "#2D2E43",
+        "tonalRamp": ["#181923", "#232432", "#2D2E43", "#41425A", "#5E6078", "#84869A", "#B5B6C2", "#EEEFF2"]
+      },
+      "playmat-raised": {
+        "role": "neutral",
+        "displayName": "Raised Playmat",
+        "canonical": "#3A3B52",
+        "tonalRamp": ["#1C1D28", "#2B2C3D", "#3A3B52", "#50516A", "#6D6E86", "#9192A4", "#BDBDC8", "#F0F0F3"]
+      },
+      "sticker-cream": {
+        "role": "neutral",
+        "displayName": "Sticker Cream",
+        "canonical": "#F5ECD8",
+        "tonalRamp": ["#2D281F", "#4E4432", "#716147", "#948064", "#B7A181", "#D5C2A3", "#E9DCC1", "#F5ECD8"]
+      },
+      "pogo-orange": {
+        "role": "primary",
+        "displayName": "Pogo Orange",
+        "canonical": "#F2A54A",
+        "tonalRamp": ["#33200D", "#5B3813", "#87551D", "#B6762B", "#D99038", "#F2A54A", "#F8C483", "#FDEBD1"]
+      },
+      "toy-teal": {
+        "role": "secondary",
+        "displayName": "Toy Teal",
+        "canonical": "#55B29D",
+        "tonalRamp": ["#102722", "#183F36", "#245E51", "#347F6D", "#45A088", "#55B29D", "#8DCEBF", "#D7F1EA"]
+      },
+      "sky-info": {
+        "role": "tertiary",
+        "displayName": "Sky Info",
+        "canonical": "#84D3E6",
+        "tonalRamp": ["#10272D", "#183F49", "#245E6C", "#367F91", "#55A4B8", "#84D3E6", "#B5E6F0", "#E6F7FA"]
+      },
+      "tomato": {
+        "role": "tertiary",
+        "displayName": "Tomato",
+        "canonical": "#E9685D",
+        "tonalRamp": ["#311310", "#54201C", "#7A2F2A", "#A34039", "#CB534A", "#E9685D", "#F19B93", "#FBE0DD"]
+      },
+      "muted-copy": {
+        "role": "neutral",
+        "displayName": "Muted Copy",
+        "canonical": "#BDB6C9",
+        "tonalRamp": ["#24212A", "#3C3746", "#575062", "#716A7D", "#8E869A", "#AAA3B6", "#BDB6C9", "#EEEAF1"]
+      },
+      "title-periwinkle": {
+        "role": "neutral",
+        "displayName": "Title Periwinkle",
+        "canonical": "#7698BD",
+        "tonalRamp": ["#17202B", "#26384C", "#38536F", "#4D7092", "#6289AC", "#7698BD", "#A7BDD3", "#E4ECF3"]
+      },
+      "roster-mauve": {
+        "role": "neutral",
+        "displayName": "Roster Mauve",
+        "canonical": "#AA8BAA",
+        "tonalRamp": ["#2A202A", "#473747", "#654F65", "#846B84", "#9B7E9B", "#AA8BAA", "#CDB9CD", "#F0E8F0"]
+      },
+      "join-clay": {
+        "role": "neutral",
+        "displayName": "Join Clay",
+        "canonical": "#B07F72",
+        "tonalRamp": ["#2C1D19", "#4A302A", "#6A463D", "#8B5E52", "#A37164", "#B07F72", "#D1ABA2", "#F1E4E0"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Screen titles and the Battle Plan wordmark." },
+      "title": { "displayName": "Title", "purpose": "Panel and unit headings." },
+      "body": { "displayName": "Body", "purpose": "Short instructions and recovery copy." },
+      "label": { "displayName": "Label", "purpose": "Buttons, tabs, and compact state labels." },
+      "mono": { "displayName": "Mono Value", "purpose": "Relay codes and compact technical values only." }
+    },
+    "shadows": [
+      {
+        "name": "toy-edge",
+        "value": "0 6px 0 #1B1927",
+        "purpose": "Firm structural bottom edge for controls and plates."
+      },
+      {
+        "name": "toy-edge-pressed",
+        "value": "0 3px 0 #1B1927",
+        "purpose": "Pressed state that visually settles into the play surface."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "100ms ease-out",
+        "purpose": "Button color, border, and press feedback."
+      },
+      {
+        "name": "character-ambient",
+        "value": "scene-authored",
+        "purpose": "One existing character loop or pose supplies each screen's ambient personality."
+      }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "1500px" },
+      { "name": "narrow", "value": "1000px" },
+      { "name": "phone", "value": "680px" },
+      { "name": "short", "value": "800px height" }
+    ],
+    "implementation": {
+      "tokens": "Assets/UI/Shared/TacticalToyboxTokens.uss",
+      "components": "Assets/UI/Shared/TacticalToybox.uss",
+      "scopeClass": "toybox-ui",
+      "loadOrder": ["BattlePlan.uss", "TacticalToybox.uss", "screen stylesheet"],
+      "isolatedSubsystems": ["Gameplay unit and ability cards"]
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single next-step action in a decision group.",
+      "html": "<button class=\"ds-btn-primary\">Play</button>",
+      "css": ".ds-btn-primary { min-height:52px; padding:10px 16px 12px; border:3px solid #1B1927; border-bottom-width:6px; border-radius:10px; background:#F2A54A; color:#1B1927; font:700 15px Rubik, sans-serif; transition:background 100ms ease-out, border-color 100ms ease-out; } .ds-btn-primary:hover { background:#FFBA5C; border-color:#F5ECD8; } .ds-btn-primary:focus-visible { border-width:5px 5px 6px; border-color:#84D3E6; outline:none; } .ds-btn-primary:active { border-bottom-width:3px; padding-top:13px; padding-bottom:9px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A tactile action that does not compete with the primary step.",
+      "html": "<button class=\"ds-btn-secondary\">Controls</button>",
+      "css": ".ds-btn-secondary { min-height:52px; padding:10px 16px 12px; border:3px solid #1B1927; border-bottom-width:6px; border-radius:10px; background:#3A3B52; color:#F5ECD8; font:700 15px Rubik, sans-serif; transition:background 100ms ease-out, border-color 100ms ease-out; } .ds-btn-secondary:hover { background:#474862; border-color:#F5ECD8; } .ds-btn-secondary:focus-visible { border-width:5px 5px 6px; border-color:#84D3E6; outline:none; } .ds-btn-secondary:active { border-bottom-width:3px; }"
+    },
+    {
+      "name": "Selected Option",
+      "kind": "button",
+      "refersTo": "button-selected",
+      "description": "A chosen mode, opponent, or unit.",
+      "html": "<button class=\"ds-btn-selected\">Elimination</button>",
+      "css": ".ds-btn-selected { min-height:52px; padding:10px 16px 12px; border:3px solid #F5ECD8; border-bottom-width:6px; border-radius:10px; background:#55B29D; color:#1B1927; font:700 15px Rubik, sans-serif; } .ds-btn-selected:hover { background:#55B29D; } .ds-btn-selected:focus-visible { border-width:5px 5px 6px; border-color:#84D3E6; background:#459E8B; outline:none; }"
+    },
+    {
+      "name": "Toy Panel",
+      "kind": "card",
+      "refersTo": "toy-panel",
+      "description": "An opaque operating surface placed beside or over the world character stage.",
+      "html": "<section class=\"ds-toy-panel\"><h2>Pick your crew</h2><p>Choose five units.</p></section>",
+      "css": ".ds-toy-panel { padding:24px; border:2px solid #1B1927; border-bottom-width:5px; border-radius:14px; background:#2D2E43; color:#F5ECD8; font:400 15px Rubik, sans-serif; } .ds-toy-panel h2 { margin:0 0 8px; font-size:20px; } .ds-toy-panel p { margin:0; color:#BDB6C9; }"
+    },
+    {
+      "name": "Toy Readout",
+      "kind": "card",
+      "refersTo": "toy-readout",
+      "description": "A compact opaque plate for phase, timer, match, and objective information.",
+      "html": "<section class=\"ds-toy-readout\"><span>Match</span><strong>Elimination · Player</strong></section>",
+      "css": ".ds-toy-readout { padding:12px 16px; border:2px solid #1B1927; border-bottom-width:5px; border-radius:10px; background:#2D2E43; color:#F5ECD8; font:400 15px Rubik, sans-serif; }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "custom",
+      "refersTo": "status-chip",
+      "description": "A short state token for fog, objective control, busy, success, or danger.",
+      "html": "<span class=\"ds-status-chip\">Fog on</span>",
+      "css": ".ds-status-chip { min-height:28px; padding:4px 9px; border:2px solid #1B1927; border-radius:6px; background:#3A3B52; color:#F5ECD8; font:700 12px Rubik, sans-serif; }"
+    },
+    {
+      "name": "Relay Input",
+      "kind": "input",
+      "description": "Large code entry with a stable focus border.",
+      "html": "<input class=\"ds-relay-input\" value=\"AB12CD\" aria-label=\"Relay code\">",
+      "css": ".ds-relay-input { min-height:52px; padding:10px 14px; border:3px solid #575168; border-radius:10px; background:#1B1927; color:#F5ECD8; font:700 20px 'Cascadia Code', monospace; } .ds-relay-input:hover { border-color:#BDB6C9; } .ds-relay-input:focus-visible { border-width:5px; border-color:#84D3E6; outline:none; }"
+    },
+    {
+      "name": "Plan Path",
+      "kind": "custom",
+      "description": "One compact route cue per wide screen.",
+      "html": "<div class=\"ds-plan-path\"><span class=\"ds-plan-start\"></span><span class=\"ds-plan-line\"></span><span class=\"ds-plan-stop\"></span></div>",
+      "css": ".ds-plan-path { display:flex; align-items:center; height:22px; } .ds-plan-start,.ds-plan-stop { width:12px; height:12px; background:#F2A54A; border:2px solid #1B1927; } .ds-plan-start { border-radius:50%; } .ds-plan-line { width:74px; height:4px; background:#F2A54A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Tactical Toy Shelf",
+    "overview": "Battle Plan should feel like opening a well-loved strategy game and finding its pieces already acting out the next match. Rounded low-poly characters, off-axis poses, and occasional goofy animation supply the charm. The interface behaves like the printed play surface around them: solid, concise, and easy to operate.",
+    "keyCharacteristics": [
+      "Real in-world character models behind reserved transparent UI regions.",
+      "Chunky, tactile controls with firm outlines and short offset depth.",
+      "Mixed-case, plain-language labels with very little supporting copy.",
+      "Warm orange decisions, teal confirmation, and tomato error states.",
+      "One animated character moment per screen, never motion everywhere."
+    ],
+    "rules": [
+      {
+        "name": "The Character Color Rule",
+        "body": "Saturated colors identify a decision or state. They do not decorate empty space.",
+        "section": "colors"
+      },
+      {
+        "name": "The Plain Words Rule",
+        "body": "If a label already names the action, do not add a sentence that repeats it.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Stage Rule",
+        "body": "Each screen has one depth-bearing character stage. Nested floating panels do not compete with it.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the project’s actual rounded models and existing humorous poses.",
+      "Do reserve opaque reading surfaces around every label, input, and status message.",
+      "Do pair color with an icon, outline, check, count, or text state.",
+      "Do let Pogo Rider carry the strongest recurring motion."
+    ],
+    "donts": [
+      "Don't use realistic soldiers, photographic portraits, or military-simulation severity.",
+      "Don't use glass, neon edge glows, purple gradients, soft SaaS cards, or fake terminal jargon.",
+      "Don't activate gameplay prefabs, networking components, colliders, or authoritative scripts for menu decoration.",
+      "Don't let continuous animation overlap controls or become required feedback."
+    ]
+  }
+}

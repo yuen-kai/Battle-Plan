@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [CreateAssetMenu(fileName = "NewUnitData", menuName = "Units/Unit Data")]
 public class UnitData : ScriptableObject
@@ -131,6 +132,8 @@ public class UnitData : ScriptableObject
     [Tooltip("Range in cells for dive movement")]
     public int diveRange = 2;
 
-    [Tooltip("Number of times the ability can be used")]
-    public int uses = 1;
+    [FormerlySerializedAs("uses")]
+    [Min(1)]
+    [Tooltip("Full rounds the ability remains unavailable after activation")]
+    public int abilityCooldownRounds = 1;
 }

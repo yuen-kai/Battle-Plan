@@ -86,7 +86,7 @@ public class Health : NetworkBehaviour
 
     /// <summary>
     /// Server-only revival for respawn-enabled modes. Restores health and transient
-    /// movement/shooting state without touching Unit.RemainingAbilityUses.
+    /// movement/shooting state without resetting the unit's ability cooldown.
     /// </summary>
     public bool RespawnAt(Vector3 position, Quaternion rotation)
     {

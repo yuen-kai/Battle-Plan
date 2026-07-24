@@ -116,17 +116,34 @@ public class PlanMovement : MonoBehaviour
 
     // Range overlays
     private GameObject moveOverlay;
-    private GameObject attackOverlay;
+
+    private System.Action<PathsDict, int> planningCallback;
+    private System.Action<int> planningUnlockCallback;
+    private bool planningActive;
+    private bool planningInitialized;
+    private bool planningSubmitted;
+    private bool planningLockPending;
+    private bool planningUnlockPending;
+    private bool lockInAvailable;
+    private int planningSessionVersion;
+    private int planningRoundToken = -1;
+    private int planningCommitVersion;
+    private double planningEndTime;
 
     [SerializeField]
     private GameObject moveOverlayCellPrefab;
 
-    [SerializeField]
-    private GameObject attackOverlayPrefab;
-
     private static float cellSize => GameLoop.cellSize; //shortened reference to GameLoop.cellSize
 
     public static PlanMovement Instance { get; private set; }
+    public bool CanEditPlan => planningActive && planningInitialized && !planningSubmitted;
+    public bool CanUnlockPlan =>
+        planningActive
+        && planningInitialized
+        && planningSubmitted
+        && !planningLockPending
+        && !planningUnlockPending
+        && lockInAvailable;
 
     public static Vector3 visualPlanHeightOffset = new(0, 0.1f, 0);
 
@@ -135,18 +152,52 @@ public class PlanMovement : MonoBehaviour
         Instance = this;
     }
 
+    void OnEnable()
+    {
+        Instance = this;
+    }
+
+    void OnDisable()
+    {
+        EndPlanningSession();
+        if (Instance == this)
+            Instance = null;
+    }
+
     public IEnumerator StartPlanning(
-        System.Action<PathsDict> callback,
+        System.Action<PathsDict, int> callback,
         double endTime,
         List<GameObject> units = null,
-        int range = -1
+        int range = -1,
+        bool allowLockIn = false,
+        System.Action<int> unlockCallback = null,
+        int planningRound = -1
     )
     {
+        if (planningActive || planningInitialized)
+            EndPlanningSession();
+        int sessionVersion = ++planningSessionVersion;
+
+        planningCallback = callback;
+        planningActive = true;
+        planningInitialized = false;
+        planningSubmitted = false;
+        planningLockPending = false;
+        planningUnlockPending = false;
+        lockInAvailable = allowLockIn && units == null;
+        planningUnlockCallback = unlockCallback;
+        planningRoundToken = planningRound;
+        planningCommitVersion = 0;
+        planningEndTime = endTime;
         useUnitCards = units == null;
         planningRangeOverride = range;
+        GameHUDController.Instance?.HidePlanningCommit();
         teamCharacters = units ?? PopulateTeamCharacters();
         while (
-            units == null
+            sessionVersion == planningSessionVersion
+            &&
+            planningActive
+            && units == null
             && teamCharacters.Count < RosterRules.UnitsPerPlayer
             && NetworkManager.Singleton != null
             && NetworkManager.Singleton.IsListening
@@ -155,24 +206,40 @@ public class PlanMovement : MonoBehaviour
         {
             // Unit spawns and TeamIndex NetworkVariables can arrive just after the phase RPC.
             yield return null;
-            teamCharacters = PopulateTeamCharacters();
+            if (!TryRefreshTeamCharactersForSession(sessionVersion))
+                yield break;
         }
 
+        if (!planningActive || sessionVersion != planningSessionVersion)
+            yield break;
+
         InitializeVisuals();
+        planningInitialized = true;
         // Select the first unit up front so planning (and especially the dodge window, where
         // cards don't map to the alerted subset) is immediately usable without a card click.
         selectedUnit = null;
         SwitchToUnit(teamCharacters.FirstOrDefault(IsPlanningUnitAvailable), range);
+        if (lockInAvailable)
+            GameHUDController.Instance?.ShowPlanningCommitReady();
+        else
+            GameHUDController.Instance?.HidePlanningCommit();
 
         NetworkManager networkManager = NetworkManager.Singleton;
         float timer;
         while (
-            networkManager != null
+            sessionVersion == planningSessionVersion
+            &&
+            planningActive
+            && networkManager != null
             && (timer = (float)(endTime - networkManager.ServerTime.Time)) > 0
         )
         {
             GameHUDController.Instance?.SetTimer(timer);
-            if (selectedUnit == null)
+            if (!CanEditPlan)
+            {
+                PathSelection.Instance?.CancelCurrentDrag();
+            }
+            else if (selectedUnit == null)
             {
                 Debug.LogWarning("No unit selected");
             }
@@ -190,11 +257,236 @@ public class PlanMovement : MonoBehaviour
             yield return null;
         }
 
+        if (!planningActive || sessionVersion != planningSessionVersion)
+            yield break;
+        if (networkManager == null || !networkManager.IsListening)
+        {
+            EndPlanningSession();
+            yield break;
+        }
+
+        if (!planningSubmitted)
+            SubmitCurrentPlan(sessionVersion);
+    }
+
+    public bool TryLockIn()
+    {
+        if (!CanEditPlan || !lockInAvailable)
+            return false;
+
+        GameObject incompleteAbilityUnit = plans
+            .Where(entry =>
+            {
+                if (!entry.Value.Item1)
+                    return false;
+                UnitData data = entry.Key?.GetComponent<Movement>()?.unitData;
+                return data != null
+                    && data.selectAbilitySquare
+                    && (entry.Value.Item2 == null || entry.Value.Item2.Count < 2);
+            })
+            .Select(entry => entry.Key)
+            .FirstOrDefault();
+        if (incompleteAbilityUnit != null)
+        {
+            SwitchToUnit(incompleteAbilityUnit);
+            GameHUDController.Instance?.SetTargetFeedback(
+                "Choose an ability target before locking in.",
+                true
+            );
+            return false;
+        }
+
+        SubmitCurrentPlan(planningSessionVersion);
+        return true;
+    }
+
+    public bool TryUnlock()
+    {
+        if (!CanUnlockPlan)
+            return false;
+
+        if (planningUnlockCallback == null)
+            return false;
+
+        planningUnlockPending = true;
+        PathSelection.Instance?.CancelCurrentDrag();
+        GameHUDController.Instance?.ShowPlanningCommitUnlocking();
+        planningUnlockCallback.Invoke(planningCommitVersion);
+        return true;
+    }
+
+    public void NotifyPlanningCommitAccepted(int planningRound, int commitVersion)
+    {
+        if (
+            !IsCurrentPlanningCommit(planningRound, commitVersion)
+            || !planningSubmitted
+            || !planningLockPending
+        )
+        {
+            return;
+        }
+
+        planningLockPending = false;
+        GameHUDController.Instance?.ShowPlanningCommitWaiting();
+    }
+
+    public void NotifyPlanningCommitRetracted(int planningRound, int commitVersion)
+    {
+        if (
+            !IsCurrentPlanningCommit(planningRound, commitVersion)
+            || !planningSubmitted
+            || !planningUnlockPending
+        )
+        {
+            return;
+        }
+
+        planningSubmitted = false;
+        planningLockPending = false;
+        planningUnlockPending = false;
+        if (HasPlanningDeadlineElapsed())
+        {
+            SubmitCurrentPlan(planningSessionVersion);
+            return;
+        }
+
+        GameHUDController.Instance?.SetCardsInteractable(true);
+        GameHUDController.Instance?.ShowPlanningCommitReady();
+        RestoreEditablePlanningVisuals();
+    }
+
+    public void NotifyPlanningCommitFinalized(int planningRound)
+    {
+        if (
+            !planningActive
+            || !lockInAvailable
+            || planningRound != planningRoundToken
+        )
+        {
+            return;
+        }
+
+        planningSubmitted = true;
+        planningLockPending = false;
+        planningUnlockPending = false;
+        lockInAvailable = false;
+        PathSelection.Instance?.CancelCurrentDrag();
+        HideEditablePlanningOverlays();
+        GameHUDController.Instance?.SetCardsInteractable(false);
+        GameHUDController.Instance?.ShowPlanningCommitLocked();
+    }
+
+    private bool IsCurrentPlanningCommit(int planningRound, int commitVersion)
+    {
+        return planningActive
+            && lockInAvailable
+            && planningRound == planningRoundToken
+            && commitVersion == planningCommitVersion;
+    }
+
+    private bool HasPlanningDeadlineElapsed()
+    {
+        NetworkManager networkManager = NetworkManager.Singleton;
+        return networkManager != null
+            && networkManager.IsListening
+            && HasPlanningDeadlineElapsed(networkManager.ServerTime.Time, planningEndTime);
+    }
+
+    public static bool HasPlanningDeadlineElapsed(double serverTime, double endTime)
+    {
+        return serverTime >= endTime;
+    }
+
+    public void EndPlanningSession(bool hideCommit = true)
+    {
+        planningSessionVersion++;
+        planningActive = false;
+        planningInitialized = false;
+        planningSubmitted = true;
+        planningLockPending = false;
+        planningUnlockPending = false;
+        planningCallback = null;
+        planningUnlockCallback = null;
+        lockInAvailable = false;
+        planningRoundToken = -1;
+        planningEndTime = 0d;
+        PathSelection.Instance?.CancelCurrentDrag();
         ClearVisuals();
         GameHUDController.Instance?.SetTimer(0f);
+        if (hideCommit)
+            GameHUDController.Instance?.HidePlanningCommit();
+    }
+
+    private void SubmitCurrentPlan(int sessionVersion)
+    {
+        if (
+            sessionVersion != planningSessionVersion
+            || !planningActive
+            || planningSubmitted
+        )
+            return;
+
+        bool showCommitState = lockInAvailable;
+        PathsDict submittedPlans = plans;
+        System.Action<PathsDict, int> callback = planningCallback;
+        planningSubmitted = true;
+        planningLockPending = showCommitState;
+        planningUnlockPending = false;
+        planningCommitVersion++;
+        PathSelection.Instance?.CancelCurrentDrag();
+        if (showCommitState)
+        {
+            HideEditablePlanningOverlays();
+            GameHUDController.Instance?.SetCardsInteractable(false);
+            GameHUDController.Instance?.ShowPlanningCommitSending();
+        }
+        else
+        {
+            planningActive = false;
+            planningInitialized = false;
+            planningCallback = null;
+            ClearVisuals();
+            GameHUDController.Instance?.SetTimer(0f);
+        }
+
+        NetworkManager networkManager = NetworkManager.Singleton;
         if (networkManager == null || !networkManager.IsListening)
-            yield break;
-        callback(plans);
+        {
+            if (showCommitState)
+            {
+                planningSubmitted = false;
+                planningLockPending = false;
+                GameHUDController.Instance?.SetCardsInteractable(true);
+                GameHUDController.Instance?.ShowPlanningCommitReady();
+                RestoreEditablePlanningVisuals();
+            }
+            else
+            {
+                GameHUDController.Instance?.HidePlanningCommit();
+            }
+            return;
+        }
+        callback?.Invoke(submittedPlans, planningCommitVersion);
+    }
+
+    private void HideEditablePlanningOverlays()
+    {
+        if (moveOverlay != null)
+        {
+            moveOverlay.SetActive(false);
+            Destroy(moveOverlay);
+            moveOverlay = null;
+        }
+        ClearAbilityTargetIndicator();
+    }
+
+    private void RestoreEditablePlanningVisuals()
+    {
+        if (!CanEditPlan || selectedUnit == null)
+            return;
+
+        ApplySelectedUnitModeVisuals();
+        RefreshUnitCards();
     }
 
     /// <summary>
@@ -483,6 +775,9 @@ public class PlanMovement : MonoBehaviour
     /// </summary>
     public bool TrySelectUnitForMovementAtCell(Vector3 cell)
     {
+        if (!CanEditPlan)
+            return false;
+
         foreach (GameObject character in teamCharacters)
         {
             if (!IsPlanningUnitAvailable(character) || character == selectedUnit)
@@ -498,7 +793,7 @@ public class PlanMovement : MonoBehaviour
     /// </summary>
     public bool TrySelectUnitForPathNode(GameObject node)
     {
-        if (node == null)
+        if (!CanEditPlan || node == null)
             return false;
 
         GameObject owner = null;
@@ -568,14 +863,53 @@ public class PlanMovement : MonoBehaviour
         return localTeamCharacters;
     }
 
+    private bool TryRefreshTeamCharactersForSession(int sessionVersion)
+    {
+        if (sessionVersion != planningSessionVersion || !planningActive)
+            return false;
+
+        teamCharacters = PopulateTeamCharacters();
+        return true;
+    }
+
     public void SwitchToUnit(int unitIndex)
     {
         SelectUnit(unitIndex);
     }
 
+    public bool TryActivateUnitCard(int unitIndex)
+    {
+        if (
+            !CanEditPlan
+            || !useUnitCards
+            || unitIndex < 0
+            || unitIndex >= teamCharacters.Count
+        )
+            return false;
+
+        GameObject unit = teamCharacters[unitIndex];
+        if (!IsPlanningUnitAvailable(unit))
+            return false;
+
+        if (selectedUnit != unit)
+        {
+            SwitchToUnit(unit);
+            return selectedUnit == unit;
+        }
+
+        bool abilityMode =
+            plans.TryGetValue(unit, out (bool, List<Vector3>) plan) && plan.Item1;
+        return TrySetSelectionMode(unit, !abilityMode);
+    }
+
     public void SelectUnit(int unitIndex)
     {
-        if (!useUnitCards || unitIndex < 0 || unitIndex >= teamCharacters.Count)
+        if (
+            !CanEditPlan
+            || !useUnitCards
+            || unitIndex < 0
+            || unitIndex >= teamCharacters.Count
+        )
             return;
 
         GameObject unit = teamCharacters[unitIndex];
@@ -585,7 +919,12 @@ public class PlanMovement : MonoBehaviour
 
     public void SetSelectionMode(int unitIndex, bool abilityMode)
     {
-        if (!useUnitCards || unitIndex < 0 || unitIndex >= teamCharacters.Count)
+        if (
+            !CanEditPlan
+            || !useUnitCards
+            || unitIndex < 0
+            || unitIndex >= teamCharacters.Count
+        )
             return;
 
         TrySetSelectionMode(teamCharacters[unitIndex], abilityMode);
@@ -593,8 +932,31 @@ public class PlanMovement : MonoBehaviour
 
     private bool TrySetSelectionMode(GameObject unit, bool abilityMode)
     {
-        if (!IsPlanningUnitAvailable(unit) || (abilityMode && unit.GetComponent<Ability>() == null))
+        if (!CanEditPlan || !IsPlanningUnitAvailable(unit))
             return false;
+
+        if (abilityMode)
+        {
+            Unit identity = unit.GetComponent<Unit>();
+            if (unit.GetComponent<Ability>() == null || identity == null)
+            {
+                GameHUDController.Instance?.SetTargetFeedback(
+                    "This unit can move only.",
+                    true
+                );
+                return false;
+            }
+            if (!identity.CanUseAbility)
+            {
+                int rounds = identity.AbilityCooldownRoundsRemaining;
+                string roundText = rounds == 1 ? "round" : "rounds";
+                GameHUDController.Instance?.SetTargetFeedback(
+                    $"{unit.GetComponent<Movement>()?.unitData?.abilityName ?? "Ability"} recharges in {rounds} {roundText}.",
+                    true
+                );
+                return false;
+            }
+        }
 
         if (selectedUnit != unit)
             SwitchToUnit(unit);
@@ -606,6 +968,7 @@ public class PlanMovement : MonoBehaviour
 
         if (plans[unit].Item1 != abilityMode)
         {
+            PathSelection.Instance?.CancelCurrentDrag();
             plans[unit] = (abilityMode, new List<Vector3> { GridSystem.GetNearestGridCell(unit) });
             ClearAbilityTargetIndicator();
             ResetVisualPlan();
@@ -619,6 +982,8 @@ public class PlanMovement : MonoBehaviour
 
     public void SwitchToUnit(GameObject newSelectedUnit, int range = -1)
     {
+        if (!CanEditPlan)
+            return;
         if (newSelectedUnit != null && !IsPlanningUnitAvailable(newSelectedUnit))
             return;
 
@@ -633,7 +998,10 @@ public class PlanMovement : MonoBehaviour
             return;
         }
         if (previousUnit != selectedUnit)
+        {
+            PathSelection.Instance?.CancelCurrentDrag();
             ClearAbilityTargetIndicator();
+        }
 
         if (!plans.ContainsKey(selectedUnit))
         {
@@ -653,7 +1021,7 @@ public class PlanMovement : MonoBehaviour
         if (selectedUnit == null || !plans.ContainsKey(selectedUnit))
             return;
 
-        // Show the range for the explicit MOVE / ABILITY mode selected on the card.
+        // Show the range for the card's current movement or ability face.
         UnitData unitData = selectedUnit.GetComponent<Movement>().unitData;
         bool abilityMode = plans[selectedUnit].Item1;
         int movementRange =
@@ -720,10 +1088,19 @@ public class PlanMovement : MonoBehaviour
     void ClearVisuals()
     {
         RemoveCharacterOutlines();
-        Destroy(planVisualsFolder);
-        Destroy(moveOverlay);
-        Destroy(attackOverlay);
+        if (planVisualsFolder != null)
+        {
+            planVisualsFolder.SetActive(false);
+            Destroy(planVisualsFolder);
+        }
+        if (moveOverlay != null)
+        {
+            moveOverlay.SetActive(false);
+            Destroy(moveOverlay);
+        }
         ClearAbilityTargetIndicator();
+        planVisualsFolder = null;
+        moveOverlay = null;
         planningRangeOverride = -1;
 
         if (useUnitCards)
@@ -757,41 +1134,18 @@ public class PlanMovement : MonoBehaviour
         );
     }
 
-    void DisplayAttackRange()
-    {
-        //TODO: update attack range on path change
-        //TODO: check line of sight
-        if (attackOverlay)
-            Destroy(attackOverlay);
-
-        if (selectedUnit == null)
-            return;
-
-        Vector3 currentPos = GridSystem.GetNearestGridCell(selectedUnit);
-        //TODO: put at end of path
-
-        attackOverlay = Instantiate(
-            attackOverlayPrefab,
-            currentPos + new Vector3(0, 0.1f, 0),
-            Quaternion.identity
-        );
-        float diameter = 2 * selectedUnit.GetComponent<Shooting>().unitData.targetRange * cellSize;
-
-        attackOverlay.transform.localScale = new Vector3(
-            diameter,
-            attackOverlay.transform.localScale.y,
-            diameter
-        );
-    }
-
     void AddCharacterOutlines()
     {
         foreach (GameObject character in teamCharacters)
         {
+            if (character == null)
+                continue;
+
             Renderer[] renderers = character.GetComponentsInChildren<Renderer>();
             foreach (Renderer rend in renderers)
             {
-                rend.gameObject.GetComponent<Renderer>().renderingLayerMask = 1 << 1;
+                if (rend != null)
+                    rend.renderingLayerMask = 1 << 1;
             }
         }
     }
@@ -800,10 +1154,14 @@ public class PlanMovement : MonoBehaviour
     {
         foreach (GameObject character in teamCharacters)
         {
+            if (character == null)
+                continue;
+
             Renderer[] renderers = character.GetComponentsInChildren<Renderer>();
             foreach (Renderer rend in renderers)
             {
-                rend.gameObject.GetComponent<Renderer>().renderingLayerMask = 1 << 0;
+                if (rend != null)
+                    rend.renderingLayerMask = 1 << 0;
             }
         }
     }

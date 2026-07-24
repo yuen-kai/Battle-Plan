@@ -1,78 +1,130 @@
 .title-screen {
-    background-color: rgb(5, 9, 15);
+    background-color: var(--toy-transparent);
 }
 
 .title-layout {
     flex-direction: row;
     align-items: center;
-    justify-content: center;
+    padding: 48px 56px;
 }
 
-.title-identity {
-    width: 56%;
-    max-width: 880px;
-    height: 66%;
-    min-height: 430px;
-    justify-content: center;
-    padding-right: 72px;
+.toybox-ui.title-screen .title-board {
+    width: 430px;
+    min-width: 430px;
+    padding: var(--toy-space-xl);
+    background-color: var(--toy-panel);
 }
 
-.title-logo {
-    width: 100%;
-    height: 250px;
-    background-image: url("project://database/Assets/Images/Battle plan title screen logo.png");
-    -unity-background-scale-mode: scale-to-fit;
+.title-wordmark {
+    font-size: 66px;
+    -unity-font-style: bold;
+    color: var(--toy-cream);
+    letter-spacing: -1.5px;
+    white-space: normal;
 }
 
-.title-rule {
-    width: 78%;
-    height: 2px;
-    margin-top: 22px;
-    margin-bottom: 0;
-    background-color: rgb(59, 130, 181);
+.title-plan-path {
+    margin-top: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-panel);
 }
 
 .title-actions {
-    width: 330px;
+    width: 100%;
 }
 
 .title-action {
-    width: 100%;
-    margin-top: 6px;
-    margin-bottom: 6px;
+    margin-top: 5px;
+    margin-bottom: 5px;
 }
 
-.title-action--last {
-    margin-top: 16px;
+.toybox-ui.title-screen .title-play {
+    min-height: 70px;
+    font-size: 22px;
+}
+
+.toybox-ui.title-screen .title-play .toy-icon {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    margin-right: 14px;
+}
+
+.title-action__label {
+    -unity-font-style: bold;
+    color: var(--toy-cream);
+}
+
+.button--primary .title-action__label {
+    color: var(--toy-ink);
+}
+
+.title-action-row {
+    width: 100%;
+    flex-direction: row;
+}
+
+.title-action--half {
+    width: 50%;
+    min-width: 0;
+    margin-right: 5px;
+}
+
+.title-action--row-last {
+    margin-right: 0;
+    margin-left: 5px;
+}
+
+.title-action-row--quiet {
+    margin-top: var(--toy-space-xs);
+}
+
+.title-model-stage {
+    flex-grow: 1;
+    min-width: 320px;
+    height: 100%;
 }
 
 .quality-dropdown {
-    min-height: 44px;
-    margin-bottom: 8px;
-    color: rgb(236, 240, 244);
-    font-size: 14px;
+    min-height: var(--toy-target);
+    margin-bottom: var(--toy-space-sm);
+    color: var(--toy-cream);
+    font-size: var(--toy-type-body-lg);
 }
 
 .quality-dropdown > .unity-base-field__input {
-    min-height: 44px;
-    padding-left: 12px;
-    background-color: rgb(7, 13, 20);
-    border-width: 1px;
-    border-color: rgb(58, 76, 92);
-    border-radius: 2px;
+    min-height: var(--toy-target);
+    padding-left: 14px;
+    background-color: var(--toy-ink);
+    color: var(--toy-cream);
+    border-width: var(--toy-focus-width);
+    border-color: var(--toy-muted-dark);
+    border-radius: var(--toy-radius-md);
 }
 
-.quality-dropdown:focus > .unity-base-field__input {
-    border-color: rgb(237, 174, 65);
+.quality-dropdown > .unity-base-field__input:hover {
+    border-color: var(--toy-cream);
 }
 
-.settings-note {
-    margin-top: 6px;
+.quality-dropdown:focus > .unity-base-field__input,
+.quality-dropdown > .unity-base-field__input:focus {
+    border-color: var(--toy-sky);
+}
+
+.quality-dropdown:disabled {
+    color: var(--toy-muted);
+    opacity: 1;
+}
+
+.quality-dropdown:disabled > .unity-base-field__input,
+.quality-dropdown:disabled > .unity-base-field__input:hover {
+    background-color: var(--toy-disabled-surface);
+    color: var(--toy-muted);
+    border-color: var(--toy-disabled-border);
 }
 
 .credit-row {
-    margin-top: 8px;
-    margin-bottom: 12px;
+    margin-top: var(--toy-space-sm);
+    margin-bottom: 14px;
 }
 
 .credit-name {
@@ -83,64 +135,91 @@
     white-space: normal;
 }
 
-.compact .title-identity {
-    width: 52%;
-    padding-right: 36px;
+.compact .title-layout {
+    padding: 36px;
 }
 
-.compact .title-logo {
-    height: 190px;
+.compact .title-screen .title-board {
+    width: 390px;
+    min-width: 390px;
+    padding: 26px;
 }
 
-.compact .title-actions {
-    width: 300px;
+.compact .title-wordmark {
+    font-size: 56px;
 }
 
 .narrow .title-layout {
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 28px;
+}
+
+.narrow .title-screen .title-board {
+    width: 410px;
+    min-width: 0;
+}
+
+.narrow .title-model-stage {
+    display: none;
+}
+
+.phone .title-layout {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: var(--toy-space-control-x);
+}
+
+.phone .title-screen .title-board {
+    width: 100%;
+    min-width: 0;
+    padding: var(--toy-space-lg);
+    background-color: var(--toy-panel);
+}
+
+.phone .title-wordmark {
+    font-size: 48px;
+}
+
+.phone .title-action-row {
     flex-direction: column;
 }
 
-.narrow .title-identity {
+.phone .title-action--half {
     width: 100%;
-    height: 42%;
-    min-height: 230px;
-    padding-right: 0;
-    align-items: center;
+    margin-left: 0;
+    margin-right: 0;
 }
 
-.narrow .title-logo {
-    height: 170px;
+.short .title-layout {
+    padding-top: 14px;
+    padding-bottom: 14px;
 }
 
-.narrow .title-actions {
-    width: 84%;
-    max-width: 420px;
+.short .title-screen .title-board {
+    padding-top: var(--toy-space-panel-compact);
+    padding-bottom: var(--toy-space-panel-compact);
 }
 
-.phone .title-identity {
-    min-height: 190px;
+.short .title-wordmark {
+    font-size: 42px;
 }
 
-.phone .title-logo {
-    height: 135px;
+.short .title-plan-path {
+    margin-top: 2px;
+    margin-bottom: var(--toy-space-sm);
 }
 
-.phone .title-actions {
-    width: 100%;
+.short .title-screen .title-action {
+    min-height: 46px;
+    margin-top: 2px;
+    margin-bottom: 2px;
 }
 
-.short .title-identity {
-    min-height: 190px;
+.short .title-screen .title-play {
+    min-height: var(--toy-target-phone);
 }
 
-.short .title-logo {
-    height: 145px;
-}
-
-.short .title-action {
-    min-height: 38px;
-    margin-top: 3px;
-    margin-bottom: 3px;
-    padding-top: 7px;
-    padding-bottom: 7px;
+.phone.short .title-screen .title-action {
+    min-height: var(--toy-target-phone);
 }

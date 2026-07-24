@@ -68,6 +68,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         RegisterUiCallbacks();
         BuildRosterOptions();
         BuildSelectedSlots();
+        ConsoleUiNavigation.ConfigureButtons(root);
         UpdateSummary(IsSpawned ? replicatedOptions.Value : MatchOptions.Current);
         UpdateSelectionState();
         root.schedule.Execute(FocusFirstEnabledRosterOption);
@@ -133,10 +134,10 @@ public class CharacterSelectionUIController : NetworkBehaviour
         if (rosterInstruction != null)
         {
             rosterInstruction.text =
-                $"Choose {UnitsPerPlayer} eligible units. Repeats are allowed. Select a filled slot to remove it.";
+                $"Pick {UnitsPerPlayer}. Repeats are allowed. Select a filled slot to remove it.";
         }
         if (rosterCountLabel != null)
-            rosterCountLabel.text = $"FIRETEAM / SELECT {UnitsPerPlayer}";
+            rosterCountLabel.text = $"Pick {UnitsPerPlayer} units";
     }
 
     private T RequireElement<T>(string elementName)

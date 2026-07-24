@@ -48,4 +48,4 @@ MonoBehaviour:
   responseDistLine: 0
   timeDivePerUnit: 3
   diveRange: 2
-  uses: 1
+  abilityCooldownRounds: 3

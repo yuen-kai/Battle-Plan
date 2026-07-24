@@ -6,9 +6,9 @@ Shader "BattlePlan/VisionCone"
     Properties
     {
         [HDR] _ConeColor ("Cone Color", Color) = (0.55, 0.8, 1, 1)
-        _ApexIntensity ("Apex Intensity", Range(0, 2)) = 0.55
-        _FarFade ("Far Fade Start (0-1)", Range(0, 1)) = 0.35
-        _SideSoftness ("Side Softness", Range(0.01, 1)) = 0.6
+        _ApexIntensity ("Apex Intensity", Range(0, 2)) = 0.25
+        _FarFade ("Far Fade Start (0-1)", Range(0, 1)) = 0.55
+        _SideSoftness ("Side Softness", Range(0.01, 1)) = 0.35
         _FlickerSpeed ("Flicker Speed (0 = off)", Float) = 0
         _FlickerAmount ("Flicker Amount", Range(0, 1)) = 0.1
     }

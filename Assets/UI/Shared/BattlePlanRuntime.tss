@@ -1,60 +1,123 @@
 @import url("unity-theme://default");
+@import url("TacticalToyboxTokens.uss");
+
 VisualElement {}
 
 .unity-base-dropdown {
-    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    background-color: rgb(5, 9, 15);
-    color: rgb(231, 236, 240);
+    -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
+    background-color: var(--toy-playmat);
+    color: var(--toy-cream);
+    font-size: var(--toy-type-body);
 }
 
 .unity-base-dropdown__container-outer {
-    background-color: rgb(5, 9, 15);
-    border-width: 1px;
-    border-color: rgb(76, 99, 119);
-    border-radius: 2px;
+    background-color: var(--toy-playmat);
+    border-width: var(--toy-stroke-thin);
+    border-bottom-width: var(--toy-depth-panel);
+    border-color: var(--toy-ink);
+    border-radius: var(--toy-radius-md);
 }
 
 .unity-base-dropdown__container-inner {
-    background-color: rgb(12, 20, 30);
+    background-color: var(--toy-playmat);
 }
 
 .unity-base-dropdown__item {
-    min-height: 36px;
-    padding: 8px 12px;
-    background-color: rgb(12, 20, 30);
-    color: rgb(231, 236, 240);
-    border-left-width: 2px;
-    border-left-color: rgba(0, 0, 0, 0);
-    font-size: 14px;
+    min-height: var(--toy-target-compact);
+    padding: var(--toy-space-sm) var(--toy-space-md);
+    background-color: var(--toy-playmat);
+    color: var(--toy-cream);
+    border-left-width: var(--toy-stroke);
+    border-left-color: var(--toy-transparent);
+    font-size: var(--toy-type-body);
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, border-color, color;
 }
 
 .unity-base-dropdown__item:hover {
-    background-color: rgb(25, 39, 52);
-    color: rgb(245, 247, 249);
-    border-left-color: rgb(229, 160, 55);
+    background-color: var(--toy-playmat-hover);
+    color: var(--toy-cream);
+    border-left-color: var(--toy-cream);
 }
 
-.unity-base-dropdown__item:focus {
-    background-color: rgb(25, 39, 52);
-    color: rgb(245, 247, 249);
-    border-left-color: rgb(237, 174, 65);
+.unity-base-dropdown__item:active {
+    background-color: var(--toy-playmat-pressed);
+    color: var(--toy-cream);
+    border-left-color: var(--toy-cream);
 }
 
 .unity-base-dropdown__item:checked {
-    background-color: rgb(24, 34, 44);
-    color: rgb(245, 247, 249);
-    border-left-color: rgb(229, 160, 55);
+    background-color: var(--toy-teal);
+    color: var(--toy-ink);
+    border-left-color: var(--toy-cream);
+}
+
+.unity-base-dropdown__item:checked:hover {
+    background-color: var(--toy-teal-hover);
+    color: var(--toy-ink);
+}
+
+.unity-base-dropdown__item:checked:active {
+    background-color: var(--toy-teal-pressed);
+    color: var(--toy-ink);
+}
+
+.unity-base-dropdown__item:focus,
+.unity-base-dropdown__item:hover:focus,
+.unity-base-dropdown__item:active:focus,
+.unity-base-dropdown__item:checked:focus {
+    border-left-color: var(--toy-sky);
+}
+
+.unity-base-dropdown__item:disabled,
+.unity-base-dropdown__item:disabled:hover,
+.unity-base-dropdown__item:disabled:focus,
+.unity-base-dropdown__item:disabled:active {
+    background-color: var(--toy-disabled-surface);
+    color: var(--toy-muted);
+    border-left-color: var(--toy-disabled-border);
+    opacity: 1;
+}
+
+.unity-base-dropdown__item:checked:disabled,
+.unity-base-dropdown__item:checked:disabled:hover,
+.unity-base-dropdown__item:checked:disabled:focus,
+.unity-base-dropdown__item:checked:disabled:active {
+    background-color: var(--toy-teal);
+    color: var(--toy-ink);
+    border-left-color: var(--toy-disabled-border);
 }
 
 .unity-base-dropdown__label {
-    color: rgb(231, 236, 240);
-    font-size: 14px;
+    color: var(--toy-cream);
+    font-size: var(--toy-type-body);
+}
+
+.unity-base-dropdown__item:checked .unity-base-dropdown__label {
+    color: var(--toy-ink);
+}
+
+.unity-base-dropdown__item:disabled .unity-base-dropdown__label {
+    color: var(--toy-muted);
+}
+
+.unity-base-dropdown__item:checked:disabled .unity-base-dropdown__label {
+    color: var(--toy-ink);
 }
 
 .unity-base-dropdown__checkmark {
-    color: rgb(237, 174, 65);
+    color: var(--toy-teal);
+}
+
+.unity-base-dropdown__item:checked .unity-base-dropdown__checkmark {
+    color: var(--toy-ink);
+}
+
+.unity-base-dropdown__item:disabled .unity-base-dropdown__checkmark {
+    color: var(--toy-muted);
 }
 
 .unity-base-dropdown__separator {
-    background-color: rgb(45, 62, 78);
+    height: var(--toy-stroke-thin);
+    background-color: var(--toy-divider);
 }

@@ -12,6 +12,8 @@ public class JoinGameUIController : MonoBehaviour
 {
     private const string LocalMultiplayerAddress = "127.0.0.1";
     private const ushort LocalMultiplayerPort = 7777;
+    private const long CaretBlinkIntervalMilliseconds = 500;
+    private const string CaretHiddenClass = "text-field--caret-hidden";
 
     private enum PanelState
     {
@@ -32,7 +34,6 @@ public class JoinGameUIController : MonoBehaviour
     private VisualElement joinPanel;
     private VisualElement relayCodePanel;
     private VisualElement localMultiplayerRow;
-    private Label routeLabel;
     private Label connectionCodeHeading;
     private Button showCreateButton;
     private Button showJoinButton;
@@ -53,6 +54,7 @@ public class JoinGameUIController : MonoBehaviour
     private Label relayStatusLabel;
     private Label createErrorLabel;
     private Label joinStatusLabel;
+    private IVisualElementScheduledItem joinCaretBlink;
 
     private MatchOptions pendingOptions;
     private PanelState panelState;
@@ -94,6 +96,7 @@ public class JoinGameUIController : MonoBehaviour
         }
 
         CacheElements();
+        ConsoleUiNavigation.ConfigureButtons(root);
         CacheTransportDefaults();
         RegisterCallbacks();
         ConfigureInitialState();
@@ -131,7 +134,6 @@ public class JoinGameUIController : MonoBehaviour
         joinPanel = RequireElement<VisualElement>("join-panel");
         relayCodePanel = RequireElement<VisualElement>("relay-code-panel");
         localMultiplayerRow = RequireElement<VisualElement>("local-multiplayer-row");
-        routeLabel = RequireElement<Label>("route-label");
         connectionCodeHeading = RequireElement<Label>("connection-code-heading");
         showCreateButton = RequireElement<Button>("show-create-button");
         showJoinButton = RequireElement<Button>("show-join-button");
@@ -201,7 +203,20 @@ public class JoinGameUIController : MonoBehaviour
             localMultiplayerToggle.RegisterValueChangedCallback(OnLocalMultiplayerChanged);
         }
         if (joinCodeInput != null)
+        {
             joinCodeInput.RegisterValueChangedCallback(OnJoinCodeChanged);
+            joinCodeInput.RegisterCallback<FocusInEvent>(OnJoinCodeFocusIn);
+            joinCodeInput.RegisterCallback<FocusOutEvent>(OnJoinCodeFocusOut);
+            joinCodeInput.RegisterCallback<KeyDownEvent>(
+                OnJoinCodeKeyDown,
+                TrickleDown.TrickleDown
+            );
+            joinCodeInput.RegisterCallback<PointerDownEvent>(
+                OnJoinCodePointerDown,
+                TrickleDown.TrickleDown
+            );
+            ConfigureJoinCaretBlink();
+        }
 
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         root.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
@@ -210,6 +225,7 @@ public class JoinGameUIController : MonoBehaviour
 
     private void UnregisterCallbacks()
     {
+        PauseJoinCaretBlink();
         if (!callbacksRegistered)
             return;
 
@@ -242,7 +258,19 @@ public class JoinGameUIController : MonoBehaviour
             localMultiplayerToggle.UnregisterValueChangedCallback(OnLocalMultiplayerChanged);
         }
         if (joinCodeInput != null)
+        {
             joinCodeInput.UnregisterValueChangedCallback(OnJoinCodeChanged);
+            joinCodeInput.UnregisterCallback<FocusInEvent>(OnJoinCodeFocusIn);
+            joinCodeInput.UnregisterCallback<FocusOutEvent>(OnJoinCodeFocusOut);
+            joinCodeInput.UnregisterCallback<KeyDownEvent>(
+                OnJoinCodeKeyDown,
+                TrickleDown.TrickleDown
+            );
+            joinCodeInput.UnregisterCallback<PointerDownEvent>(
+                OnJoinCodePointerDown,
+                TrickleDown.TrickleDown
+            );
+        }
 
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         root.UnregisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
@@ -325,9 +353,6 @@ public class JoinGameUIController : MonoBehaviour
         joinPanel?.EnableInClassList("hidden", nextState != PanelState.Join);
         showCreateButton?.EnableInClassList("button--selected", nextState == PanelState.Create);
         showJoinButton?.EnableInClassList("button--selected", nextState == PanelState.Join);
-
-        if (routeLabel != null)
-            routeLabel.text = nextState == PanelState.Create ? "LINK / CREATE" : "LINK / JOIN";
 
         if (!moveFocus)
             return;
@@ -430,6 +455,84 @@ public class JoinGameUIController : MonoBehaviour
         if (joinCodeInput != null && normalized != evt.newValue)
             joinCodeInput.SetValueWithoutNotify(normalized);
         SetJoinStatus(string.Empty, false);
+    }
+
+    private void ConfigureJoinCaretBlink()
+    {
+        if (joinCodeInput == null)
+            return;
+
+        if (joinCaretBlink != null && joinCaretBlink.element != joinCodeInput)
+        {
+            joinCaretBlink.Pause();
+            joinCaretBlink = null;
+        }
+
+        if (joinCaretBlink == null)
+        {
+            joinCaretBlink = joinCodeInput
+                .schedule.Execute(ToggleJoinCaretVisibility)
+                .Every(CaretBlinkIntervalMilliseconds);
+            joinCaretBlink.Pause();
+        }
+
+        SetJoinCaretVisible();
+    }
+
+    private void OnJoinCodeFocusIn(FocusInEvent evt)
+    {
+        RestartJoinCaretBlink();
+    }
+
+    private void OnJoinCodeFocusOut(FocusOutEvent evt)
+    {
+        PauseJoinCaretBlink();
+    }
+
+    private void OnJoinCodeKeyDown(KeyDownEvent evt)
+    {
+        RestartJoinCaretBlink();
+    }
+
+    private void OnJoinCodePointerDown(PointerDownEvent evt)
+    {
+        RestartJoinCaretBlink();
+    }
+
+    private void RestartJoinCaretBlink()
+    {
+        SetJoinCaretVisible();
+        if (joinCaretBlink == null)
+            return;
+
+        joinCaretBlink.Resume();
+        joinCaretBlink.ExecuteLater(CaretBlinkIntervalMilliseconds);
+    }
+
+    private void PauseJoinCaretBlink()
+    {
+        joinCaretBlink?.Pause();
+        SetJoinCaretVisible();
+    }
+
+    private void ToggleJoinCaretVisibility()
+    {
+        if (
+            joinCodeInput == null
+            || root?.focusController?.focusedElement != joinCodeInput
+        )
+        {
+            PauseJoinCaretBlink();
+            return;
+        }
+
+        bool hidden = joinCodeInput.ClassListContains(CaretHiddenClass);
+        joinCodeInput.EnableInClassList(CaretHiddenClass, !hidden);
+    }
+
+    private void SetJoinCaretVisible()
+    {
+        joinCodeInput?.RemoveFromClassList(CaretHiddenClass);
     }
 
     private async void CreateMatch()
@@ -922,8 +1025,8 @@ public class JoinGameUIController : MonoBehaviour
             createMatchButton.text = "Start vs AI";
         else
             createMatchButton.text = ShouldUseLocalMultiplayer()
-                ? "Create local PvP match"
-                : "Create PvP match";
+                ? "Start local match"
+                : "Create online match";
     }
 
     private void ShowHostStatusPanel(string heading, string code, string status)
@@ -975,7 +1078,7 @@ public class JoinGameUIController : MonoBehaviour
         if (createErrorLabel == null)
             return;
         createErrorLabel.text = message;
-        createErrorLabel.EnableInClassList("label--danger", isError);
+        createErrorLabel.EnableInClassList("status-line--danger", isError);
     }
 
     private void SetJoinStatus(string message, bool isError)
@@ -983,7 +1086,7 @@ public class JoinGameUIController : MonoBehaviour
         if (joinStatusLabel == null)
             return;
         joinStatusLabel.text = message;
-        joinStatusLabel.EnableInClassList("label--danger", isError);
+        joinStatusLabel.EnableInClassList("status-line--danger", isError);
     }
 
     private void ClearMppmDirective()

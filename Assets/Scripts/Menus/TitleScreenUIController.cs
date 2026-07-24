@@ -37,6 +37,7 @@ public class TitleScreenUIController : MonoBehaviour
         }
 
         CacheElements();
+        ConsoleUiNavigation.ConfigureButtons(root);
         RegisterCallbacks();
         ConfigureQualityDropdown();
         CloseModal(false);
