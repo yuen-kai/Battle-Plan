@@ -1,29 +1,19 @@
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 public class PathSelection : MonoBehaviour
 {
     public static PathSelection Instance { get; private set; }
 
-    [SerializeField]
-    private GameObject pathNodePrefab;
-
-    [SerializeField]
-    private GameObject pathEdgePrefab;
-
-    private GameObject currentPathNodes;
-    private GameObject currentPathEdges;
     private bool pathDragActive;
+
     private List<Vector3> CurrentPlan =>
         PlanMovement.Instance != null ? PlanMovement.Instance.currentPlan : null;
-    private GameObject CurrentVisuals =>
-        PlanMovement.Instance != null ? PlanMovement.Instance.currentVisuals : null;
+    private PathRibbon CurrentRibbon =>
+        PlanMovement.Instance != null ? PlanMovement.Instance.currentRibbon : null;
     private GameObject SelectedUnit =>
         PlanMovement.Instance != null ? PlanMovement.Instance.selectedUnit : null;
     private float CellSize => GameLoop.cellSize;
-    private Vector3 VisualPlanHeightOffset => PlanMovement.visualPlanHeightOffset;
 
     void Awake()
     {
@@ -73,51 +63,51 @@ public class PathSelection : MonoBehaviour
 
     bool StartPath()
     {
-        Vector3 characterCell = GridSystem.GetNearestGridCell(SelectedUnit);
-        Vector3? clickedCell = Mouse.GetGridCellUnderMouse();
-        if (clickedCell == characterCell)
-        {
-            InitializePath();
-            return HasCurrentPathVisuals();
-        }
+        Vector3? pointer = Mouse.GetGridPointUnderMouse();
+        if (pointer == null || SelectedUnit == null)
+            return false;
 
-        GameObject node = Mouse.GetObjectUnderMouse("PathNode");
-        if (node != null)
-        {
-            if (!PlanMovement.Instance.TrySelectUnitForPathNode(node))
-                return false;
-
-            BindCurrentPathVisuals();
-            node = FindCurrentPathNodeRoot(node);
-            if (!HasCurrentPathVisuals() || node == null)
-                return false;
-
-            ResetPath(node);
-            return true;
-        }
-
-        // Pressing another friendly unit starts a fresh movement path for it. Preparing movement
-        // also makes this gesture work when the previously selected unit was targeting an ability.
+        // Pressing on a drawn route grabs that route and trims it back to the pressed cell. The
+        // pick uses the exact pointer position, so where routes share a cell you grab the one you
+        // are actually pointing at rather than whichever happens to be checked first.
         if (
-            clickedCell != null
-            && PlanMovement.Instance.TrySelectUnitForMovementAtCell(clickedCell.Value)
+            PlanMovement.Instance.TryFindPlannedRouteAtPoint(
+                pointer.Value,
+                out GameObject owner,
+                out int planIndex
+            )
         )
         {
-            InitializePath();
-            return HasCurrentPathVisuals();
+            if (!PlanMovement.Instance.TrySelectUnitForRoute(owner))
+                return false;
+
+            TruncatePlan(planIndex);
+            return CurrentRibbon != null;
+        }
+
+        // Pressing another friendly unit starts a fresh route for it. Preparing movement also makes
+        // this gesture work when the previously selected unit was targeting an ability.
+        if (
+            PlanMovement.Instance.TrySelectUnitForMovementAtCell(
+                GridSystem.GetNearestGridCell(pointer.Value)
+            )
+        )
+        {
+            TruncatePlan(0);
+            return CurrentRibbon != null;
         }
         return false;
     }
 
     void ExtendPath(int moveDist)
     {
-        // A drag is only valid after StartPath has created containers for the selected unit.
-        // Ignore malformed/off-unit drags instead of mutating the plan and throwing every frame.
+        // A drag is only valid once a route exists for the selected unit. Ignore malformed or
+        // off-unit drags instead of mutating the plan and throwing every frame.
         if (
             !pathDragActive
             || CurrentPlan == null
             || CurrentPlan.Count == 0
-            || !HasCurrentPathVisuals()
+            || CurrentRibbon == null
         )
         {
             pathDragActive = false;
@@ -132,7 +122,7 @@ public class PathSelection : MonoBehaviour
         //Undo movementPath
         if (CurrentPlan.Count >= 2 && CurrentPlan[^2] == currentTile)
         {
-            ResetPath(currentPathNodes.transform.childCount - 2);
+            TruncatePlan(CurrentPlan.Count - 2);
             return;
         }
 
@@ -140,79 +130,22 @@ public class PathSelection : MonoBehaviour
         if (ValidMove(last, currentTile, moveDist))
         {
             CurrentPlan.Add(currentTile);
-            AddPathSectionVisual(currentTile, last, CurrentPlan.Count - 1, moveDist);
+            PlanMovement.Instance.NotifyCurrentRouteChanged();
         }
     }
 
-    void InitializePath()
+    /// <summary>Drops every step after the given plan index, keeping the start cell at index 0.</summary>
+    void TruncatePlan(int keepThroughIndex)
     {
-        if (!CurrentVisuals)
-        {
-            currentPathNodes = null;
-            currentPathEdges = null;
+        List<Vector3> plan = CurrentPlan;
+        if (plan == null || plan.Count == 0)
             return;
-        }
 
-        BindCurrentPathVisuals();
-        if (!currentPathNodes || !currentPathEdges)
-        {
-            currentPathNodes = Helper.CreateGameObject("PathNodes", CurrentVisuals);
-            currentPathEdges = Helper.CreateGameObject("PathEdges", CurrentVisuals);
-        }
-        else
-        {
-            ResetPath(-1);
-        }
-    }
+        int keep = Mathf.Clamp(keepThroughIndex, 0, plan.Count - 1);
+        if (plan.Count > keep + 1)
+            plan.RemoveRange(keep + 1, plan.Count - (keep + 1));
 
-    void BindCurrentPathVisuals()
-    {
-        if (!CurrentVisuals)
-        {
-            currentPathNodes = null;
-            currentPathEdges = null;
-            return;
-        }
-
-        currentPathNodes = CurrentVisuals.transform.Find("PathNodes")?.gameObject;
-        currentPathEdges = CurrentVisuals.transform.Find("PathEdges")?.gameObject;
-    }
-
-    GameObject FindCurrentPathNodeRoot(GameObject hitObject)
-    {
-        if (!currentPathNodes || hitObject == null)
-            return null;
-
-        Transform node = hitObject.transform;
-        while (node != null && node.parent != currentPathNodes.transform)
-            node = node.parent;
-
-        return node?.parent == currentPathNodes.transform ? node.gameObject : null;
-    }
-
-    bool HasCurrentPathVisuals()
-    {
-        return CurrentVisuals
-            && currentPathNodes
-            && currentPathEdges
-            && currentPathNodes.transform.parent == CurrentVisuals.transform
-            && currentPathEdges.transform.parent == CurrentVisuals.transform;
-    }
-
-    void ResetPath(int index)
-    {
-        for (int i = currentPathNodes.transform.childCount - 1; i > index; i--)
-        {
-            Destroy(currentPathNodes.transform.GetChild(i)?.gameObject);
-            Destroy(currentPathEdges.transform.GetChild(i)?.gameObject);
-        }
-
-        CurrentPlan.RemoveRange(index + 2, CurrentPlan.Count - (index + 2)); //current plan includes start but visual does not
-    }
-
-    void ResetPath(GameObject node)
-    {
-        ResetPath(node.transform.GetSiblingIndex());
+        PlanMovement.Instance.NotifyCurrentRouteChanged();
     }
 
     bool ValidMove(Vector3 last, Vector3 currentTile, int moveDist)
@@ -223,21 +156,5 @@ public class PathSelection : MonoBehaviour
         bool notAlreadyInPath = !CurrentPlan.Contains(currentTile);
 
         return withinMoveDistance && exactlyOneTileAway && notInWall && notAlreadyInPath;
-    }
-
-    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
-    {
-        GameObject node = Instantiate(pathNodePrefab, cell, Quaternion.identity);
-        node.transform.parent = currentPathNodes.transform;
-        node.transform.position += VisualPlanHeightOffset;
-
-        GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2, Quaternion.identity);
-        edge.transform.parent = currentPathEdges.transform;
-        edge.transform.position += VisualPlanHeightOffset;
-
-        if (length == moveDist)
-        {
-            node.transform.GetComponent<Renderer>().material.color = Color.green;
-        }
     }
 }

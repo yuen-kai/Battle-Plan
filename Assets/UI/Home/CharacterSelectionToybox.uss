@@ -85,19 +85,13 @@
 .roster-model-stage {
     flex-grow: 1;
     min-height: 120px;
-    justify-content: flex-end;
-    align-items: flex-end;
-    padding-right: 6px;
-}
-
-.roster-stage-path {
-    margin-bottom: var(--toy-space-sm);
 }
 
 .roster-body {
     flex-grow: 0;
-    height: 306px;
-    min-height: 306px;
+    flex-shrink: 0;
+    height: 380px;
+    min-height: 380px;
     flex-direction: row;
 }
 
@@ -140,9 +134,10 @@
 
 .unit-option {
     position: relative;
-    width: 184px;
-    min-width: 184px;
-    min-height: 236px;
+    width: 206px;
+    min-width: 206px;
+    min-height: 0;
+    height: 100%;
     margin-right: var(--toy-space-md);
     padding: 0;
     flex-direction: column;
@@ -213,6 +208,7 @@
 
 .unit-option__portrait {
     height: 132px;
+    flex-shrink: 0;
     -unity-background-scale-mode: scale-and-crop;
     background-color: var(--toy-ink);
     border-bottom-width: var(--toy-focus-width);
@@ -225,10 +221,13 @@
 
 .unit-option__copy {
     flex-grow: 1;
-    padding: 11px var(--toy-space-md) var(--toy-space-md) var(--toy-space-md);
+    min-height: 0;
+    padding: 10px 13px;
+    overflow: hidden;
 }
 
 .unit-option__name {
+    flex-shrink: 0;
     margin-bottom: 3px;
     font-size: 17px;
     -unity-font-style: bold;
@@ -245,9 +244,12 @@
 
 .unit-option__description {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
     font-size: var(--toy-type-caption);
     color: var(--toy-body-copy);
     white-space: normal;
+    overflow: hidden;
 }
 
 .unit-option--selected .unit-option__description {
@@ -255,10 +257,11 @@
 }
 
 .unit-option__ability-row {
+    flex-shrink: 0;
     flex-direction: row;
     align-items: center;
     margin-top: var(--toy-space-sm);
-    padding: 5px 7px;
+    padding: 4px 7px;
     background-color: var(--toy-ink);
     border-radius: var(--toy-radius-sm);
 }
@@ -356,13 +359,14 @@
 }
 
 .selected-slot {
-    width: 154px;
-    min-width: 132px;
+    width: 200px;
+    min-width: 176px;
     min-height: 64px;
     margin-right: var(--toy-space-sm);
     padding: 7px 9px 9px 9px;
     flex-direction: row;
     align-items: center;
+    overflow: hidden;
     background-color: var(--toy-playmat-quiet);
     color: var(--toy-muted);
     border-width: var(--toy-focus-width);
@@ -450,6 +454,7 @@
     flex-grow: 1;
     min-width: 0;
     justify-content: center;
+    overflow: hidden;
 }
 
 .selected-slot__name {
@@ -467,6 +472,7 @@
     margin-top: 2px;
     font-size: 10px;
     color: var(--toy-muted);
+    white-space: nowrap;
 }
 
 .selected-slot--filled .selected-slot__detail {
@@ -523,22 +529,28 @@
 }
 
 .compact .unit-option {
-    width: 166px;
-    min-width: 166px;
-    min-height: 214px;
+    width: 178px;
+    min-width: 178px;
 }
 
 .compact .unit-option__portrait {
-    height: 112px;
+    height: 106px;
 }
 
 .compact .unit-option__description {
     display: none;
 }
 
+/* Without the description there is no flexible child left to hold the
+   ability chip against the bottom of the card. */
+.compact .unit-option__copy,
+.short .unit-option__copy {
+    justify-content: space-between;
+}
+
 .compact .selected-slot {
-    width: 136px;
-    min-width: 120px;
+    width: 190px;
+    min-width: 168px;
 }
 
 .narrow .roster-frame {
@@ -603,10 +615,6 @@
     min-height: 42px;
 }
 
-.phone .roster-stage-path {
-    display: none;
-}
-
 .phone .roster-body {
     height: 300px;
     min-height: 300px;
@@ -666,12 +674,8 @@
 }
 
 .short .roster-body {
-    height: 276px;
-    min-height: 276px;
-}
-
-.short .unit-option {
-    min-height: 188px;
+    height: 288px;
+    min-height: 288px;
 }
 
 .short .unit-option__portrait {

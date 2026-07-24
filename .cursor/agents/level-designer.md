@@ -1,7 +1,7 @@
 ---
 name: level-designer
 description: Proactively delegate when creating, reviewing, or iterating Battle Plan maps, grid blockouts, walls, lanes, sightlines, spawn safety, KOTH center control, fog and vision readability, or MapVibe environment direction.
-model: claude-opus-4-8-thinking-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

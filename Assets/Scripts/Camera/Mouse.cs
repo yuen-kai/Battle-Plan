@@ -36,4 +36,13 @@ public class Mouse : MonoBehaviour
         RaycastHit? hit = GetHitUnderMouse(LayerMask.GetMask("Grid"));
         return hit == null ? null : GridSystem.GetNearestGridCell(hit.Value.point);
     }
+
+    /// <summary>
+    /// The unsnapped board position under the pointer, for picks that need to tell apart several
+    /// things drawn inside the same cell.
+    /// </summary>
+    public static Vector3? GetGridPointUnderMouse()
+    {
+        return GetHitUnderMouse(LayerMask.GetMask("Grid"))?.point;
+    }
 }

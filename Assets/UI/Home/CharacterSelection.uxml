@@ -28,13 +28,7 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement class="roster-model-stage" picking-mode="Ignore">
-                <ui:VisualElement class="plan-path roster-stage-path">
-                    <ui:VisualElement class="plan-path__start" />
-                    <ui:VisualElement class="plan-path__line" />
-                    <ui:VisualElement class="plan-path__stop" />
-                </ui:VisualElement>
-            </ui:VisualElement>
+            <ui:VisualElement class="roster-model-stage" picking-mode="Ignore" />
 
             <ui:VisualElement class="roster-body">
                 <ui:VisualElement class="unit-library toy-panel">

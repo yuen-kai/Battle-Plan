@@ -110,9 +110,10 @@ public class PlanMovement : MonoBehaviour
 
     // Visual representation of paths
     private GameObject planVisualsFolder;
-    private Dictionary<GameObject, GameObject> planVisuals = new();
+    private Dictionary<GameObject, PathRibbon> planVisuals = new();
+    private readonly RouteLaneMap laneMap = new();
 
-    public GameObject currentVisuals;
+    public PathRibbon currentRibbon;
 
     // Range overlays
     private GameObject moveOverlay;
@@ -144,8 +145,6 @@ public class PlanMovement : MonoBehaviour
         && !planningLockPending
         && !planningUnlockPending
         && lockInAvailable;
-
-    public static Vector3 visualPlanHeightOffset = new(0, 0.1f, 0);
 
     void Awake()
     {
@@ -509,10 +508,7 @@ public class PlanMovement : MonoBehaviour
             return;
         }
 
-        GameObject hoveredNode = Mouse.GetObjectUnderMouse("PathNode");
         Vector3? clicked = Mouse.GetGridCellUnderMouse();
-        if (clicked == null && hoveredNode != null)
-            clicked = GridSystem.GetNearestGridCell(hoveredNode.transform.position);
         if (clicked == null)
         {
             ShowInvalidTargetFeedback(AbilityTargetValidationReason.NoTargetCell);
@@ -788,35 +784,100 @@ public class PlanMovement : MonoBehaviour
         return false;
     }
 
+    // Two routes drawn closer together than this within one cell count as pointed at equally.
+    private const float LaneTieDistance = 0.02f;
+
     /// <summary>
-    /// Selects the unit that owns a path node and prepares that unit for movement editing.
+    /// Finds the drawn movement route nearest the pointer inside the cell it is over, reporting the
+    /// owner and the index of that cell within the owner's plan. Candidates are compared against
+    /// the position each ribbon actually drew, so where several routes share a cell you get the one
+    /// you are pointing at; the selected unit only breaks a genuine tie.
     /// </summary>
-    public bool TrySelectUnitForPathNode(GameObject node)
+    public bool TryFindPlannedRouteAtPoint(
+        Vector3 worldPoint,
+        out GameObject unit,
+        out int planIndex
+    )
     {
-        if (!CanEditPlan || node == null)
+        unit = null;
+        planIndex = -1;
+        if (!CanEditPlan)
             return false;
 
-        GameObject owner = null;
-        for (Transform ancestor = node.transform; ancestor != null; ancestor = ancestor.parent)
-        {
-            foreach (KeyValuePair<GameObject, GameObject> pair in planVisuals)
-            {
-                if (pair.Value == null || pair.Value != ancestor.gameObject)
-                    continue;
+        Vector3 cell = GridSystem.GetNearestGridCell(worldPoint);
+        float bestDistance = float.MaxValue;
 
-                owner = pair.Key;
-                break;
-            }
-            if (
-                owner != null
-                || (planVisualsFolder != null && ancestor.gameObject == planVisualsFolder)
-            )
-                break;
+        foreach (GameObject character in teamCharacters)
+        {
+            if (!TryFindRouteCellForUnit(character, cell, out int index))
+                continue;
+
+            float distance = GetDrawnRouteDistance(character, index, worldPoint, cell);
+            bool clearlyCloser = distance < bestDistance - LaneTieDistance;
+            bool tiedButSelected =
+                character == selectedUnit && distance <= bestDistance + LaneTieDistance;
+            if (unit != null && !clearlyCloser && !tiedButSelected)
+                continue;
+
+            unit = character;
+            planIndex = index;
+            bestDistance = Mathf.Min(bestDistance, distance);
+        }
+        return unit != null;
+    }
+
+    /// <summary>
+    /// Flat distance from the pointer to where a unit's ribbon drew the given plan step, falling
+    /// back to the cell centre for a plan too short to have been drawn.
+    /// </summary>
+    private float GetDrawnRouteDistance(
+        GameObject unit,
+        int planIndex,
+        Vector3 worldPoint,
+        Vector3 cell
+    )
+    {
+        Vector3 reference = cell;
+        if (
+            planVisuals.TryGetValue(unit, out PathRibbon ribbon)
+            && ribbon != null
+            && ribbon.TryGetDrawnPoint(planIndex, out Vector3 drawn)
+        )
+        {
+            reference = drawn;
         }
 
-        if (owner == null)
+        Vector2 delta = new(worldPoint.x - reference.x, worldPoint.z - reference.z);
+        return delta.magnitude;
+    }
+
+    private bool TryFindRouteCellForUnit(GameObject unit, Vector3 cell, out int planIndex)
+    {
+        planIndex = -1;
+        if (
+            unit == null
+            || !IsPlanningUnitAvailable(unit)
+            || !plans.TryGetValue(unit, out (bool, List<Vector3>) plan)
+            || plan.Item1
+            || plan.Item2 == null
+        )
+        {
             return false;
-        return owner == selectedUnit || TrySetSelectionMode(owner, false);
+        }
+
+        planIndex = plan.Item2.IndexOf(cell);
+        return planIndex >= 0;
+    }
+
+    /// <summary>
+    /// Selects the unit that owns a drawn route and prepares that unit for movement editing.
+    /// </summary>
+    public bool TrySelectUnitForRoute(GameObject unit)
+    {
+        if (!CanEditPlan || unit == null)
+            return false;
+
+        return unit == selectedUnit || TrySetSelectionMode(unit, false);
     }
 
     private static bool IsPlanningUnitAvailable(GameObject unit)
@@ -994,6 +1055,7 @@ public class PlanMovement : MonoBehaviour
         {
             ClearAbilityTargetIndicator();
             Destroy(moveOverlay);
+            RefreshAllRibbons();
             RefreshUnitCards();
             return;
         }
@@ -1038,8 +1100,7 @@ public class PlanMovement : MonoBehaviour
             );
 
         currentPlan = plans[selectedUnit].Item2;
-        if (planVisuals.TryGetValue(selectedUnit, out GameObject visuals))
-            currentVisuals = visuals;
+        RefreshAllRibbons();
 
         if (
             abilityMode
@@ -1070,17 +1131,98 @@ public class PlanMovement : MonoBehaviour
 
     void ResetVisualPlan()
     {
-        if (planVisuals.ContainsKey(selectedUnit))
-            Destroy(planVisuals[selectedUnit]);
+        PathRibbon ribbon = EnsureRibbon(selectedUnit);
+        currentRibbon = ribbon;
+        ribbon?.Clear();
+    }
 
-        planVisuals[selectedUnit] = Helper.CreateGameObject("PlanVisual", planVisualsFolder);
+    /// <summary>
+    /// Roster slot drives both a unit's route colour and its lane, so a route stays tied to the
+    /// same unit card all match. Falls back to team ordering if identity has not replicated yet.
+    /// </summary>
+    private int GetRosterSlot(GameObject unit)
+    {
+        Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+        int slot = identity != null ? identity.RosterSlot : -1;
+        return slot >= 0 ? slot : Mathf.Max(0, teamCharacters.IndexOf(unit));
+    }
+
+    private PathRibbon EnsureRibbon(GameObject unit)
+    {
+        if (unit == null)
+            return null;
+        if (planVisuals.TryGetValue(unit, out PathRibbon existing) && existing != null)
+            return existing;
+
+        int slot = GetRosterSlot(unit);
+        PathRibbon ribbon = PathRibbon.Create(
+            planVisualsFolder != null ? planVisualsFolder.transform : null,
+            $"PlanRoute_{slot}",
+            slot
+        );
+        planVisuals[unit] = ribbon;
+        return ribbon;
+    }
+
+    /// <summary>
+    /// Redraws after <see cref="PathSelection"/> extends or trims the selected route. Editing one
+    /// route changes which cells are shared, so every route is rebuilt rather than just this one.
+    /// </summary>
+    public void NotifyCurrentRouteChanged()
+    {
+        RefreshAllRibbons();
+    }
+
+    /// <summary>
+    /// Repaints every route so the unit being edited reads bright and full width while the rest
+    /// stay dimmed but legible, and each route holds the centre of its cells except where it has
+    /// to share them.
+    /// </summary>
+    private void RefreshAllRibbons()
+    {
+        currentRibbon = selectedUnit != null ? EnsureRibbon(selectedUnit) : null;
+        RebuildLaneMap();
+        foreach (KeyValuePair<GameObject, PathRibbon> pair in planVisuals)
+        {
+            if (pair.Value == null)
+                continue;
+
+            pair.Value.SetSelected(pair.Key == selectedUnit);
+            DrawRoute(pair.Key, pair.Value);
+        }
+    }
+
+    private void RebuildLaneMap()
+    {
+        laneMap.Clear();
+        foreach (KeyValuePair<GameObject, (bool, List<Vector3>)> entry in plans)
+        {
+            // Ability plans hold a target square rather than a route, so they claim no lanes.
+            if (entry.Value.Item1 || entry.Value.Item2 == null)
+                continue;
+
+            laneMap.AddRoute(GetRosterSlot(entry.Key), entry.Value.Item2);
+        }
+    }
+
+    private void DrawRoute(GameObject unit, PathRibbon ribbon)
+    {
+        if (ribbon == null)
+            return;
+
+        bool hasPlan = plans.TryGetValue(unit, out (bool, List<Vector3>) plan);
+        if (!hasPlan || plan.Item1 || plan.Item2 == null)
+            ribbon.Clear();
+        else
+            ribbon.SetRoute(plan.Item2, laneMap);
     }
 
     //================
     void InitializeVisuals()
     {
         plans = new PathsDict();
-        planVisuals = new Dictionary<GameObject, GameObject>();
+        planVisuals = new Dictionary<GameObject, PathRibbon>();
+        currentRibbon = null;
         AddCharacterOutlines();
         planVisualsFolder = new GameObject("PlanVisuals");
     }
@@ -1099,6 +1241,9 @@ public class PlanMovement : MonoBehaviour
             Destroy(moveOverlay);
         }
         ClearAbilityTargetIndicator();
+        planVisuals.Clear();
+        laneMap.Clear();
+        currentRibbon = null;
         planVisualsFolder = null;
         moveOverlay = null;
         planningRangeOverride = -1;

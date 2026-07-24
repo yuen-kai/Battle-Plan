@@ -1,7 +1,7 @@
 ---
 name: build-release-engineer
 description: Proactively audits and prepares Battle Plan builds, platform settings, performance budgets, release artifacts, and rollback-ready delivery checklists.
-model: gpt-5.6-sol-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

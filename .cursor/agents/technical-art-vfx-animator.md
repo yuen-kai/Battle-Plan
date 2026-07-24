@@ -1,7 +1,7 @@
 ---
 name: technical-art-vfx-animator
 description: Proactively implements and optimizes Battle Plan’s URP materials, shaders, textures, local-only VFX, animation, outlines, post-processing, and visual performance while protecting gameplay and network authority.
-model: gpt-5.6-sol-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

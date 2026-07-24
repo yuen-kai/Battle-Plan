@@ -1,7 +1,7 @@
 ---
 name: ui-ux-designer
 description: Proactively designs and implements Battle Plan UI Toolkit flows, HUD states, responsive layouts, accessibility, copy, and UXML-controller contracts whenever player-facing interface clarity or polish is involved.
-model: gpt-5.6-sol-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

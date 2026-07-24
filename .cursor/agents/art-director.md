@@ -1,7 +1,7 @@
 ---
 name: art-director
 description: Proactively defines and enforces Battle Plan’s visual language through character, map, prop, palette, material, and concept briefs with production-ready acceptance criteria and licensed sourcing guidance.
-model: claude-opus-4-8-thinking-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission
