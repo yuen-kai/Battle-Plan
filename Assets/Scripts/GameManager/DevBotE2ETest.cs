@@ -401,7 +401,6 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             return;
         }
 
-        int activeCount = 0;
         for (int index = 0; index < enemyUnits.Count; index++)
         {
             GameObject enemy = enemyUnits[index];
@@ -415,8 +414,6 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             Button selectButton = card?.Q<Button>($"enemy-unit-card-select-{index}");
 
             bool alive = health != null && health.IsAlive;
-            if (alive)
-                activeCount++;
             string expectedHealth =
                 health != null
                     ? $"{Mathf.RoundToInt(health.CurrentHealth)} / {Mathf.RoundToInt(health.MaxHealth)} HP"
@@ -448,17 +445,6 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                 $"{checkpoint} enemy slot {index} alive state is live (got '{stateLabel?.text ?? "<none>"}')"
             );
         }
-
-        int eliminatedCount = enemyUnits.Count - activeCount;
-        string expectedSummary =
-            eliminatedCount == 0
-                ? $"{activeCount} ACTIVE"
-                : $"{activeCount} ACTIVE · {eliminatedCount} DOWN";
-        Label summary = hudRoot.Q<Label>("enemy-contact-summary");
-        Check(
-            summary != null && summary.text == expectedSummary,
-            $"{checkpoint} enemy fireteam summary is live (got '{summary?.text ?? "<none>"}')"
-        );
     }
 
     private IEnumerator ResolveRound()

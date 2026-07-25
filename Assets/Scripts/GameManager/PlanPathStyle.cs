@@ -59,6 +59,13 @@ public static class PlanPathStyle
     // board cut into them.
     public const float RouteHeight = 0.35f;
 
+    /// <summary>
+    /// Height for the path an ability travels. Above the target markers at 0.26 so an arrowhead
+    /// reads over the cell it stops on, and below <see cref="RouteHeight"/> so a planned route
+    /// crossing one still comes out on top of it.
+    /// </summary>
+    public const float AbilityPathHeight = 0.3f;
+
     /// <summary>Width at the route's start relative to its end, giving a direction-of-travel cue.</summary>
     public const float StartWidthScale = 0.72f;
 
@@ -91,6 +98,41 @@ public static class PlanPathStyle
     public static float GetRouteWidth(bool selected)
     {
         return (selected ? SelectedWidthCells : UnselectedWidthCells) * GameLoop.cellSize;
+    }
+
+    /// <summary>
+    /// Colour for the end of a route that is resting somewhere it cannot stop. Deliberately not one
+    /// of the slot hues: a destination that will not hold has to read as wrong at a glance rather
+    /// than as merely belonging to a different unit.
+    /// </summary>
+    public static Color GetBlockedEndColor(bool selected)
+    {
+        return new Color(1f, 0.29f, 0.31f, selected ? 1f : UnselectedAlpha);
+    }
+
+    /// <summary>
+    /// Fills <paramref name="chevron"/> with the three points of the arrowhead that caps a path at
+    /// <paramref name="tip"/>, pointing the way it arrives. Shared so a walked route and an
+    /// ability's own path finish in the same shape. False when the approach names no direction to
+    /// point along, which leaves the caller nothing to draw.
+    /// </summary>
+    public static bool TryBuildEndChevron(Vector3 tip, Vector3 approach, Vector3[] chevron)
+    {
+        if (chevron == null || chevron.Length < 3)
+            return false;
+
+        approach.y = 0f;
+        if (approach.sqrMagnitude <= Mathf.Epsilon)
+            return false;
+
+        approach.Normalize();
+        Vector3 halfWidth = new Vector3(approach.z, 0f, -approach.x) * DestinationHalfWidth;
+        Vector3 back = tip - approach * DestinationLength;
+
+        chevron[0] = back + halfWidth;
+        chevron[1] = tip;
+        chevron[2] = back - halfWidth;
+        return true;
     }
 
     /// <summary>

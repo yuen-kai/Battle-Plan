@@ -100,6 +100,11 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
    - The server loop waits until no unit is `stillShooting` (each unit stops after its current
      magazine/bullets resolve once `OrderAllowShooting(false)` is issued), then starts the next
      planning phase.
+   - Weapons are held free while anyone is still moving, so a unit that walks into a rifle is shot
+     at the whole way in. An ability that sets its caster down arrives all at once and can do so
+     after the last walker has stopped, so a landing also holds them free for
+     `GameLoop.AbilityLandingReturnFireSeconds` (`Pogo` calls `HoldReturnFireWindow` as it comes
+     down) — otherwise the rider would empty a magazine into units already ordered to cease fire.
 3. **Win condition** — the round loop runs `while` both teams have ≥1 active unit
    (`teamSize(team) > 0`, tag-based). When it exits, `EndGame` → `EndGameClientRpc` shows
    "You win!/You lose!" plus *Play Again* (both players must accept; reloads `HomeScreen`) and
@@ -202,6 +207,9 @@ invoked by the planning-phase move-or-ability pipeline in `GameLoop` — see §2
   force-reveal through fog — jump-behind-lines is the marquee fog play.
 - `AreaLock` (Sniper): snaps to nearest cell, projects a laser line toward a chosen square for up
   to 3s; the first enemy crossing the ray takes a flat **130** damage via an animated beam rush.
+  The square is a direction anchor rather than a destination, so the sniper's own cell — which
+  names no direction — is excluded from the range overlay and refused by client and server
+  (`UnitData.CanTargetOwnCell`). Abilities that land on their square may still target their own.
   Ability damage is deliberately independent from the Sniper rifle's direct-fire damage.
   Force-reveals the caster to enemy teams for the ability window (its object-scoped ClientRpcs
   would otherwise be dropped for clients it's hidden from, and bots use the same reveal deadline

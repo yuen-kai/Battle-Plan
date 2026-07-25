@@ -92,8 +92,13 @@ Server-authoritative, deterministic order within a round:
 3. `RunDodgePhase` telegraphs all activations publicly; threatened units (from other abilities) get
    dodge windows; dodging cancels the dodger's own ability plan and activations are re-collected.
 4. `ExecuteMoves` runs all committed/dive movement.
-5. **Smoke applies before shooting resolves:** the smoke occluder becomes active at the start of the
-   combat window so it is present for every line-of-sight/target-acquisition check that round.
+5. **Smoke is thrown, and applies where it lands:** the Commander pitches a canister that arcs to the
+   committed cell over `Smoke.ThrowSeconds` (0.35s), and `TryRegisterSmokeFootprint` runs on impact.
+   The throw is deliberately short, so in practice the cloud is present for the line-of-sight and
+   target-acquisition checks that matter; the sliver of clear sight the flight leaves open is the
+   accepted cost of having the cloud a player can see and the occluder that stops a shot begin at the
+   same moment. Registration is open for the whole execution window rather than one synchronous
+   pre-movement batch, because each Commander's screen now deploys on its own canister's impact.
 6. Auto-combat resolves (units acquire nearest enemy with clear LoS and fire).
 7. Smoke is removed at end of round; `Ability.ResetForRespawn()` clears any transient smoke state on
    respawn without restoring the use count.
@@ -107,6 +112,10 @@ lengths.
 - At execution start, **both players** see a telegraph of the smoke area, consistent with the existing
   telegraph model (`ShowAbilityTelegraphClientRpc`, orange area marker) — the counterplay window is the
   point, so the placement is never hidden from the opponent.
+- The deployment has a visible cause: a canister (`Assets/Prefabs/Projectiles/SmokeCanister.prefab`)
+  arcs from the Commander to the target cell and the cloud blooms where it lands, rather than the
+  screen appearing from nowhere. Planning previews the same arc, since `Smoke.BuildPlannedPath`
+  samples the throw the ability actually flies.
 - When the smoke becomes active, a clearly readable **smoke volume VFX** occupies the affected cells for
   both teams. It must read as "sightline blocked here" at a glance and be visually distinct from walls
   and from the fog-of-war shroud.
@@ -254,10 +263,10 @@ edit-mode tests; no reliance on human feel.
 
 ## 14. Balance guardrails
 
-**Update (repeat units shipped):** fireteam selection no longer requires distinct units — a side may
+**Update (repeat units shipped):** crew selection no longer requires distinct units — a side may
 field the same unit, including the Commander, in more than one slot. Every guardrail below that
 assumed "unique rosters mean at most one Commander per side" was written before this change and is
-now an **open balance risk, not a verified-safe config**. In particular a 5x-Commander fireteam can
+now an **open balance risk, not a verified-safe config**. In particular a 5x-Commander crew can
 put multiple simultaneous Smoke Screens on the board per round, which directly contradicts "No
 permanent safe zone" below. Re-validate with a multi-Commander roster before trusting these
 guardrails; a per-unit repeat cap (e.g. limit Commander to 1) is the straightforward rollback if
@@ -344,4 +353,4 @@ Smoke Screen.
 - The Commander keeps a light pistol for self-defense but is defined by utility; final stats are
   systems-balance's call (§12).
 - "Eligible roster" = Soldier, Shotgunner, Sniper, Pogostick rider while the Commander is gated
-  (four eligible characters; fireteam = three distinct).
+  (four eligible characters; crew = three distinct).

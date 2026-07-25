@@ -7,8 +7,6 @@ using UnityEngine.UIElements;
 public class GameHUDController : MonoBehaviour
 {
     public static GameHUDController Instance { get; private set; }
-    private const string PlanningReadyHelp =
-        "Choose orders, then lock in. You can unlock while waiting.";
     private static readonly string[] PlanningCommitStateClasses =
     {
         "planning-commit--ready",
@@ -37,12 +35,10 @@ public class GameHUDController : MonoBehaviour
     private VisualElement resultsPanel;
     private Label phaseLabel;
     private Label timerLabel;
-    private Label planningHelp;
     private Label hillStatusLabel;
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
-    private Label enemyContactSummary;
     private VisualElement planningCommit;
     private Label planningCommitStatus;
     private Button lockInButton;
@@ -57,7 +53,6 @@ public class GameHUDController : MonoBehaviour
     private Action mainMenuAction;
     private Coroutine flashCoroutine;
     private bool callbacksRegistered;
-    private bool targetFeedbackUsesPlanningHelp;
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
 
@@ -130,12 +125,10 @@ public class GameHUDController : MonoBehaviour
         resultsPanel = RequireElement<VisualElement>("results-panel");
         phaseLabel = RequireElement<Label>("phase-label");
         timerLabel = RequireElement<Label>("timer-label");
-        planningHelp = RequireElement<Label>("planning-help");
         hillStatusReadout = RequireElement<VisualElement>("hill-status-readout");
         hillStatusLabel = RequireElement<Label>("hill-status-label");
         deploymentStatus = RequireElement<Label>("deployment-status");
         resultsStatus = RequireElement<Label>("results-status");
-        enemyContactSummary = RequireElement<Label>("enemy-contact-summary");
         playAgainButton = RequireElement<Button>("play-again-button");
         mainMenuButton = RequireElement<Button>("main-menu-button");
         targetFeedbackLabel = root.Q<Label>("target-feedback-label");
@@ -246,7 +239,6 @@ public class GameHUDController : MonoBehaviour
             enemyCardsContainer.Add(host);
             enemyCards[i] = new UnitCardElement(host, i, true);
         }
-        RefreshEnemyContactSummary();
     }
 
     public void ConfigureCard(
@@ -288,7 +280,6 @@ public class GameHUDController : MonoBehaviour
             maxHealth,
             alive
         );
-        RefreshEnemyContactSummary();
     }
 
     public void SetCardsInteractable(bool interactable)
@@ -297,70 +288,31 @@ public class GameHUDController : MonoBehaviour
             card?.SetInteractable(interactable);
 
         ClearTargetFeedback();
-        SetPlanningHelp(
-            interactable ? PlanningReadyHelp : "Orders locked while the round resolves."
-        );
-    }
-
-    public void SetPlanningHelp(string message)
-    {
-        if (planningHelp != null)
-            planningHelp.text = message ?? string.Empty;
     }
 
     public void ShowPlanningCommitReady()
     {
-        SetPlanningCommitState(
-            "READY",
-            "Lock in",
-            true,
-            PlanningReadyHelp,
-            "Lock current orders"
-        );
+        SetPlanningCommitState("READY", "Lock in", true, "Lock current orders");
     }
 
     public void ShowPlanningCommitSending()
     {
-        SetPlanningCommitState(
-            "SENDING",
-            "Locking…",
-            false,
-            "Sending orders…",
-            "Sending orders"
-        );
+        SetPlanningCommitState("SENDING", "Locking…", false, "Sending orders");
     }
 
     public void ShowPlanningCommitWaiting()
     {
-        SetPlanningCommitState(
-            "WAITING",
-            "Unlock",
-            true,
-            "Orders locked. Unlock to edit while waiting.",
-            "Unlock to edit orders"
-        );
+        SetPlanningCommitState("WAITING", "Unlock", true, "Unlock to edit orders");
     }
 
     public void ShowPlanningCommitUnlocking()
     {
-        SetPlanningCommitState(
-            "UNLOCKING",
-            "Unlocking…",
-            false,
-            "Unlocking orders…",
-            "Unlocking orders"
-        );
+        SetPlanningCommitState("UNLOCKING", "Unlocking…", false, "Unlocking orders");
     }
 
     public void ShowPlanningCommitLocked()
     {
-        SetPlanningCommitState(
-            "LOCKED",
-            "Locked",
-            false,
-            "Orders final. Round starting.",
-            "Orders are final"
-        );
+        SetPlanningCommitState("LOCKED", "Locked", false, "Orders are final");
     }
 
     public void HidePlanningCommit()
@@ -373,7 +325,6 @@ public class GameHUDController : MonoBehaviour
         string status,
         string buttonText,
         bool buttonEnabled,
-        string help,
         string tooltip
     )
     {
@@ -403,7 +354,6 @@ public class GameHUDController : MonoBehaviour
             lockInButton.SetEnabled(buttonEnabled);
         }
         planningCommit?.RemoveFromClassList("hidden");
-        SetPlanningHelp(help);
     }
 
     private void OnLockInClicked()
@@ -420,37 +370,21 @@ public class GameHUDController : MonoBehaviour
 
     public void SetTargetFeedback(string message, bool isError = true)
     {
-        Label feedback = targetFeedbackLabel ?? planningHelp;
-        if (feedback == null)
+        if (targetFeedbackLabel == null)
             return;
 
         bool visible = !string.IsNullOrWhiteSpace(message);
-        targetFeedbackUsesPlanningHelp = targetFeedbackLabel == null && visible;
-        feedback.text = visible ? message : string.Empty;
-        if (targetFeedbackLabel != null)
-            targetFeedbackLabel.EnableInClassList("hidden", !visible);
-        feedback.EnableInClassList("target-feedback--visible", visible);
-        feedback.EnableInClassList("target-feedback--error", visible && isError);
-        feedback.EnableInClassList("target-feedback--success", visible && !isError);
-        feedback.EnableInClassList("label--danger", visible && isError);
+        targetFeedbackLabel.text = visible ? message : string.Empty;
+        targetFeedbackLabel.EnableInClassList("hidden", !visible);
+        targetFeedbackLabel.EnableInClassList("target-feedback--visible", visible);
+        targetFeedbackLabel.EnableInClassList("target-feedback--error", visible && isError);
+        targetFeedbackLabel.EnableInClassList("target-feedback--success", visible && !isError);
+        targetFeedbackLabel.EnableInClassList("label--danger", visible && isError);
     }
 
     public void ClearTargetFeedback()
     {
-        if (targetFeedbackLabel != null)
-        {
-            SetTargetFeedback(string.Empty, false);
-            return;
-        }
-        if (!targetFeedbackUsesPlanningHelp || planningHelp == null)
-            return;
-
-        targetFeedbackUsesPlanningHelp = false;
-        planningHelp.text = PlanningReadyHelp;
-        planningHelp.RemoveFromClassList("target-feedback--visible");
-        planningHelp.RemoveFromClassList("target-feedback--error");
-        planningHelp.RemoveFromClassList("target-feedback--success");
-        planningHelp.RemoveFromClassList("label--danger");
+        SetTargetFeedback(string.Empty, false);
     }
 
     public void SetCardDisabled(int cardIndex, bool disabled)
@@ -539,6 +473,7 @@ public class GameHUDController : MonoBehaviour
     {
         options = options.Sanitized();
         bool showHillStatus = options.IsKingOfTheHill;
+        root?.EnableInClassList("koth", showHillStatus);
         hillStatusReadout?.EnableInClassList("hidden", !showHillStatus);
         if (showHillStatus && hillStatusLabel != null)
         {
@@ -583,7 +518,7 @@ public class GameHUDController : MonoBehaviour
         if (deploymentStatus != null)
         {
             deploymentStatus.text = string.IsNullOrWhiteSpace(status)
-                ? "Preparing the battlefield and both fireteams."
+                ? "Preparing the battlefield and both crews."
                 : status;
         }
         deploymentOverlay?.RemoveFromClassList("hidden");
@@ -871,34 +806,6 @@ public class GameHUDController : MonoBehaviour
 
         card = enemyCards[cardIndex];
         return card != null;
-    }
-
-    private void RefreshEnemyContactSummary()
-    {
-        if (enemyContactSummary == null)
-            return;
-
-        int configured = 0;
-        int active = 0;
-        foreach (UnitCardElement card in enemyCards)
-        {
-            if (card == null || !card.IsEnemyConfigured)
-                continue;
-
-            configured++;
-            if (card.IsEnemyAlive)
-                active++;
-        }
-
-        if (configured == 0)
-        {
-            enemyContactSummary.text = "STATUS LINK";
-            return;
-        }
-
-        int eliminated = configured - active;
-        enemyContactSummary.text =
-            eliminated == 0 ? $"{active} ACTIVE" : $"{active} ACTIVE · {eliminated} DOWN";
     }
 
     private void OnGeometryChanged(GeometryChangedEvent evt)

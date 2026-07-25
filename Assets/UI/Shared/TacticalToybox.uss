@@ -17,11 +17,6 @@
     border-radius: var(--toy-radius-lg);
 }
 
-.toybox-ui .toy-panel--cream {
-    background-color: var(--toy-cream);
-    color: var(--toy-ink);
-}
-
 .toybox-ui .toy-panel--compact {
     padding: var(--toy-space-panel-compact);
     border-bottom-width: var(--toy-depth-pressed);
@@ -544,17 +539,17 @@
 .toybox-ui .unity-scroller__low-button,
 .toybox-ui .unity-scroller__high-button {
     background-color: var(--toy-playmat-raised);
-    border-color: var(--toy-cream);
+    border-color: var(--toy-divider);
 }
 
 .toybox-ui .unity-base-slider__tracker {
     background-color: var(--toy-playmat-quiet);
-    border-color: var(--toy-muted-dark);
+    border-color: var(--toy-divider);
 }
 
 .toybox-ui .unity-base-slider__dragger {
-    background-color: var(--toy-teal);
-    border-color: var(--toy-cream);
+    background-color: var(--toy-muted-dark);
+    border-color: var(--toy-divider);
 }
 
 .toybox-ui .plan-path {

@@ -11,9 +11,9 @@ colors:
   sky-info: "#84D3E6"
   tomato: "#E9685D"
   muted-copy: "#BDB6C9"
-  title-periwinkle: "#7698BD"
-  roster-mauve: "#AA8BAA"
-  join-clay: "#B07F72"
+  title-slate: "#616E9A"
+  roster-mauve: "#856287"
+  join-clay: "#946251"
 typography:
   display:
     fontFamily: "Rubik"
@@ -109,7 +109,13 @@ The world is playful without becoming childish. It refuses both realistic milita
 
 ## Colors
 
-Use the Playmat family for solid operating surfaces, Sticker Cream for readable text and paper pieces, Pogo Orange for the primary decision, Toy Teal for selected or confirmed state, Sky Info for neutral information, and Tomato for danger or invalid state. Title Periwinkle, Roster Mauve, and Join Clay are scene-stage backdrops chosen for silhouette contrast; they do not replace semantic UI colors. Inactive controls remain visibly neutral rather than desaturated into illegibility.
+Use the Playmat family for solid operating surfaces, Sticker Cream for readable text and paper pieces, Pogo Orange for the primary decision, Toy Teal for selected or confirmed state, Sky Info for neutral information, and Tomato for danger or invalid state. Title Slate, Roster Mauve, and Join Clay are scene-stage backdrops; they do not replace semantic UI colors. Inactive controls remain visibly neutral rather than desaturated into illegibility.
+
+**The Quiet Backdrop Rule.** Stage backdrops sit between the Playmat ramp and the accent colors: richer than a surface so the stage reads as a deliberate color rather than gray, but never at or above the chroma of Sky Info, because saturation at that strength is how the interface marks focus and selection. All three share one lightness, a clear step above the panels, so dark models keep their silhouette while the UI stays the boldest thing on screen. A backdrop that competes with the controls in front of it is wrong regardless of how pleasant it looks alone.
+
+Those three values are on-screen targets, not camera settings. Menu scenes share a color grade (`Assets/Scenes/Title Screen/Global Volume Profile.asset`) that the UI layer never passes through, so each camera's Background field holds a pre-compensated input instead: Title `#757CB7`, Roster `#8C70A4`. Changing the grade or its per-scene volume weight invalidates both, so re-measure the rendered backdrop and re-derive the input rather than editing it by eye. Join Clay is a target only; that screen is opaque today and its camera never clears a visible pixel.
+
+Author that field as plain sRGB. The project renders in Linear color space and URP converts the value itself, so anything gamma-corrected by hand beforehand gets darkened twice.
 
 **The Character Color Rule.** Saturated colors identify a decision or state. They do not decorate empty space.
 
@@ -191,5 +197,6 @@ Load order is legacy reset, Tactical Toybox component library, then the screen s
 ### Don't:
 - **Don't** use realistic soldiers, photographic portraits, or military-simulation severity.
 - **Don't** use glass, neon edge glows, purple gradients, soft SaaS cards, or fake terminal jargon.
+- **Don't** add film grain or other photographic texture through post-processing. UI Toolkit composites after post, so it can only ever reach the 3D half of the frame and splits one screen into two media. Texture belongs on materials the whole composition can share.
 - **Don't** activate gameplay prefabs, networking components, colliders, or authoritative scripts for menu decoration.
 - **Don't** let continuous animation overlap controls or become required feedback.

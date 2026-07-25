@@ -38,10 +38,16 @@ public class GridSystem : MonoBehaviour
     //     }
     // }
 
+    /// <summary>
+    /// Draws the Manhattan diamond of cells within <paramref name="dist"/> of a position. Aiming an
+    /// ability that only uses its square as a direction has no use for the caster's own cell, so
+    /// <paramref name="includeOrigin"/> leaves that one out of the range it offers.
+    /// </summary>
     public static GameObject DisplayGridRange(
         Vector3 currentPos,
         int dist,
-        GameObject overlayPrefab
+        GameObject overlayPrefab,
+        bool includeOrigin = true
     )
     {
         GameObject overlay = new("MoveOverlay");
@@ -51,6 +57,9 @@ public class GridSystem : MonoBehaviour
             int horizontalDist = dist - Mathf.Abs(i);
             for (int j = -horizontalDist; j <= horizontalDist; j++)
             {
+                if (!includeOrigin && i == 0 && j == 0)
+                    continue;
+
                 float cellSize = GameLoop.cellSize;
                 Vector2 overlayCellPos = new(
                     currentPos.x + j * cellSize,
@@ -435,6 +444,84 @@ public class GridSystem : MonoBehaviour
         }
 
         return reachable;
+    }
+
+    /// <summary>Four-directional step count between two cells, ignoring walls and occupancy.</summary>
+    public static int GetGridDistance(Vector2Int from, Vector2Int to)
+    {
+        return Mathf.Abs(from.x - to.x) + Mathf.Abs(from.y - to.y);
+    }
+
+    /// <summary>
+    /// Row-major ordering (bottom row first, left to right within a row), matching the order
+    /// square footprints are enumerated in. Used wherever a tie between two cells has to resolve
+    /// the same way on every peer.
+    /// </summary>
+    public static int CompareCellsRowMajor(Vector2Int left, Vector2Int right)
+    {
+        int rowComparison = left.y.CompareTo(right.y);
+        return rowComparison != 0 ? rowComparison : left.x.CompareTo(right.x);
+    }
+
+    /// <summary>
+    /// Picks the cell a unit is set down on when it has to give up the one it is standing on.
+    /// Candidates are unclaimed cells within <paramref name="maxSteps"/> of walking around walls,
+    /// so a shove can squeeze past another body — the way units already pass through each other
+    /// mid-move — but never through a wall or off the board. The nearest candidate wins, pulled
+    /// toward <paramref name="anchor"/> (normally the cell the unit came from, so it gives ground
+    /// the way it arrived) and settled row-major when that is still a tie. False when everything
+    /// in range is spoken for and there is nowhere to put the unit.
+    /// </summary>
+    public static bool TryFindDisplacementCell(
+        Vector2Int origin,
+        Vector2Int anchor,
+        ISet<Vector2Int> occupiedCells,
+        int maxSteps,
+        out Vector2Int displacementCell
+    )
+    {
+        displacementCell = origin;
+        bool found = false;
+        int nearestDistance = int.MaxValue;
+        int nearestAnchorDistance = int.MaxValue;
+
+        foreach (Vector2Int candidate in GetReachableCells(origin, maxSteps))
+        {
+            if (
+                candidate == origin
+                || (occupiedCells != null && occupiedCells.Contains(candidate))
+            )
+            {
+                continue;
+            }
+
+            int distance = GetGridDistance(origin, candidate);
+            int anchorDistance = GetGridDistance(anchor, candidate);
+            bool nearer =
+                !found
+                || distance < nearestDistance
+                || (
+                    distance == nearestDistance
+                    && (
+                        anchorDistance < nearestAnchorDistance
+                        || (
+                            anchorDistance == nearestAnchorDistance
+                            && CompareCellsRowMajor(candidate, displacementCell) < 0
+                        )
+                    )
+                );
+            if (!nearer)
+                continue;
+
+            displacementCell = candidate;
+            nearestDistance = distance;
+            nearestAnchorDistance = anchorDistance;
+            found = true;
+        }
+
+        if (!found)
+            displacementCell = origin;
+        return found;
     }
 
     // === FOG OF WAR VISION MATH (pure/static, shared by server visibility + client overlay) ===

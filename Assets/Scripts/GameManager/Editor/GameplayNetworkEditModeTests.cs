@@ -202,7 +202,7 @@ public class GameplayNetworkEditModeTests
     [TestCase(2, 12f)]
     [TestCase(1, 12f)]
     [TestCase(0, 12f)]
-    public void PlanningDuration_ScalesDownWithLivingFireteam(int livingUnits, float expectedSeconds)
+    public void PlanningDuration_ScalesDownWithLivingCrew(int livingUnits, float expectedSeconds)
     {
         Assert.That(GameLoop.GetPlanningDurationSeconds(livingUnits), Is.EqualTo(expectedSeconds));
     }
@@ -488,7 +488,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void ConfigureTeam_AcceptsRosterWithRepeatedUnitIndices()
     {
-        // A fireteam may field the same unit in more than one slot; ConfigureTeam only rejects
+        // A crew may field the same unit in more than one slot; ConfigureTeam only rejects
         // wrong-length rosters and negative indices, not repeats.
         const ulong hostClientId = 23;
         int[] repeatedRoster = Enumerable.Repeat(0, RosterRules.UnitsPerPlayer).ToArray();
@@ -790,6 +790,73 @@ public class GameplayNetworkEditModeTests
         {
             Object.DestroyImmediate(instance);
         }
+    }
+
+    [Test]
+    public void BulletColour_IsCarriedByBothPrefabsSoEitherSideCanReadItAsItsOwnFire()
+    {
+        GameObject blue = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Prefabs/Projectiles/BulletBlue.prefab"
+        );
+        GameObject red = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Prefabs/Projectiles/BulletRed.prefab"
+        );
+        Assert.That(blue, Is.Not.Null);
+        Assert.That(red, Is.Not.Null);
+        Bullet blueBullet = blue.GetComponent<Bullet>();
+        Bullet redBullet = red.GetComponent<Bullet>();
+        Assert.That(blueBullet, Is.Not.Null);
+        Assert.That(redBullet, Is.Not.Null);
+
+        // Which prefab a shot spawns from stays absolute — it carries the shield layers the round
+        // passes through — so each prefab is also what says who fired it, on every peer.
+        Assert.That(
+            Bullet.GetShooterTeamIndex(blueBullet.enemyTeam),
+            Is.EqualTo(GameLoop.HostTeamIndex),
+            "A shot that can damage red was fired by blue."
+        );
+        Assert.That(
+            Bullet.GetShooterTeamIndex(redBullet.enemyTeam),
+            Is.EqualTo(GameLoop.OpponentTeamIndex)
+        );
+
+        foreach (Bullet bullet in new[] { blueBullet, redBullet })
+        {
+            Assert.That(
+                bullet.teamMaterials,
+                Has.Count.EqualTo(2),
+                "Either team's shot has to be drawable as own fire or as enemy fire."
+            );
+            Assert.That(bullet.teamMaterials[0], Is.Not.Null);
+            Assert.That(bullet.teamMaterials[1], Is.Not.Null);
+            Assert.That(
+                bullet.teamMaterials[0],
+                Is.Not.EqualTo(bullet.teamMaterials[1]),
+                "Own fire and incoming fire must not look the same."
+            );
+        }
+        Assert.That(
+            redBullet.teamMaterials[0],
+            Is.EqualTo(blueBullet.teamMaterials[0]),
+            "Both prefabs answer to the same pair, so the variant inherits rather than diverges."
+        );
+
+        // The look each prefab is authored in is the host's view of it; the client resolves the
+        // other way round at spawn.
+        Assert.That(
+            blue.GetComponentInChildren<Renderer>(true).sharedMaterial,
+            Is.EqualTo(blueBullet.teamMaterials[0])
+        );
+        Assert.That(
+            red.GetComponentInChildren<Renderer>(true).sharedMaterial,
+            Is.EqualTo(redBullet.teamMaterials[1])
+        );
+
+        Assert.That(
+            GameLoop.IsTeamFriendlyToLocalPlayer(-1),
+            Is.False,
+            "A shot with no readable shooter falls back to enemy fire rather than to own fire."
+        );
     }
 
     [Test]
@@ -1447,7 +1514,7 @@ public class GameplayNetworkEditModeTests
                 RosterRules.Validate(validRoster.Take(validRoster.Length - 1).ToArray(), catalog)
                     .Reason,
                 Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
-                "A short fireteam is rejected before any per-unit inspection."
+                "A short crew is rejected before any per-unit inspection."
             );
             Assert.That(
                 RosterRules.Validate(
@@ -1456,7 +1523,7 @@ public class GameplayNetworkEditModeTests
                     )
                     .Reason,
                 Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
-                "An oversized fireteam is rejected on shape."
+                "An oversized crew is rejected on shape."
             );
             Assert.That(
                 RosterRules.Validate(validRoster, null).Reason,
@@ -1494,7 +1561,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void Roster_Validate_AcceptsRosterWithRepeatedUnits()
     {
-        // Repeats are an intentional feature: a fireteam may field the same unit in more than
+        // Repeats are an intentional feature: a crew may field the same unit in more than
         // one slot, up to and including every slot.
         int[] earlyRepeat = CreateValidRoster();
         earlyRepeat[1] = earlyRepeat[0];
@@ -1509,7 +1576,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 RosterRules.Validate(allSameUnit, catalog).IsValid,
                 Is.True,
-                "A fireteam of five copies of the same unit is a valid repeat pick."
+                "A crew of five copies of the same unit is a valid repeat pick."
             );
         }
         finally
@@ -2057,12 +2124,12 @@ public class GameplayNetworkEditModeTests
         );
         Assert.That(
             result.GetStatusForTeam(GameLoop.HostTeamIndex),
-            Is.EqualTo("Draw — both fireteams eliminated.")
+            Is.EqualTo("Draw — both crews eliminated.")
         );
         Assert.That(
             result.GetStatusForTeam(GameLoop.OpponentTeamIndex),
-            Is.EqualTo("Draw — both fireteams eliminated."),
-            "A draw reads identically from either fireteam's perspective."
+            Is.EqualTo("Draw — both crews eliminated."),
+            "A draw reads identically from either crew's perspective."
         );
     }
 
@@ -2095,7 +2162,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void MatchResult_BothAliveIsNotTerminalAndDefaultIsNotAResult()
     {
-        // The pure seam refuses to resolve a terminal result while both fireteams still live.
+        // The pure seam refuses to resolve a terminal result while both crews still live.
         Assert.That(
             () => GameLoop.ResolveEliminationResult(true, true),
             Throws.InstanceOf<System.InvalidOperationException>()

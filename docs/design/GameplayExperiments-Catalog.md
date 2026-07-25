@@ -61,7 +61,7 @@ space permits;
 so a team may field the same unit in more than one slot;
 - a five-unit eligible roster: Soldier, Shotgunner, Pogo Rider, Sniper, and Commander;
 - fog of war enabled unless an experiment explicitly makes fog the single variable;
-- the current Commander **Smoke Screen**: two-round cooldown, target range 3, a real 3 × 3 footprint,
+- the current Commander **Smoke Screen**: two-round cooldown, target range 4, a real 3 × 3 footprint,
  and one-round sight/fire denial without changing movement or wall data. A segment is blocked only
 when it crosses a cloud cell interior; shooter and target endpoint cells are deliberately exempt.
 - the current combat prototype: **80 glass / 120 standard / 160 tank HP**, with ordinary standard
@@ -140,7 +140,7 @@ turned two-step path does not.
 - 120 HP; move 3; vision 6.
 - Target range 5; bullet range 7.
 - 8 damage × 5-round magazine = 40 theoretical clean-magazine damage.
-- Smoke Screen: target range 3; nine-cell footprint; no dodge response.
+- Smoke Screen: target range 4; nine-cell footprint; no dodge response.
 - Two-round ability cooldown.
 
 The deterministic base metric is
@@ -1608,7 +1608,7 @@ optionally showing an in-world attack direction when the source was observable. 
 help a player adapt without exposing hidden enemy positions or plans.
 - **Problem / defense:** Execution can remove a unit before the player understands why. A brief,
 fog-safe recap can turn a loss into a learnable next-round adjustment.
-- **Arms / primary variable:** Compact transition line; local fireteam rows; in-world
+- **Arms / primary variable:** Compact transition line; local crew rows; in-world
 source-to-impact/direction marker when that source was observable. No blocking modal.
 - **Controls & evidence:** Public objective state and own observed outcomes only; no hidden enemy
 path, HP, position, or ability choice.
@@ -1630,7 +1630,7 @@ treatment remains viable
 
 - **Details:** Replace incomparable flavor prose with side-by-side mobility, durability, reach,
 ability shape, response, and charge information. The command dock now generates its card count from
-`RosterRules.UnitsPerPlayer` and scrolls horizontally when the full fireteam does not fit. The
+`RosterRules.UnitsPerPlayer` and scrolls horizontally when the full crew does not fit. The
 read-only enemy rail uses the same roster count and keeps identity, current/max HP, alive state, and
 authoritative ability cooldown public without carrying positions or orders.
 - **Problem / defense:** Character selection uses prose rather than comparable mobility,

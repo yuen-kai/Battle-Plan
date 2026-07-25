@@ -58,6 +58,57 @@ public class CombatBalanceEditModeTests
     }
 
     [Test]
+    public void AreaLock_LeavesTheSniperOwnSquareOutOfItsAbilityRange()
+    {
+        UnitData sniper = LoadUnit("Sniper");
+        Assert.That(sniper.responseDistLine, Is.True, "Area Lock is the line ability.");
+        Assert.That(sniper.CanTargetOwnCell, Is.False);
+
+        Vector2Int start = new(4, 4);
+        Assert.That(
+            PlanMovement.ValidateAbilityTarget(sniper, start, start, true, false),
+            Is.EqualTo(AbilityTargetValidationReason.AimedAtOwnCell),
+            "The beam is fired through the chosen square, and its own square names no direction."
+        );
+        Assert.That(
+            PlanMovement.GetAbilityTargetFeedback(AbilityTargetValidationReason.AimedAtOwnCell),
+            Is.Not.Empty,
+            "A refused target has to say why."
+        );
+        Assert.That(
+            PlanMovement.ValidateAbilityTarget(sniper, start, new Vector2Int(4, 5), true, false),
+            Is.EqualTo(AbilityTargetValidationReason.Valid),
+            "Every other square stays aimable, walls included."
+        );
+
+        Assert.That(
+            PlanMovement.ValidateAbilityTarget(LoadUnit("Commander"), start, start, true, false),
+            Is.EqualTo(AbilityTargetValidationReason.Valid),
+            "Abilities that land on their square keep their own: smoke underfoot is a real play."
+        );
+    }
+
+    [Test]
+    public void AbilityLanding_HoldsFireOpenLongEnoughToTurnAroundAndShootBack()
+    {
+        // A rider walked into is shot at all the way in; one that is set down arrives at once, and
+        // the defender's answer starts with a turn that can be the full half-circle.
+        float worstTurn = 180f / RosterUnits().Min(unit => unit.rotationSpeed);
+        float slowestShotInterval = RosterUnits().Max(unit => unit.timeBetweenShots);
+
+        Assert.That(
+            GameLoop.AbilityLandingReturnFireSeconds,
+            Is.GreaterThan(worstTurn + slowestShotInterval),
+            "A landing outlasted by the defender's own turn cannot be answered at all."
+        );
+        Assert.That(
+            GameLoop.AbilityLandingReturnFireSeconds,
+            Is.LessThanOrEqualTo(2f),
+            "Longer reads as the round refusing to end rather than as an answer to the landing."
+        );
+    }
+
+    [Test]
     public void StandardTarget_ProvisionalMissAllowancesStayWithinTwoToFourMagazines()
     {
         UnitData commander = LoadUnit("Commander");
@@ -180,6 +231,13 @@ public class CombatBalanceEditModeTests
             Is.EqualTo(maxHealth).Within(FloatTolerance),
             $"{assetName} health drifted."
         );
+    }
+
+    private static UnitData[] RosterUnits()
+    {
+        return new[] { "Commander", "PogoRider", "Shotgunner", "Sniper", "Soldier" }
+            .Select(LoadUnit)
+            .ToArray();
     }
 
     private static UnitData LoadUnit(string assetName)

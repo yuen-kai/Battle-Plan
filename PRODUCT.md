@@ -12,7 +12,7 @@ Players who want quick, readable tactical matches. The current build is desktop-
 
 ## Product Purpose
 
-Battle Plan is a multiplayer tactics game in which players assemble a five-unit fireteam, issue simultaneous hidden orders, and watch those plans resolve. Setup should move players from the title screen to a readable match configuration and roster with minimal friction.
+Battle Plan is a multiplayer tactics game in which players assemble a five-unit crew, issue simultaneous hidden orders, and watch those plans resolve. Setup should move players from the title screen to a readable match configuration and roster with minimal friction.
 
 ## Positioning
 
@@ -20,7 +20,7 @@ The defining mechanism is simultaneous planning: prediction, positioning, abilit
 
 ## Operating Context
 
-The non-gameplay flow is Title Screen → Create or Join Match → Assemble Fireteam → Game. Matches support AI or player opponents, Elimination or King of the Hill, optional fog of war, and Unity Relay for remote players.
+The non-gameplay flow is Title Screen → Create or Join Match → Assemble Crew → Game. Matches support AI or player opponents, Elimination or King of the Hill, optional fog of war, and Unity Relay for remote players.
 
 ## Capabilities and Constraints
 

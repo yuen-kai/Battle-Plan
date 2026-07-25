@@ -77,16 +77,6 @@
     background-color: var(--toy-ink);
 }
 
-.join-content .unity-base-slider__tracker {
-    background-color: var(--toy-playmat-quiet);
-    border-color: var(--toy-divider);
-}
-
-.join-content .unity-base-slider__dragger {
-    background-color: var(--toy-teal);
-    border-color: var(--toy-cream);
-}
-
 .join-panel {
     width: 100%;
     justify-content: flex-start;
@@ -253,25 +243,27 @@
 
 .relay-code-panel {
     margin-top: var(--toy-space-panel-compact);
-    padding: var(--toy-space-panel-compact);
-    background-color: var(--toy-cream);
-    color: var(--toy-ink);
-    border-width: var(--toy-focus-width);
-    border-color: var(--toy-ink);
-    border-radius: var(--toy-radius-lg);
+    padding: var(--toy-space-md) 14px;
+    background-color: var(--toy-playmat-quiet);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-divider);
+    border-radius: var(--toy-radius-md);
 }
 
-.relay-code-panel .section-label,
-.relay-code-panel .label {
-    color: var(--toy-dark-copy);
-}
-
+/* Trailing letter-spacing pads the right edge, so the box is cut narrower there. */
 .relay-code {
-    margin-bottom: 6px;
+    align-self: flex-start;
+    margin-top: var(--toy-space-xs);
+    margin-bottom: var(--toy-space-md);
+    padding: 6px 10px 6px 15px;
+    background-color: var(--toy-ink);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-teal);
+    border-radius: 9px;
     -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
     font-size: 34px;
     -unity-font-style: bold;
-    color: var(--toy-ink);
+    color: var(--toy-cream);
     letter-spacing: 5px;
 }
 

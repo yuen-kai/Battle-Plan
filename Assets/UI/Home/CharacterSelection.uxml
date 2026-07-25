@@ -7,8 +7,8 @@
     <ui:VisualElement name="screen" class="screen toybox-screen toybox-ui roster-screen">
         <ui:ScrollView mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="screen-frame roster-frame">
             <ui:VisualElement class="roster-header">
-                <ui:VisualElement class="roster-heading toy-panel toy-panel--cream" picking-mode="Ignore">
-                    <ui:Label text="Assemble your fireteam" class="title-xl" picking-mode="Ignore" />
+                <ui:VisualElement class="roster-heading toy-panel" picking-mode="Ignore">
+                    <ui:Label text="Assemble your crew" class="title-xl" picking-mode="Ignore" />
                     <ui:Label name="roster-instruction" text="Choose eligible units. Repeats are allowed. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
                 </ui:VisualElement>
                 <ui:VisualElement class="match-summary toy-panel">
@@ -32,7 +32,7 @@
 
             <ui:VisualElement class="roster-body">
                 <ui:VisualElement class="unit-library toy-panel">
-                    <ui:Label text="Pick your crew" class="section-label" picking-mode="Ignore" />
+                    <ui:Label text="All units" class="section-label" picking-mode="Ignore" />
                     <ui:ScrollView name="roster-options" mode="Horizontal" horizontal-scroller-visibility="Auto" vertical-scroller-visibility="Hidden" class="roster-options" />
                 </ui:VisualElement>
                 <ui:VisualElement class="map-column toy-panel">
@@ -44,14 +44,14 @@
 
             <ui:VisualElement class="selection-dock toy-panel">
                 <ui:VisualElement class="selection-column">
-                    <ui:Label text="Your fireteam" class="section-label" picking-mode="Ignore" />
+                    <ui:Label text="Your crew" class="section-label" picking-mode="Ignore" />
                     <ui:VisualElement name="selected-roster" class="selected-roster" />
                 </ui:VisualElement>
                 <ui:VisualElement class="confirm-column">
                     <ui:Label name="selection-status" class="label label--muted selection-status" />
                     <ui:Button name="confirm-selection-button" enabled="false" class="button button--primary confirm-button">
                         <ui:VisualElement class="toy-icon toy-icon--check" picking-mode="Ignore" />
-                        <ui:Label text="Confirm fireteam" class="toy-button__label confirm-button__label" picking-mode="Ignore" />
+                        <ui:Label text="Confirm" class="toy-button__label confirm-button__label" picking-mode="Ignore" />
                     </ui:Button>
                 </ui:VisualElement>
             </ui:VisualElement>

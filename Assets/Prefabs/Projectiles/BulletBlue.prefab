@@ -153,6 +153,9 @@ MonoBehaviour:
   backstabAngle: 90
   range: 50
   enemyTeam: RedTeam
+  teamMaterials:
+  - {fileID: 2100000, guid: 2e51eeb3148285341a601aee0b0d83ca, type: 2}
+  - {fileID: 2100000, guid: 99eb1d137fefd0044a3502d6dd296d4f, type: 2}
 --- !u!114 &2002092308998913790
 MonoBehaviour:
   m_ObjectHideFlags: 0

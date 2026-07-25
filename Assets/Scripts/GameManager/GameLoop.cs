@@ -81,7 +81,7 @@ public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
         if (Outcome == MatchOutcome.Draw)
         {
             return Reason == MatchResultReason.SimultaneousElimination
-                ? "Draw — both fireteams eliminated."
+                ? "Draw — both crews eliminated."
                 : "Draw.";
         }
 
@@ -237,6 +237,32 @@ public class GameLoop : NetworkBehaviour
     private int maxDiveRangeThisRound;
     private int runningAbilities;
 
+    // A unit that walks into a rifle is shot at the whole way in, because movement is what holds
+    // the round's weapons free. A unit an ability sets down arrives all at once, and can do so
+    // after the last walker has stopped — so weapons stay free this long past a landing too. Long
+    // enough for the unit beside it to turn all the way round and fire back, short enough that the
+    // round is not left visibly waiting on it.
+    public const float AbilityLandingReturnFireSeconds = 1.5f;
+
+    private float returnFireWindowUntil;
+
+    private bool IsReturnFireWindowOpen => Time.time < returnFireWindowUntil;
+
+    // === UNIT OVERLAP (server-only round state) ===
+    // No two units share a cell. Allied orders are pulled apart before execution, but the two
+    // commanders plan blind to each other, so the round can still end with an enemy standing where
+    // one of your units stopped; whoever walked in is shoved aside once everything has settled.
+
+    // How far a unit may be shoved. Two or three cells still reads as being knocked aside; further
+    // than that and the shove would move a unit more than its own orders did.
+    public const int MaxDisplacementSteps = 3;
+
+    // Long enough to read as being shoved rather than teleporting, short enough that the round
+    // does not visibly stall on it.
+    private const float DisplacementSlideSeconds = 0.3f;
+
+    private bool resolvingOverlaps;
+
     // Server-authored round state. Smoke never enters wallLayout, physics, or pathing.
     private readonly HashSet<Vector2Int> activeSmokeCells = new();
     private bool acceptingSmokeRegistrations;
@@ -245,7 +271,6 @@ public class GameLoop : NetworkBehaviour
     private readonly HashSet<Vector2Int> clientSmokeCells = new();
     private readonly List<GameObject> clientTelegraphs = new();
     private GameObject clientSmokeVisualRoot;
-    private Material clientSmokeVisualMaterial;
 
     public UnitDatabase allUnits;
 
@@ -1179,6 +1204,8 @@ public class GameLoop : NetworkBehaviour
             planningChangesOpen = false;
             planningDeadline = 0d;
             devEndPlanningNow = false;
+            resolvingOverlaps = false;
+            returnFireWindowUntil = 0f;
             currentPhase = "planning";
 
             // Fast-forward the whole simulation (movement/shooting/physics) in dev mode.
@@ -1308,8 +1335,16 @@ public class GameLoop : NetworkBehaviour
             // before movement and abilities start so lines/discs cannot linger into resolution.
             HideAbilityTelegraphsClientRpc();
             currentPhase = "executing";
-            ActivateSmokeScreens(activations);
+            // Smoke is thrown now rather than placed, so each screen registers when its own
+            // canister lands instead of all of them up front. The window has to stay open for as
+            // long as abilities are still resolving.
+            acceptingSmokeRegistrations = true;
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
+
+            // Last word on allied destinations before anyone marches: dodge dives and bot orders
+            // reach this point without ever having passed through the planning-phase rule.
+            ApplyFriendlyEndCellSeparation(paths);
+            Dictionary<GameObject, Vector2Int> cellsBeforeExecution = CaptureUnitCells();
 
             ExecuteMoves(paths);
 
@@ -1319,14 +1354,24 @@ public class GameLoop : NetworkBehaviour
                 StartCoroutine(RunAbility(activation.unit, activation.square, activation.data));
             }
 
-            while (!matchEnded && (CheckStillShooting() || runningAbilities > 0))
+            StartCoroutine(ResolveUnitOverlaps(cellsBeforeExecution));
+
+            while (
+                !matchEnded
+                && (
+                    CheckStillShooting()
+                    || runningAbilities > 0
+                    || resolvingOverlaps
+                    || IsReturnFireWindowOpen
+                )
+            )
             {
                 //THINKING: ability activates such that theres movement/gameplay extension
                 //If moving continues during this time restart checkStillMoving
-                if (CheckStillMoving())
+                if (CheckStillMoving() || IsReturnFireWindowOpen)
                 {
                     OrderContinueShooting();
-                    while (CheckStillMoving())
+                    while (CheckStillMoving() || IsReturnFireWindowOpen)
                     {
                         yield return null;
                     }
@@ -1348,6 +1393,7 @@ public class GameLoop : NetworkBehaviour
             if (matchEnded)
                 yield break;
 
+            acceptingSmokeRegistrations = false;
             HideAbilityTelegraphsClientRpc();
             TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
 
@@ -1371,41 +1417,15 @@ public class GameLoop : NetworkBehaviour
         EndGame();
     }
 
-    private void ActivateSmokeScreens(
-        IEnumerable<(GameObject unit, Vector3 square, UnitData data)> activations
-    )
-    {
-        bool registeredAny = false;
-        acceptingSmokeRegistrations = true;
-        try
-        {
-            foreach (var activation in activations)
-            {
-                Smoke smoke =
-                    activation.unit != null ? activation.unit.GetComponent<Smoke>() : null;
-                registeredAny |= smoke != null && smoke.RegisterTargetFootprint(activation.square);
-            }
-        }
-        finally
-        {
-            acceptingSmokeRegistrations = false;
-        }
-
-        if (registeredAny)
-        {
-            RefreshServerFogForSmokeChange();
-            ShowSmokeScreenClientRpc(
-                activeSmokeCells
-                    .OrderBy(cell => cell.y)
-                    .ThenBy(cell => cell.x)
-                    .Select(gridCoordToWorld)
-                    .ToArray()
-            );
-        }
-    }
-
     /// <summary>
-    /// Server-only mutation seam used by Smoke during the post-dodge, pre-movement activation window.
+    /// Server-only mutation seam used by Smoke when its thrown canister lands. Deployment follows
+    /// the throw rather than the round, so the cloud a player can see and the occluder that stops a
+    /// shot begin together; the window stays open for as long as abilities are resolving.
+    /// <para>
+    /// Clients are handed the whole active set rather than the newly added cells, because both
+    /// commanders can land a canister in the same round and the visual is rebuilt from scratch each
+    /// time it is sent.
+    /// </para>
     /// </summary>
     public bool TryRegisterSmokeFootprint(Vector2Int center)
     {
@@ -1424,7 +1444,36 @@ public class GameLoop : NetworkBehaviour
         {
             activeSmokeCells.Add(cell);
         }
+
+        RefreshServerFogForSmokeChange();
+        if (IsSpawned && NetworkManager != null && NetworkManager.IsListening)
+        {
+            ShowSmokeScreenClientRpc(
+                activeSmokeCells
+                    .OrderBy(cell => cell.y)
+                    .ThenBy(cell => cell.x)
+                    .Select(gridCoordToWorld)
+                    .ToArray()
+            );
+        }
         return true;
+    }
+
+    /// <summary>
+    /// Server-only seam for an ability that sets its caster down somewhere new. The caster starts
+    /// shooting the moment it lands, so without this the round would let a jump come down among
+    /// units that have already been ordered to cease fire and empty a magazine into them unanswered.
+    /// Holding the window open gives whoever it landed next to the same chance to shoot back.
+    /// </summary>
+    public void HoldReturnFireWindow()
+    {
+        if (!IsServer || matchEnded || currentPhase != "executing")
+            return;
+
+        returnFireWindowUntil = Mathf.Max(
+            returnFireWindowUntil,
+            Time.time + AbilityLandingReturnFireSeconds
+        );
     }
 
     public bool IsSmokeCellActive(Vector2Int cell)
@@ -1499,38 +1548,12 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
-        clientSmokeVisualRoot = new GameObject("SmokeScreenVisuals");
-        clientSmokeVisualRoot.transform.SetParent(transform, true);
-        clientSmokeVisualMaterial = new Material(Shader.Find("Sprites/Default"))
-        {
-            name = "Smoke Screen Visual (Runtime)",
-            color = new Color(0.55f, 0.65f, 0.68f, 0.46f),
-        };
-
         foreach (Vector3 cellWorldPosition in cellWorldPositions)
-        {
-            Vector2Int cell = GridSystem.ConvertToGridCoords(cellWorldPosition);
-            clientSmokeCells.Add(cell);
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            marker.name = $"SmokeCell_{cell.x}_{cell.y}";
-            marker.layer = 0;
-            marker.transform.SetParent(clientSmokeVisualRoot.transform, true);
-            marker.transform.position = cellWorldPosition + Vector3.up * 0.22f;
-            marker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            marker.transform.localScale = Vector3.one * (cellSize * 0.92f);
+            clientSmokeCells.Add(GridSystem.ConvertToGridCoords(cellWorldPosition));
 
-            Collider markerCollider = marker.GetComponent<Collider>();
-            if (markerCollider != null)
-            {
-                markerCollider.enabled = false;
-                Destroy(markerCollider);
-            }
-
-            Renderer markerRenderer = marker.GetComponent<Renderer>();
-            markerRenderer.sharedMaterial = clientSmokeVisualMaterial;
-            markerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            markerRenderer.receiveShadows = false;
-        }
+        clientSmokeVisualRoot = SmokeScreenVisual
+            .Create(transform, cellWorldPositions, cellSize)
+            .gameObject;
 
         RefreshClientFogForSmokeChange();
     }
@@ -1548,15 +1571,10 @@ public class GameLoop : NetworkBehaviour
 
         if (clientSmokeVisualRoot != null)
         {
+            // The visual owns its runtime materials and releases them with the object.
             clientSmokeVisualRoot.SetActive(false);
             Destroy(clientSmokeVisualRoot);
             clientSmokeVisualRoot = null;
-        }
-
-        if (clientSmokeVisualMaterial != null)
-        {
-            Destroy(clientSmokeVisualMaterial);
-            clientSmokeVisualMaterial = null;
         }
     }
 
@@ -1716,8 +1734,7 @@ public class GameLoop : NetworkBehaviour
         int teamIndex
     )
     {
-        Color teamColor =
-            teamIndex == HostTeamIndex ? new Color(0.22f, 0.78f, 1f) : new Color(1f, 0.23f, 0.33f);
+        Color teamColor = GetTeamColorForViewer(teamIndex);
         StartCoroutine(FlashAbilityCasterWhenVisible(unitReference));
         ImpactShockwave.Spawn(activationPosition, teamColor, 1.8f, 0.45f);
     }
@@ -3637,7 +3654,7 @@ public class GameLoop : NetworkBehaviour
         if (hostTeamHasLivingUnits && opponentTeamHasLivingUnits)
         {
             throw new System.InvalidOperationException(
-                "Elimination cannot resolve while both fireteams still have living units."
+                "Elimination cannot resolve while both crews still have living units."
             );
         }
         if (hostTeamHasLivingUnits)
@@ -4014,11 +4031,131 @@ public class GameLoop : NetworkBehaviour
         // Line abilities (AreaLock) use the square only as a direction anchor; others land there.
         bool wallOk =
             data.responseDistLine || !wallLayout.Contains(GridSystem.ConvertToGridCoords(square));
+        bool aimOk = data.CanTargetOwnCell || targetCell != GridSystem.ConvertToGridCoords(start);
 
-        if (!inBounds || !footprintInBounds || !inRange || !wallOk)
+        if (!inBounds || !footprintInBounds || !inRange || !wallOk || !aimOk)
             return (false, new List<Vector3> { start });
 
         return (true, new List<Vector3> { start, square });
+    }
+
+    /// <summary>
+    /// How many cells of each route may be kept so that no two of them finish on the same cell.
+    /// Routes are resolved in the order given: an earlier one keeps its destination and a later
+    /// one gives up steps until it stops somewhere unclaimed, falling back to its own starting
+    /// cell when every step of it is already spoken for. <paramref name="claimedCells"/> arrives
+    /// holding the cells of units that are not moving at all and collects each destination as it
+    /// is handed out.
+    /// </summary>
+    public static List<int> ResolveUniqueEndCellLengths(
+        IReadOnlyList<IReadOnlyList<Vector2Int>> routes,
+        ISet<Vector2Int> claimedCells = null
+    )
+    {
+        List<int> lengths = new();
+        if (routes == null)
+            return lengths;
+
+        ISet<Vector2Int> claimed = claimedCells ?? new HashSet<Vector2Int>();
+        foreach (IReadOnlyList<Vector2Int> route in routes)
+        {
+            if (route == null || route.Count == 0)
+            {
+                lengths.Add(0);
+                continue;
+            }
+
+            int endIndex = route.Count - 1;
+            while (endIndex > 0 && claimed.Contains(route[endIndex]))
+                endIndex--;
+
+            claimed.Add(route[endIndex]);
+            lengths.Add(endIndex + 1);
+        }
+        return lengths;
+    }
+
+    /// <summary>
+    /// Cuts each team's routes short until no two of its own units finish the round on the same
+    /// cell. Planning settles its own routes the same way before submitting and the bot reserves
+    /// its own destinations, so this is the authoritative backstop: a tampered submission, or a
+    /// dodge dive drawn against only the alerted part of a team, still resolves to one unit per
+    /// cell. Shorter orders are honoured first, so a unit holding its ground keeps its cell and the
+    /// one walking into it is the one cut short.
+    /// </summary>
+    void ApplyFriendlyEndCellSeparation(PathsDict paths)
+    {
+        if (paths == null)
+            return;
+
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            HashSet<Vector2Int> claimed = new();
+            List<(GameObject unit, int rosterSlot, List<Vector3> route)> movers = new();
+            GameObject[] teamUnits = GetTeamUnits(teamIndex);
+
+            for (int rosterSlot = 0; rosterSlot < teamUnits.Length; rosterSlot++)
+            {
+                GameObject unit = teamUnits[rosterSlot];
+                if (unit == null || !unit.activeInHierarchy || !IsLivingUnit(unit))
+                    continue;
+
+                // A unit with no orders, or one spending the round on an ability, never marches
+                // anywhere: ExecuteMoves keeps casters on their own cell, and the repositioning a
+                // rush or a jump does is settled afterwards by the overlap pass. Either way the
+                // cell it is standing on is held against every route.
+                if (
+                    !paths.TryGetValue(unit, out (bool, List<Vector3>) plan)
+                    || plan.Item1
+                    || plan.Item2 == null
+                    || plan.Item2.Count < 2
+                )
+                {
+                    claimed.Add(
+                        GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit))
+                    );
+                    continue;
+                }
+
+                movers.Add((unit, rosterSlot, plan.Item2));
+            }
+
+            // A shorter route has fewer cells to retreat along, so it picks its destination first.
+            // Roster slot settles two equally long routes so the outcome never depends on
+            // dictionary order.
+            movers.Sort(
+                (left, right) =>
+                {
+                    int lengthComparison = left.route.Count.CompareTo(right.route.Count);
+                    return lengthComparison != 0
+                        ? lengthComparison
+                        : left.rosterSlot.CompareTo(right.rosterSlot);
+                }
+            );
+
+            List<int> lengths = ResolveUniqueEndCellLengths(
+                movers
+                    .Select(mover =>
+                        (IReadOnlyList<Vector2Int>)
+                            mover.route.Select(GridSystem.ConvertToGridCoords).ToList()
+                    )
+                    .ToList(),
+                claimed
+            );
+
+            for (int i = 0; i < movers.Count; i++)
+            {
+                List<Vector3> route = movers[i].route;
+                if (lengths[i] >= route.Count)
+                    continue;
+
+                Debug.Log(
+                    $"[GameLoop] {movers[i].unit.name} stops {route.Count - lengths[i]} cell(s) "
+                        + "short of its order: an allied unit already ends the round there."
+                );
+                route.RemoveRange(lengths[i], route.Count - lengths[i]);
+            }
+        }
     }
 
     /// <summary>
@@ -4097,6 +4234,187 @@ public class GameLoop : NetworkBehaviour
             }
         }
         diveUnitsThisRound.Clear();
+    }
+
+    /// <summary>Living units of both teams, in team then roster order.</summary>
+    private static IEnumerable<GameObject> EnumerateLivingUnits()
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            foreach (GameObject unit in GetTeamUnits(teamIndex))
+            {
+                if (unit != null && unit.activeInHierarchy && IsLivingUnit(unit))
+                    yield return unit;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The cell every living unit is standing on. Taken before execution so the overlap pass can
+    /// tell who walked into a contested cell apart from whoever was already there.
+    /// </summary>
+    private static Dictionary<GameObject, Vector2Int> CaptureUnitCells()
+    {
+        Dictionary<GameObject, Vector2Int> cells = new();
+        foreach (GameObject unit in EnumerateLivingUnits())
+            cells[unit] = GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+        return cells;
+    }
+
+    /// <summary>
+    /// Two units may not finish the round on the same cell. Allied orders are pulled apart before
+    /// execution, but the two commanders plan blind to each other and a rush or a jump sets its
+    /// caster down wherever it lands, so a round can still end with units stacked. Once nothing is
+    /// moving any more, whoever arrived on a contested cell is slid off it.
+    /// </summary>
+    IEnumerator ResolveUnitOverlaps(Dictionary<GameObject, Vector2Int> cellsBeforeExecution)
+    {
+        resolvingOverlaps = true;
+
+        // Rushes and jumps reposition their caster from inside their own coroutine, so a unit's
+        // cell is only final once movement AND every ability have finished.
+        while (!matchEnded && (CheckStillMoving() || runningAbilities > 0))
+            yield return null;
+
+        if (!matchEnded)
+        {
+            yield return StartCoroutine(
+                SlideUnitsToCells(BuildOverlapDisplacements(cellsBeforeExecution))
+            );
+        }
+
+        resolvingOverlaps = false;
+    }
+
+    /// <summary>
+    /// Who has to give up the cell they are standing on, and where each of them goes. A unit that
+    /// never left the cell this round keeps it; anyone who walked, rushed or landed on top of it
+    /// is moved off. When nobody was standing there first, every contender is moved off and the
+    /// cell is left empty for the rest of the round, so racing an enemy to a cell is not something
+    /// either side can win by virtue of being sorted first. Cells are resolved bottom to top and
+    /// contenders in team then roster order, so the pass gives the same answer every time it runs.
+    /// </summary>
+    private List<(GameObject unit, Vector2Int cell)> BuildOverlapDisplacements(
+        IReadOnlyDictionary<GameObject, Vector2Int> cellsBeforeExecution
+    )
+    {
+        Dictionary<Vector2Int, List<GameObject>> occupants = new();
+        HashSet<Vector2Int> claimed = new();
+        foreach (GameObject unit in EnumerateLivingUnits())
+        {
+            Vector2Int cell = GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+            if (!occupants.TryGetValue(cell, out List<GameObject> sharing))
+                occupants[cell] = sharing = new List<GameObject>();
+
+            sharing.Add(unit);
+            claimed.Add(cell);
+        }
+
+        List<(GameObject unit, Vector2Int cell)> displacements = new();
+        foreach (
+            Vector2Int cell in occupants
+                .Where(entry => entry.Value.Count > 1)
+                .Select(entry => entry.Key)
+                .OrderBy(contested => contested.y)
+                .ThenBy(contested => contested.x)
+                .ToList()
+        )
+        {
+            List<GameObject> sharing = occupants[cell];
+            GameObject holder = sharing.FirstOrDefault(candidate =>
+                cellsBeforeExecution != null
+                && cellsBeforeExecution.TryGetValue(candidate, out Vector2Int cellBefore)
+                && cellBefore == cell
+            );
+
+            foreach (GameObject unit in sharing)
+            {
+                if (unit == holder)
+                    continue;
+
+                // Pulling the shove back toward where the unit set out from makes it read as
+                // giving ground rather than as being flung somewhere arbitrary.
+                Vector2Int anchor = cell;
+                if (
+                    cellsBeforeExecution != null
+                    && cellsBeforeExecution.TryGetValue(unit, out Vector2Int cellBeforeMove)
+                )
+                {
+                    anchor = cellBeforeMove;
+                }
+
+                if (
+                    !GridSystem.TryFindDisplacementCell(
+                        cell,
+                        anchor,
+                        claimed,
+                        MaxDisplacementSteps,
+                        out Vector2Int destination
+                    )
+                )
+                {
+                    Debug.LogWarning(
+                        $"[GameLoop] {unit.name} shares cell ({cell.x},{cell.y}) and has no free "
+                            + $"cell within {MaxDisplacementSteps} steps; it stays where it is."
+                    );
+                    continue;
+                }
+
+                claimed.Add(destination);
+                displacements.Add((unit, destination));
+            }
+        }
+        return displacements;
+    }
+
+    /// <summary>
+    /// Slides displaced units onto their new cells together. Snapping would read as a bug; the
+    /// slide stays server-side and reaches clients through each unit's NetworkTransform.
+    /// </summary>
+    IEnumerator SlideUnitsToCells(List<(GameObject unit, Vector2Int cell)> displacements)
+    {
+        List<(Transform unitTransform, Vector3 from, Vector3 to)> slides = new();
+        foreach (var (unit, cell) in displacements)
+        {
+            if (unit == null)
+                continue;
+
+            Transform unitTransform = unit.transform;
+            slides.Add(
+                (
+                    unitTransform,
+                    unitTransform.position,
+                    gridCoordToWorld(cell) + Helper.heightOffset(unitTransform)
+                )
+            );
+        }
+
+        if (slides.Count == 0)
+            yield break;
+
+        float elapsed = 0f;
+        while (elapsed < DisplacementSlideSeconds)
+        {
+            elapsed += Time.deltaTime;
+            float progress = Mathf.Clamp01(elapsed / DisplacementSlideSeconds);
+            foreach (var slide in slides)
+            {
+                if (slide.unitTransform != null)
+                    slide.unitTransform.position = Vector3.Lerp(slide.from, slide.to, progress);
+            }
+            yield return null;
+        }
+
+        foreach (var slide in slides)
+        {
+            if (slide.unitTransform != null)
+                slide.unitTransform.position = slide.to;
+        }
+
+        // Shooting acquires targets with casts against colliders. Units are moved by Transform, so
+        // without this the shots taken right after a shove would still be aimed at where the
+        // displaced unit used to stand.
+        Physics.SyncTransforms();
     }
 
     public void SetGroupLayerGlobal(GameObject obj, int layer)
@@ -4185,6 +4503,25 @@ public class GameLoop : NetworkBehaviour
             return executingMoves;
         }
         return teamColors[teamNames.IndexOf(team)];
+    }
+
+    /// <summary>
+    /// Both players read their own crew as blue and the enemy as red, so a team-coloured visual is
+    /// chosen from the side of the board it is watched from rather than from the absolute team.
+    /// Unit materials and vision cones already work this way; anything else that colours by team
+    /// has to agree, or the same shot reads as friendly on one screen and hostile on the other.
+    /// </summary>
+    public static readonly Color FriendlyTeamColor = new(0.22f, 0.78f, 1f);
+    public static readonly Color EnemyTeamColor = new(1f, 0.23f, 0.33f);
+
+    public static bool IsTeamFriendlyToLocalPlayer(int teamIndex)
+    {
+        return Instance != null && teamIndex >= 0 && teamIndex == Instance.LocalTeamIndex;
+    }
+
+    public static Color GetTeamColorForViewer(int teamIndex)
+    {
+        return IsTeamFriendlyToLocalPlayer(teamIndex) ? FriendlyTeamColor : EnemyTeamColor;
     }
 
     public Material GetTeamMaterial(string team)

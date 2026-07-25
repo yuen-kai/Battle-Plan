@@ -16,16 +16,6 @@
     background-color: var(--toy-ink);
 }
 
-.roster-frame > .unity-scroll-view__vertical-scroller .unity-base-slider__tracker {
-    background-color: var(--toy-playmat-quiet);
-    border-color: var(--toy-divider);
-}
-
-.roster-frame > .unity-scroll-view__vertical-scroller .unity-base-slider__dragger {
-    background-color: var(--toy-teal);
-    border-color: var(--toy-cream);
-}
-
 .roster-header {
     min-height: 104px;
     flex-direction: row;
@@ -39,14 +29,9 @@
     padding: var(--toy-space-panel-compact) 22px;
 }
 
-.roster-heading .title-xl {
-    color: var(--toy-ink);
-}
-
 .roster-heading .roster-instruction {
     margin-top: 3px;
     font-size: var(--toy-type-label);
-    color: var(--toy-dark-copy);
     white-space: normal;
 }
 
@@ -114,22 +99,6 @@
 .roster-options .unity-scroller--horizontal {
     min-height: var(--toy-scroll-size);
     background-color: var(--toy-ink);
-}
-
-.roster-options .unity-scroller__low-button,
-.roster-options .unity-scroller__high-button {
-    background-color: var(--toy-playmat-raised);
-    border-color: var(--toy-cream);
-}
-
-.roster-options .unity-base-slider__tracker {
-    background-color: var(--toy-playmat-quiet);
-    border-color: var(--toy-divider);
-}
-
-.roster-options .unity-base-slider__dragger {
-    background-color: var(--toy-teal);
-    border-color: var(--toy-cream);
 }
 
 .unit-option {

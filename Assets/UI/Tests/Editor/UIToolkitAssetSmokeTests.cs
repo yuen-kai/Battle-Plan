@@ -91,10 +91,8 @@ public class UIToolkitAssetSmokeTests
                 "hill-status-readout",
                 "hill-status-label",
                 "enemy-unit-cards",
-                "enemy-contact-summary",
                 "unit-cards",
                 "hud-dock",
-                "planning-help",
                 "target-feedback-label",
                 "planning-commit",
                 "planning-commit-status",
@@ -550,7 +548,7 @@ public class UIToolkitAssetSmokeTests
         Assert.That(markup, Does.Contain("../Shared/TacticalToybox.uss"));
         Assert.That(markup, Does.Not.Contain("match-type-label").And.Not.Contain("fog-label"));
         string style = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
-        Assert.That(style, Does.Contain(".hud-top .phase-cluster"));
+        Assert.That(style, Does.Contain(".phase-notch .phase-cluster"));
         Assert.That(style, Does.Contain(".hud-top .hill-status-readout__value"));
         Assert.That(style, Does.Contain(".hud-top .hill-status--contested"));
         int phoneReadoutStart = style.IndexOf(".phone .hill-status-readout {");
@@ -568,10 +566,18 @@ public class UIToolkitAssetSmokeTests
         );
         Assert.That(
             style,
-            Does.Contain(".phone.short .hud-top {\n")
-                .And.Contain(".phone.short .phase-cluster {\n")
-                .And.Contain(".phone.short .hill-status-readout {\n"),
-            "Short landscape layouts must place the two top readouts side by side."
+            Does.Contain(".phone.short .hill-status-readout {\n"),
+            "Constrained layouts must still place the hill readout in the top bar."
+        );
+        int notchStart = style.IndexOf(".phase-notch {");
+        Assert.That(notchStart, Is.GreaterThanOrEqualTo(0));
+        int notchEnd = style.IndexOf("}", notchStart);
+        string notchRule = style.Substring(notchStart, notchEnd - notchStart);
+        Assert.That(
+            notchRule,
+            Does.Contain("bottom: -31px;").And.Contain("height: 39px;"),
+            "The phase tab hangs into the band the camera viewport reserves below the top bar. "
+                + "Resizing it without retuning Game.unity's viewport rect will cover the board."
         );
         Assert.That(
             style,

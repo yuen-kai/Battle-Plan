@@ -19,7 +19,7 @@ public class UnitData : ScriptableObject
 
     [Header("=== ROSTER PARAMETERS ===")]
     [SerializeField]
-    [Tooltip("Opt out of player-selectable and externally configured fireteams")]
+    [Tooltip("Opt out of player-selectable and externally configured crews")]
     private bool unavailableForRoster = false;
 
     public bool IsRosterEligible => !unavailableForRoster;
@@ -125,6 +125,14 @@ public class UnitData : ScriptableObject
     public float responseRange = 5f;
 
     public bool responseDistLine = false;
+
+    /// <summary>
+    /// Whether the ability may be aimed at the cell its caster is standing on. A line ability fires
+    /// from the caster through the chosen square, so its own cell names no direction to fire in.
+    /// Everything else lands on its square, and landing on its own is a fair play — smoke dropped
+    /// underfoot is one of the Commander's better ones.
+    /// </summary>
+    public bool CanTargetOwnCell => !responseDistLine;
 
     [Tooltip("Time per unit for dive movement planning in seconds")]
     public float timeDivePerUnit = 3f;

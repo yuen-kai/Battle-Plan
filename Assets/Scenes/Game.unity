@@ -13966,9 +13966,9 @@ Camera:
   m_NormalizedViewPortRect:
     serializedVersion: 2
     x: 0
-    y: 0.24
+    y: 0.112
     width: 1
-    height: 0.76
+    height: 0.83
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 60
@@ -23801,9 +23801,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   selectedUnit: {fileID: 0}
   currentPlan: []
-  currentVisuals: {fileID: 0}
+  currentRibbon: {fileID: 0}
   moveOverlayCellPrefab: {fileID: 5853487972985149831, guid: abccdb47ab50a2b4dac00e651c5eb25c, type: 3}
-  attackOverlayPrefab: {fileID: 103789117567813075, guid: dd59fc7d0c70aa9458a13134a06c5b29, type: 3}
 --- !u!4 &1620178443
 Transform:
   m_ObjectHideFlags: 0
@@ -23894,8 +23893,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6232c2888802840cd94aa4c357e5d273, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PathSelection
-  pathNodePrefab: {fileID: 3326808074419072509, guid: 9039b112a97483042ac95f6eeb289632, type: 3}
-  pathEdgePrefab: {fileID: 2616021756888154325, guid: c88f639d0e4f17e4c960fdad9b90e7b7, type: 3}
 --- !u!1 &1621429733
 GameObject:
   m_ObjectHideFlags: 0

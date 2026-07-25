@@ -91,6 +91,7 @@ public enum AbilityTargetValidationReason : byte
     DirectionNotAdjacent,
     OutOfRange,
     WallBlocked,
+    AimedAtOwnCell,
 }
 
 /// <summary>
@@ -101,6 +102,11 @@ public enum AbilityTargetValidationReason : byte
 public class PlanMovement : MonoBehaviour
 {
     private List<GameObject> teamCharacters = new();
+
+    // Every living unit of the local team, which during a dodge window is more than
+    // teamCharacters: only the alerted units may be given orders, but the rest of the team still
+    // holds the cells it will be standing on when the round resolves.
+    private List<GameObject> reservationUnits = new();
     public GameObject selectedUnit;
     private bool useUnitCards;
     private int planningRangeOverride = -1;
@@ -138,13 +144,27 @@ public class PlanMovement : MonoBehaviour
 
     public static PlanMovement Instance { get; private set; }
     public bool CanEditPlan => planningActive && planningInitialized && !planningSubmitted;
-    public bool CanUnlockPlan =>
+    public bool CanUnlockPlan => IsCommitAcknowledged && !HasPlanningDeadlineElapsed();
+
+    /// <summary>
+    /// Orders are locked in and the server has said so — the state the commit chip offers Unlock
+    /// from. Whether that offer still stands is a separate question, since the server stops
+    /// honouring unlock requests at the planning deadline.
+    /// </summary>
+    private bool IsCommitAcknowledged =>
         planningActive
         && planningInitialized
         && planningSubmitted
         && !planningLockPending
         && !planningUnlockPending
         && lockInAvailable;
+
+    /// <summary>
+    /// The unit whose orders are being worked on, which is nobody once they are committed. A locked
+    /// board is a record rather than a workspace, so every plan on it draws the same way instead of
+    /// leaving whichever card was touched last lit up as though it were still the one in hand.
+    /// </summary>
+    private GameObject HighlightedUnit => CanEditPlan ? selectedUnit : null;
 
     void Awake()
     {
@@ -192,6 +212,7 @@ public class PlanMovement : MonoBehaviour
         planningRangeOverride = range;
         GameHUDController.Instance?.HidePlanningCommit();
         teamCharacters = units ?? PopulateTeamCharacters();
+        reservationUnits = units == null ? teamCharacters : PopulateTeamCharacters();
         while (
             sessionVersion == planningSessionVersion
             &&
@@ -258,6 +279,11 @@ public class PlanMovement : MonoBehaviour
 
         if (!planningActive || sessionVersion != planningSessionVersion)
             yield break;
+
+        // Orders close on this deadline, but the phase stays up past it while the server collects
+        // late submissions. Run the clock out here rather than when the phase ends, so the timer
+        // does not sit reading "1" through a second the player can no longer act in.
+        GameHUDController.Instance?.SetTimer(0f);
         if (networkManager == null || !networkManager.IsListening)
         {
             EndPlanningSession();
@@ -266,6 +292,10 @@ public class PlanMovement : MonoBehaviour
 
         if (!planningSubmitted)
             SubmitCurrentPlan(sessionVersion);
+        else if (IsCommitAcknowledged)
+            // Orders locked in earlier are final now that the deadline has passed. Seal the chip
+            // instead of leaving a live Unlock the server can only answer with "Locked".
+            GameHUDController.Instance?.ShowPlanningCommitLocked();
     }
 
     public bool TryLockIn()
@@ -326,7 +356,12 @@ public class PlanMovement : MonoBehaviour
         }
 
         planningLockPending = false;
-        GameHUDController.Instance?.ShowPlanningCommitWaiting();
+        // The acknowledgement for a deadline auto-submit arrives after unlocking has closed, so
+        // those orders are presented as final rather than as an offer the server would refuse.
+        if (HasPlanningDeadlineElapsed())
+            GameHUDController.Instance?.ShowPlanningCommitLocked();
+        else
+            GameHUDController.Instance?.ShowPlanningCommitWaiting();
     }
 
     public void NotifyPlanningCommitRetracted(int planningRound, int commitVersion)
@@ -370,7 +405,7 @@ public class PlanMovement : MonoBehaviour
         planningUnlockPending = false;
         lockInAvailable = false;
         PathSelection.Instance?.CancelCurrentDrag();
-        HideEditablePlanningOverlays();
+        ShowCommittedPlanningVisuals();
         GameHUDController.Instance?.SetCardsInteractable(false);
         GameHUDController.Instance?.ShowPlanningCommitLocked();
     }
@@ -425,6 +460,12 @@ public class PlanMovement : MonoBehaviour
         )
             return;
 
+        // A route is free to be drawn across a team-mate's destination, and the clock can run out
+        // while one is still resting there. Settle every route before it goes over the wire so the
+        // orders the player sees committed are the ones that will actually be carried out.
+        PathSelection.Instance?.CancelCurrentDrag();
+        TrimAllRoutesToFreeCells();
+
         bool showCommitState = lockInAvailable;
         PathsDict submittedPlans = plans;
         System.Action<PathsDict, int> callback = planningCallback;
@@ -432,10 +473,9 @@ public class PlanMovement : MonoBehaviour
         planningLockPending = showCommitState;
         planningUnlockPending = false;
         planningCommitVersion++;
-        PathSelection.Instance?.CancelCurrentDrag();
         if (showCommitState)
         {
-            HideEditablePlanningOverlays();
+            ShowCommittedPlanningVisuals();
             GameHUDController.Instance?.SetCardsInteractable(false);
             GameHUDController.Instance?.ShowPlanningCommitSending();
         }
@@ -468,7 +508,13 @@ public class PlanMovement : MonoBehaviour
         callback?.Invoke(submittedPlans, planningCommitVersion);
     }
 
-    private void HideEditablePlanningOverlays()
+    /// <summary>
+    /// Turns the board from a workspace into a record of what was committed. The range overlay goes,
+    /// since it offers squares that can no longer be picked, while the orders themselves — routes
+    /// and ability previews alike — stay drawn so the turn can still be read as it plays out. They
+    /// repaint on the way, which drops the last edited unit back in line with the rest.
+    /// </summary>
+    private void ShowCommittedPlanningVisuals()
     {
         if (moveOverlay != null)
         {
@@ -476,15 +522,21 @@ public class PlanMovement : MonoBehaviour
             Destroy(moveOverlay);
             moveOverlay = null;
         }
-        ClearAbilityTargetIndicator();
+        RefreshAllRibbons();
+        RefreshAbilityIndicators();
     }
 
     private void RestoreEditablePlanningVisuals()
     {
-        if (!CanEditPlan || selectedUnit == null)
+        if (!CanEditPlan)
             return;
 
-        ApplySelectedUnitModeVisuals();
+        if (selectedUnit != null)
+            ApplySelectedUnitModeVisuals();
+        else
+            // Ability plans belong to their own units rather than to the selection, so they come
+            // back after a cancelled commit even with nothing selected.
+            RefreshAbilityIndicators();
         RefreshUnitCards();
     }
 
@@ -564,7 +616,7 @@ public class PlanMovement : MonoBehaviour
 
         plans[selectedUnit] = (true, new List<Vector3> { start, square });
         currentPlan = plans[selectedUnit].Item2;
-        UpdateAbilityTargetIndicator(start, square, unitData);
+        RefreshAbilityIndicators();
         GameHUDController.Instance?.SetTargetFeedback("Target locked.", false);
     }
 
@@ -590,6 +642,9 @@ public class PlanMovement : MonoBehaviour
                 ? AbilityTargetValidationReason.Valid
                 : AbilityTargetValidationReason.DirectionNotAdjacent;
         }
+
+        if (!unitData.CanTargetOwnCell && targetCell == startCell)
+            return AbilityTargetValidationReason.AimedAtOwnCell;
 
         int manhattanCells =
             Mathf.Abs(targetCell.x - startCell.x) + Mathf.Abs(targetCell.y - startCell.y);
@@ -618,6 +673,8 @@ public class PlanMovement : MonoBehaviour
                 "Target is outside this ability's range.",
             AbilityTargetValidationReason.WallBlocked =>
                 "That ability cannot target a wall cell.",
+            AbilityTargetValidationReason.AimedAtOwnCell =>
+                "Aim away from the square you are standing on.",
             _ => string.Empty,
         };
     }
@@ -629,8 +686,26 @@ public class PlanMovement : MonoBehaviour
 
     // Runtime-generated ability target visuals (AOE disc, single/multi-cell square outline, or
     // preview line), mirroring how AreaLock builds its laser at runtime — no prefab/scene
-    // references needed.
-    private GameObject abilityTargetIndicator;
+    // references needed. Held per unit like route ribbons are, so an ability plan stays on the
+    // board while its owner sits in the background and another unit takes its orders.
+    private Dictionary<GameObject, GameObject> abilityVisuals = new();
+
+    // The blast disc is a filled shape rather than a line, so it needs to sit further back than
+    // the outlines it is drawn among to avoid swamping them.
+    private const float AbilityDiscAlphaScale = 0.55f;
+
+    private readonly List<Vector3> abilityPathPoints = new();
+
+    /// <summary>
+    /// The colour a unit's ability plan draws in. This is the same per-roster-slot colour its
+    /// movement route uses, so a plan on the board — move or ability — carries its owner's
+    /// identity and shape alone signals move-versus-ability, leaving no need to read a label to
+    /// tell whose grenade is landing where.
+    /// </summary>
+    private static Color GetAbilityPreviewColor(int rosterSlot, bool selected)
+    {
+        return PlanPathStyle.GetRouteColor(rosterSlot, selected);
+    }
 
     // MoveOverlayCell's root plane is opaque (URP Lit, ZWrite on) at world y=0.2, and its "Inner"
     // highlight sits at y=0.227; both are shown under the target cell whenever an ability's range
@@ -639,15 +714,66 @@ public class PlanMovement : MonoBehaviour
     // markers clearly above both so they render on top of the range overlay.
     private const float AbilityIndicatorHeight = 0.26f;
 
-    void UpdateAbilityTargetIndicator(Vector3 start, Vector3 square, UnitData unitData)
+    /// <summary>
+    /// Redraws the whole team's ability plans. Every unit holding a target keeps its preview on the
+    /// board, not just the selected one, so a turn can be judged as a whole — whether the grenade
+    /// lands clear of where the Pogo Rider is about to come down — instead of one card at a time.
+    /// The unit being edited draws bright and the rest step back.
+    /// </summary>
+    private void RefreshAbilityIndicators()
     {
-        ClearAbilityTargetIndicator();
-        abilityTargetIndicator = new GameObject("AbilityTargetIndicator");
-
-        if (selectedUnit != null && selectedUnit.GetComponent<Smoke>() != null)
+        ClearAbilityIndicators();
+        foreach (KeyValuePair<GameObject, (bool, List<Vector3>)> entry in plans)
         {
-            CreateSquareFootprintIndicator(square, Smoke.FootprintRadius);
-            return;
+            GameObject unit = entry.Key;
+            (bool abilityMode, List<Vector3> plan) = entry.Value;
+            if (!abilityMode || plan == null || plan.Count < 2 || !IsPlanningUnitAvailable(unit))
+                continue;
+
+            Movement movement = unit.GetComponent<Movement>();
+            UnitData unitData = movement != null ? movement.unitData : null;
+            if (unitData == null || !unitData.selectAbilitySquare)
+                continue;
+
+            abilityVisuals[unit] = BuildAbilityIndicator(
+                unit,
+                plan[0],
+                plan[1],
+                unitData,
+                unit == HighlightedUnit
+            );
+        }
+    }
+
+    /// <summary>
+    /// Builds one unit's ability preview: the path the ability travels, plus a marker on whatever
+    /// it arrives at. Everything hangs off a single host so one unit's plan can be dropped or
+    /// rebuilt without disturbing anyone else's.
+    /// </summary>
+    GameObject BuildAbilityIndicator(
+        GameObject unit,
+        Vector3 start,
+        Vector3 square,
+        UnitData unitData,
+        bool selected
+    )
+    {
+        GameObject host = new($"AbilityPlan_{GetRosterSlot(unit)}");
+        host.transform.SetParent(
+            planVisualsFolder != null ? planVisualsFolder.transform : null,
+            false
+        );
+        Color color = GetAbilityPreviewColor(GetRosterSlot(unit), selected);
+
+        // Ask before the directional branch below rewrites `square` into a resolved destination:
+        // an ability is handed the square the player actually picked and works out for itself
+        // where that leads.
+        ShowAbilityPathPreview(host, unit, square, unitData, color);
+
+        if (unit.GetComponent<Smoke>() != null)
+        {
+            CreateSquareFootprintIndicator(host, square, Smoke.FootprintRadius, color);
+            return host;
         }
 
         if (
@@ -670,12 +796,12 @@ public class PlanMovement : MonoBehaviour
 
         if (unitData.responseDistLine)
         {
-            Vector3 casterPos = selectedUnit.transform.position;
+            Vector3 casterPos = unit.transform.position;
             Vector3 direction = (
-                square + Helper.heightOffset(selectedUnit.transform) - casterPos
+                square + Helper.heightOffset(unit.transform) - casterPos
             ).normalized;
             if (direction == Vector3.zero)
-                return;
+                return host;
             Vector3 end = casterPos + direction * 50f;
             if (
                 Physics.Raycast(
@@ -690,9 +816,9 @@ public class PlanMovement : MonoBehaviour
                 end = hit.point;
             }
 
-            LineRenderer lr = abilityTargetIndicator.AddComponent<LineRenderer>();
+            LineRenderer lr = host.AddComponent<LineRenderer>();
             lr.material = new Material(Shader.Find("Sprites/Default"));
-            lr.startColor = lr.endColor = new Color(1f, 0.8f, 0f, 0.9f);
+            lr.startColor = lr.endColor = color;
             lr.startWidth = lr.endWidth = 0.12f;
             lr.positionCount = 2;
             lr.SetPosition(0, casterPos);
@@ -702,37 +828,76 @@ public class PlanMovement : MonoBehaviour
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             Destroy(marker.GetComponent<Collider>());
-            marker.transform.parent = abilityTargetIndicator.transform;
+            marker.transform.parent = host.transform;
             float diameter = 2f * unitData.abilityRadius * cellSize;
             marker.transform.position = square + new Vector3(0, AbilityIndicatorHeight, 0);
             marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+            Color discColor = color;
+            discColor.a *= AbilityDiscAlphaScale;
             Renderer rend = marker.GetComponent<Renderer>();
             rend.material = new Material(Shader.Find("Sprites/Default"));
-            rend.material.color = new Color(1f, 0.8f, 0f, 0.5f);
+            rend.material.color = discColor;
         }
         else
         {
             // Point-target abilities have no blast radius to draw as an AOE disc (e.g. the Pogo
             // Rider's Jump — it lands on exactly one cell). Outline that single target square
             // instead so the selection reads clearly, matching the other units' visible markers.
-            CreateSquareFootprintIndicator(square, 0);
+            CreateSquareFootprintIndicator(host, square, 0, color);
         }
+
+        return host;
     }
 
-    void CreateSquareFootprintIndicator(Vector3 square, int radius)
+    /// <summary>
+    /// Draws the route the ability itself will travel, from points the ability samples off its own
+    /// execution maths — the Shotgunner's rush, the Soldier's grenade arc, the Pogo Rider's jump.
+    /// Abilities that reach their target without travelling report nothing and draw nothing, so no
+    /// new ability needs this method changed to be previewed.
+    /// </summary>
+    void ShowAbilityPathPreview(
+        GameObject host,
+        GameObject unit,
+        Vector3 selectedSquare,
+        UnitData unitData,
+        Color color
+    )
+    {
+        Ability ability = unit.GetComponent<Ability>();
+        if (ability == null)
+            return;
+
+        AbilityPathKind kind = ability.BuildPlannedPath(
+            selectedSquare,
+            unitData,
+            abilityPathPoints
+        );
+        if (kind == AbilityPathKind.None)
+            return;
+
+        AbilityPathIndicator
+            .Create(host.transform, "AbilityPath")
+            .Show(abilityPathPoints, kind, color);
+    }
+
+    void CreateSquareFootprintIndicator(
+        GameObject host,
+        Vector3 square,
+        int radius,
+        Color previewColor
+    )
     {
         Vector2Int center = GridSystem.ConvertToGridCoords(
             GridSystem.GetNearestGridCell(square)
         );
         Material previewMaterial = new(Shader.Find("Sprites/Default"));
-        Color previewColor = new(1f, 0.8f, 0f, 0.9f);
         float halfCell = cellSize * 0.46f;
         float lineWidth = Mathf.Max(0.04f, cellSize * 0.04f);
 
         foreach (Vector2Int cell in GridSystem.GetSquareFootprint(center, radius))
         {
             GameObject cellOutline = new($"AbilityTargetCell_{cell.x}_{cell.y}");
-            cellOutline.transform.SetParent(abilityTargetIndicator.transform, true);
+            cellOutline.transform.SetParent(host.transform, true);
 
             Vector3 cellCenter =
                 GameLoop.gridCoordToWorld(cell) + new Vector3(0, AbilityIndicatorHeight, 0);
@@ -754,15 +919,31 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-    void ClearAbilityTargetIndicator()
+    /// <summary>Drops one unit's ability preview, leaving the rest of the team's plans drawn.</summary>
+    void ClearAbilityIndicator(GameObject unit)
     {
-        if (abilityTargetIndicator != null)
-        {
-            // Destroy is deferred; hide the private planning preview before the phase can advance.
-            abilityTargetIndicator.SetActive(false);
-            Destroy(abilityTargetIndicator);
-        }
-        abilityTargetIndicator = null;
+        if (unit == null || !abilityVisuals.TryGetValue(unit, out GameObject indicator))
+            return;
+
+        DestroyAbilityIndicator(indicator);
+        abilityVisuals.Remove(unit);
+    }
+
+    void ClearAbilityIndicators()
+    {
+        foreach (GameObject indicator in abilityVisuals.Values)
+            DestroyAbilityIndicator(indicator);
+        abilityVisuals.Clear();
+    }
+
+    private void DestroyAbilityIndicator(GameObject indicator)
+    {
+        if (indicator == null)
+            return;
+
+        // Destroy is deferred; hide the private planning preview before the phase can advance.
+        indicator.SetActive(false);
+        Destroy(indicator);
     }
 
     /// <summary>
@@ -880,6 +1061,25 @@ public class PlanMovement : MonoBehaviour
         return unit == selectedUnit || TrySetSelectionMode(unit, false);
     }
 
+    /// <summary>
+    /// Turns the unit being edited to its ability, for the board-side click on a unit that is not
+    /// going anywhere. A unit holding a route keeps it, so the click that gives up a route is never
+    /// also the one that changes what the unit is doing with its round.
+    /// </summary>
+    public bool TrySwitchToAbilityPlan(GameObject unit)
+    {
+        // A dodge response is movement only — the server throws away an ability-flagged plan — so
+        // the gesture is offered in the same window the cards are, and nowhere else.
+        if (!CanEditPlan || !useUnitCards || unit == null || unit != selectedUnit)
+            return false;
+        if (!plans.TryGetValue(unit, out (bool, List<Vector3>) plan))
+            return false;
+        if (plan.Item1 || (plan.Item2?.Count ?? 0) > 1)
+            return false;
+
+        return TrySetSelectionMode(unit, true);
+    }
+
     private static bool IsPlanningUnitAvailable(GameObject unit)
     {
         if (unit == null || !unit.activeInHierarchy)
@@ -930,7 +1130,154 @@ public class PlanMovement : MonoBehaviour
             return false;
 
         teamCharacters = PopulateTeamCharacters();
+        reservationUnits = teamCharacters;
         return true;
+    }
+
+    /// <summary>
+    /// Which entry of a plan holds the cell its unit is standing on when the round resolves: the
+    /// last step of a route, or the first cell for a unit spending the round on an ability, since
+    /// a caster does not march anywhere during execution. -1 for a plan with nothing in it.
+    /// </summary>
+    public static int GetPlannedEndIndex(bool abilityMode, int planLength)
+    {
+        if (planLength <= 0)
+            return -1;
+
+        return abilityMode ? 0 : planLength - 1;
+    }
+
+    /// <summary>The cell a plan leaves its unit standing on; the unit's own cell without one.</summary>
+    private Vector3 GetPlannedEndCell(GameObject unit)
+    {
+        if (plans.TryGetValue(unit, out (bool, List<Vector3>) plan))
+        {
+            int endIndex = GetPlannedEndIndex(plan.Item1, plan.Item2?.Count ?? 0);
+            if (endIndex >= 0)
+                return plan.Item2[endIndex];
+        }
+        return GridSystem.GetNearestGridCell(unit);
+    }
+
+    /// <summary>
+    /// Whether another unit of this team already finishes the round standing on the given cell.
+    /// Two units cannot share a square, so this is the cell a route may pass over but not stop on.
+    /// </summary>
+    public bool IsEndCellHeldByAnotherUnit(Vector3 cell, GameObject excludedUnit)
+    {
+        Vector2Int target = GridSystem.ConvertToGridCoords(cell);
+        foreach (GameObject unit in reservationUnits)
+        {
+            if (unit == excludedUnit || !IsPlanningUnitAvailable(unit))
+                continue;
+            if (GridSystem.ConvertToGridCoords(GetPlannedEndCell(unit)) == target)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a unit's route currently stops on a square a team-mate finishes on. Routes are free
+    /// to run through those squares, so this end state is reachable mid-drag and is drawn as
+    /// unusable until the route is settled.
+    /// </summary>
+    public bool IsRouteEndBlocked(GameObject unit)
+    {
+        if (unit == null || !plans.TryGetValue(unit, out (bool, List<Vector3>) plan))
+            return false;
+        if (plan.Item1 || plan.Item2 == null || plan.Item2.Count < 2)
+            return false;
+
+        return IsEndCellHeldByAnotherUnit(plan.Item2[^1], unit);
+    }
+
+    /// <summary>
+    /// Gives up the trailing cells of a route until it stops somewhere its team leaves free. A
+    /// route may be drawn across a team-mate's destination, so this is what holds the player to a
+    /// destination they can actually keep, rather than letting the server silently cut orders the
+    /// player already believed were given.
+    /// </summary>
+    public void TrimRouteToLastFreeCell(GameObject unit)
+    {
+        if (unit == null || !plans.TryGetValue(unit, out (bool, List<Vector3>) plan))
+            return;
+
+        List<Vector3> route = plan.Item2;
+        if (plan.Item1 || route == null || route.Count < 2)
+            return;
+
+        int endIndex = route.Count - 1;
+        while (endIndex > 0 && IsEndCellHeldByAnotherUnit(route[endIndex], unit))
+            endIndex--;
+        if (endIndex == route.Count - 1)
+            return;
+
+        route.RemoveRange(endIndex + 1, route.Count - (endIndex + 1));
+        if (unit == selectedUnit)
+            currentPlan = route;
+        RefreshAllRibbons();
+    }
+
+    /// <summary>
+    /// Settles every unit's route so no two of them finish on the same square, matching the order
+    /// the server resolves them in so the board a player commits is the board they get. Shorter
+    /// orders are honoured first, which leaves a unit holding its ground on the cell it occupies
+    /// and cuts short the one walking into it.
+    /// </summary>
+    private void TrimAllRoutesToFreeCells()
+    {
+        HashSet<Vector2Int> claimed = new();
+        List<(GameObject unit, int rosterSlot, List<Vector3> route)> movers = new();
+        foreach (GameObject unit in reservationUnits)
+        {
+            if (!IsPlanningUnitAvailable(unit))
+                continue;
+
+            bool hasPlan = plans.TryGetValue(unit, out (bool, List<Vector3>) plan);
+            if (!hasPlan || plan.Item1 || plan.Item2 == null || plan.Item2.Count < 2)
+            {
+                claimed.Add(GridSystem.ConvertToGridCoords(GetPlannedEndCell(unit)));
+                continue;
+            }
+            movers.Add((unit, GetRosterSlot(unit), plan.Item2));
+        }
+
+        // Must match the order the server resolves these in, or the board the player is shown at
+        // commit is not the board the round is run from.
+        movers.Sort(
+            (left, right) =>
+            {
+                int lengthComparison = left.route.Count.CompareTo(right.route.Count);
+                return lengthComparison != 0
+                    ? lengthComparison
+                    : left.rosterSlot.CompareTo(right.rosterSlot);
+            }
+        );
+        List<int> lengths = GameLoop.ResolveUniqueEndCellLengths(
+            movers
+                .Select(mover =>
+                    (IReadOnlyList<Vector2Int>)
+                        mover.route.Select(GridSystem.ConvertToGridCoords).ToList()
+                )
+                .ToList(),
+            claimed
+        );
+
+        bool trimmedAny = false;
+        for (int i = 0; i < movers.Count; i++)
+        {
+            List<Vector3> route = movers[i].route;
+            if (lengths[i] >= route.Count)
+                continue;
+
+            route.RemoveRange(lengths[i], route.Count - lengths[i]);
+            trimmedAny = true;
+            if (movers[i].unit == selectedUnit)
+                currentPlan = route;
+        }
+
+        if (trimmedAny)
+            RefreshAllRibbons();
     }
 
     public void SwitchToUnit(int unitIndex)
@@ -1031,7 +1378,8 @@ public class PlanMovement : MonoBehaviour
         {
             PathSelection.Instance?.CancelCurrentDrag();
             plans[unit] = (abilityMode, new List<Vector3> { GridSystem.GetNearestGridCell(unit) });
-            ClearAbilityTargetIndicator();
+            // Only this unit's target is being abandoned; the rest of the team keeps its plans.
+            ClearAbilityIndicator(unit);
             ResetVisualPlan();
         }
 
@@ -1053,17 +1401,15 @@ public class PlanMovement : MonoBehaviour
         GameHUDController.Instance?.ClearTargetFeedback();
         if (selectedUnit == null)
         {
-            ClearAbilityTargetIndicator();
             Destroy(moveOverlay);
             RefreshAllRibbons();
+            // Deselecting dims the team's ability plans rather than erasing them.
+            RefreshAbilityIndicators();
             RefreshUnitCards();
             return;
         }
         if (previousUnit != selectedUnit)
-        {
             PathSelection.Instance?.CancelCurrentDrag();
-            ClearAbilityTargetIndicator();
-        }
 
         if (!plans.ContainsKey(selectedUnit))
         {
@@ -1096,21 +1442,13 @@ public class PlanMovement : MonoBehaviour
             DisplayMoveRange(
                 abilityMode
                     ? (unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0)
-                    : movementRange
+                    : movementRange,
+                !abilityMode || unitData.CanTargetOwnCell
             );
 
         currentPlan = plans[selectedUnit].Item2;
         RefreshAllRibbons();
-
-        if (
-            abilityMode
-            && unitData.selectAbilitySquare
-            && currentPlan != null
-            && currentPlan.Count >= 2
-        )
-        {
-            UpdateAbilityTargetIndicator(currentPlan[0], currentPlan[1], unitData);
-        }
+        RefreshAbilityIndicators();
     }
 
     private void RefreshUnitCards()
@@ -1187,7 +1525,8 @@ public class PlanMovement : MonoBehaviour
             if (pair.Value == null)
                 continue;
 
-            pair.Value.SetSelected(pair.Key == selectedUnit);
+            pair.Value.SetSelected(pair.Key == HighlightedUnit);
+            pair.Value.SetEndBlocked(IsRouteEndBlocked(pair.Key));
             DrawRoute(pair.Key, pair.Value);
         }
     }
@@ -1222,6 +1561,7 @@ public class PlanMovement : MonoBehaviour
     {
         plans = new PathsDict();
         planVisuals = new Dictionary<GameObject, PathRibbon>();
+        abilityVisuals = new Dictionary<GameObject, GameObject>();
         currentRibbon = null;
         AddCharacterOutlines();
         planVisualsFolder = new GameObject("PlanVisuals");
@@ -1240,7 +1580,7 @@ public class PlanMovement : MonoBehaviour
             moveOverlay.SetActive(false);
             Destroy(moveOverlay);
         }
-        ClearAbilityTargetIndicator();
+        ClearAbilityIndicators();
         planVisuals.Clear();
         laneMap.Clear();
         currentRibbon = null;
@@ -1254,7 +1594,7 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-    void DisplayMoveRange(int range)
+    void DisplayMoveRange(int range, bool includeOwnCell = true)
     {
         Destroy(moveOverlay);
         if (selectedUnit == null)
@@ -1263,7 +1603,8 @@ public class PlanMovement : MonoBehaviour
         moveOverlay = GridSystem.DisplayGridRange(
             GridSystem.GetNearestGridCell(selectedUnit),
             range,
-            moveOverlayCellPrefab
+            moveOverlayCellPrefab,
+            includeOwnCell
         );
     }
 

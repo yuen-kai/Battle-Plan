@@ -61,7 +61,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Select a unit. Select its card again to switch between movement and its ability." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Select a unit. Click it again with no route drawn to switch to its ability; its card switches back to movement." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
@@ -84,7 +84,7 @@
                         <ui:Label text="Win conditions" class="control-section__label" picking-mode="Ignore" />
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Knock out the other fireteam." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Knock out the other crew." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row control-row--last">
                             <ui:Label text="King of the Hill" class="control-key" picking-mode="Ignore" />

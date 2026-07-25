@@ -15,7 +15,6 @@ public sealed class UnitCardElement : IDisposable
     private readonly Label healthValue;
     private readonly Label abilityName;
     private readonly Label stateLabel;
-    private readonly VisualElement stateMark;
     private readonly VisualElement flipIndicator;
     private readonly Label cooldownLabel;
 
@@ -55,7 +54,6 @@ public sealed class UnitCardElement : IDisposable
         healthValue = cardRoot.Q<Label>("unit-card-health-value");
         abilityName = cardRoot.Q<Label>("unit-card-ability");
         stateLabel = cardRoot.Q<Label>("unit-card-state");
-        stateMark = cardRoot.Q<VisualElement>("unit-card-state-mark");
         VisualElement abilityVignette = cardRoot.Q<VisualElement>("unit-card-ability-vignette");
         flipIndicator = cardRoot.Q<VisualElement>("unit-card-flip-indicator");
         VisualElement flipIcon = cardRoot.Q<VisualElement>("unit-card-flip-icon");
@@ -95,14 +93,6 @@ public sealed class UnitCardElement : IDisposable
             }
         }
         flipIndicator?.AddToClassList("hidden");
-
-        if (!enemyCard && stateMark != null)
-        {
-            // Keep the corner chip lit in the roster slot's colour so a card can be matched to its
-            // planned route on the board at a glance, not just while the card is selected.
-            stateMark.style.display = DisplayStyle.Flex;
-            stateMark.style.backgroundColor = PlanPathStyle.GetSlotColor(index);
-        }
 
         if (enemyCard)
         {
@@ -413,9 +403,6 @@ public sealed class UnitCardElement : IDisposable
         VisualElement root = new() { name = "unit-card-root" };
         root.AddToClassList("unit-card");
 
-        VisualElement stateMark = new() { name = "unit-card-state-mark" };
-        stateMark.AddToClassList("unit-card__state-mark");
-
         Button select = new() { name = "unit-card-select" };
         select.AddToClassList("unit-card__select");
         VisualElement abilityVignette = new() { name = "unit-card-ability-vignette" };
@@ -460,7 +447,6 @@ public sealed class UnitCardElement : IDisposable
         select.Add(copy);
         select.Add(flipIndicator);
 
-        root.Add(stateMark);
         root.Add(select);
         return root;
     }

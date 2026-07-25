@@ -14,10 +14,12 @@ public class PathRibbon : MonoBehaviour
     private Material ribbonMaterial;
     private int rosterSlot;
     private bool selected;
+    private bool endBlocked;
     private readonly List<Vector3> lanePoints = new();
     private readonly List<LanePlacement> arrivalLanes = new();
     private readonly List<LanePlacement> departureLanes = new();
     private readonly List<int> vertexIndices = new();
+    private readonly Vector3[] chevron = new Vector3[3];
 
     public static PathRibbon Create(Transform parent, string name, int rosterSlot)
     {
@@ -78,6 +80,21 @@ public class PathRibbon : MonoBehaviour
             return;
 
         selected = value;
+        ApplyStyle();
+    }
+
+    /// <summary>
+    /// Marks the route as resting on a square it may cross but not stop on. A route is allowed to
+    /// reach this state mid-drag, so the cap that says where the unit ends up is the part that has
+    /// to disown it — the player should be able to see the destination will not hold before
+    /// letting go of it.
+    /// </summary>
+    public void SetEndBlocked(bool value)
+    {
+        if (endBlocked == value)
+            return;
+
+        endBlocked = value;
         ApplyStyle();
     }
 
@@ -173,35 +190,28 @@ public class PathRibbon : MonoBehaviour
     {
         Vector3 tip = lanePoints[lanePoints.Count - 1];
         Vector3 approach = tip - lanePoints[lanePoints.Count - 2];
-        approach.y = 0f;
-        if (approach.sqrMagnitude <= Mathf.Epsilon)
+        if (!PlanPathStyle.TryBuildEndChevron(tip, approach, chevron))
         {
             destination.positionCount = 0;
             return;
         }
 
-        approach.Normalize();
-        Vector3 side = new(approach.z, 0f, -approach.x);
-        Vector3 back = tip - approach * PlanPathStyle.DestinationLength;
-        Vector3 halfWidth = side * PlanPathStyle.DestinationHalfWidth;
-
-        destination.positionCount = 3;
-        destination.SetPosition(0, back + halfWidth);
-        destination.SetPosition(1, tip);
-        destination.SetPosition(2, back - halfWidth);
+        destination.positionCount = chevron.Length;
+        destination.SetPositions(chevron);
     }
 
     private void ApplyStyle()
     {
         Color color = PlanPathStyle.GetRouteColor(rosterSlot, selected);
         float width = PlanPathStyle.GetRouteWidth(selected);
+        Color capColor = endBlocked ? PlanPathStyle.GetBlockedEndColor(selected) : color;
 
         route.startColor = color;
-        route.endColor = color;
+        route.endColor = capColor;
         route.widthMultiplier = width;
 
-        destination.startColor = color;
-        destination.endColor = color;
+        destination.startColor = capColor;
+        destination.endColor = capColor;
         destination.widthMultiplier = width * 0.8f;
     }
 

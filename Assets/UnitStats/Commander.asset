@@ -42,7 +42,7 @@ MonoBehaviour:
   maxHealth: 120
   abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1
-  abilitySquareRange: 3
+  abilitySquareRange: 4
   selectAbilityDirection: 0
   abilityFixedDistance: 0
   abilityRadius: 1.5

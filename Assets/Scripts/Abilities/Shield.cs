@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -43,6 +44,74 @@ public class Shield : Ability
         ApplyShieldState(false);
     }
 
+    public override AbilityPathKind BuildPlannedPath(
+        Vector3 targetSquare,
+        UnitData data,
+        List<Vector3> points
+    )
+    {
+        points.Clear();
+        if (
+            !TryResolveRush(
+                targetSquare,
+                data,
+                out Vector2Int startCell,
+                out Vector2Int destinationCell,
+                out _
+            )
+        )
+        {
+            return AbilityPathKind.None;
+        }
+
+        return AbilityTrajectory.BuildGroundRun(
+            GameLoop.gridCoordToWorld(startCell),
+            GameLoop.gridCoordToWorld(destinationCell),
+            points
+        )
+            ? AbilityPathKind.Ground
+            : AbilityPathKind.None;
+    }
+
+    /// <summary>
+    /// The cells this rush leaves from and stops on, for a direction read off
+    /// <paramref name="targetSquare"/>. Shared with the path drawn while planning so the preview
+    /// is cut short by exactly the wall that will cut the rush short.
+    /// </summary>
+    private bool TryResolveRush(
+        Vector3 targetSquare,
+        UnitData data,
+        out Vector2Int startCell,
+        out Vector2Int destinationCell,
+        out Vector2Int direction
+    )
+    {
+        startCell = GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(gameObject));
+        destinationCell = startCell;
+        direction = Vector2Int.zero;
+        if (data == null || data.abilityFixedDistance <= 0)
+            return false;
+
+        if (
+            !GridSystem.TryGetAdjacentDirection(
+                startCell,
+                GridSystem.ConvertToGridCoords(targetSquare),
+                out direction
+            )
+        )
+        {
+            return false;
+        }
+
+        destinationCell = GridSystem.GetDirectionalDestination(
+            startCell,
+            direction,
+            data.abilityFixedDistance,
+            GameLoop.wallLayout
+        );
+        return true;
+    }
+
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
         if (!IsServer)
@@ -51,23 +120,22 @@ public class Shield : Ability
         Movement movement = GetComponent<Movement>();
         Shooting shooting = GetComponent<Shooting>();
         UnitData data = movement != null ? movement.unitData : null;
-        if (movement == null || shooting == null || data == null || data.abilityFixedDistance <= 0)
+        if (movement == null || shooting == null)
+            yield break;
+
+        if (
+            !TryResolveRush(
+                abilitySquare,
+                data,
+                out Vector2Int startCell,
+                out Vector2Int destinationCell,
+                out Vector2Int direction
+            )
+        )
         {
             yield break;
         }
 
-        Vector3 startSquare = GridSystem.GetNearestGridCell(gameObject);
-        Vector2Int startCell = GridSystem.ConvertToGridCoords(startSquare);
-        Vector2Int selectedCell = GridSystem.ConvertToGridCoords(abilitySquare);
-        if (!GridSystem.TryGetAdjacentDirection(startCell, selectedCell, out Vector2Int direction))
-            yield break;
-
-        Vector2Int destinationCell = GridSystem.GetDirectionalDestination(
-            startCell,
-            direction,
-            data.abilityFixedDistance,
-            GameLoop.wallLayout
-        );
         Vector3 heightOffset = Helper.heightOffset(transform);
         Vector3 startPosition = GameLoop.gridCoordToWorld(startCell) + heightOffset;
         Vector3 destinationPosition = GameLoop.gridCoordToWorld(destinationCell) + heightOffset;

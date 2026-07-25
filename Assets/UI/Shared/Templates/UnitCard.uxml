@@ -1,6 +1,5 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:VisualElement name="unit-card-root" class="unit-card">
-        <ui:VisualElement name="unit-card-state-mark" class="unit-card__state-mark" picking-mode="Ignore" />
         <ui:Button name="unit-card-select" class="unit-card__select" tooltip="Select this unit">
             <ui:VisualElement name="unit-card-ability-vignette" class="unit-card__ability-vignette" picking-mode="Ignore" />
             <ui:VisualElement name="unit-card-portrait" class="unit-card__portrait" picking-mode="Ignore" />

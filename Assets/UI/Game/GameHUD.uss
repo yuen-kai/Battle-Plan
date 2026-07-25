@@ -20,69 +20,77 @@
 
 .hud-top {
     position: absolute;
-    left: 24px;
-    right: 24px;
-    top: 20px;
-    height: 100px;
+    left: 16px;
+    right: 16px;
+    top: 16px;
+    height: 78px;
 }
 
-.hud-top .phase-cluster {
+/* Centred tab hanging off the bottom edge of the top bar. The camera viewport
+   is tuned so the board starts below it, so changing its depth means retuning
+   Game.unity's viewport rect too. */
+.phase-notch {
     position: absolute;
-    top: 0;
-    left: 50%;
-    width: 380px;
-    min-height: 72px;
-    margin-left: -190px;
-    align-items: center;
+    left: 0;
+    right: 0;
+    bottom: -31px;
+    height: 39px;
+    flex-direction: row;
     justify-content: center;
-    padding: 10px 28px 12px 28px;
+}
+
+.phase-notch .phase-cluster {
+    height: 39px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 20px;
     background-color: var(--toy-panel);
     border-color: var(--toy-ink);
-    border-bottom-width: var(--toy-depth-panel);
-    border-radius: var(--toy-radius-lg);
+    border-bottom-width: var(--toy-stroke-thin);
+    border-left-width: var(--toy-stroke-thin);
+    border-right-width: var(--toy-stroke-thin);
+    border-bottom-left-radius: var(--toy-radius-lg);
+    border-bottom-right-radius: var(--toy-radius-lg);
 }
 
-.hud-top .phase-cluster__mark {
-    position: absolute;
-    top: 12px;
-    left: 14px;
-    width: 10px;
-    height: 10px;
+.phase-notch .phase-cluster__mark {
+    width: 9px;
+    height: 9px;
+    margin-right: 11px;
     background-color: var(--toy-orange);
     border-width: var(--toy-stroke-thin);
     border-color: var(--toy-ink);
     border-radius: var(--toy-radius-sm);
 }
 
-.hud-top .phase-label {
-    font-size: 22px;
+.phase-notch .phase-label {
+    font-size: 17px;
     -unity-font-style: bold;
     color: var(--toy-cream);
     letter-spacing: 0;
-    -unity-text-align: middle-center;
 }
 
-.hud-top .phase-label--friendly {
+.phase-notch .phase-label--friendly {
     color: var(--toy-orange-hover);
 }
 
-.hud-top .phase-label--enemy {
+.phase-notch .phase-label--enemy {
     color: var(--toy-tomato-copy);
 }
 
-.hud-top .phase-label--neutral {
+.phase-notch .phase-label--neutral {
     color: var(--toy-cream);
 }
 
-.hud-top .timer-label {
-    min-height: 22px;
+.phase-notch .timer-label {
+    margin-left: 16px;
     -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    font-size: 18px;
+    font-size: 19px;
     -unity-font-style: bold;
     color: var(--toy-orange);
 }
 
-.hud-top .timer-label--urgent {
+.phase-notch .timer-label--urgent {
     color: var(--toy-tomato-copy);
 }
 
@@ -126,48 +134,29 @@
 
 .hud-dock {
     position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: 8px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     min-height: 0;
     padding: 8px 16px;
     background-color: rgba(7, 12, 19, 0.94);
-    border-width: 1px;
+    border-top-width: 1px;
     border-color: rgb(48, 65, 80);
-    border-radius: 3px;
 }
 
-.hud-dock__header {
+.hud-dock__row {
     flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: center;
 }
 
-.planning-copy {
-    flex-grow: 1;
-    min-width: 0;
-    padding-right: 16px;
-}
-
-.planning-message-slot {
-    position: relative;
-    height: 24px;
-    min-height: 24px;
-}
-
-.planning-help {
-    font-size: 11px;
-    color: rgb(157, 172, 185);
-    white-space: normal;
-}
-
+/* Shares the notch's band above the dock, kept left so the two never meet. */
 .target-feedback {
     position: absolute;
     left: 0;
-    right: 0;
-    top: 0;
-    min-height: 24px;
-    padding: 3px 8px;
+    top: -31px;
+    max-width: 640px;
+    min-height: 30px;
+    padding: 5px 10px;
     background-color: rgb(13, 21, 29);
     color: rgb(225, 231, 235);
     border-left-width: 3px;
@@ -198,29 +187,7 @@
     flex-direction: row;
     flex-shrink: 0;
     align-items: center;
-}
-
-.hud-key {
-    flex-direction: row;
-    flex-shrink: 0;
-    align-items: center;
-    margin-right: 12px;
-}
-
-.hud-key__swatch {
-    width: 9px;
-    height: 9px;
-    margin-right: 7px;
-}
-
-.hud-key__swatch--amber {
-    background-color: rgb(229, 158, 45);
-}
-
-.hud-key__label {
-    font-size: 11px;
-    color: rgb(147, 162, 175);
-    letter-spacing: 1px;
+    margin-left: 16px;
 }
 
 .planning-commit {
@@ -280,46 +247,37 @@
 }
 
 .enemy-status-strip {
-    margin-top: 6px;
-}
-
-.enemy-status-strip__header {
-    min-height: 15px;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.enemy-status-strip__label,
-.enemy-status-strip__summary {
-    font-size: 10px;
-    -unity-font-style: bold;
-    letter-spacing: 1px;
-}
-
-.enemy-status-strip__label {
-    color: rgb(255, 139, 132);
-}
-
-.enemy-status-strip__summary {
-    color: rgb(146, 162, 176);
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    padding: 16px 16px 8px 16px;
+    background-color: rgba(7, 12, 19, 0.94);
+    border-bottom-width: 1px;
+    border-color: rgb(48, 65, 80);
 }
 
 .enemy-unit-cards {
     flex-grow: 0;
     height: 78px;
-    margin-top: 3px;
 }
 
 .enemy-unit-cards .unity-scroll-view__content-container {
     flex-grow: 1;
     flex-direction: row;
+    justify-content: center;
+}
+
+/* The hill readout floats over the right end of this same band, so King of the
+   Hill keeps the row packed left where it clears the readout at full card width. */
+.koth .enemy-unit-cards .unity-scroll-view__content-container {
+    justify-content: flex-start;
 }
 
 .unit-cards {
-    flex-grow: 0;
+    flex-grow: 1;
+    min-width: 0;
     height: 104px;
-    margin-top: 8px;
 }
 
 .unit-cards .unity-scroll-view__content-container {
@@ -369,16 +327,6 @@
     border-radius: 2px;
 }
 
-.unit-card__state-mark {
-    display: none;
-    position: absolute;
-    left: 8px;
-    top: 8px;
-    width: 7px;
-    height: 7px;
-    background-color: rgb(232, 167, 58);
-}
-
 .unit-card--selected {
     background-color: rgb(25, 37, 47);
     border-color: rgb(231, 167, 58);
@@ -391,10 +339,6 @@
 
 .unit-card--ability.unit-card--selected {
     border-color: rgb(255, 190, 92);
-}
-
-.unit-card--selected .unit-card__state-mark {
-    display: flex;
 }
 
 .unit-card--disabled {
@@ -853,23 +797,6 @@
     font-size: 12px;
 }
 
-.compact .hud-dock__header .section-label,
-.compact .planning-help,
-.compact .hud-key {
-    display: none;
-}
-
-.compact .phase-cluster {
-    width: 350px;
-    margin-left: -175px;
-}
-
-.narrow .hud-dock {
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-}
-
 .narrow .unit-card-host {
     width: 220px;
     min-width: 220px;
@@ -889,11 +816,6 @@
     min-width: 0;
 }
 
-.narrow .phase-cluster {
-    width: 330px;
-    margin-left: -165px;
-}
-
 .narrow .hill-status-readout {
     width: 244px;
 }
@@ -903,7 +825,17 @@
     padding-right: 10px;
 }
 
-.phone .hud-dock__header {
+.phone .enemy-status-strip {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.phone .hud-top {
+    left: 10px;
+    right: 10px;
+}
+
+.phone .hud-dock__row {
     flex-direction: column;
     align-items: stretch;
 }
@@ -913,17 +845,10 @@
     height: auto;
 }
 
-.phone .hud-key {
-    display: none;
-}
-
-.phone .planning-copy {
-    width: 100%;
-    padding-right: 0;
-}
-
 .phone .hud-header-actions {
     width: 100%;
+    margin-left: 0;
+    margin-top: 6px;
     justify-content: flex-end;
 }
 
@@ -1023,33 +948,24 @@
     font-size: 10px;
 }
 
-.phone .phase-cluster {
-    top: 0;
-    left: 0;
-    right: 0;
-    width: auto;
-    min-height: 54px;
-    margin-left: 0;
-    padding-top: 6px;
-    padding-bottom: 8px;
+.phone .phase-notch .phase-label {
+    font-size: 14px;
+}
+
+.phone .phase-notch .timer-label {
+    margin-left: 12px;
+    font-size: 16px;
 }
 
 .phone .hill-status-readout {
-    top: 62px;
-    left: 0;
+    top: 0;
+    left: auto;
     right: 0;
-    width: auto;
-    min-height: 66px;
+    width: 210px;
+    min-height: 62px;
     padding: 7px 10px 9px 10px;
     flex-direction: column;
     align-items: stretch;
-}
-
-.phone .hud-top {
-    left: 10px;
-    right: 10px;
-    top: 10px;
-    height: 148px;
 }
 
 .phone .hill-status-readout__key {
@@ -1084,24 +1000,8 @@
     padding-bottom: 8px;
 }
 
-.short .hud-dock__header {
-    min-height: 24px;
-    align-items: center;
-}
-
-.short .hud-dock__header .section-label,
-.short .planning-help,
-.short .hud-key {
-    display: none;
-}
-
-.short .planning-message-slot {
-    height: 24px;
-    min-height: 24px;
-}
-
 .short .target-feedback {
-    min-height: 22px;
+    min-height: 26px;
     padding-top: 3px;
     padding-bottom: 3px;
 }
@@ -1110,10 +1010,6 @@
     min-height: 44px;
     padding-top: 4px;
     padding-bottom: 4px;
-}
-
-.short .unit-cards {
-    margin-top: 0;
 }
 
 .short .unit-card-host,
@@ -1126,43 +1022,18 @@
     min-height: 72px;
 }
 
-.short .hud-top {
-    top: 12px;
+.short .phase-notch .phase-label {
+    font-size: 15px;
 }
 
-.short .phase-cluster {
-    top: 0;
-    min-height: 54px;
-}
-
-.short .phase-label {
-    font-size: 20px;
-}
-
-.short .hud-top .timer-label {
-    font-size: 16px;
+.short .phase-notch .timer-label {
+    font-size: 17px;
 }
 
 .phone.short .hud-controls-button {
     min-height: 44px;
     padding-top: 7px;
     padding-bottom: 7px;
-}
-
-.phone.short .hud-top {
-    left: 10px;
-    right: 10px;
-    top: 8px;
-    height: 72px;
-}
-
-.phone.short .phase-cluster {
-    left: 0;
-    right: auto;
-    width: 40%;
-    min-height: 54px;
-    margin-left: 0;
-    padding: 6px 12px 8px 12px;
 }
 
 .phone.short .hill-status-readout {

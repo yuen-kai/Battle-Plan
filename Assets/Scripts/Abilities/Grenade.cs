@@ -6,12 +6,36 @@ using UnityEngine;
 public partial class Grenade : Ability
 {
     float abilityTime = 1;
-    float throwHeight = 5f;
+
+    // How high the throw rises over the midpoint of its flight.
+    private const float ArcApexHeight = 2.5f;
 
     [SerializeField]
     private float damage = 80f;
     public GameObject grenadePrefab;
     public GameObject grenadeExplosionPrefab;
+
+    public override AbilityPathKind BuildPlannedPath(
+        Vector3 targetSquare,
+        UnitData data,
+        List<Vector3> points
+    )
+    {
+        return AbilityTrajectory.BuildLob(
+            transform.position,
+            GetThrowTarget(targetSquare),
+            ArcApexHeight,
+            points
+        )
+            ? AbilityPathKind.Lob
+            : AbilityPathKind.None;
+    }
+
+    /// <summary>Where the grenade comes to rest: the target square at the thrower's own height.</summary>
+    private Vector3 GetThrowTarget(Vector3 abilitySquare)
+    {
+        return abilitySquare + Helper.heightOffset(transform);
+    }
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3)
     {
@@ -22,8 +46,7 @@ public partial class Grenade : Ability
             Quaternion.identity
         );
         Vector3 startPosition = grenade.transform.position;
-        Vector3 targetPosition =
-            abilitySquare + new Vector3(0, GetComponent<Collider>().bounds.size.y / 2, 0);
+        Vector3 targetPosition = GetThrowTarget(abilitySquare);
 
         float elapsed = 0f;
 
@@ -32,11 +55,12 @@ public partial class Grenade : Ability
             elapsed += Time.deltaTime;
             float progress = elapsed / abilityTime;
 
-            // Interpolate between start and target positions
-            Vector3 currentPos = Vector3.Lerp(startPosition, targetPosition, progress);
-            currentPos.y += throwHeight * 2 * progress * (1 - progress);
-
-            grenade.transform.position = currentPos;
+            grenade.transform.position = AbilityTrajectory.SampleLob(
+                startPosition,
+                targetPosition,
+                ArcApexHeight,
+                progress
+            );
 
             yield return null; // Wait for next frame
         }

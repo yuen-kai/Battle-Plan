@@ -5,33 +5,31 @@
     <ui:VisualElement name="screen" class="screen game-screen" picking-mode="Ignore">
         <ui:VisualElement name="hud-flash" class="hud-flash" picking-mode="Ignore" />
 
-        <ui:VisualElement class="hud-top toybox-ui" picking-mode="Ignore">
-            <ui:VisualElement class="phase-cluster toy-readout" picking-mode="Ignore">
-                <ui:VisualElement class="phase-cluster__mark" picking-mode="Ignore" />
-                <ui:Label name="phase-label" text="Preparing match" class="phase-label" picking-mode="Ignore" />
-                <ui:Label name="timer-label" class="timer-label" picking-mode="Ignore" />
+        <ui:VisualElement name="enemy-status-strip" class="enemy-status-strip">
+            <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
+
+            <ui:VisualElement class="hud-top toybox-ui" picking-mode="Ignore">
+                <ui:VisualElement name="hill-status-readout" class="hill-status-readout toy-readout hidden" picking-mode="Ignore">
+                    <ui:Label text="Hill control" class="hill-status-readout__key toy-readout__label" picking-mode="Ignore" />
+                    <ui:Label name="hill-status-label" text="No control · 0/3" class="hill-status-readout__value toy-chip" picking-mode="Ignore" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
-            <ui:VisualElement name="hill-status-readout" class="hill-status-readout toy-readout hidden" picking-mode="Ignore">
-                <ui:Label text="Hill control" class="hill-status-readout__key toy-readout__label" picking-mode="Ignore" />
-                <ui:Label name="hill-status-label" text="No control · 0/3" class="hill-status-readout__value toy-chip" picking-mode="Ignore" />
+            <ui:VisualElement class="phase-notch toybox-ui" picking-mode="Ignore">
+                <ui:VisualElement class="phase-cluster toy-readout" picking-mode="Ignore">
+                    <ui:VisualElement class="phase-cluster__mark" picking-mode="Ignore" />
+                    <ui:Label name="phase-label" text="Preparing match" class="phase-label" picking-mode="Ignore" />
+                    <ui:Label name="timer-label" class="timer-label" picking-mode="Ignore" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement name="hud-dock" class="hud-dock">
-            <ui:VisualElement class="hud-dock__header">
-                <ui:VisualElement class="planning-copy" picking-mode="Ignore">
-                    <ui:Label text="Fireteam orders" class="section-label" picking-mode="Ignore" />
-                    <ui:VisualElement class="planning-message-slot" picking-mode="Ignore">
-                        <ui:Label name="planning-help" text="Set one order for each unit. Lock in when ready; unlock to keep editing while you wait." class="planning-help" picking-mode="Ignore" />
-                        <ui:Label name="target-feedback-label" class="target-feedback hidden" picking-mode="Ignore" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
+            <ui:Label name="target-feedback-label" class="target-feedback hidden" picking-mode="Ignore" />
+
+            <ui:VisualElement class="hud-dock__row">
+                <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" />
                 <ui:VisualElement class="hud-header-actions">
-                    <ui:VisualElement class="hud-key" picking-mode="Ignore">
-                        <ui:VisualElement class="hud-key__swatch hud-key__swatch--amber" picking-mode="Ignore" />
-                        <ui:Label text="ACTIVE ORDER" class="hud-key__label" picking-mode="Ignore" />
-                    </ui:VisualElement>
                     <ui:VisualElement name="planning-commit" class="planning-commit hidden">
                         <ui:Label name="planning-commit-status" text="READY" class="planning-commit__status" picking-mode="Ignore" />
                         <ui:Button name="lock-in-button" text="Lock in" class="button button--primary planning-commit__button" tooltip="Lock current orders" />
@@ -39,21 +37,13 @@
                     <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
                 </ui:VisualElement>
             </ui:VisualElement>
-            <ui:VisualElement name="enemy-status-strip" class="enemy-status-strip">
-                <ui:VisualElement class="enemy-status-strip__header" picking-mode="Ignore">
-                    <ui:Label text="Enemy fireteam" class="enemy-status-strip__label" picking-mode="Ignore" />
-                    <ui:Label name="enemy-contact-summary" text="STATUS LINK" class="enemy-status-strip__summary" picking-mode="Ignore" />
-                </ui:VisualElement>
-                <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
-            </ui:VisualElement>
-            <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" />
         </ui:VisualElement>
 
         <ui:VisualElement name="deployment-overlay" class="deployment-overlay toybox-ui" focusable="true" tabindex="-1">
             <ui:VisualElement class="deployment-overlay__content toy-panel" picking-mode="Ignore">
                 <ui:VisualElement class="deployment-overlay__mark" picking-mode="Ignore" />
-                <ui:Label text="Deploying fireteams" class="deployment-overlay__title title-lg" picking-mode="Ignore" />
-                <ui:Label name="deployment-status" text="Preparing the battlefield and both fireteams." class="deployment-overlay__status label label--muted" picking-mode="Ignore" />
+                <ui:Label text="Deploying crews" class="deployment-overlay__title title-lg" picking-mode="Ignore" />
+                <ui:Label name="deployment-status" text="Preparing the battlefield and both crews." class="deployment-overlay__status label label--muted" picking-mode="Ignore" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -70,7 +60,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Select a unit. Select its card again to switch between movement and its ability, then choose the highlighted destination or target." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Select a unit, then choose the highlighted destination or target. Click a unit with no route to switch it to its ability; its card switches back." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
@@ -93,7 +83,7 @@
                         <ui:Label text="Win conditions" class="control-section__label" picking-mode="Ignore" />
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Wipe out the enemy fireteam." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Wipe out the enemy crew." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row control-row--last">
                             <ui:Label text="King of the Hill" class="control-key" picking-mode="Ignore" />

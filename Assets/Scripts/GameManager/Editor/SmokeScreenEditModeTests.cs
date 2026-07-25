@@ -18,6 +18,7 @@ public class SmokeScreenEditModeTests
     private const string CatalogPath = "Assets/UnitStats/AllUnits.asset";
     private const string CommanderDataPath = "Assets/UnitStats/Commander.asset";
     private const string CommanderPrefabPath = "Assets/Prefabs/Units/Commander.prefab";
+    private const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
 
     // === Footprint: exact deterministic interior 3x3 ===
 
@@ -635,7 +636,7 @@ public class SmokeScreenEditModeTests
         Assert.That(commander.abilityName, Is.EqualTo("Smoke Screen"));
         Assert.That(commander.selectAbilitySquare, Is.True);
         Assert.That(commander.selectAbilityDirection, Is.False);
-        Assert.That(commander.abilitySquareRange, Is.EqualTo(3));
+        Assert.That(commander.abilitySquareRange, Is.EqualTo(4));
         Assert.That(commander.abilityFixedDistance, Is.EqualTo(0));
         Assert.That(commander.abilityCooldownRounds, Is.EqualTo(2));
         // abilityRadius drives the visual/target preview; the placed cloud is cell-quantized by
@@ -676,6 +677,60 @@ public class SmokeScreenEditModeTests
             "Smoke must be the Commander's only ability."
         );
         Assert.That(abilityComponents[0], Is.InstanceOf<Smoke>());
+    }
+
+    /// <summary>
+    /// The screen is now thrown, so the canister is part of the Commander's contract. An unassigned
+    /// prefab silently degrades to an invisible throw, and one that is not registered as a network
+    /// prefab spawns for the server alone — a fault that would otherwise only surface in a live
+    /// two-client match.
+    /// </summary>
+    [Test]
+    public void CommanderPrefab_ThrowsARegisteredNetworkCanister()
+    {
+        GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            CommanderPrefabPath
+        );
+        Assert.That(prefab, Is.Not.Null, $"Could not load {CommanderPrefabPath}.");
+
+        UnityEditor.SerializedProperty canisterProperty = new UnityEditor.SerializedObject(
+            prefab.GetComponent<Smoke>()
+        ).FindProperty("canisterPrefab");
+        Assert.That(canisterProperty, Is.Not.Null, "Smoke must expose a canisterPrefab field.");
+
+        GameObject canister = canisterProperty.objectReferenceValue as GameObject;
+        Assert.That(canister, Is.Not.Null, "The Commander must be given a canister to throw.");
+        Assert.That(
+            canister.GetComponent<NetworkObject>(),
+            Is.Not.Null,
+            "The canister is spawned through NetworkHelper, so it needs a NetworkObject."
+        );
+
+        NetworkPrefabsList networkPrefabs =
+            UnityEditor.AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>(
+                DefaultNetworkPrefabsPath
+            );
+        Assert.That(networkPrefabs, Is.Not.Null, $"Could not load {DefaultNetworkPrefabsPath}.");
+        Assert.That(
+            networkPrefabs.PrefabList.Any(entry => entry != null && entry.Prefab == canister),
+            Is.True,
+            "The canister must be a registered network prefab or it will never reach clients."
+        );
+    }
+
+    /// <summary>
+    /// The flight has to stay brief. It is the window in which the committed screen is telegraphed
+    /// but not yet blocking, so a long throw would hand the opponent real shooting time.
+    /// </summary>
+    [Test]
+    public void SmokeThrow_IsShortEnoughToLandInsideTheCombatWindow()
+    {
+        Assert.That(Smoke.ThrowSeconds, Is.GreaterThan(0f));
+        Assert.That(
+            Smoke.ThrowSeconds,
+            Is.LessThanOrEqualTo(0.5f),
+            "A longer throw turns the deploy delay into exploitable clear sight."
+        );
     }
 
     private static void AssertCellSegment(

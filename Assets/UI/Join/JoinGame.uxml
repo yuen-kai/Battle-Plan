@@ -35,7 +35,7 @@
                                 <ui:VisualElement class="toy-icon toy-icon--elimination mode-option__icon" picking-mode="Ignore" />
                                 <ui:VisualElement class="option-copy" picking-mode="Ignore">
                                     <ui:Label text="Elimination" class="toy-button__label mode-option__name" />
-                                    <ui:Label text="Knock out the other team." class="toy-button__label mode-option__detail" />
+                                    <ui:Label text="Knock out the other crew." class="toy-button__label mode-option__detail" />
                                 </ui:VisualElement>
                             </ui:Button>
                             <ui:Button name="king-button" class="button mode-option">
