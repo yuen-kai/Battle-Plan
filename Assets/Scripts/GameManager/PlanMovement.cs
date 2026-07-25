@@ -1386,6 +1386,7 @@ public class PlanMovement : MonoBehaviour
         GameHUDController.Instance?.ClearTargetFeedback();
         ApplySelectedUnitModeVisuals();
         RefreshUnitCards();
+        PlanningAudio.AbilityModeChanged(abilityMode);
         return true;
     }
 
@@ -1399,6 +1400,8 @@ public class PlanMovement : MonoBehaviour
         GameObject previousUnit = selectedUnit;
         selectedUnit = newSelectedUnit;
         GameHUDController.Instance?.ClearTargetFeedback();
+        if (previousUnit != selectedUnit)
+            PlanningAudio.UnitSelected(selectedUnit);
         if (selectedUnit == null)
         {
             Destroy(moveOverlay);
@@ -1509,6 +1512,7 @@ public class PlanMovement : MonoBehaviour
     public void NotifyCurrentRouteChanged()
     {
         RefreshAllRibbons();
+        PlanningAudio.RouteChanged(currentPlan?.Count ?? 0);
     }
 
     /// <summary>

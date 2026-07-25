@@ -18,6 +18,7 @@
                 <ui:VisualElement name="unit-card-flip-icon" class="unit-card__flip-icon" picking-mode="Ignore" />
                 <ui:Label name="unit-card-cooldown" class="unit-card__cooldown hidden" picking-mode="Ignore" />
             </ui:VisualElement>
+            <ui:VisualElement class="unit-card__focus-ring" picking-mode="Ignore" />
         </ui:Button>
     </ui:VisualElement>
 </ui:UXML>

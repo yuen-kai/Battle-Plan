@@ -5,119 +5,104 @@ VisualElement {}
 
 .unity-base-dropdown {
     -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
-    background-color: var(--toy-playmat);
-    color: var(--toy-cream);
-    font-size: var(--toy-type-body);
+    background-color: var(--bp-deck-2);
+    color: var(--bp-text);
+    font-size: var(--bp-type-body);
 }
 
 .unity-base-dropdown__container-outer {
-    background-color: var(--toy-playmat);
-    border-width: var(--toy-stroke-thin);
-    border-bottom-width: var(--toy-depth-panel);
-    border-color: var(--toy-ink);
-    border-radius: var(--toy-radius-md);
+    background-color: var(--bp-deck-2);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-radius: var(--bp-r-md);
 }
 
 .unity-base-dropdown__container-inner {
-    background-color: var(--toy-playmat);
+    background-color: var(--bp-deck-2);
 }
 
 .unity-base-dropdown__item {
-    min-height: var(--toy-target-compact);
-    padding: var(--toy-space-sm) var(--toy-space-md);
-    background-color: var(--toy-playmat);
-    color: var(--toy-cream);
-    border-left-width: var(--toy-stroke);
-    border-left-color: var(--toy-transparent);
-    font-size: var(--toy-type-body);
-    transition-duration: var(--toy-motion-fast);
+    min-height: 40px;
+    padding: 0 var(--bp-s3);
+    align-items: center;
+    background-color: var(--bp-transparent);
+    color: var(--bp-text-2);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-transparent);
+    font-size: var(--bp-type-body);
     transition-property: background-color, border-color, color;
+    transition-duration: var(--bp-t-fast);
+    transition-timing-function: var(--bp-ease-out);
 }
 
 .unity-base-dropdown__item:hover {
-    background-color: var(--toy-playmat-hover);
-    color: var(--toy-cream);
-    border-left-color: var(--toy-cream);
+    background-color: var(--bp-deck-3);
+    color: var(--bp-text);
 }
 
 .unity-base-dropdown__item:active {
-    background-color: var(--toy-playmat-pressed);
-    color: var(--toy-cream);
-    border-left-color: var(--toy-cream);
+    background-color: var(--bp-deck-4);
+    color: var(--bp-text);
 }
 
 .unity-base-dropdown__item:checked {
-    background-color: var(--toy-teal);
-    color: var(--toy-ink);
-    border-left-color: var(--toy-cream);
+    background-color: var(--bp-deck-3);
+    color: var(--bp-text);
+    border-left-color: var(--bp-blue);
 }
 
 .unity-base-dropdown__item:checked:hover {
-    background-color: var(--toy-teal-hover);
-    color: var(--toy-ink);
-}
-
-.unity-base-dropdown__item:checked:active {
-    background-color: var(--toy-teal-pressed);
-    color: var(--toy-ink);
+    background-color: var(--bp-deck-4);
+    color: var(--bp-text);
 }
 
 .unity-base-dropdown__item:focus,
 .unity-base-dropdown__item:hover:focus,
 .unity-base-dropdown__item:active:focus,
 .unity-base-dropdown__item:checked:focus {
-    border-left-color: var(--toy-sky);
+    background-color: var(--bp-deck-3);
+    border-left-color: var(--bp-focus-light);
 }
 
 .unity-base-dropdown__item:disabled,
 .unity-base-dropdown__item:disabled:hover,
 .unity-base-dropdown__item:disabled:focus,
 .unity-base-dropdown__item:disabled:active {
-    background-color: var(--toy-disabled-surface);
-    color: var(--toy-muted);
-    border-left-color: var(--toy-disabled-border);
     opacity: 1;
+    background-color: var(--bp-deck-1);
+    color: var(--bp-text-3);
+    border-left-color: var(--bp-transparent);
 }
 
 .unity-base-dropdown__item:checked:disabled,
 .unity-base-dropdown__item:checked:disabled:hover,
 .unity-base-dropdown__item:checked:disabled:focus,
 .unity-base-dropdown__item:checked:disabled:active {
-    background-color: var(--toy-teal);
-    color: var(--toy-ink);
-    border-left-color: var(--toy-disabled-border);
+    background-color: var(--bp-deck-1);
+    color: var(--bp-text-3);
+    border-left-color: var(--bp-blue-dim);
 }
 
 .unity-base-dropdown__label {
-    color: var(--toy-cream);
-    font-size: var(--toy-type-body);
+    color: var(--bp-text-2);
+    font-size: var(--bp-type-body);
 }
 
+.unity-base-dropdown__item:hover .unity-base-dropdown__label,
 .unity-base-dropdown__item:checked .unity-base-dropdown__label {
-    color: var(--toy-ink);
+    color: var(--bp-text);
 }
 
 .unity-base-dropdown__item:disabled .unity-base-dropdown__label {
-    color: var(--toy-muted);
+    color: var(--bp-text-3);
 }
 
-.unity-base-dropdown__item:checked:disabled .unity-base-dropdown__label {
-    color: var(--toy-ink);
-}
-
+/* The 3px left rule already carries the checked state; the tick would repeat it. */
 .unity-base-dropdown__checkmark {
-    color: var(--toy-teal);
-}
-
-.unity-base-dropdown__item:checked .unity-base-dropdown__checkmark {
-    color: var(--toy-ink);
-}
-
-.unity-base-dropdown__item:disabled .unity-base-dropdown__checkmark {
-    color: var(--toy-muted);
+    display: none;
 }
 
 .unity-base-dropdown__separator {
-    height: var(--toy-stroke-thin);
-    background-color: var(--toy-divider);
+    height: var(--bp-bw-hair);
+    background-color: var(--bp-line-2);
 }

@@ -565,7 +565,7 @@ public class JoinGameUIController : MonoBehaviour
             {
                 RestoreDirectTransport();
                 ConfigureLoopbackTransport(networkManager);
-                SetCreateStatus("Starting local match...", false);
+                SetCreateStatus("Starting local match…", false);
                 EnsureCurrentOperation(operationVersion);
                 bool botHostStarted = networkManager.StartHost();
                 EnsureCurrentOperation(operationVersion);
@@ -579,7 +579,7 @@ public class JoinGameUIController : MonoBehaviour
                 ShowHostStatusPanel(
                     "Local endpoint",
                     $"{LocalMultiplayerAddress}:{LocalMultiplayerPort}",
-                    "Starting local host..."
+                    "Starting local host…"
                 );
                 RestoreDirectTransport();
                 ConfigureLoopbackTransport(networkManager);
@@ -595,7 +595,7 @@ public class JoinGameUIController : MonoBehaviour
                 return;
             }
 
-            ShowHostStatusPanel("Relay code", string.Empty, "Creating Relay host...");
+            ShowHostStatusPanel("Relay code", string.Empty, "Creating Relay host…");
             RestoreDirectTransport();
             RelayManager relayManager = RequireRelayManager();
             string joinCode = await relayManager.PrepareHostAsync(1, networkCancellation.Token);
@@ -608,6 +608,7 @@ public class JoinGameUIController : MonoBehaviour
             if (relayCodeLabel != null)
                 relayCodeLabel.text = joinCode;
             SetRelayStatus("Waiting for second player.");
+            BattlePlanAudio.Play(AudioCueId.RelayCodeReady);
         }
         catch (OperationCanceledException exception)
         {
@@ -644,7 +645,7 @@ public class JoinGameUIController : MonoBehaviour
         GameLoop.ResetMatchState();
         ClearMppmDirective();
         int operationVersion = BeginNetworkOperation(NetworkOperationKind.Client);
-        SetJoinStatus("Preparing Relay connection...", false);
+        SetJoinStatus("Preparing Relay connection…", false);
         ShowJoinCancel();
 
         try
@@ -658,7 +659,7 @@ public class JoinGameUIController : MonoBehaviour
             await relayManager.PrepareClientAsync(joinCode, networkCancellation.Token);
             EnsureCurrentOperation(operationVersion);
 
-            SetJoinStatus("Connecting...", false);
+            SetJoinStatus("Connecting…", false);
             bool clientStarted = networkManager.StartClient();
             EnsureCurrentOperation(operationVersion);
             if (!clientStarted)

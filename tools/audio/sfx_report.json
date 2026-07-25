@@ -1,0 +1,610 @@
+[
+  {
+    "name": "UiHover",
+    "seconds": 0.045,
+    "channels": 1,
+    "peak_db": -19.0,
+    "mono_peak_db": -19.0,
+    "rms_db": -36.16
+  },
+  {
+    "name": "UiPress",
+    "seconds": 0.065,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -25.19
+  },
+  {
+    "name": "UiPressPrimary",
+    "seconds": 0.12,
+    "channels": 1,
+    "peak_db": -6.0,
+    "mono_peak_db": -6.0,
+    "rms_db": -20.0
+  },
+  {
+    "name": "UiPressDisabled",
+    "seconds": 0.09,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -24.1
+  },
+  {
+    "name": "UiToggleOn",
+    "seconds": 0.085,
+    "channels": 1,
+    "peak_db": -8.5,
+    "mono_peak_db": -8.5,
+    "rms_db": -25.5
+  },
+  {
+    "name": "UiToggleOff",
+    "seconds": 0.085,
+    "channels": 1,
+    "peak_db": -10.0,
+    "mono_peak_db": -10.0,
+    "rms_db": -27.82
+  },
+  {
+    "name": "UiTabChange",
+    "seconds": 0.075,
+    "channels": 1,
+    "peak_db": -9.0,
+    "mono_peak_db": -9.0,
+    "rms_db": -28.48
+  },
+  {
+    "name": "UiDialogOpen",
+    "seconds": 0.19,
+    "channels": 1,
+    "peak_db": -7.5,
+    "mono_peak_db": -7.5,
+    "rms_db": -26.51
+  },
+  {
+    "name": "UiDialogClose",
+    "seconds": 0.15,
+    "channels": 1,
+    "peak_db": -9.0,
+    "mono_peak_db": -9.0,
+    "rms_db": -28.64
+  },
+  {
+    "name": "UiError",
+    "seconds": 0.22,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -24.18
+  },
+  {
+    "name": "UiConfirm",
+    "seconds": 0.15,
+    "channels": 1,
+    "peak_db": -7.0,
+    "mono_peak_db": -7.0,
+    "rms_db": -24.37
+  },
+  {
+    "name": "RosterPick",
+    "seconds": 0.12,
+    "channels": 1,
+    "peak_db": -7.0,
+    "mono_peak_db": -7.0,
+    "rms_db": -27.12
+  },
+  {
+    "name": "RosterRemove",
+    "seconds": 0.12,
+    "channels": 1,
+    "peak_db": -9.0,
+    "mono_peak_db": -9.0,
+    "rms_db": -24.62
+  },
+  {
+    "name": "RosterConfirm",
+    "seconds": 0.42,
+    "channels": 1,
+    "peak_db": -5.5,
+    "mono_peak_db": -5.5,
+    "rms_db": -23.57
+  },
+  {
+    "name": "RelayCodeReady",
+    "seconds": 0.24,
+    "channels": 1,
+    "peak_db": -7.0,
+    "mono_peak_db": -7.0,
+    "rms_db": -30.83
+  },
+  {
+    "name": "MatchDeploy",
+    "seconds": 2.4,
+    "channels": 1,
+    "peak_db": -4.0,
+    "mono_peak_db": -4.0,
+    "rms_db": -18.95
+  },
+  {
+    "name": "PhasePlanning",
+    "seconds": 0.9,
+    "channels": 1,
+    "peak_db": -6.0,
+    "mono_peak_db": -6.0,
+    "rms_db": -22.43
+  },
+  {
+    "name": "PhaseDodge",
+    "seconds": 1.429,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -20.16
+  },
+  {
+    "name": "PhaseDodgeResolve",
+    "seconds": 0.3,
+    "channels": 1,
+    "peak_db": -10.0,
+    "mono_peak_db": -10.0,
+    "rms_db": -28.56
+  },
+  {
+    "name": "PhaseExecute",
+    "seconds": 1.2,
+    "channels": 1,
+    "peak_db": -4.5,
+    "mono_peak_db": -4.5,
+    "rms_db": -26.82
+  },
+  {
+    "name": "PhaseRoundEnd",
+    "seconds": 0.72,
+    "channels": 1,
+    "peak_db": -7.5,
+    "mono_peak_db": -7.5,
+    "rms_db": -28.25
+  },
+  {
+    "name": "TimerTick",
+    "seconds": 0.06,
+    "channels": 1,
+    "peak_db": -14.0,
+    "mono_peak_db": -14.0,
+    "rms_db": -30.9
+  },
+  {
+    "name": "TimerFinal",
+    "seconds": 0.06,
+    "channels": 1,
+    "peak_db": -10.0,
+    "mono_peak_db": -10.0,
+    "rms_db": -33.61
+  },
+  {
+    "name": "MatchWin",
+    "seconds": 3.5,
+    "channels": 1,
+    "peak_db": -4.0,
+    "mono_peak_db": -4.0,
+    "rms_db": -23.66
+  },
+  {
+    "name": "MatchLose",
+    "seconds": 3.0,
+    "channels": 1,
+    "peak_db": -6.5,
+    "mono_peak_db": -6.5,
+    "rms_db": -20.15
+  },
+  {
+    "name": "UnitSelect",
+    "seconds": 0.1,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -26.62
+  },
+  {
+    "name": "UnitDeselect",
+    "seconds": 0.09,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -25.05
+  },
+  {
+    "name": "AbilityModeEnter",
+    "seconds": 0.27,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -23.52
+  },
+  {
+    "name": "AbilityModeExit",
+    "seconds": 0.17,
+    "channels": 1,
+    "peak_db": -11.0,
+    "mono_peak_db": -11.0,
+    "rms_db": -21.09
+  },
+  {
+    "name": "PathNodeAdd",
+    "seconds": 0.05,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -27.44
+  },
+  {
+    "name": "PathNodeRemove",
+    "seconds": 0.05,
+    "channels": 1,
+    "peak_db": -14.0,
+    "mono_peak_db": -14.0,
+    "rms_db": -30.95
+  },
+  {
+    "name": "TargetConfirm",
+    "seconds": 0.15,
+    "channels": 1,
+    "peak_db": -7.0,
+    "mono_peak_db": -7.0,
+    "rms_db": -22.79
+  },
+  {
+    "name": "LockIn",
+    "seconds": 0.34,
+    "channels": 1,
+    "peak_db": -4.5,
+    "mono_peak_db": -4.5,
+    "rms_db": -22.91
+  },
+  {
+    "name": "LockInWaiting",
+    "seconds": 0.22,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -27.33
+  },
+  {
+    "name": "Unlock",
+    "seconds": 0.25,
+    "channels": 1,
+    "peak_db": -9.0,
+    "mono_peak_db": -9.0,
+    "rms_db": -26.18
+  },
+  {
+    "name": "AbilityReady",
+    "seconds": 0.2,
+    "channels": 1,
+    "peak_db": -10.0,
+    "mono_peak_db": -10.0,
+    "rms_db": -26.97
+  },
+  {
+    "name": "WeaponPistol",
+    "seconds": 0.11,
+    "channels": 1,
+    "peak_db": -6.0,
+    "mono_peak_db": -6.0,
+    "rms_db": -17.87
+  },
+  {
+    "name": "WeaponRifle",
+    "seconds": 0.13,
+    "channels": 1,
+    "peak_db": -5.5,
+    "mono_peak_db": -5.5,
+    "rms_db": -17.58
+  },
+  {
+    "name": "WeaponShotgun",
+    "seconds": 0.42,
+    "channels": 1,
+    "peak_db": -4.5,
+    "mono_peak_db": -4.5,
+    "rms_db": -16.59
+  },
+  {
+    "name": "WeaponSniper",
+    "seconds": 0.52,
+    "channels": 1,
+    "peak_db": -4.0,
+    "mono_peak_db": -4.0,
+    "rms_db": -15.85
+  },
+  {
+    "name": "WeaponSmg",
+    "seconds": 0.09,
+    "channels": 1,
+    "peak_db": -7.0,
+    "mono_peak_db": -7.0,
+    "rms_db": -20.06
+  },
+  {
+    "name": "SniperLockCharge",
+    "seconds": 2.0,
+    "channels": 1,
+    "peak_db": -11.0,
+    "mono_peak_db": -11.0,
+    "rms_db": -21.95
+  },
+  {
+    "name": "WeaponReloadShort",
+    "seconds": 1.0,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -34.29
+  },
+  {
+    "name": "WeaponReloadLong",
+    "seconds": 2.5,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -34.66
+  },
+  {
+    "name": "BulletWhizz",
+    "seconds": 0.14,
+    "channels": 1,
+    "peak_db": -11.0,
+    "mono_peak_db": -11.0,
+    "rms_db": -23.67
+  },
+  {
+    "name": "ImpactBody",
+    "seconds": 0.09,
+    "channels": 1,
+    "peak_db": -6.5,
+    "mono_peak_db": -6.5,
+    "rms_db": -21.53
+  },
+  {
+    "name": "ImpactArmor",
+    "seconds": 0.1,
+    "channels": 1,
+    "peak_db": -6.5,
+    "mono_peak_db": -6.5,
+    "rms_db": -25.64
+  },
+  {
+    "name": "ImpactSurface",
+    "seconds": 0.1,
+    "channels": 1,
+    "peak_db": -10.0,
+    "mono_peak_db": -10.0,
+    "rms_db": -29.25
+  },
+  {
+    "name": "ShieldBlock",
+    "seconds": 0.12,
+    "channels": 1,
+    "peak_db": -6.0,
+    "mono_peak_db": -6.0,
+    "rms_db": -24.62
+  },
+  {
+    "name": "DamageTaken",
+    "seconds": 0.16,
+    "channels": 1,
+    "peak_db": -5.0,
+    "mono_peak_db": -5.0,
+    "rms_db": -21.59
+  },
+  {
+    "name": "UnitEliminated",
+    "seconds": 0.7,
+    "channels": 1,
+    "peak_db": -5.0,
+    "mono_peak_db": -5.0,
+    "rms_db": -21.62
+  },
+  {
+    "name": "UnitSpawn",
+    "seconds": 0.3,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -26.55
+  },
+  {
+    "name": "UnitStep_01",
+    "seconds": 0.075,
+    "channels": 1,
+    "peak_db": -17.55,
+    "mono_peak_db": -17.55,
+    "rms_db": -34.0
+  },
+  {
+    "name": "UnitStep_02",
+    "seconds": 0.075,
+    "channels": 1,
+    "peak_db": -10.74,
+    "mono_peak_db": -10.74,
+    "rms_db": -34.0
+  },
+  {
+    "name": "UnitStep_03",
+    "seconds": 0.075,
+    "channels": 1,
+    "peak_db": -18.38,
+    "mono_peak_db": -18.38,
+    "rms_db": -34.0
+  },
+  {
+    "name": "UnitStep_04",
+    "seconds": 0.075,
+    "channels": 1,
+    "peak_db": -11.58,
+    "mono_peak_db": -11.58,
+    "rms_db": -34.0
+  },
+  {
+    "name": "UnitDive",
+    "seconds": 0.24,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -21.82
+  },
+  {
+    "name": "AbilityTelegraph",
+    "seconds": 0.42,
+    "channels": 1,
+    "peak_db": -6.5,
+    "mono_peak_db": -6.5,
+    "rms_db": -25.81
+  },
+  {
+    "name": "DodgeAlert",
+    "seconds": 0.9,
+    "channels": 1,
+    "peak_db": -4.0,
+    "mono_peak_db": -4.0,
+    "rms_db": -17.09
+  },
+  {
+    "name": "SmokeThrow",
+    "seconds": 0.19,
+    "channels": 1,
+    "peak_db": -11.0,
+    "mono_peak_db": -11.0,
+    "rms_db": -26.28
+  },
+  {
+    "name": "SmokeBloom",
+    "seconds": 0.95,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -23.52
+  },
+  {
+    "name": "PogoLaunch",
+    "seconds": 0.27,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -17.81
+  },
+  {
+    "name": "PogoLand",
+    "seconds": 0.35,
+    "channels": 1,
+    "peak_db": -4.5,
+    "mono_peak_db": -4.5,
+    "rms_db": -18.01
+  },
+  {
+    "name": "ShieldRaise",
+    "seconds": 0.43,
+    "channels": 1,
+    "peak_db": -7.0,
+    "mono_peak_db": -7.0,
+    "rms_db": -22.37
+  },
+  {
+    "name": "ShieldDrop",
+    "seconds": 0.25,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -23.78
+  },
+  {
+    "name": "AreaLockCharge",
+    "seconds": 3.0,
+    "channels": 1,
+    "peak_db": -10.0,
+    "mono_peak_db": -10.0,
+    "rms_db": -20.2
+  },
+  {
+    "name": "AreaLockFire",
+    "seconds": 0.7,
+    "channels": 1,
+    "peak_db": -3.0,
+    "mono_peak_db": -3.0,
+    "rms_db": -13.29
+  },
+  {
+    "name": "AreaLockImpact",
+    "seconds": 0.5,
+    "channels": 1,
+    "peak_db": -3.5,
+    "mono_peak_db": -3.5,
+    "rms_db": -16.65
+  },
+  {
+    "name": "AreaLockExpire",
+    "seconds": 0.3,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -22.33
+  },
+  {
+    "name": "GrenadeThrow",
+    "seconds": 0.17,
+    "channels": 1,
+    "peak_db": -12.0,
+    "mono_peak_db": -12.0,
+    "rms_db": -25.63
+  },
+  {
+    "name": "GrenadeFuse",
+    "seconds": 1.0,
+    "channels": 1,
+    "peak_db": -10.0,
+    "mono_peak_db": -10.0,
+    "rms_db": -38.13
+  },
+  {
+    "name": "GrenadeExplode",
+    "seconds": 1.1,
+    "channels": 1,
+    "peak_db": -2.5,
+    "mono_peak_db": -2.5,
+    "rms_db": -15.68
+  },
+  {
+    "name": "HillCaptured",
+    "seconds": 0.5,
+    "channels": 1,
+    "peak_db": -6.0,
+    "mono_peak_db": -6.0,
+    "rms_db": -25.02
+  },
+  {
+    "name": "HillLost",
+    "seconds": 0.5,
+    "channels": 1,
+    "peak_db": -8.0,
+    "mono_peak_db": -8.0,
+    "rms_db": -24.14
+  },
+  {
+    "name": "HillContested",
+    "seconds": 0.36,
+    "channels": 1,
+    "peak_db": -8.5,
+    "mono_peak_db": -8.5,
+    "rms_db": -28.59
+  },
+  {
+    "name": "AmbienceBoard",
+    "seconds": 12.0,
+    "channels": 2,
+    "peak_db": -22.0,
+    "mono_peak_db": -24.25,
+    "rms_db": -34.82
+  }
+]

@@ -26,11 +26,14 @@ Material:
     m_Ints: []
     m_Floats:
     - _ApexIntensity: 0.25
+    - _CompositeMode: 2
+    - _DstBlend: 0
     - _FarFade: 0.35
     - _FlickerAmount: 0.1
     - _FlickerSpeed: 0
     - _SideSoftness: 0.6
+    - _SrcBlend: 2
     m_Colors:
-    - _ConeColor: {r: 0.55, g: 0.8, b: 1, a: 0.28}
+    - _ConeColor: {r: 0.0482, g: 0.0723, b: 0.0908, a: 0.22}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

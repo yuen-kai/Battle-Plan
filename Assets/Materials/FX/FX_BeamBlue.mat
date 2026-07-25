@@ -25,14 +25,17 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
+    - _CompositeMode: 1
     - _CoreWidth: 0.25
+    - _DstBlend: 10
     - _EdgeSoftness: 0.5
-    - _ScrollSpeed: 3
+    - _Intensity: 1
     - _NoiseScale: 8
     - _NoiseStrength: 0.35
-    - _Intensity: 1
+    - _ScrollSpeed: 3
+    - _SrcBlend: 5
     m_Colors:
-    - _GlowColor: {r: 0.44, g: 1.6, b: 2.4, a: 1}
-    - _CoreColor: {r: 4, g: 4, b: 4, a: 1}
+    - _CoreColor: {r: 0.0033, g: 0.0685, b: 0.2918, a: 1}
+    - _GlowColor: {r: 0.0033, g: 0.0685, b: 0.2918, a: 0.85}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

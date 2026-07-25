@@ -1,5 +1,14 @@
+/* Match HUD — five floating widget clusters anchored to the screen edges
+   (ArtDirection §5.5, "Game HUD"). The two full-bleed bars are retired: .enemy-status-strip
+   and .hud-dock are now transparent positioning frames that pick nothing, and
+   every fill lives on the widget inside them.
+
+   ⚠ Game.unity's camera viewport rect must be full-screen (x 0, y 0, w 1, h 1).
+   It was tuned to reserve a band for the retired top bar; leaving it at
+   y 0.112 / height 0.83 letterboxes the board inside the new layout. */
+
 .game-screen {
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--bp-transparent);
 }
 
 .hud-flash {
@@ -9,257 +18,61 @@
     top: 0;
     bottom: 0;
     opacity: 0;
-    background-color: rgba(255, 255, 255, 0.15);
-    transition-duration: 0.14s;
+    background-color: var(--bp-transparent);
     transition-property: opacity;
+    transition-duration: var(--bp-t-flash-out);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+/* The tint is an opaque token and the beat's strength is the element opacity,
+   because var() cannot be nested inside an alpha colour. */
+.hud-flash--friendly {
+    background-color: var(--bp-blue);
+}
+
+.hud-flash--enemy {
+    background-color: var(--bp-red);
+}
+
+.hud-flash--neutral {
+    background-color: var(--bp-text);
 }
 
 .hud-flash--active {
-    opacity: 1;
+    opacity: 0.07;
+    transition-duration: var(--bp-t-flash-in);
 }
 
-.hud-top {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    top: 16px;
-    height: 78px;
+.hud-flash--active.hud-flash--friendly {
+    opacity: 0.1;
 }
 
-/* Centred tab hanging off the bottom edge of the top bar. The camera viewport
-   is tuned so the board starts below it, so changing its depth means retuning
-   Game.unity's viewport rect too. */
-.phase-notch {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -31px;
-    height: 39px;
-    flex-direction: row;
-    justify-content: center;
+.hud-flash--active.hud-flash--enemy {
+    opacity: 0.12;
 }
 
-.phase-notch .phase-cluster {
-    height: 39px;
-    flex-direction: row;
-    align-items: center;
-    padding: 0 20px;
-    background-color: var(--toy-panel);
-    border-color: var(--toy-ink);
-    border-bottom-width: var(--toy-stroke-thin);
-    border-left-width: var(--toy-stroke-thin);
-    border-right-width: var(--toy-stroke-thin);
-    border-bottom-left-radius: var(--toy-radius-lg);
-    border-bottom-right-radius: var(--toy-radius-lg);
+.hud-flash--active.hud-flash--neutral {
+    opacity: 0.07;
 }
 
-.phase-notch .phase-cluster__mark {
-    width: 9px;
-    height: 9px;
-    margin-right: 11px;
-    background-color: var(--toy-orange);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-ink);
-    border-radius: var(--toy-radius-sm);
-}
-
-.phase-notch .phase-label {
-    font-size: 17px;
-    -unity-font-style: bold;
-    color: var(--toy-cream);
-    letter-spacing: 0;
-}
-
-.phase-notch .phase-label--friendly {
-    color: var(--toy-orange-hover);
-}
-
-.phase-notch .phase-label--enemy {
-    color: var(--toy-tomato-copy);
-}
-
-.phase-notch .phase-label--neutral {
-    color: var(--toy-cream);
-}
-
-.phase-notch .timer-label {
-    margin-left: 16px;
-    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    font-size: 19px;
-    -unity-font-style: bold;
-    color: var(--toy-orange);
-}
-
-.phase-notch .timer-label--urgent {
-    color: var(--toy-tomato-copy);
-}
-
-.hud-top .hill-status-readout {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 260px;
-    min-height: 72px;
-    align-items: stretch;
-    padding: 10px 14px 12px 14px;
-}
-
-.hud-top .hill-status-readout__key {
-    margin-bottom: 5px;
-    letter-spacing: 0;
-}
-
-.hud-top .hill-status-readout__value {
-    align-self: flex-start;
-    font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
-    color: var(--toy-orange-hover);
-    letter-spacing: 0;
-}
-
-.hud-top .hill-status--blue {
-    color: var(--toy-cream);
-    border-color: var(--toy-sky);
-}
-
-.hud-top .hill-status--red {
-    color: var(--toy-cream);
-    border-color: var(--toy-tomato);
-}
-
-.hud-top .hill-status--contested {
-    color: var(--toy-cream);
-    border-color: var(--toy-orange);
-}
-
-.hud-dock {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    min-height: 0;
-    padding: 8px 16px;
-    background-color: rgba(7, 12, 19, 0.94);
-    border-top-width: 1px;
-    border-color: rgb(48, 65, 80);
-}
-
-.hud-dock__row {
-    flex-direction: row;
-    align-items: center;
-}
-
-/* Shares the notch's band above the dock, kept left so the two never meet. */
-.target-feedback {
-    position: absolute;
-    left: 0;
-    top: -31px;
-    max-width: 640px;
-    min-height: 30px;
-    padding: 5px 10px;
-    background-color: rgb(13, 21, 29);
-    color: rgb(225, 231, 235);
-    border-left-width: 3px;
-    border-left-color: rgb(123, 141, 156);
-    font-size: 11px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-left;
-    white-space: normal;
-}
-
-.target-feedback--visible {
-    opacity: 1;
-}
-
-.target-feedback--error {
-    background-color: rgb(42, 20, 23);
-    color: rgb(255, 211, 207);
-    border-left-color: rgb(255, 126, 118);
-}
-
-.target-feedback--success {
-    background-color: rgb(41, 32, 17);
-    color: rgb(255, 231, 188);
-    border-left-color: rgb(235, 174, 69);
-}
-
-.hud-header-actions {
-    flex-direction: row;
-    flex-shrink: 0;
-    align-items: center;
-    margin-left: 16px;
-}
-
-.planning-commit {
-    min-height: 44px;
-    flex-direction: row;
-    flex-shrink: 0;
-    align-items: center;
-    margin-right: 8px;
-    padding-left: 10px;
-    background-color: rgb(13, 21, 29);
-    border-left-width: 2px;
-    border-left-color: rgb(226, 157, 46);
-}
-
-.planning-commit__status {
-    min-width: 72px;
-    flex-shrink: 0;
-    margin-right: 8px;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: rgb(235, 178, 76);
-    letter-spacing: 1px;
-    white-space: nowrap;
-}
-
-.planning-commit__button {
-    min-width: 112px;
-    min-height: 44px;
-    flex-shrink: 0;
-    padding: 8px 14px;
-    font-size: 12px;
-}
-
-.planning-commit--ready .planning-commit__status {
-    color: rgb(235, 178, 76);
-}
-
-.planning-commit--sending .planning-commit__status,
-.planning-commit--waiting .planning-commit__status,
-.planning-commit--unlocking .planning-commit__status {
-    color: rgb(112, 187, 236);
-}
-
-.planning-commit--locked {
-    border-left-color: rgb(100, 193, 249);
-}
-
-.planning-commit--locked .planning-commit__status {
-    color: rgb(139, 208, 245);
-}
-
-.hud-controls-button {
-    min-height: 44px;
-    flex-shrink: 0;
-    padding: 6px 11px;
-    font-size: 11px;
-}
+/* --- Top clusters ------------------------------------------------------------ */
 
 .enemy-status-strip {
     position: absolute;
     left: 0;
     right: 0;
     top: 0;
-    padding: 16px 16px 8px 16px;
-    background-color: rgba(7, 12, 19, 0.94);
-    border-bottom-width: 1px;
-    border-color: rgb(48, 65, 80);
+    height: 140px;
+    background-color: var(--bp-transparent);
 }
 
 .enemy-unit-cards {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--bp-s4);
+    height: 64px;
     flex-grow: 0;
-    height: 78px;
 }
 
 .enemy-unit-cards .unity-scroll-view__content-container {
@@ -272,27 +85,362 @@
    Hill keeps the row packed left where it clears the readout at full card width. */
 .koth .enemy-unit-cards .unity-scroll-view__content-container {
     justify-content: flex-start;
+    padding-left: var(--bp-s4);
 }
+
+.hud-top {
+    position: absolute;
+    left: var(--bp-s4);
+    right: var(--bp-s4);
+    top: var(--bp-s4);
+    height: 62px;
+}
+
+.hud-top .hill-status-readout {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 220px;
+    height: 62px;
+    padding: 6px var(--bp-s3);
+    justify-content: center;
+    background-color: var(--bp-panel);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-deck-4);
+    border-radius: var(--bp-r-md);
+    transition-property: border-color;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+.hud-top .hill-status-readout__key {
+    font-size: var(--bp-type-label);
+    -unity-font-style: bold;
+    color: var(--bp-text-3);
+    letter-spacing: 0.6px;
+}
+
+.hud-top .hill-status-readout__value {
+    margin-top: 2px;
+    font-size: var(--bp-type-body);
+    -unity-font-style: bold;
+    color: var(--bp-text);
+}
+
+.hud-top .hill-status--blue {
+    border-left-color: var(--bp-blue);
+}
+
+.hud-top .hill-status--red {
+    border-left-color: var(--bp-red);
+}
+
+.hud-top .hill-status--contested {
+    border-left-color: var(--bp-amber);
+}
+
+/* Three pips restate the streak graphically; the value string still carries it. */
+.hill-streak {
+    flex-direction: row;
+    margin-top: 6px;
+}
+
+.hill-pip {
+    width: 18px;
+    height: 4px;
+    margin-right: var(--bp-s1);
+    background-color: var(--bp-deck-3);
+    border-radius: var(--bp-r-sm);
+    transition-property: background-color;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+.hill-pip--last {
+    margin-right: 0;
+}
+
+.hill-status--blue .hill-pip--filled {
+    background-color: var(--bp-blue);
+}
+
+.hill-status--red .hill-pip--filled {
+    background-color: var(--bp-red);
+}
+
+.hill-status--contested .hill-pip--filled {
+    background-color: var(--bp-amber);
+}
+
+/* --- Phase readout -------------------------------------------------------------- */
+
+.phase-notch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 92px;
+    height: 34px;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.phase-notch .phase-cluster {
+    height: 34px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 18px;
+    background-color: var(--bp-panel);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-radius: var(--bp-r-md);
+}
+
+.phase-notch .phase-cluster__mark {
+    width: 4px;
+    height: 16px;
+    margin-right: var(--bp-s3);
+    background-color: var(--bp-text-3);
+    border-radius: 1px;
+    transition-property: background-color;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+.phase-notch .phase-cluster__mark--friendly {
+    background-color: var(--bp-amber);
+}
+
+.phase-notch .phase-cluster__mark--enemy {
+    background-color: var(--bp-red);
+}
+
+.phase-notch .phase-cluster__mark--neutral {
+    background-color: var(--bp-text-2);
+}
+
+/* The mark carries the phase state, so the longest strings stay maximally
+   legible and the text colour never moves. */
+.phase-notch .phase-label,
+.phase-notch .phase-label--friendly,
+.phase-notch .phase-label--enemy,
+.phase-notch .phase-label--neutral {
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-SemiBold UI SDF.asset");
+    font-size: var(--bp-type-subtitle);
+    color: var(--bp-text);
+    letter-spacing: 1px;
+}
+
+.phase-notch .timer-label {
+    margin-left: var(--bp-s4);
+    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
+    font-size: var(--bp-type-num-lg);
+    -unity-font-style: bold;
+    color: var(--bp-text);
+    letter-spacing: 1px;
+    transition-property: color;
+    transition-duration: var(--bp-t-fast);
+    transition-timing-function: linear;
+}
+
+.phase-notch .timer-label--urgent {
+    color: var(--bp-amber);
+}
+
+/* --- Bottom clusters ---------------------------------------------------------------- */
+
+.hud-dock {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 168px;
+    background-color: var(--bp-transparent);
+}
+
+.hud-dock__row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: var(--bp-s4);
+    flex-direction: row;
+    align-items: flex-end;
+    padding: 0 var(--bp-s4);
+}
+
+.target-feedback {
+    position: absolute;
+    left: var(--bp-s4);
+    bottom: 124px;
+    max-width: 560px;
+    min-height: 20px;
+    margin-top: 0;
+}
+
+.target-feedback--visible {
+    opacity: 1;
+}
+
+.target-feedback--success {
+    padding: 6px var(--bp-s3);
+    background-color: var(--bp-green-surface);
+    color: var(--bp-green-hi);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-green);
+    border-radius: var(--bp-r-sm);
+}
+
+.target-feedback--error {
+    padding: 6px var(--bp-s3);
+    background-color: var(--bp-red-surface);
+    color: var(--bp-red-hi);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-red);
+    border-radius: var(--bp-r-sm);
+}
+
+.hud-header-actions {
+    flex-direction: row;
+    flex-shrink: 0;
+    align-items: center;
+    margin-left: var(--bp-s4);
+}
+
+/* --- Commit control -------------------------------------------------------------------- */
+
+.planning-commit {
+    min-height: var(--bp-target);
+    flex-direction: row;
+    flex-shrink: 0;
+    align-items: center;
+    margin-right: var(--bp-s2);
+    padding-left: var(--bp-s3);
+    background-color: var(--bp-dock);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-amber);
+    border-radius: var(--bp-r-md);
+    transition-property: border-color;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-snap);
+}
+
+.planning-commit__status {
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-ExtraBold UI SDF.asset");
+    min-width: 78px;
+    flex-shrink: 0;
+    margin-right: var(--bp-s2);
+    font-size: 11px;
+    color: var(--bp-amber);
+    letter-spacing: 1.8px;
+    white-space: nowrap;
+}
+
+.toybox-ui .planning-commit__button {
+    width: 132px;
+    min-width: 132px;
+    min-height: var(--bp-target);
+    flex-shrink: 0;
+    padding: 0 var(--bp-s3);
+}
+
+.planning-commit--ready {
+    border-left-color: var(--bp-amber);
+}
+
+.planning-commit--ready .planning-commit__status {
+    color: var(--bp-amber);
+}
+
+.planning-commit--sending,
+.planning-commit--unlocking {
+    border-left-color: var(--bp-text-3);
+}
+
+.planning-commit--sending .planning-commit__status,
+.planning-commit--unlocking .planning-commit__status {
+    color: var(--bp-text-2);
+}
+
+.planning-commit--waiting {
+    border-left-color: var(--bp-blue);
+}
+
+.planning-commit--waiting .planning-commit__status {
+    color: var(--bp-blue);
+}
+
+.planning-commit--locked {
+    border-left-color: var(--bp-green);
+}
+
+.planning-commit--locked .planning-commit__status {
+    color: var(--bp-green);
+}
+
+/* A ghost control everywhere else, but this one sits over the live board, so it
+   takes an opaque dock fill rather than putting text on the deck. */
+.toybox-ui .hud-controls-button {
+    min-height: var(--bp-target);
+    flex-shrink: 0;
+    padding: 0 var(--bp-s3);
+    background-color: var(--bp-dock);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-radius: var(--bp-r-md);
+}
+
+/* --bp-dock is --bp-deck-2 at 0.97, so this ladder starts one rung lower than a plain
+   button's and runs deck-3 then deck-4. Hovering to deck-2 would be a no-op. */
+.toybox-ui .hud-controls-button:hover {
+    background-color: var(--bp-deck-3);
+    border-color: var(--bp-line-3);
+}
+
+.toybox-ui .hud-controls-button:active {
+    background-color: var(--bp-deck-4);
+    border-color: var(--bp-line-2);
+}
+
+.toybox-ui .hud-controls-button:focus {
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
+}
+
+/* Dim via surface and text, never opacity: this control floats over the live board and
+   fading it would let the board read through the fill. */
+.toybox-ui .hud-controls-button:disabled {
+    opacity: 1;
+    background-color: var(--bp-deck-1);
+    border-color: var(--bp-line-1);
+    color: var(--bp-text-3);
+}
+
+/* --- Card hosts ---------------------------------------------------------------------------- */
 
 .unit-cards {
     flex-grow: 1;
     min-width: 0;
-    height: 104px;
+    height: 92px;
 }
 
 .unit-cards .unity-scroll-view__content-container {
     flex-grow: 1;
     flex-direction: row;
+    justify-content: center;
 }
 
 .unit-card-host {
     flex-grow: 1;
     flex-shrink: 0;
+    flex-basis: 0;
     width: 0;
-    min-width: 264px;
-    max-width: 360px;
-    min-height: 96px;
-    margin-right: 8px;
+    min-width: 200px;
+    max-width: 236px;
+    height: 92px;
+    margin-right: var(--bp-s2);
 }
 
 .unit-card-host--last {
@@ -300,50 +448,64 @@
 }
 
 .enemy-unit-card-host {
-    flex-grow: 1;
+    flex-grow: 0;
     flex-shrink: 0;
-    width: 0;
-    min-width: 220px;
-    max-width: 320px;
-    min-height: 72px;
-    margin-right: 6px;
+    flex-basis: auto;
+    width: 200px;
+    min-width: 176px;
+    max-width: 260px;
+    height: 64px;
+    margin-right: var(--bp-s2);
 }
 
 .enemy-unit-card-host--last {
     margin-right: 0;
 }
 
+/* --- Unit card — player variant ---------------------------------------------------------------- */
+
 .unit-card {
     position: relative;
     flex-grow: 1;
     width: 100%;
     height: 100%;
-    min-height: 96px;
     flex-direction: row;
     overflow: hidden;
-    background-color: rgb(13, 22, 31);
-    border-width: 1px;
-    border-color: rgb(48, 65, 80);
-    border-radius: 2px;
+    background-color: var(--bp-panel);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-bottom-width: var(--bp-edge);
+    border-bottom-color: var(--bp-edge-dark);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-deck-4);
+    border-radius: var(--bp-r-md);
+    transition-property: background-color, border-color;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
 }
 
 .unit-card--selected {
-    background-color: rgb(25, 37, 47);
-    border-color: rgb(231, 167, 58);
+    background-color: var(--bp-deck-3);
+    border-color: var(--bp-blue-line);
+    border-left-color: var(--bp-blue);
 }
 
 .unit-card--ability {
-    background-color: rgb(59, 35, 20);
-    border-color: rgb(177, 108, 43);
+    background-color: var(--bp-amber-surface);
+    border-color: var(--bp-amber-border);
+    border-left-color: var(--bp-amber);
 }
 
 .unit-card--ability.unit-card--selected {
-    border-color: rgb(255, 190, 92);
+    border-color: var(--bp-amber);
+    border-left-color: var(--bp-amber);
 }
 
 .unit-card--disabled {
-    opacity: 0.55;
-    border-color: rgb(92, 56, 60);
+    opacity: 1;
+    background-color: var(--bp-deck-1);
+    border-color: var(--bp-line-1);
+    border-left-color: var(--bp-red-dim);
 }
 
 .unit-card__select {
@@ -354,35 +516,52 @@
     padding: 0;
     flex-direction: row;
     align-items: stretch;
+    justify-content: flex-start;
     overflow: hidden;
-    background-color: rgba(0, 0, 0, 0);
-    border-width: 1px;
-    border-color: rgba(0, 0, 0, 0);
+    background-color: var(--bp-transparent);
+    border-width: 0;
     border-radius: 0;
-    transition-duration: 0.14s;
-    transition-property: background-color, border-color;
+    transition-property: background-color, translate;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
 }
 
 .unit-card__select:hover {
-    background-color: rgb(23, 36, 48);
+    background-color: var(--bp-deck-2);
 }
 
-.unit-card__select:focus {
-    background-color: rgb(27, 41, 54);
-    border-color: rgb(237, 174, 65);
+.unit-card__select:active {
+    background-color: var(--bp-deck-3);
+    translate: 0 1px;
 }
 
-.unit-card--ability .unit-card__select {
-    background-color: rgb(59, 35, 20);
+/* The ring is an overlay rather than a border so focusing a card never nudges
+   the portrait and copy by the ring's width. */
+.unit-card__focus-ring {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-transparent);
+    transition-property: border-color;
+    transition-duration: var(--bp-t-instant);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+.unit-card__select:focus .unit-card__focus-ring {
+    border-color: var(--bp-focus-light);
 }
 
 .unit-card--ability .unit-card__select:hover {
-    background-color: rgb(76, 44, 23);
+    background-color: var(--bp-amber-border);
 }
 
-.unit-card--ability .unit-card__select:focus {
-    background-color: rgb(71, 41, 22);
-    border-color: rgb(255, 208, 134);
+.unit-card--disabled .unit-card__select:hover,
+.unit-card--disabled .unit-card__select:active {
+    background-color: var(--bp-transparent);
+    translate: 0 0;
 }
 
 .unit-card__ability-vignette {
@@ -394,21 +573,26 @@
     opacity: 0;
     background-image: url("project://database/Assets/UI/Shared/Icons/ability-flare.svg");
     -unity-background-scale-mode: stretch-to-fill;
-    -unity-background-image-tint-color: rgb(242, 165, 74);
-    transition-duration: 0.14s;
+    -unity-background-image-tint-color: var(--bp-amber);
     transition-property: opacity;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
 }
 
 .unit-card--ability .unit-card__ability-vignette {
-    opacity: 0.42;
+    opacity: 0.35;
 }
 
 .unit-card__portrait {
     position: relative;
-    width: 80px;
-    min-width: 80px;
+    width: 64px;
+    min-width: 64px;
+    /* Two ramp steps below the card fill. Depth is not emphasis: the ramp inverted for
+       FIELD DAY but a recess still has to sit darker than whatever contains it. */
+    background-color: var(--bp-deck-2);
+    border-right-width: var(--bp-bw-hair);
+    border-right-color: var(--bp-line-1);
     -unity-background-scale-mode: scale-to-fit;
-    background-color: rgb(7, 13, 20);
 }
 
 .unit-card__copy {
@@ -416,90 +600,80 @@
     flex-grow: 1;
     min-width: 0;
     justify-content: center;
-    padding: 8px 40px 8px 8px;
+    padding: var(--bp-s2) 36px var(--bp-s2) var(--bp-s3);
 }
 
 .unit-card__name {
-    font-size: 15px;
+    font-size: var(--bp-type-body);
     -unity-font-style: bold;
-    color: rgb(239, 243, 246);
-    white-space: normal;
-}
-
-.unit-card__health {
-    min-height: 13px;
-    margin-top: 3px;
-    flex-direction: row;
-    align-items: center;
-}
-
-.unit-card__health-track {
-    flex-grow: 1;
-    height: 5px;
-    margin-right: 7px;
+    color: var(--bp-text);
+    white-space: nowrap;
+    text-overflow: ellipsis;
     overflow: hidden;
-    background-color: rgb(48, 31, 36);
-    border-radius: 1px;
-}
-
-.unit-card__health-fill {
-    width: 0%;
-    height: 100%;
-    background-color: rgb(226, 82, 82);
-}
-
-.unit-card__health-value {
-    min-width: 68px;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: rgb(229, 235, 240);
-    -unity-text-align: middle-right;
 }
 
 .unit-card__ability {
-    margin-top: 4px;
-    font-size: 11px;
-    color: rgb(159, 174, 187);
-    white-space: normal;
+    margin-top: 3px;
+    font-size: var(--bp-type-body-sm);
+    color: var(--bp-text-2);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 
 .unit-card--ability .unit-card__ability {
-    color: rgb(255, 210, 143);
     -unity-font-style: bold;
+    color: var(--bp-amber-hi);
 }
 
 .unit-card--ability-cooldown .unit-card__ability {
-    color: rgb(126, 137, 147);
+    color: var(--bp-text-3);
 }
 
 .unit-card__state {
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-ExtraBold UI SDF.asset");
     min-height: 0;
-    margin-top: 4px;
-    font-size: 11px;
-    color: rgb(255, 126, 118);
-    letter-spacing: 1px;
+    margin-top: 3px;
+    font-size: var(--bp-type-micro);
+    color: var(--bp-red-hi);
+    letter-spacing: 1.5px;
 }
+
+.unit-card--disabled .unit-card__name,
+.unit-card--disabled .unit-card__ability {
+    color: var(--bp-text-3);
+}
+
+/* --- Flip indicator / cooldown badge ------------------------------------------------------------- */
 
 .unit-card__flip-indicator {
     position: absolute;
-    right: 8px;
+    right: var(--bp-s2);
     bottom: 6px;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     align-items: center;
     justify-content: center;
-    opacity: 0.68;
-    transition-duration: 0.14s;
-    transition-property: opacity;
 }
 
 .unit-card__flip-icon {
     position: absolute;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     background-image: url("project://database/Assets/UI/Shared/Icons/flip-card.svg");
     -unity-background-scale-mode: scale-to-fit;
-    -unity-background-image-tint-color: rgb(205, 216, 225);
+    -unity-background-image-tint-color: var(--bp-text-3);
+    transition-property: opacity, -unity-background-image-tint-color;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+.unit-card--selected .unit-card__flip-icon {
+    -unity-background-image-tint-color: var(--bp-blue);
+}
+
+.unit-card--ability .unit-card__flip-icon {
+    -unity-background-image-tint-color: var(--bp-amber);
 }
 
 .unit-card__cooldown {
@@ -509,128 +683,155 @@
     top: 0;
     bottom: 0;
     -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    font-size: 12px;
+    font-size: 13px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
-    color: rgb(225, 231, 235);
-}
-
-.unit-card--selected .unit-card__flip-indicator {
-    opacity: 1;
-}
-
-.unit-card__select:hover .unit-card__flip-indicator {
-    opacity: 0.9;
-}
-
-.unit-card--selected .unit-card__flip-icon {
-    -unity-background-image-tint-color: rgb(231, 167, 58);
-}
-
-.unit-card--ability .unit-card__flip-icon {
-    -unity-background-image-tint-color: rgb(255, 210, 143);
+    color: var(--bp-text-2);
 }
 
 .unit-card__flip-indicator--cooldown,
 .unit-card--selected .unit-card__flip-indicator--cooldown {
-    opacity: 0.72;
+    background-color: var(--bp-deck-0);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-3);
+    border-radius: var(--bp-r-md);
 }
 
 .unit-card__flip-indicator--cooldown .unit-card__flip-icon,
 .unit-card--selected .unit-card__flip-indicator--cooldown .unit-card__flip-icon {
     opacity: 0.22;
-    -unity-background-image-tint-color: rgb(126, 137, 147);
-}
-
-.unit-card__flip-indicator--cooldown .unit-card__cooldown {
-    color: rgb(171, 181, 189);
+    -unity-background-image-tint-color: var(--bp-text-3);
 }
 
 .unit-card--disabled .unit-card__flip-indicator {
-    opacity: 0.45;
+    display: none;
 }
 
+/* --- Unit card — enemy variant --------------------------------------------------------------------- */
+
 .unit-card--enemy {
-    min-height: 72px;
-    background-color: rgb(24, 16, 22);
-    border-color: rgb(107, 55, 62);
+    height: 100%;
+    background-color: var(--bp-panel);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-bottom-width: var(--bp-bw-hair);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-deck-4);
 }
 
 .unit-card--enemy-active {
-    border-color: rgb(168, 70, 75);
+    border-left-color: var(--bp-red);
 }
 
 .unit-card--enemy-eliminated {
-    background-color: rgb(16, 15, 19);
-    border-color: rgb(74, 62, 68);
+    background-color: var(--bp-deck-1);
+    border-left-color: var(--bp-deck-4);
 }
 
 .unit-card--enemy .unit-card__select {
     min-width: 0;
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--bp-transparent);
     border-width: 0;
     opacity: 1;
 }
 
+.unit-card--enemy .unit-card__select:hover,
 .unit-card--enemy .unit-card__select:disabled {
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--bp-transparent);
+    translate: 0 0;
     opacity: 1;
 }
 
 .unit-card--enemy .unit-card__portrait {
-    width: 52px;
-    min-width: 52px;
-    background-color: rgb(12, 10, 14);
+    width: 44px;
+    min-width: 44px;
+    background-color: var(--bp-deck-2);
 }
 
 .unit-card--enemy .unit-card__copy {
     position: relative;
     justify-content: center;
-    padding: 5px 7px;
+    padding: var(--bp-s1) var(--bp-s2);
 }
 
 .unit-card--enemy .unit-card__name {
-    padding-right: 82px;
-    font-size: 12px;
+    padding-right: 78px;
+    font-size: var(--bp-type-body-sm);
     white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.unit-card--enemy .unit-card__health {
+    min-height: 12px;
+    margin-top: 3px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.unit-card__health-track {
+    flex-grow: 1;
+    height: 4px;
+    margin-right: var(--bp-s2);
+    overflow: hidden;
+    background-color: var(--bp-deck-3);
+    border-radius: var(--bp-r-sm);
+}
+
+.unit-card__health-fill {
+    width: 0;
+    height: 100%;
+    background-color: var(--bp-red);
+    transition-property: width;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+.unit-card__health-value {
+    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
+    min-width: 72px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    color: var(--bp-text-2);
+    -unity-text-align: middle-right;
+    letter-spacing: 0.4px;
 }
 
 .unit-card--enemy .unit-card__ability {
     margin-top: 2px;
-    font-size: 10px;
-    white-space: normal;
+    font-size: 11px;
+    color: var(--bp-text-2);
 }
 
 .unit-card--enemy .unit-card__state {
     position: absolute;
     top: 0;
     right: 0;
-    min-height: 13px;
+    min-height: 12px;
     margin-top: 0;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: rgb(255, 139, 132);
-    letter-spacing: 0;
+    color: var(--bp-text-3);
+}
+
+.unit-card--enemy-active .unit-card__state {
+    color: var(--bp-red-hi);
 }
 
 .unit-card--enemy-eliminated .unit-card__name,
 .unit-card--enemy-eliminated .unit-card__ability,
-.unit-card--enemy-eliminated .unit-card__health-value {
-    color: rgb(136, 144, 151);
+.unit-card--enemy-eliminated .unit-card__health-value,
+.unit-card--enemy-eliminated .unit-card__state {
+    color: var(--bp-text-3);
 }
 
 .unit-card--enemy-eliminated .unit-card__health-fill {
-    background-color: rgb(91, 66, 70);
-}
-
-.unit-card--enemy-eliminated .unit-card__state {
-    color: rgb(196, 139, 139);
+    background-color: var(--bp-red-dim);
 }
 
 .unit-card--enemy .unit-card__flip-indicator,
 .unit-card--enemy .unit-card__ability-vignette {
     display: none;
 }
+
+/* --- Deployment ------------------------------------------------------------------------------------- */
 
 .deployment-overlay {
     position: absolute;
@@ -640,48 +841,52 @@
     bottom: 0;
     align-items: center;
     justify-content: center;
-    padding: var(--toy-space-xl);
-    background-color: var(--toy-ink);
+    padding: var(--bp-s6);
+    /* Drops the board to the tabletop while crews are placed. Copy on this bed steps down the
+       deck ramp rather than using ink: Palette §7.3 bans ink on table at 2.33:1 and names
+       --bp-deck-0 as the replacement. */
+    background-color: var(--bp-table);
 }
 
 .toybox-ui.deployment-overlay .deployment-overlay__content {
     width: 620px;
     max-width: 92%;
     align-items: center;
-    padding: var(--toy-space-xl);
 }
 
 .deployment-overlay__mark {
-    width: 82px;
+    width: 88px;
     height: 6px;
-    margin-bottom: var(--toy-space-lg);
-    background-color: var(--toy-orange);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-ink);
-    border-radius: var(--toy-radius-sm);
+    margin-top: var(--bp-s2);
+    margin-bottom: var(--bp-s5);
+    flex-direction: row;
+    align-items: center;
 }
 
 .deployment-overlay__title {
-    font-size: var(--toy-type-title-lg);
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-SemiBold UI SDF.asset");
+    font-size: var(--bp-type-display);
     -unity-text-align: middle-center;
-    color: var(--toy-cream);
+    color: var(--bp-deck-0);
+    letter-spacing: 0.5px;
 }
 
 .deployment-overlay__status {
-    margin-top: var(--toy-space-md);
-    font-size: var(--toy-type-body);
+    margin-top: var(--bp-s3);
+    font-size: var(--bp-type-body);
     -unity-text-align: middle-center;
+    color: var(--bp-deck-1);
     white-space: normal;
-    color: var(--toy-muted);
 }
 
+/* --- Results ------------------------------------------------------------------------------------------ */
+
 .results-overlay {
-    background-color: var(--toy-shade);
+    background-color: var(--bp-scrim);
 }
 
 .controls-overlay {
-    background-color: var(--toy-shade);
+    background-color: var(--bp-scrim);
 }
 
 .toybox-ui.results-overlay .results-panel {
@@ -695,25 +900,51 @@
 }
 
 .results-scroll .unity-scroll-view__content-container {
-    padding-right: var(--toy-space-md);
+    padding-right: var(--bp-s3);
 }
 
+/* A 3px rule with a 6px square at its left end, both in the outcome colour. */
 .results-mark {
-    width: 92px;
+    width: 88px;
     height: 6px;
-    margin-top: var(--toy-space-sm);
-    margin-bottom: var(--toy-space-md);
-    background-color: var(--toy-orange);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-ink);
-    border-radius: var(--toy-radius-sm);
+    margin-top: var(--bp-s2);
+    margin-bottom: var(--bp-s3);
+    flex-direction: row;
+    align-items: center;
+}
+
+.results-mark__cap {
+    width: 6px;
+    height: 6px;
+    background-color: var(--bp-amber);
+}
+
+.results-mark__bar {
+    flex-grow: 1;
+    height: 3px;
+    background-color: var(--bp-amber);
+}
+
+.results-mark--win .results-mark__cap,
+.results-mark--win .results-mark__bar {
+    background-color: var(--bp-green);
+}
+
+.results-mark--loss .results-mark__cap,
+.results-mark--loss .results-mark__bar {
+    background-color: var(--bp-red);
+}
+
+.results-mark--draw .results-mark__cap,
+.results-mark--draw .results-mark__bar {
+    background-color: var(--bp-amber);
 }
 
 .results-status {
-    margin-bottom: var(--toy-space-sm);
-    font-size: var(--toy-type-display);
-    -unity-font-style: bold;
-    color: var(--toy-cream);
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-ExtraBold UI SDF.asset");
+    margin-bottom: var(--bp-s2);
+    font-size: 40px;
+    color: var(--bp-text);
     white-space: normal;
 }
 
@@ -723,32 +954,22 @@
     justify-content: flex-end;
 }
 
-.results-button {
+.toybox-ui.results-overlay .results-button {
     min-width: 170px;
-    margin-left: var(--toy-space-sm);
+    min-height: var(--bp-target-lg);
+    margin-left: var(--bp-s2);
 }
 
-.compact .hud-dock {
-    left: 16px;
-    right: 16px;
-    bottom: 8px;
+/* --- .compact -------------------------------------------------------------------------------------------- */
+
+.compact .enemy-unit-card-host {
+    width: 176px;
+    min-width: 176px;
 }
 
 .compact .unit-card-host {
-    width: 0;
-    min-width: 240px;
-    max-width: 300px;
-}
-
-.compact .enemy-unit-card-host {
-    min-width: 210px;
-    max-width: 280px;
-}
-
-.compact .unit-card__select {
-    flex-grow: 1;
-    width: 100%;
-    min-width: 0;
+    min-width: 176px;
+    max-width: 200px;
 }
 
 .compact .unit-card__portrait {
@@ -756,196 +977,93 @@
     min-width: 48px;
 }
 
+.compact .unit-card--enemy .unit-card__portrait {
+    width: 40px;
+    min-width: 40px;
+}
+
 .compact .unit-card__copy {
-    padding: 6px 36px 6px 6px;
+    padding-right: 32px;
 }
 
-.compact .unit-card__name {
-    font-size: 12px;
+.compact .phase-notch,
+.compact .phase-notch .phase-cluster {
+    height: 30px;
 }
 
-.compact .unit-card__ability {
-    font-size: 10px;
-}
-
-.compact .unit-card__state {
-    font-size: 9px;
+.compact .phase-notch .timer-label {
+    font-size: 22px;
 }
 
 .compact .unit-card--enemy .unit-card__name {
-    padding-right: 76px;
+    padding-right: 74px;
 }
 
-.compact .unit-card--enemy .unit-card__state,
-.compact .unit-card--enemy .unit-card__health-value {
-    font-size: 10px;
-}
-
-.compact .unit-card__flip-indicator {
-    right: 7px;
-    bottom: 5px;
-    width: 26px;
-    height: 26px;
-}
-
-.compact .unit-card__flip-icon {
-    width: 19px;
-    height: 19px;
-}
-
-.compact .unit-card__cooldown {
-    font-size: 12px;
-}
-
-.narrow .unit-card-host {
-    width: 220px;
-    min-width: 220px;
-    max-width: 220px;
-}
-
-.narrow .enemy-unit-card-host {
-    width: 210px;
-    min-width: 210px;
-}
+/* --- .narrow ---------------------------------------------------------------------------------------------- */
 
 .narrow .unit-card__portrait {
     display: none;
 }
 
-.narrow .unit-card__select {
-    min-width: 0;
+.narrow .enemy-unit-card-host {
+    width: 176px;
+    min-width: 176px;
+    max-width: 176px;
 }
 
-.narrow .hill-status-readout {
-    width: 244px;
+.narrow .hud-top .hill-status-readout {
+    width: 190px;
 }
+
+.narrow .hill-pip {
+    width: 14px;
+}
+
+/* --- .phone ------------------------------------------------------------------------------------------------ */
 
 .phone .hud-dock {
-    padding-left: 10px;
-    padding-right: 10px;
-}
-
-.phone .enemy-status-strip {
-    padding-left: 10px;
-    padding-right: 10px;
-}
-
-.phone .hud-top {
-    left: 10px;
-    right: 10px;
+    height: 214px;
 }
 
 .phone .hud-dock__row {
     flex-direction: column;
     align-items: stretch;
-}
-
-.phone .unit-cards {
-    flex-grow: 1;
-    height: auto;
+    padding-left: var(--bp-s3);
+    padding-right: var(--bp-s3);
 }
 
 .phone .hud-header-actions {
     width: 100%;
     margin-left: 0;
-    margin-top: 6px;
+    margin-bottom: var(--bp-s2);
     justify-content: flex-end;
 }
 
-.phone .planning-commit {
-    flex-grow: 1;
-    flex-shrink: 1;
-    min-width: 0;
-    margin-right: 6px;
-    padding-left: 8px;
-}
-
-.phone .planning-commit__status {
-    flex-grow: 1;
-    flex-shrink: 1;
-    min-width: 0;
-    margin-right: 6px;
-    font-size: 9px;
-}
-
-.phone .planning-commit__button {
-    min-width: 88px;
-    padding-left: 10px;
-    padding-right: 10px;
-}
-
-.phone .hud-controls-button {
-    min-height: 44px;
-    padding-left: 8px;
-    padding-right: 8px;
+.phone .unit-cards {
+    flex-grow: 0;
 }
 
 .phone .unit-card-host {
-    width: 184px;
-    min-width: 184px;
-    max-width: 184px;
-    margin-right: 6px;
-}
-
-.phone .unit-card-host--last {
-    margin-right: 0;
-}
-
-.phone .unit-card {
-    min-height: 112px;
-}
-
-.phone .unit-card__select {
-    width: 100%;
-    min-width: 0;
-    min-height: 104px;
+    flex-grow: 0;
+    flex-basis: auto;
+    width: 168px;
+    min-width: 168px;
+    max-width: 168px;
 }
 
 .phone .unit-card__copy {
-    padding: 8px 36px 8px 8px;
-}
-
-.phone .unit-card__name {
-    font-size: 12px;
-}
-
-.phone .unit-card__ability {
-    font-size: 11px;
-}
-
-.phone .enemy-unit-cards {
-    flex-grow: 0;
-    height: 78px;
+    padding-right: 32px;
 }
 
 .phone .enemy-unit-card-host {
-    width: 210px;
-    min-width: 210px;
+    width: 176px;
+    min-width: 176px;
 }
 
-.phone .unit-card--enemy {
-    min-height: 72px;
-    flex-direction: row;
-}
-
-.phone .unit-card--enemy .unit-card__select {
-    width: 100%;
-    min-height: 0;
-}
-
-.phone .unit-card--enemy .unit-card__copy {
-    padding: 5px 7px;
-}
-
-.phone .unit-card--enemy .unit-card__name {
-    padding-right: 76px;
-    font-size: 12px;
-}
-
-.phone .unit-card--enemy .unit-card__ability,
-.phone .unit-card--enemy .unit-card__state,
-.phone .unit-card--enemy .unit-card__health-value {
-    font-size: 10px;
+.phone .target-feedback {
+    left: var(--bp-s3);
+    bottom: 178px;
+    max-width: 92%;
 }
 
 .phone .phase-notch .phase-label {
@@ -953,17 +1071,17 @@
 }
 
 .phone .phase-notch .timer-label {
-    margin-left: 12px;
-    font-size: 16px;
+    margin-left: var(--bp-s3);
+    font-size: 20px;
 }
 
 .phone .hill-status-readout {
     top: 0;
     left: auto;
     right: 0;
-    width: 210px;
-    min-height: 62px;
-    padding: 7px 10px 9px 10px;
+    width: 190px;
+    height: 62px;
+    padding: 6px var(--bp-s2);
     flex-direction: column;
     align-items: stretch;
 }
@@ -972,75 +1090,50 @@
     display: none;
 }
 
-.phone .hill-status-readout__value {
-    align-self: stretch;
-}
-
 .phone .deployment-overlay {
-    padding: var(--toy-space-panel-compact);
+    padding: var(--bp-s4);
 }
 
 .phone .deployment-overlay__title {
-    font-size: 24px;
+    font-size: 26px;
 }
 
 .phone .results-actions {
     flex-direction: column;
 }
 
-.phone .results-button {
+.phone .toybox-ui.results-overlay .results-button {
     width: 100%;
     margin-left: 0;
-    margin-top: var(--toy-space-sm);
+    margin-top: var(--bp-s2);
 }
 
-.short .hud-dock {
-    min-height: 0;
-    padding-top: 8px;
-    padding-bottom: 8px;
+/* --- .short -------------------------------------------------------------------------------------------------- */
+
+.short .phase-notch {
+    top: 72px;
 }
 
 .short .target-feedback {
-    min-height: 26px;
-    padding-top: 3px;
-    padding-bottom: 3px;
+    bottom: 108px;
 }
 
-.short .hud-controls-button {
-    min-height: 44px;
-    padding-top: 4px;
-    padding-bottom: 4px;
+.short .unit-card-host {
+    height: 92px;
 }
 
-.short .unit-card-host,
-.short .unit-card {
-    min-height: 96px;
-}
-
-.short .enemy-unit-card-host,
-.short .unit-card--enemy {
-    min-height: 72px;
-}
-
-.short .phase-notch .phase-label {
-    font-size: 15px;
-}
-
-.short .phase-notch .timer-label {
-    font-size: 17px;
-}
-
-.phone.short .hud-controls-button {
-    min-height: 44px;
-    padding-top: 7px;
-    padding-bottom: 7px;
+.short .enemy-unit-card-host {
+    height: 64px;
 }
 
 .phone.short .hill-status-readout {
     left: auto;
     right: 0;
     top: 0;
-    width: 56%;
-    min-height: 54px;
-    padding: 6px 10px 8px 10px;
+    width: 170px;
+    height: 56px;
+}
+
+.phone.short .hill-streak {
+    display: none;
 }

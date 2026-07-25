@@ -46,4 +46,7 @@ TagManager:
     locked: 0
   m_RenderingLayers:
   - Default
-  - SelectedUnit
+  - AllUnits
+  - SelectionOutline
+  - ThreatOutline
+  - PaperOutline

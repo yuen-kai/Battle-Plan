@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Planning",
+    "seconds": 45.714,
+    "channels": 2,
+    "peak_db": -11.07,
+    "mono_peak_db": -12.62,
+    "rms_db": -28.29,
+    "bars": 16.0
+  },
+  {
+    "name": "Execute",
+    "seconds": 45.714,
+    "channels": 2,
+    "peak_db": -5.7,
+    "mono_peak_db": -6.44,
+    "rms_db": -23.96,
+    "bars": 16.0
+  },
+  {
+    "name": "Title",
+    "seconds": 45.714,
+    "channels": 2,
+    "peak_db": -8.88,
+    "mono_peak_db": -10.16,
+    "rms_db": -26.3,
+    "bars": 16.0
+  },
+  {
+    "name": "Setup",
+    "seconds": 22.857,
+    "channels": 2,
+    "peak_db": -13.42,
+    "mono_peak_db": -14.73,
+    "rms_db": -30.57,
+    "bars": 8.0
+  },
+  {
+    "name": "Crew",
+    "seconds": 45.714,
+    "channels": 2,
+    "peak_db": -10.09,
+    "mono_peak_db": -11.41,
+    "rms_db": -27.36,
+    "bars": 16.0
+  },
+  {
+    "name": "Aftermath",
+    "seconds": 22.857,
+    "channels": 2,
+    "peak_db": -19.55,
+    "mono_peak_db": -19.85,
+    "rms_db": -26.06,
+    "bars": 8.0
+  }
+]

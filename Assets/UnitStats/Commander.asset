@@ -15,10 +15,10 @@ MonoBehaviour:
   unitModel: {fileID: 4136433947033533029, guid: 9b67c3ffd1e9c1f4d810e0a404dd6666, type: 3}
   unitName: Commander
   unitDescription: He wishes to one day to become the player
-  unitSprite: {fileID: 21300000, guid: efe6b964de0374f779044295d25d8995, type: 3}
+  unitSprite: {fileID: 21300000, guid: 12029c89851d2489fbfc55ae9cf94a79, type: 3}
   unavailableForRoster: 0
   abilityName: Smoke Screen
-  abilitySprite: {fileID: 21300000, guid: efe6b964de0374f779044295d25d8995, type: 3}
+  abilitySprite: {fileID: 21300000, guid: 12029c89851d2489fbfc55ae9cf94a79, type: 3}
   moveDist: 3
   moveSpeed: 1
   diveSpeed: 4

@@ -48,6 +48,8 @@ public partial class Grenade : Ability
         Vector3 startPosition = grenade.transform.position;
         Vector3 targetPosition = GetThrowTarget(abilitySquare);
 
+        ThrowFxClientRpc(startPosition, targetPosition, abilityTime);
+
         float elapsed = 0f;
 
         while (elapsed < abilityTime)
@@ -66,8 +68,8 @@ public partial class Grenade : Ability
         }
         grenade.transform.position = targetPosition;
 
-        // Explode and damage enemies
-        CameraEffects.Instance.CameraShakeClientRpc();
+        // Explode and damage enemies. The shake now rides inside ExplosionFxClientRpc, which
+        // already reaches every peer, rather than costing a second broadcast of its own.
         ExplosionFxClientRpc(targetPosition, AreaRadius);
         ExplodeGrenade(targetPosition, AreaRadius);
         GameObject explosionEffect = NetworkHelper.Spawn(
@@ -82,16 +84,42 @@ public partial class Grenade : Ability
         NetworkHelper.Instance.Despawn(grenade);
     }
 
+    /// <summary>
+    /// The toss and the fuse. The toss sits on the thrower and is fog-gated like any other unit
+    /// action; the fuse sits on the landing square and is deliberately audible through fog, because
+    /// the grenade's blink telegraph is already shown to both players as counterplay — the sound
+    /// leaks nothing the screen is not already showing, and it is the only warning a player outside
+    /// the blast has. Both are client-local presentation: no simulation state is touched here.
+    /// </summary>
+    [ClientRpc]
+    private void ThrowFxClientRpc(Vector3 fromPosition, Vector3 landingPosition, float flightTime)
+    {
+        BattlePlanAudio.PlayAt(AudioCueId.GrenadeThrow, fromPosition, gameObject);
+
+        // Anticipation (§9.3): the landing square wears the exact blast footprint for the whole
+        // arc, pulsing faster as the fuse runs down. Deliberately shown to both players — it is
+        // the dodge counterplay, which is also why it is never a frame wider than the rules.
+        AbilityFX.GrenadeTelegraph(landingPosition, flightTime);
+
+        // The fuse clip is authored at one second. Scaling its rate by the actual flight time keeps
+        // the accelerating tick landing on the detonation rather than drifting off it if the throw
+        // duration is ever retuned.
+        BattlePlanAudio.PlayAt(
+            AudioCueId.GrenadeFuse,
+            landingPosition,
+            null,
+            1f,
+            1f / Mathf.Max(0.1f, flightTime)
+        );
+    }
+
     [ClientRpc]
     private void ExplosionFxClientRpc(Vector3 explosionPosition, float areaRadius)
     {
-        // Alarm-yellow shockwave matching the damage radius; runs on host too (host is a client).
-        ImpactShockwave.Spawn(
-            explosionPosition,
-            new Color(1f, 0.77f, 0f),
-            areaRadius * GameLoop.cellSize,
-            0.55f
-        );
+        // Impact frame and aftermath (§9.3); runs on host too, because the host is a client. The
+        // ring is sized off the same AreaRadius the damage query used, so it cannot drift from it.
+        AbilityFX.GrenadeDetonation(explosionPosition, areaRadius);
+        BattlePlanAudio.PlayAt(AudioCueId.GrenadeExplode, explosionPosition);
     }
 
     private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)

@@ -134,21 +134,22 @@ public class Health : NetworkBehaviour
         // resync, but only flash on an actual decrease.
         if (newValue < previousValue && gameObject.activeInHierarchy)
         {
-            float severity = (previousValue - newValue) >= unitData.maxHealth * 0.4f ? 1.5f : 1f;
-            HitFlash.FlashTarget(gameObject, 0.12f, severity);
+            bool heavy = (previousValue - newValue) >= unitData.maxHealth * 0.4f;
+            CombatFX.BulletImpact(gameObject, heavy);
+            if (heavy)
+                AbilityFX.HeavyHitSlash(gameObject);
+            CombatAudio.DamageTaken(gameObject, previousValue - newValue, unitData.maxHealth);
         }
     }
 
     private void OnAliveChanged(bool previousValue, bool newValue)
     {
-        // Death pop: shockwave ring in team color at the body's last position. Spawned as an
-        // independent object so it outlives the unit's deactivation below.
+        // Death pop at the body's last position. Everything CombatFX spawns is an independent
+        // object, so it outlives the unit's deactivation below.
         if (previousValue && !newValue)
         {
-            Color teamColor = gameObject.CompareTag("BlueTeam")
-                ? new Color(0.22f, 0.78f, 1f)
-                : new Color(1f, 0.23f, 0.33f);
-            ImpactShockwave.Spawn(transform.position, teamColor, 2.2f, 0.5f);
+            CombatFX.UnitDeath(gameObject);
+            CombatAudio.UnitEliminated(gameObject);
         }
 
         // The host/server controls its active state directly. Death hides the remote object;

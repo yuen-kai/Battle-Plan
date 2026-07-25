@@ -1,6 +1,14 @@
-// Battle Plan — additive energy beam for LineRenderers (Area Lock laser, Target Lock, trails).
+// Battle Plan — energy beam for LineRenderers (Area Lock laser, Target Lock, trails).
 // White-hot core + colored glow falloff across the line width (UV.y), subtle scrolling
-// energy noise along the length (UV.x). Designed for HDR colors so URP Bloom picks it up.
+// energy noise along the length (UV.x).
+//
+// Three composite modes, because a beam needs a different construction depending on how bright the
+// floor is. Additive is the dark-board form: HDR colors that URP Bloom picks up. Alpha is the
+// opaque body of a light-board beam, which reads by occluding the floor rather than by out-glowing
+// it. Multiply is the contour line that runs underneath both, darkening the deck along the beam —
+// on a light board that dark edge carries most of the legibility.
+//
+// See BeamVFX.cs for the three-layer stack and BP_FXComposite.hlsl for why the mode is a float.
 Shader "BattlePlan/EnergyBeam"
 {
     Properties
@@ -13,6 +21,11 @@ Shader "BattlePlan/EnergyBeam"
         _NoiseScale ("Noise Scale (along length)", Float) = 8
         _NoiseStrength ("Noise Strength", Range(0, 1)) = 0.35
         _Intensity ("Overall Intensity", Range(0, 4)) = 1
+
+        [Header(Compositing)]
+        [Enum(Additive, 0, Alpha, 1, Multiply, 2)] _CompositeMode ("Composite Mode", Float) = 0
+        [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src Blend", Float) = 1
+        [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Dst Blend", Float) = 1
     }
 
     SubShader
@@ -28,7 +41,7 @@ Shader "BattlePlan/EnergyBeam"
         Pass
         {
             Name "Forward"
-            Blend One One          // additive
+            Blend [_SrcBlend] [_DstBlend]
             ZWrite Off
             Cull Off
 
@@ -36,6 +49,7 @@ Shader "BattlePlan/EnergyBeam"
             #pragma vertex vert
             #pragma fragment frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "BP_FXComposite.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _GlowColor;
@@ -46,6 +60,9 @@ Shader "BattlePlan/EnergyBeam"
                 half _NoiseScale;
                 half _NoiseStrength;
                 half _Intensity;
+                half _CompositeMode;
+                half _SrcBlend;
+                half _DstBlend;
             CBUFFER_END
 
             struct Attributes
@@ -97,12 +114,23 @@ Shader "BattlePlan/EnergyBeam"
                 // Hot core
                 half core = 1.0 - smoothstep(_CoreWidth * 0.5, _CoreWidth, d);
 
+                if (_CompositeMode >= BP_COMPOSITE_ALPHA)
+                {
+                    // Alpha and multiply have a single source colour to spend, so the core and the
+                    // glow become one tint chosen by how central the pixel is, and their sum
+                    // becomes coverage. Summing colours the way additive does would just wash the
+                    // core out here.
+                    half3 tint = lerp(_GlowColor.rgb, _CoreColor.rgb, saturate(core));
+                    half coverage = saturate(glow + core) * shimmer * _Intensity * IN.color.a;
+                    return BP_Composite(_CompositeMode, tint * IN.color.rgb, coverage);
+                }
+
                 half3 col = _GlowColor.rgb * glow + _CoreColor.rgb * core;
                 col *= shimmer * _Intensity;
 
                 // Respect LineRenderer vertex color (tint + fade-out animations)
                 col *= IN.color.rgb * IN.color.a;
-                return half4(col, 1);
+                return half4(col, saturate((glow + core) * IN.color.a));
             }
             ENDHLSL
         }

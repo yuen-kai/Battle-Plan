@@ -1,0 +1,218 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!244 &-1201
+AudioMixerEffectController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_EffectID: ba71e91a000000000000000000000004
+  m_EffectName: Attenuation
+  m_MixLevel: ba71e91a000000000000000000000005
+  m_Parameters: []
+  m_SendTarget: {fileID: 0}
+  m_EnableWetMix: 0
+  m_Bypass: 0
+--- !u!244 &-1202
+AudioMixerEffectController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_EffectID: ba71e91a000000000000000000000009
+  m_EffectName: Attenuation
+  m_MixLevel: ba71e91a00000000000000000000000a
+  m_Parameters: []
+  m_SendTarget: {fileID: 0}
+  m_EnableWetMix: 0
+  m_Bypass: 0
+--- !u!244 &-1203
+AudioMixerEffectController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_EffectID: ba71e91a00000000000000000000000e
+  m_EffectName: Attenuation
+  m_MixLevel: ba71e91a00000000000000000000000f
+  m_Parameters: []
+  m_SendTarget: {fileID: 0}
+  m_EnableWetMix: 0
+  m_Bypass: 0
+--- !u!244 &-1204
+AudioMixerEffectController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_EffectID: ba71e91a000000000000000000000013
+  m_EffectName: Attenuation
+  m_MixLevel: ba71e91a000000000000000000000014
+  m_Parameters: []
+  m_SendTarget: {fileID: 0}
+  m_EnableWetMix: 0
+  m_Bypass: 0
+--- !u!244 &-1205
+AudioMixerEffectController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_EffectID: ba71e91a000000000000000000000018
+  m_EffectName: Attenuation
+  m_MixLevel: ba71e91a000000000000000000000019
+  m_Parameters: []
+  m_SendTarget: {fileID: 0}
+  m_EnableWetMix: 0
+  m_Bypass: 0
+--- !u!243 &-1102
+AudioMixerGroupController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Music
+  m_AudioMixer: {fileID: 24100000}
+  m_GroupID: ba71e91a000000000000000000000006
+  m_Children: []
+  m_Volume: ba71e91a000000000000000000000007
+  m_Pitch: ba71e91a000000000000000000000008
+  m_Send: 00000000000000000000000000000000
+  m_Effects:
+  - {fileID: -1202}
+  m_UserColorIndex: 0
+  m_Mute: 0
+  m_Solo: 0
+  m_BypassEffects: 0
+--- !u!243 &-1103
+AudioMixerGroupController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: SFX
+  m_AudioMixer: {fileID: 24100000}
+  m_GroupID: ba71e91a00000000000000000000000b
+  m_Children: []
+  m_Volume: ba71e91a00000000000000000000000c
+  m_Pitch: ba71e91a00000000000000000000000d
+  m_Send: 00000000000000000000000000000000
+  m_Effects:
+  - {fileID: -1203}
+  m_UserColorIndex: 0
+  m_Mute: 0
+  m_Solo: 0
+  m_BypassEffects: 0
+--- !u!243 &-1104
+AudioMixerGroupController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: UI
+  m_AudioMixer: {fileID: 24100000}
+  m_GroupID: ba71e91a000000000000000000000010
+  m_Children: []
+  m_Volume: ba71e91a000000000000000000000011
+  m_Pitch: ba71e91a000000000000000000000012
+  m_Send: 00000000000000000000000000000000
+  m_Effects:
+  - {fileID: -1204}
+  m_UserColorIndex: 0
+  m_Mute: 0
+  m_Solo: 0
+  m_BypassEffects: 0
+--- !u!243 &-1105
+AudioMixerGroupController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Ambience
+  m_AudioMixer: {fileID: 24100000}
+  m_GroupID: ba71e91a000000000000000000000015
+  m_Children: []
+  m_Volume: ba71e91a000000000000000000000016
+  m_Pitch: ba71e91a000000000000000000000017
+  m_Send: 00000000000000000000000000000000
+  m_Effects:
+  - {fileID: -1205}
+  m_UserColorIndex: 0
+  m_Mute: 0
+  m_Solo: 0
+  m_BypassEffects: 0
+--- !u!243 &-1101
+AudioMixerGroupController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Master
+  m_AudioMixer: {fileID: 24100000}
+  m_GroupID: ba71e91a000000000000000000000001
+  m_Children:
+  - {fileID: -1102}
+  - {fileID: -1103}
+  - {fileID: -1104}
+  - {fileID: -1105}
+  m_Volume: ba71e91a000000000000000000000002
+  m_Pitch: ba71e91a000000000000000000000003
+  m_Send: 00000000000000000000000000000000
+  m_Effects:
+  - {fileID: -1201}
+  m_UserColorIndex: 0
+  m_Mute: 0
+  m_Solo: 0
+  m_BypassEffects: 0
+--- !u!245 &-1301
+AudioMixerSnapshotController:
+  m_ObjectHideFlags: 3
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Match
+  m_AudioMixer: {fileID: 24100000}
+  m_SnapshotID: ba71e91a00000000000000000000001a
+  m_FloatValues: {}
+  m_TransitionOverrides: {}
+--- !u!241 &24100000
+AudioMixerController:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: BattlePlanMixer
+  m_OutputGroup: {fileID: 0}
+  m_MasterGroup: {fileID: -1101}
+  m_Snapshots:
+  - {fileID: -1301}
+  m_StartSnapshot: {fileID: -1301}
+  m_SuspendThreshold: -80
+  m_EnableSuspend: 1
+  m_UpdateMode: 0
+  m_ExposedParameters:
+  - guid: ba71e91a000000000000000000000002
+    name: MasterVolume
+  - guid: ba71e91a000000000000000000000007
+    name: MusicVolume
+  - guid: ba71e91a00000000000000000000000c
+    name: SFXVolume
+  - guid: ba71e91a000000000000000000000011
+    name: UIVolume
+  - guid: ba71e91a000000000000000000000016
+    name: AmbienceVolume
+  m_AudioMixerGroupViews:
+  - guids:
+    - ba71e91a000000000000000000000001
+    - ba71e91a000000000000000000000006
+    - ba71e91a00000000000000000000000b
+    - ba71e91a000000000000000000000010
+    - ba71e91a000000000000000000000015
+    name: View
+  m_CurrentViewIndex: 0
+  m_TargetSnapshot: {fileID: -1301}

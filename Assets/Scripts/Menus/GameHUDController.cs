@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -14,6 +15,18 @@ public class GameHUDController : MonoBehaviour
         "planning-commit--waiting",
         "planning-commit--unlocking",
         "planning-commit--locked",
+    };
+    private static readonly string[] FlashPerspectiveClasses =
+    {
+        "hud-flash--friendly",
+        "hud-flash--enemy",
+        "hud-flash--neutral",
+    };
+    private static readonly string[] ResultsOutcomeClasses =
+    {
+        "results-mark--win",
+        "results-mark--loss",
+        "results-mark--draw",
     };
 
     [SerializeField]
@@ -33,6 +46,9 @@ public class GameHUDController : MonoBehaviour
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
     private VisualElement resultsPanel;
+    private VisualElement resultsMark;
+    private VisualElement phaseMark;
+    private List<VisualElement> hillPips;
     private Label phaseLabel;
     private Label timerLabel;
     private Label hillStatusLabel;
@@ -98,6 +114,11 @@ public class GameHUDController : MonoBehaviour
             flashCoroutine = null;
         }
         flash?.RemoveFromClassList("hud-flash--active");
+        if (flash != null)
+        {
+            foreach (string perspectiveClass in FlashPerspectiveClasses)
+                flash.RemoveFromClassList(perspectiveClass);
+        }
 
         foreach (UnitCardElement card in cards)
             card?.Dispose();
@@ -139,6 +160,9 @@ public class GameHUDController : MonoBehaviour
         controlsOverlay = root.Q<VisualElement>("controls-overlay");
         controlsPanel = controlsOverlay?.Q<VisualElement>(className: "controls-panel");
         controlsCloseButton = root.Q<Button>("controls-close-button");
+        resultsMark = resultsPanel?.Q<VisualElement>(className: "results-mark");
+        phaseMark = root.Q<VisualElement>(className: "phase-cluster__mark");
+        hillPips = hillStatusReadout?.Query<VisualElement>(className: "hill-pip").ToList();
     }
 
     private T RequireElement<T>(string elementName)
@@ -215,6 +239,8 @@ public class GameHUDController : MonoBehaviour
                 "[GameHUDController] Unit card template is not assigned; using fallback UI."
             );
         }
+        LetPointerThrough(cardsContainer);
+        LetPointerThrough(enemyCardsContainer);
         for (int i = 0; i < cards.Length; i++)
         {
             VisualElement host =
@@ -238,6 +264,26 @@ public class GameHUDController : MonoBehaviour
                 host.AddToClassList("enemy-unit-card-host--last");
             enemyCardsContainer.Add(host);
             enemyCards[i] = new UnitCardElement(host, i, true);
+        }
+    }
+
+    /// The card rows float over live gameplay, so only the cards themselves may
+    /// take a pointer; the transparent scroll chrome would otherwise swallow
+    /// board clicks across the full width of the screen.
+    private static void LetPointerThrough(VisualElement container)
+    {
+        if (container == null)
+            return;
+
+        container.pickingMode = PickingMode.Ignore;
+        if (container is ScrollView scrollView)
+        {
+            scrollView.contentViewport.pickingMode = PickingMode.Ignore;
+            scrollView.contentContainer.pickingMode = PickingMode.Ignore;
+        }
+        else if (container.contentContainer != container)
+        {
+            container.contentContainer.pickingMode = PickingMode.Ignore;
         }
     }
 
@@ -354,6 +400,8 @@ public class GameHUDController : MonoBehaviour
             lockInButton.SetEnabled(buttonEnabled);
         }
         planningCommit?.RemoveFromClassList("hidden");
+
+        PlanningAudio.CommitStateChanged(status);
     }
 
     private void OnLockInClicked()
@@ -380,6 +428,8 @@ public class GameHUDController : MonoBehaviour
         targetFeedbackLabel.EnableInClassList("target-feedback--error", visible && isError);
         targetFeedbackLabel.EnableInClassList("target-feedback--success", visible && !isError);
         targetFeedbackLabel.EnableInClassList("label--danger", visible && isError);
+
+        HudAudio.TargetFeedback(message, isError);
     }
 
     public void ClearTargetFeedback()
@@ -416,16 +466,22 @@ public class GameHUDController : MonoBehaviour
         if (phaseLabel == null)
             return;
 
+        bool friendly = perspective == MessagePerspective.Friendly;
+        bool enemy = perspective == MessagePerspective.Enemy;
+        bool neutral = perspective == MessagePerspective.Neutral;
+
         phaseLabel.text = message ?? string.Empty;
-        phaseLabel.EnableInClassList(
-            "phase-label--friendly",
-            perspective == MessagePerspective.Friendly
-        );
-        phaseLabel.EnableInClassList("phase-label--enemy", perspective == MessagePerspective.Enemy);
-        phaseLabel.EnableInClassList(
-            "phase-label--neutral",
-            perspective == MessagePerspective.Neutral
-        );
+        phaseLabel.EnableInClassList("phase-label--friendly", friendly);
+        phaseLabel.EnableInClassList("phase-label--enemy", enemy);
+        phaseLabel.EnableInClassList("phase-label--neutral", neutral);
+
+        // The mark carries the phase state so the phase text can stay at full
+        // contrast no matter how long the string is.
+        phaseMark?.EnableInClassList("phase-cluster__mark--friendly", friendly);
+        phaseMark?.EnableInClassList("phase-cluster__mark--enemy", enemy);
+        phaseMark?.EnableInClassList("phase-cluster__mark--neutral", neutral);
+
+        HudAudio.PhaseChanged(message);
     }
 
     public void SetTimer(float seconds)
@@ -439,6 +495,8 @@ public class GameHUDController : MonoBehaviour
             "timer-label--urgent",
             displayedSeconds > 0 && displayedSeconds <= 5
         );
+
+        HudAudio.TimerUpdated(seconds);
     }
 
     public void Flash(MessagePerspective perspective, float duration = 0.2f)
@@ -446,15 +504,16 @@ public class GameHUDController : MonoBehaviour
         if (flash == null)
             return;
 
-        Color color =
-            perspective == MessagePerspective.Friendly
-                ? new Color(0.12f, 0.5f, 0.78f, 0.18f)
-                : (
-                    perspective == MessagePerspective.Enemy
-                        ? new Color(0.8f, 0.12f, 0.16f, 0.1f)
-                        : new Color(0.8f, 0.65f, 0.3f, 0.14f)
-                );
-        flash.style.backgroundColor = color;
+        foreach (string perspectiveClass in FlashPerspectiveClasses)
+            flash.RemoveFromClassList(perspectiveClass);
+        flash.AddToClassList(
+            perspective switch
+            {
+                MessagePerspective.Friendly => "hud-flash--friendly",
+                MessagePerspective.Enemy => "hud-flash--enemy",
+                _ => "hud-flash--neutral",
+            }
+        );
 
         if (flashCoroutine != null)
             StopCoroutine(flashCoroutine);
@@ -495,12 +554,25 @@ public class GameHUDController : MonoBehaviour
             state.Status == HillControlStatus.Controlled
             && state.ControllingTeamIndex == GameLoop.OpponentTeamIndex;
 
+        bool contested = state.Status == HillControlStatus.Contested;
         hillStatusLabel.EnableInClassList("hill-status--blue", hostControlled);
         hillStatusLabel.EnableInClassList("hill-status--red", opponentControlled);
-        hillStatusLabel.EnableInClassList(
-            "hill-status--contested",
-            state.Status == HillControlStatus.Contested
-        );
+        hillStatusLabel.EnableInClassList("hill-status--contested", contested);
+
+        // The widget's left rule and the streak pips read the same state.
+        hillStatusReadout?.EnableInClassList("hill-status--blue", hostControlled);
+        hillStatusReadout?.EnableInClassList("hill-status--red", opponentControlled);
+        hillStatusReadout?.EnableInClassList("hill-status--contested", contested);
+
+        int filledPips =
+            state.Status == HillControlStatus.Controlled
+                ? Mathf.Clamp(state.Streak, 0, GameLoop.HillControlRoundsToWin)
+                : 0;
+        if (hillPips != null)
+        {
+            for (int i = 0; i < hillPips.Count; i++)
+                hillPips[i].EnableInClassList("hill-pip--filled", i < filledPips);
+        }
 
         hillStatusLabel.text = state.Status switch
         {
@@ -511,6 +583,8 @@ public class GameHUDController : MonoBehaviour
                 + GameLoop.HillControlRoundsToWin,
             _ => "No control · 0/" + GameLoop.HillControlRoundsToWin,
         };
+
+        HudAudio.HillControlChanged(state);
     }
 
     public void ShowDeployment(string status = null)
@@ -524,6 +598,8 @@ public class GameHUDController : MonoBehaviour
         deploymentOverlay?.RemoveFromClassList("hidden");
         deploymentOverlay?.BringToFront();
         ActivateOverlay(deploymentOverlay, deploymentOverlay);
+
+        HudAudio.Deploying();
     }
 
     public void HideDeployment()
@@ -544,8 +620,10 @@ public class GameHUDController : MonoBehaviour
 
     public void ShowResults(string status, Action onPlayAgain, Action onMainMenu)
     {
+        string resolvedStatus = status ?? "Match complete.";
         if (resultsStatus != null)
-            resultsStatus.text = status ?? "Match complete";
+            resultsStatus.text = resolvedStatus;
+        SetResultsOutcome(resolvedStatus);
 
         playAgainAction = onPlayAgain;
         mainMenuAction = onMainMenu;
@@ -555,6 +633,8 @@ public class GameHUDController : MonoBehaviour
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);
+
+        HudAudio.ResultsShown(resolvedStatus);
     }
 
     public void HideResults()
@@ -563,6 +643,27 @@ public class GameHUDController : MonoBehaviour
         ClearActiveOverlay(resultsOverlay, null);
         playAgainAction = null;
         mainMenuAction = null;
+    }
+
+    /// The result strings are locked copy, so the mark can be tinted from them
+    /// without the outcome having to travel separately. Anything unresolved
+    /// keeps the default amber.
+    private void SetResultsOutcome(string status)
+    {
+        if (resultsMark == null)
+            return;
+
+        foreach (string outcomeClass in ResultsOutcomeClasses)
+            resultsMark.RemoveFromClassList(outcomeClass);
+
+        if (string.IsNullOrEmpty(status))
+            return;
+        if (status.StartsWith("You win", StringComparison.Ordinal))
+            resultsMark.AddToClassList("results-mark--win");
+        else if (status.StartsWith("You lose", StringComparison.Ordinal))
+            resultsMark.AddToClassList("results-mark--loss");
+        else if (status.StartsWith("Draw", StringComparison.Ordinal))
+            resultsMark.AddToClassList("results-mark--draw");
     }
 
     public void SetResultButtonsEnabled(bool playAgainEnabled, bool mainMenuEnabled)

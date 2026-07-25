@@ -860,6 +860,108 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void ProjectileTeamMaterials_MatchTheRendererTheyWillRepaint()
+    {
+        foreach (
+            string prefabName in new[]
+            {
+                "BulletBlue",
+                "BulletRed",
+                "SniperSuperBlue",
+                "SniperSuperRed",
+            }
+        )
+        {
+            GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                $"Assets/Prefabs/Projectiles/{prefabName}.prefab"
+            );
+            Assert.That(prefab, Is.Not.Null, $"{prefabName}.prefab is missing.");
+            Bullet bullet = prefab.GetComponent<Bullet>();
+            Assert.That(bullet, Is.Not.Null, $"{prefabName} carries no Bullet to repaint it.");
+
+            // Each prefab is authored as the host sees it and the client resolves the other way
+            // round at spawn, so the slot to check against is the shooter's own. Asking
+            // IsTeamFriendlyToLocalPlayer instead would not work here: with no live GameLoop it
+            // answers false for every shot, and the check would demand that both sides be authored
+            // as incoming fire.
+            int fireSlot =
+                Bullet.GetShooterTeamIndex(bullet.enemyTeam) == GameLoop.HostTeamIndex ? 0 : 1;
+
+            AssertRepaintKeepsTheAuthoredLook(
+                prefabName,
+                "tracer",
+                prefab.GetComponentInChildren<Renderer>(true),
+                bullet.teamMaterials,
+                fireSlot
+            );
+
+            // §8.2: the sniper lance is --bp-ink on both sides of the board and takes its team
+            // colour from the trail, so it carries no body pair and its body is never repainted.
+            if (bullet.bodyTeamMaterials == null || bullet.bodyTeamMaterials.Count == 0)
+            {
+                Assert.That(
+                    prefabName,
+                    Does.StartWith("SniperSuper"),
+                    $"{prefabName} has a team-coloured body per §8.1, so losing its body pair "
+                        + "leaves a client watching its own fire as the wrong side's slug."
+                );
+                continue;
+            }
+
+            AssertRepaintKeepsTheAuthoredLook(
+                prefabName,
+                "body",
+                Bullet.FindBodyRenderer(prefab.transform),
+                bullet.bodyTeamMaterials,
+                fireSlot
+            );
+        }
+    }
+
+    /// <summary>
+    /// One drawn part of a projectile against the pair Bullet.ApplyTeamPresentation will repaint it
+    /// from. Both renderers are resolved the way the runtime resolves them rather than by the child
+    /// name we expect, because what matters is which renderer that call actually reaches.
+    ///
+    /// Is.SameAs rather than Is.EqualTo on purpose: it compares the asset reference, so a duplicate
+    /// material with an identical name still fails.
+    /// </summary>
+    private static void AssertRepaintKeepsTheAuthoredLook(
+        string prefabName,
+        string part,
+        Renderer repainted,
+        List<Material> viewerRelativePair,
+        int fireSlot
+    )
+    {
+        Assert.That(
+            repainted,
+            Is.Not.Null,
+            $"{prefabName}: no {part} Renderer for ApplyTeamPresentation to reach."
+        );
+        Assert.That(
+            viewerRelativePair,
+            Has.Count.EqualTo(2),
+            $"{prefabName}: the {part} pair must hold own fire and incoming fire."
+        );
+
+        Material authored = repainted.sharedMaterial;
+        Material assigned = viewerRelativePair[fireSlot];
+        Assert.That(
+            authored,
+            Is.Not.Null,
+            $"{prefabName}: the {part} is drawn with no material, so it writes no depth and the "
+                + "ink contour's inverted hull has nothing to occlude its front faces."
+        );
+        Assert.That(
+            assigned,
+            Is.SameAs(authored),
+            $"{prefabName}: '{repainted.name}' is authored in '{authored?.name}' but "
+                + $"ApplyTeamPresentation would assign '{assigned?.name}' — the shot reverts at spawn."
+        );
+    }
+
+    [Test]
     public void ShieldRushBoost_OnlySelectsNearbyLivingAllies()
     {
         Vector2Int casterCell = new(4, 4);

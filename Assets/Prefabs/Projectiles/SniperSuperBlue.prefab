@@ -8,6 +8,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 133961346130352190, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.4666666
+      objectReference: {fileID: 0}
+    - target: {fileID: 133961346130352190, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.0441176
+      objectReference: {fileID: 0}
+    - target: {fileID: 133961346130352190, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.4666666
+      objectReference: {fileID: 0}
     - target: {fileID: 1104741117984779039, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -52,13 +64,41 @@ PrefabInstance:
       propertyPath: m_ExcludeLayers.m_Bits
       value: 2368
       objectReference: {fileID: 0}
+    - target: {fileID: 3281325689177080545, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: kind
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4070684451518733692, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
       propertyPath: enemyTeam
       value: RedTeam
       objectReference: {fileID: 0}
+    - target: {fileID: 4688112533962339549, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.09
+      objectReference: {fileID: 0}
+    - target: {fileID: 4688112533962339549, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.68
+      objectReference: {fileID: 0}
+    - target: {fileID: 4688112533962339549, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.09
+      objectReference: {fileID: 0}
     - target: {fileID: 6320211027281411224, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
       propertyPath: m_Name
       value: SniperSuperBlue
+      objectReference: {fileID: 0}
+    - target: {fileID: 7801334664009722537, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_Time
+      value: 0.18
+      objectReference: {fileID: 0}
+    - target: {fileID: 7801334664009722537, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: d94be4bcffee49e2954533b863f68efe, type: 2}
+    - target: {fileID: 7801334664009722537, guid: 938003f101230b3478e8171e2c03fac6, type: 3}
+      propertyPath: m_Parameters.widthCurve.m_Curve.Array.data[0].value
+      value: 0.16
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

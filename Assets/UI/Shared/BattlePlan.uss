@@ -1,286 +1,428 @@
+/* Battle Plan — FIELD DAY base layer.
+   Loaded before TacticalToybox.uss on every screen. Owns the element reset, the
+   type scale from Palette §9.5 and the unscoped atoms. ArtDirection §3.3 delegates the
+   scale to that table rather than restating it.
+
+   Two engine limits shape everything below:
+   - USS has no line-height, so Palette §9.5's line-height column is unreachable.
+   - USS has no cubic-bezier(), so the Palette §9.6 easing tokens ship keywords rather than
+     curves and rules reference them directly. ease-out-back's overshoot is fixed,
+     so --bp-ease-snap cannot be dialled to its intended 56%. Plain `linear` stays
+     literal: it marks a colour cross-fade with no motion to ease, and has no token. */
+
+@import url("TacticalToyboxTokens.uss");
+
 :root {
-    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    color: rgb(231, 236, 240);
-    font-size: 12px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
+    color: var(--bp-text);
+    font-size: var(--bp-type-body);
 }
 
 .screen {
     flex-grow: 1;
-    background-color: rgb(5, 9, 15);
-    color: rgb(231, 236, 240);
+    background-color: var(--bp-transparent);
+    color: var(--bp-text);
 }
 
 .screen-frame {
     flex-grow: 1;
-    padding: 38px 54px;
 }
 
-.command-ribbon {
-    height: 36px;
-    min-height: 36px;
-    flex-direction: row;
-    align-items: center;
-    padding-left: 16px;
-    padding-right: 16px;
-    background-color: rgb(11, 18, 27);
-    border-bottom-width: 1px;
-    border-bottom-color: rgb(48, 66, 82);
+.hidden {
+    display: none;
 }
 
-.command-ribbon__beacon {
-    width: 8px;
-    height: 8px;
-    margin-right: 11px;
-    background-color: rgb(229, 160, 55);
-}
+/* --- Type ---------------------------------------------------------------- */
 
-.command-ribbon__text {
-    font-size: 11px;
-    color: rgb(166, 180, 193);
-    letter-spacing: 1px;
-}
-
-.command-ribbon__route {
-    margin-left: auto;
-    font-size: 11px;
-    color: rgb(111, 130, 147);
-    letter-spacing: 1px;
-}
-
-.brand-mark {
-    -unity-background-scale-mode: scale-to-fit;
-    background-repeat: no-repeat;
-}
-
-.panel {
-    padding: 28px;
-    background-color: rgba(12, 20, 30, 0.98);
-    border-width: 1px;
-    border-color: rgb(45, 62, 78);
-    border-radius: 3px;
-}
-
-.panel--quiet {
-    background-color: rgba(8, 14, 22, 0.92);
-    border-color: rgb(31, 45, 58);
-}
-
-.panel--blue {
-    border-color: rgb(48, 111, 158);
-}
-
-.panel--amber {
-    border-color: rgb(133, 97, 39);
+.type-hero {
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-ExtraBold UI SDF.asset");
+    font-size: var(--bp-type-hero);
+    color: var(--bp-text);
+    letter-spacing: 2px;
 }
 
 .title-xl {
-    font-size: 34px;
-    -unity-font-style: bold;
-    color: rgb(245, 247, 249);
-    letter-spacing: 1px;
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-SemiBold UI SDF.asset");
+    font-size: var(--bp-type-display);
+    color: var(--bp-text);
+    letter-spacing: 0.5px;
 }
 
 .title-lg {
-    font-size: 25px;
-    -unity-font-style: bold;
-    color: rgb(245, 247, 249);
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-SemiBold UI SDF.asset");
+    font-size: var(--bp-type-title);
+    color: var(--bp-text);
+    letter-spacing: 0.5px;
 }
 
 .title-md {
-    font-size: 18px;
+    font-size: var(--bp-type-title);
     -unity-font-style: bold;
-    color: rgb(232, 237, 241);
+    color: var(--bp-text);
 }
 
 .label {
-    font-size: 14px;
-    color: rgb(199, 209, 218);
+    font-size: var(--bp-type-body);
+    color: var(--bp-text-2);
+}
+
+.label--sm {
+    font-size: var(--bp-type-body-sm);
 }
 
 .label--muted {
-    color: rgb(151, 166, 180);
+    color: var(--bp-text-2);
 }
 
 .label--danger {
-    color: rgb(255, 126, 118);
+    color: var(--bp-red-hi);
 }
 
 .label--amber {
-    color: rgb(238, 180, 80);
+    color: var(--bp-amber-hi);
 }
 
 .label--blue {
-    color: rgb(108, 191, 244);
+    color: var(--bp-blue);
+}
+
+.label--success {
+    color: var(--bp-green-hi);
 }
 
 .section-label {
-    margin-bottom: 10px;
-    font-size: 11px;
-    -unity-font-style: bold;
-    color: rgb(162, 177, 190);
-    letter-spacing: 1px;
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-SemiBold UI SDF.asset");
+    margin-bottom: var(--bp-s2);
+    font-size: var(--bp-type-label);
+    color: var(--bp-text-3);
+    letter-spacing: 1.6px;
 }
+
+.readout-key {
+    font-size: var(--bp-type-label);
+    -unity-font-style: bold;
+    color: var(--bp-text-3);
+    letter-spacing: 0.6px;
+}
+
+.state-word {
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-ExtraBold UI SDF.asset");
+    font-size: var(--bp-type-micro);
+    letter-spacing: 1.5px;
+}
+
+/* Cascadia carries every number so digit width never changes between 10 and 9. */
+.num {
+    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
+}
+
+/* --- Structure ------------------------------------------------------------ */
 
 .divider {
-    height: 1px;
-    margin-top: 18px;
-    margin-bottom: 18px;
-    background-color: rgb(42, 57, 71);
+    height: var(--bp-bw-hair);
+    margin-top: var(--bp-s4);
+    margin-bottom: var(--bp-s5);
+    background-color: var(--bp-line-2);
 }
 
+.panel {
+    padding: var(--bp-s5);
+    background-color: var(--bp-deck-1);
+    border-width: var(--bp-bw-hair);
+    border-top-color: var(--bp-line-1);
+    border-right-color: var(--bp-line-2);
+    border-left-color: var(--bp-line-2);
+    border-bottom-width: var(--bp-edge);
+    border-bottom-color: var(--bp-edge-dark);
+    border-radius: var(--bp-r-lg);
+}
+
+.card {
+    padding: var(--bp-s4);
+    background-color: var(--bp-deck-2);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-radius: var(--bp-r-md);
+}
+
+/* --- Button --------------------------------------------------------------- */
+
 .button {
-    min-height: 44px;
-    padding: 10px 18px;
-    background-color: rgb(25, 39, 52);
-    color: rgb(234, 239, 243);
-    border-width: 1px;
-    border-color: rgb(69, 89, 107);
-    border-radius: 2px;
+    min-height: var(--bp-target-lg);
+    padding: 0 var(--bp-s4);
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bp-deck-2);
+    color: var(--bp-text);
+    border-width: var(--bp-bw-hair);
+    border-top-color: var(--bp-line-1);
+    border-right-color: var(--bp-line-2);
+    border-left-color: var(--bp-line-2);
+    border-bottom-width: var(--bp-edge);
+    border-bottom-color: var(--bp-edge-dark);
+    border-radius: var(--bp-r-md);
     -unity-font-style: bold;
-    font-size: 14px;
-    transition-duration: 0.12s;
-    transition-property: background-color, border-color, color, opacity;
+    font-size: var(--bp-type-body);
+    letter-spacing: 0.3px;
+    transition-property: background-color, border-color, border-width, color, translate;
+    transition-duration: var(--bp-t-fast);
+    transition-timing-function: var(--bp-ease-out);
 }
 
 .button:hover {
-    background-color: rgb(34, 51, 66);
-    border-color: rgb(99, 128, 151);
+    background-color: var(--bp-deck-3);
+    border-top-color: var(--bp-line-3);
+    border-right-color: var(--bp-line-3);
+    border-left-color: var(--bp-line-3);
 }
 
 .button:active {
-    background-color: rgb(19, 30, 41);
-    border-color: rgb(229, 160, 55);
+    background-color: var(--bp-deck-4);
+    border-bottom-width: var(--bp-bw-hair);
+    translate: 0 1px;
+    transition-duration: var(--bp-t-instant);
 }
 
 .button:focus {
-    border-width: 2px;
-    border-color: rgb(237, 174, 65);
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
+    transition-duration: var(--bp-t-instant);
 }
 
-.button:disabled {
-    background-color: rgb(16, 24, 33);
-    border-color: rgb(42, 54, 65);
-    color: rgb(112, 124, 135);
-    opacity: 0.78;
+.button:disabled,
+.button:disabled:hover,
+.button:disabled:active {
+    opacity: 1;
+    background-color: var(--bp-deck-1);
+    color: var(--bp-text-3);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-1);
+    translate: 0 0;
+    transition-timing-function: linear;
 }
 
 .button--primary {
-    background-color: rgb(24, 91, 142);
-    border-color: rgb(82, 169, 230);
-    color: rgb(248, 251, 253);
+    background-color: var(--bp-amber);
+    color: var(--bp-text-on-accent);
+    border-top-color: var(--bp-amber-deep);
+    border-right-color: var(--bp-amber-deep);
+    border-left-color: var(--bp-amber-deep);
 }
 
 .button--primary:hover {
-    background-color: rgb(29, 108, 166);
-    border-color: rgb(124, 202, 249);
+    background-color: var(--bp-amber-hover);
+    border-top-color: var(--bp-amber-deep);
+    border-right-color: var(--bp-amber-deep);
+    border-left-color: var(--bp-amber-deep);
 }
 
-.button--primary:disabled,
-.button--primary:disabled:hover,
-.button--primary:disabled:active {
-    opacity: 1;
-    background-color: rgb(16, 24, 33);
-    border-width: 1px;
-    border-color: rgb(49, 61, 72);
-    color: rgb(119, 131, 141);
+.button--primary:active {
+    background-color: var(--bp-amber-deep);
 }
 
-.button--danger {
-    background-color: rgb(91, 28, 35);
-    border-color: rgb(185, 69, 78);
+.button--primary:focus {
+    border-color: var(--bp-focus-dark);
 }
 
-.button--danger:hover {
-    background-color: rgb(112, 34, 42);
-    border-color: rgb(225, 91, 100);
+.button--ghost {
+    min-height: var(--bp-target);
+    background-color: var(--bp-transparent);
+    color: var(--bp-text-2);
+    border-width: 0;
+    border-bottom-width: var(--bp-bw-hair);
+    border-bottom-color: var(--bp-line-1);
 }
 
-.button--selected {
-    background-color: rgb(77, 56, 21);
-    border-color: rgb(237, 174, 65);
-    color: rgb(255, 232, 188);
+.button--ghost:hover {
+    background-color: var(--bp-line-1);
+    color: var(--bp-text);
 }
 
-.button--selected:hover {
-    background-color: rgb(91, 66, 25);
-    border-color: rgb(251, 191, 84);
+.button--ghost:active {
+    background-color: var(--bp-line-2);
+    translate: 0 1px;
 }
 
-.button--flat {
-    background-color: rgba(0, 0, 0, 0);
-    border-color: rgba(0, 0, 0, 0);
-    color: rgb(171, 185, 198);
+.button--ghost:focus {
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
 }
 
-.button--flat:hover {
-    background-color: rgb(20, 31, 42);
-    border-color: rgb(54, 72, 88);
-    color: rgb(237, 241, 244);
+.button--text {
+    min-height: var(--bp-target-sm);
+    padding: 0;
+    justify-content: flex-start;
+    background-color: var(--bp-transparent);
+    color: var(--bp-text-3);
+    border-width: 0;
+    font-size: var(--bp-type-body-sm);
 }
+
+.button--text:hover {
+    background-color: var(--bp-transparent);
+    color: var(--bp-text-2);
+}
+
+.button--text:active {
+    background-color: var(--bp-transparent);
+    translate: 0 0;
+}
+
+.button--text:focus {
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
+}
+
+/* --- Text input ------------------------------------------------------------ */
 
 .text-field {
-    margin-top: 6px;
-    margin-bottom: 12px;
-    color: rgb(226, 232, 237);
+    margin-top: var(--bp-s1);
+    margin-bottom: var(--bp-s3);
+    color: var(--bp-text);
 }
 
 .text-field > .unity-base-text-field__input {
-    min-height: 46px;
-    padding: 10px 12px;
-    background-color: rgb(7, 13, 20);
-    color: rgb(243, 246, 248);
-    border-width: 1px;
-    border-color: rgb(58, 76, 92);
-    border-radius: 2px;
-    font-size: 18px;
+    min-height: var(--bp-target-lg);
+    padding: 0 var(--bp-s3);
+    background-color: var(--bp-deck-0);
+    color: var(--bp-text);
+    --unity-cursor-color: var(--bp-blue);
+    border-width: var(--bp-bw);
+    border-color: var(--bp-line-3);
+    border-radius: var(--bp-r-md);
+    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
+    font-size: var(--bp-type-num-lg);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    letter-spacing: 5px;
+    transition-property: border-color, border-width;
+    transition-duration: var(--bp-t-fast);
+    transition-timing-function: var(--bp-ease-out);
 }
 
 .text-field > .unity-base-text-field__input:hover {
-    border-color: rgb(88, 111, 131);
+    border-color: var(--bp-paint);
 }
 
 .text-field > .unity-base-text-field__input:focus {
-    border-color: rgb(237, 174, 65);
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
 }
+
+.text-field--error > .unity-base-text-field__input {
+    border-color: var(--bp-red);
+}
+
+.text-field.text-field--caret-hidden > .unity-base-text-field__input {
+    --unity-cursor-color: var(--bp-transparent);
+}
+
+/* --- Toggle ---------------------------------------------------------------- */
 
 .toggle {
-    min-height: 36px;
+    min-height: var(--bp-target);
     flex-direction: row;
-    align-items: center;
-    color: rgb(214, 222, 229);
-    font-size: 14px;
+    align-items: flex-start;
+    color: var(--bp-text);
+    font-size: var(--bp-type-body);
+    -unity-font-style: bold;
 }
 
+/* The inline text lives inside the input, so this must keep its width. */
 .toggle > .unity-toggle__input {
-    min-height: 22px;
-    background-color: rgba(0, 0, 0, 0);
+    min-height: 20px;
+    align-items: flex-start;
+    background-color: var(--bp-transparent);
     border-width: 0;
 }
 
 .toggle > .unity-toggle__input > .unity-toggle__checkmark {
-    width: 22px;
-    min-width: 22px;
-    height: 22px;
-    margin-right: 10px;
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    margin-right: var(--bp-icon-gap);
     background-image: none;
-    background-color: rgb(8, 14, 22);
-    border-width: 1px;
-    border-color: rgb(72, 91, 108);
-    border-radius: 2px;
+    background-color: var(--bp-deck-0);
+    border-width: var(--bp-bw);
+    border-color: var(--bp-line-3);
+    border-radius: var(--bp-r-sm);
+    -unity-background-image-tint-color: var(--bp-text-on-accent);
+    transition-property: background-color, border-color, border-width;
+    transition-duration: var(--bp-t-fast);
+    transition-timing-function: var(--bp-ease-out);
 }
 
 .toggle:hover > .unity-toggle__input > .unity-toggle__checkmark {
-    border-color: rgb(109, 137, 160);
+    border-color: var(--bp-paint);
 }
 
 .toggle:focus > .unity-toggle__input > .unity-toggle__checkmark {
-    border-color: rgb(237, 174, 65);
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
 }
 
 .toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
-    background-color: rgb(31, 112, 166);
-    border-color: rgb(103, 194, 247);
+    background-image: url("project://database/Assets/UI/Shared/Icons/check.svg");
+    background-color: var(--bp-blue);
+    border-color: var(--bp-blue);
+    -unity-background-scale-mode: scale-to-fit;
 }
+
+.toggle:checked:focus > .unity-toggle__input > .unity-toggle__checkmark {
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
+}
+
+.toggle:disabled {
+    opacity: 1;
+    color: var(--bp-text-3);
+}
+
+.toggle:disabled > .unity-toggle__input > .unity-toggle__checkmark {
+    background-color: var(--bp-deck-1);
+    border-color: var(--bp-line-1);
+}
+
+/* --- Status line ------------------------------------------------------------ */
+
+.status-line {
+    min-height: 20px;
+    margin-top: var(--bp-s2);
+    font-size: var(--bp-type-body-sm);
+    color: var(--bp-text-2);
+    white-space: normal;
+    transition-property: color;
+    transition-duration: var(--bp-t-fast);
+    transition-timing-function: linear;
+}
+
+.status-line--busy {
+    color: var(--bp-blue);
+}
+
+/* Fill and rule appear immediately — a fading error box reads as a bug. */
+.status-line--success {
+    padding: 6px var(--bp-s3);
+    background-color: var(--bp-green-surface);
+    color: var(--bp-green-hi);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-green);
+    border-radius: var(--bp-r-sm);
+}
+
+.status-line.label--danger,
+.status-line--danger {
+    padding: 6px var(--bp-s3);
+    background-color: var(--bp-red-surface);
+    color: var(--bp-red-hi);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-red);
+    border-radius: var(--bp-r-sm);
+}
+
+/* --- Dialog ------------------------------------------------------------------ */
 
 .modal-shade {
     position: absolute;
@@ -290,23 +432,28 @@
     bottom: 0;
     align-items: center;
     justify-content: center;
-    padding: 42px;
-    background-color: rgba(2, 5, 9, 0.9);
+    padding: var(--bp-s6);
+    background-color: var(--bp-scrim);
 }
 
 .modal {
     width: 680px;
     max-width: 92%;
-    max-height: 88%;
-    padding: 30px;
-    background-color: rgb(12, 20, 30);
-    border-width: 1px;
-    border-color: rgb(76, 99, 119);
-    border-radius: 3px;
+    max-height: 90%;
+    padding: var(--bp-s6);
+    background-color: var(--bp-deck-1);
+    border-width: var(--bp-bw-hair);
+    border-top-color: var(--bp-line-1);
+    border-right-color: var(--bp-line-2);
+    border-left-color: var(--bp-line-2);
+    border-bottom-width: var(--bp-edge);
+    border-bottom-color: var(--bp-edge-dark);
+    border-radius: var(--bp-r-lg);
 }
 
 .modal:focus {
-    border-color: rgb(102, 129, 151);
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
 }
 
 .modal__header {
@@ -318,14 +465,14 @@
 .modal-close {
     align-self: flex-end;
     min-width: 140px;
-    margin-top: 24px;
+    margin-top: var(--bp-s5);
 }
 
 .controls-panel {
     width: 760px;
     height: 680px;
     max-width: 92%;
-    max-height: 88%;
+    max-height: 90%;
 }
 
 .controls-scroll {
@@ -334,59 +481,44 @@
 }
 
 .controls-scroll .unity-scroll-view__content-container {
-    padding-right: 12px;
-}
-
-.controls-scroll .unity-scroller--vertical {
-    width: 12px;
-    background-color: rgb(8, 14, 21);
-}
-
-.controls-scroll .unity-base-slider__tracker {
-    background-color: rgb(11, 19, 27);
-    border-color: rgb(43, 58, 71);
-}
-
-.controls-scroll .unity-base-slider__dragger {
-    background-color: rgb(75, 96, 113);
-    border-color: rgb(105, 130, 150);
+    padding-right: var(--bp-s3);
 }
 
 .control-section {
-    margin-bottom: 10px;
+    margin-bottom: var(--bp-s3);
 }
 
 .control-section__label {
-    margin-top: 4px;
-    margin-bottom: 2px;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: rgb(132, 149, 164);
-    letter-spacing: 1px;
+    -unity-font-definition: url("project://database/Assets/Fonts/SairaCondensed/SairaCondensed-SemiBold UI SDF.asset");
+    margin-top: var(--bp-s1);
+    margin-bottom: var(--bp-s2);
+    font-size: var(--bp-type-label);
+    color: var(--bp-amber);
+    letter-spacing: 1.6px;
 }
 
 .control-row {
-    min-height: 48px;
+    min-height: 44px;
     flex-direction: row;
     align-items: flex-start;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    border-bottom-width: 1px;
-    border-bottom-color: rgb(39, 53, 66);
+    padding-top: var(--bp-s3);
+    padding-bottom: var(--bp-s3);
+    border-bottom-width: var(--bp-bw-hair);
+    border-bottom-color: var(--bp-line-1);
 }
 
 .control-key {
     width: 176px;
     min-width: 176px;
-    padding-right: 18px;
-    color: rgb(235, 174, 69);
+    padding-right: var(--bp-s4);
+    color: var(--bp-text);
     -unity-font-style: bold;
 }
 
 .control-copy {
     flex-grow: 1;
     min-width: 0;
-    color: rgb(203, 213, 221);
+    color: var(--bp-text-2);
     white-space: normal;
 }
 
@@ -395,65 +527,69 @@
 }
 
 .controls-panel .modal-close {
-    margin-top: 16px;
+    margin-top: var(--bp-s4);
 }
 
-.status-line {
-    min-height: 24px;
-    margin-top: 6px;
-    margin-bottom: 8px;
-    white-space: normal;
+/* --- Scrollbars ---------------------------------------------------------------- */
+
+.unity-scroller--vertical {
+    width: var(--bp-scroll);
+    background-color: var(--bp-deck-0);
+    border-width: 0;
 }
 
-.hidden {
+.unity-scroller--horizontal {
+    height: var(--bp-scroll);
+    background-color: var(--bp-deck-0);
+    border-width: 0;
+}
+
+.unity-scroller__low-button,
+.unity-scroller__high-button {
     display: none;
 }
 
-.compact .screen-frame {
-    padding: 24px 30px;
+.unity-base-slider__tracker {
+    background-color: var(--bp-transparent);
+    border-width: 0;
 }
 
-.compact .panel {
-    padding: 22px;
+.unity-base-slider__dragger {
+    background-color: var(--bp-deck-4);
+    border-width: 0;
+    border-radius: var(--bp-r-sm);
 }
 
-.compact .title-xl {
-    font-size: 29px;
+.unity-base-slider__dragger:hover {
+    background-color: var(--bp-deck-5);
 }
 
-.narrow .command-ribbon__route {
-    display: none;
-}
-
-.phone .screen-frame {
-    padding-left: 16px;
-    padding-right: 16px;
-}
+/* --- Responsive ------------------------------------------------------------------ */
 
 .phone .modal-shade {
-    padding: 16px;
+    padding: var(--bp-s4);
 }
 
 .phone .modal {
     max-width: 100%;
-    padding: 22px;
+    padding: var(--bp-s5);
 }
 
 .phone .controls-panel {
-    padding: 18px;
+    padding: var(--bp-s4);
 }
 
 .phone .control-row {
     min-height: 0;
     flex-direction: column;
-    padding-top: 8px;
-    padding-bottom: 8px;
+    padding-top: var(--bp-s2);
+    padding-bottom: var(--bp-s2);
 }
 
 .phone .control-key {
     width: auto;
     min-width: 0;
-    margin-bottom: 4px;
+    margin-bottom: var(--bp-s1);
     padding-right: 0;
 }
 
@@ -461,9 +597,13 @@
     width: 100%;
 }
 
-.short .screen-frame {
-    padding-top: 18px;
-    padding-bottom: 18px;
+.phone .button {
+    min-height: var(--bp-target-phone);
+}
+
+.phone .button--ghost,
+.phone .button--text {
+    min-height: var(--bp-target);
 }
 
 .short .controls-panel {

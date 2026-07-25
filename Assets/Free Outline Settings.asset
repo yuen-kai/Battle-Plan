@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ca2cb9e9790a941d3b51ae2615e6e1bd, type: 3}
-  m_Name: Outline
+  m_Name: Silhouette
   m_EditorClassIdentifier: 
   material: {fileID: 0}
   isActive: 1
@@ -19,17 +19,125 @@ MonoBehaviour:
     m_Bits: 2
   layerMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 192
   renderQueue: 0
   occlusion: 2
   maskingStrategy: 0
-  color: {r: 0, g: 0.55951166, b: 1, a: 1}
+  color: {r: 0.019608, g: 0.027451, b: 0.043137, a: 1}
   enableOcclusion: 0
   occludedColor: {r: 1, g: 0, b: 0, a: 1}
   blendMode: 0
   extrusionMethod: 4
   scaling: 0
-  width: 3
+  width: 2.5
+  minWidth: 0
+  scaleWithResolution: 0
+  referenceResolution: 0
+  customResolution: 0
+  materialType: 0
+  customMaterial: {fileID: 0}
+--- !u!114 &-4085261445761138489
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca2cb9e9790a941d3b51ae2615e6e1bd, type: 3}
+  m_Name: Selection
+  m_EditorClassIdentifier: 
+  material: {fileID: 0}
+  isActive: 1
+  RenderingLayer:
+    serializedVersion: 0
+    m_Bits: 4
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 192
+  renderQueue: 0
+  occlusion: 2
+  maskingStrategy: 0
+  color: {r: 0.298039, g: 0.780392, b: 1, a: 1}
+  enableOcclusion: 0
+  occludedColor: {r: 1, g: 0, b: 0, a: 1}
+  blendMode: 0
+  extrusionMethod: 4
+  scaling: 0
+  width: 4.5
+  minWidth: 0
+  scaleWithResolution: 0
+  referenceResolution: 0
+  customResolution: 0
+  materialType: 0
+  customMaterial: {fileID: 0}
+--- !u!114 &-4085261445761138488
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca2cb9e9790a941d3b51ae2615e6e1bd, type: 3}
+  m_Name: Threat
+  m_EditorClassIdentifier: 
+  material: {fileID: 0}
+  isActive: 1
+  RenderingLayer:
+    serializedVersion: 0
+    m_Bits: 8
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 192
+  renderQueue: 0
+  occlusion: 2
+  maskingStrategy: 0
+  color: {r: 1, g: 0.690196, b: 0.12549, a: 1}
+  enableOcclusion: 0
+  occludedColor: {r: 1, g: 0, b: 0, a: 1}
+  blendMode: 0
+  extrusionMethod: 4
+  scaling: 0
+  width: 4.5
+  minWidth: 0
+  scaleWithResolution: 0
+  referenceResolution: 0
+  customResolution: 0
+  materialType: 0
+  customMaterial: {fileID: 0}
+--- !u!114 &-3156227663929092992
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca2cb9e9790a941d3b51ae2615e6e1bd, type: 3}
+  m_Name: Menu Contour
+  m_EditorClassIdentifier: LineworkLite::LineworkLite.FreeOutline.Outline
+  material: {fileID: 0}
+  isActive: 1
+  RenderingLayer:
+    serializedVersion: 0
+    m_Bits: 16
+  layerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  renderQueue: 0
+  occlusion: 2
+  maskingStrategy: 0
+  color: {r: 0.9882353, g: 0.9764706, b: 0.9529412, a: 1}
+  enableOcclusion: 0
+  occludedColor: {r: 1, g: 0, b: 0, a: 1}
+  blendMode: 0
+  extrusionMethod: 4
+  scaling: 0
+  width: 2.5
   minWidth: 0
   scaleWithResolution: 0
   referenceResolution: 0
@@ -52,3 +160,6 @@ MonoBehaviour:
   showInSceneView: 1
   outlines:
   - {fileID: -4085261445761138490}
+  - {fileID: -4085261445761138489}
+  - {fileID: -4085261445761138488}
+  - {fileID: -3156227663929092992}

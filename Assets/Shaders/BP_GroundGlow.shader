@@ -1,8 +1,18 @@
-// Battle Plan — additive radial glow for ground FX on a default Unity Quad.
-// One shader covers three shapes via _RingWidth:
+// Battle Plan — radial ground FX on a default Unity Quad. One shader covers five roles:
 //   _RingWidth = 1   -> soft filled disc (telegraphs, lock markers, ability glow pools)
 //   _RingWidth < 1   -> ring/shockwave (expanding impact rings)
+//   _CompositeMode 2 -> the same disc or ring as a DARKENING, which is how a contact shadow, a
+//                       negative flash and the dark half of a two-tone shockwave are all drawn
+//                       without a second shader.
 // Tint per-instance via MaterialPropertyBlock ("_GlowColor") — see ImpactShockwave.cs.
+//
+// _MaskTex multiplies the procedural shape with an authored greyscale mask, which is how the
+// muzzle flash gets its four-point star while still being a GroundGlow disc (ArtDirection §8.5).
+// It defaults to white, so every material and every runtime `new Material(shader)` that predates
+// it is unchanged.
+//
+// Blend state defaults to additive, so materials authored before the composite work behave exactly
+// as they did. See BP_FXComposite.hlsl for why the mode is a float and not a keyword.
 Shader "BattlePlan/GroundGlow"
 {
     Properties
@@ -13,6 +23,12 @@ Shader "BattlePlan/GroundGlow"
         _Intensity ("Intensity", Range(0, 8)) = 1
         _PulseSpeed ("Pulse Speed (0 = off)", Float) = 0
         _PulseAmount ("Pulse Amount", Range(0, 1)) = 0.3
+        _MaskTex ("Shape Mask (greyscale)", 2D) = "white" {}
+
+        [Header(Compositing)]
+        [Enum(Additive, 0, Alpha, 1, Multiply, 2)] _CompositeMode ("Composite Mode", Float) = 0
+        [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src Blend", Float) = 1
+        [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Dst Blend", Float) = 1
     }
 
     SubShader
@@ -28,7 +44,7 @@ Shader "BattlePlan/GroundGlow"
         Pass
         {
             Name "Forward"
-            Blend One One
+            Blend [_SrcBlend] [_DstBlend]
             ZWrite Off
             Cull Off
 
@@ -37,6 +53,18 @@ Shader "BattlePlan/GroundGlow"
             #pragma fragment frag
             #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "BP_FXComposite.hlsl"
+
+            TEXTURE2D(_MaskTex);
+            SAMPLER(sampler_MaskTex);
+            float4 _MaskTex_ST;
+
+            // Render state has to come from the material, so these cannot live in the instancing
+            // buffer alongside the tint. Two composite modes therefore mean two materials — which
+            // is correct anyway, since they cannot batch into one draw call.
+            half _CompositeMode;
+            half _SrcBlend;
+            half _DstBlend;
 
             UNITY_INSTANCING_BUFFER_START(Props)
                 UNITY_DEFINE_INSTANCED_PROP(half4, _GlowColor)
@@ -92,6 +120,7 @@ Shader "BattlePlan/GroundGlow"
 
                 half mask = saturate(outer * inner);
                 mask = pow(mask, 1.5);
+                mask *= SAMPLE_TEXTURE2D(_MaskTex, sampler_MaskTex, TRANSFORM_TEX(IN.uv, _MaskTex)).a;
 
                 half pulse = 1.0;
                 if (pulseSpeed > 0.0)
@@ -99,8 +128,11 @@ Shader "BattlePlan/GroundGlow"
                     pulse = 1.0 - pulseAmount * 0.5 + pulseAmount * 0.5 * sin(_Time.y * pulseSpeed * 6.2831853);
                 }
 
-                half3 col = glowColor.rgb * mask * intensity * pulse * glowColor.a;
-                return half4(col, 1);
+                // In additive mode intensity is HDR headroom and drives bloom. In multiply mode the
+                // same number reads as how hard the shadow bites, because coverage is what gets
+                // scaled and the tint stays put.
+                half weight = mask * intensity * pulse * glowColor.a;
+                return BP_Composite(_CompositeMode, glowColor.rgb, weight);
             }
             ENDHLSL
         }

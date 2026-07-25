@@ -123,7 +123,15 @@ public sealed class UnitCardElement : IDisposable
 
         activateAction = onActivate;
         hasAbility = abilityPresent;
+
+        int previousCooldown = abilityCooldownRoundsRemaining;
         abilityCooldownRoundsRemaining = Mathf.Max(0, cooldownRoundsRemaining);
+
+        // Cards reconfigure often, so only the edge from cooling-down to ready speaks. This is the
+        // one moment a player gains an option they did not have last round.
+        if (hasAbility && previousCooldown > 0 && abilityCooldownRoundsRemaining == 0)
+            BattlePlanAudio.Play(AudioCueId.AbilityReady);
+
         configuredAbilityName =
             data != null && !string.IsNullOrWhiteSpace(data.abilityName)
                 ? data.abilityName
@@ -440,12 +448,16 @@ public sealed class UnitCardElement : IDisposable
         Label cooldown = new() { name = "unit-card-cooldown" };
         cooldown.AddToClassList("unit-card__cooldown");
         cooldown.AddToClassList("hidden");
+        VisualElement focusRing = new();
+        focusRing.AddToClassList("unit-card__focus-ring");
+        focusRing.pickingMode = PickingMode.Ignore;
         flipIndicator.Add(flipIcon);
         flipIndicator.Add(cooldown);
         select.Add(abilityVignette);
         select.Add(portrait);
         select.Add(copy);
         select.Add(flipIndicator);
+        select.Add(focusRing);
 
         root.Add(select);
         return root;

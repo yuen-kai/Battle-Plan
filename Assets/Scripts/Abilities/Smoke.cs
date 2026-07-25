@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 public class Smoke : Ability
@@ -69,6 +70,8 @@ public class Smoke : Ability
                 ? NetworkHelper.Spawn(canisterPrefab, startPosition, Quaternion.identity)
                 : null;
 
+        ThrowFxClientRpc(startPosition, landingPosition);
+
         float elapsed = 0f;
         while (elapsed < ThrowSeconds)
         {
@@ -94,5 +97,21 @@ public class Smoke : Ability
         RegisterTargetFootprint(abilitySquare);
         if (canister != null)
             NetworkHelper.Instance.Despawn(canister);
+    }
+
+    /// <summary>
+    /// The toss itself, on the thrower's cell and fog-gated with it. The bloom when the screen
+    /// actually deploys is a separate, deliberately unmasked cue raised in GameLoop, because a
+    /// screen changes sightlines for both players. Client-local presentation only.
+    /// </summary>
+    [ClientRpc]
+    private void ThrowFxClientRpc(Vector3 fromPosition, Vector3 landingPosition)
+    {
+        BattlePlanAudio.PlayAt(AudioCueId.SmokeThrow, fromPosition, gameObject);
+
+        // Anticipation (§9.3): the exact 3x3 the screen will occupy, held for the flight and faded
+        // as the puffs take over. Shown to both players for the same reason the deploy bloom is —
+        // a screen changes sightlines for everyone, so its footprint is not a secret.
+        AbilityFX.SmokeThrow(landingPosition, ThrowSeconds);
     }
 }

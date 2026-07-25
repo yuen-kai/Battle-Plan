@@ -1,0 +1,10 @@
+=== capture pass B ===
+screen 1920x1080
+match up, fog off, phase=planning
+control pair ctl-a/ctl-b written
+tracer: head screen (1130,676) [origin (960,658)] travelled 4.5 units
+area lock: no clear lit cell found
+hit flash: victim Soldier(Clone) at screen (960,658), 29 renderers; bullet lift 1.4 x 0.5, area lock lift 2 x 0.5
+tl-mid: owner Sniper(Clone) alpha 0.6902 progress 0.425 width 0.1136 endpoints screen (634,453) -> (860,749)
+tl-full: owner Sniper(Clone) alpha 0.8627 progress 0.948 width 0.1924 endpoints screen (634,453) -> (860,749)
+RESULT: still running

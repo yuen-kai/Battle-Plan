@@ -11,6 +11,14 @@ Shader "BattlePlan/VisionCone"
         _SideSoftness ("Side Softness", Range(0.01, 1)) = 0.35
         _FlickerSpeed ("Flicker Speed (0 = off)", Float) = 0
         _FlickerAmount ("Flicker Amount", Range(0, 1)) = 0.1
+
+        // An additive cone is invisible on a bright floor. The non-additive paths exist so the
+        // cone can instead read as a tinted or shaded wedge; which one it becomes is the art
+        // director's fog-of-war ruling, not a rendering choice, so the default is unchanged.
+        [Header(Compositing)]
+        [Enum(Additive, 0, Alpha, 1, Multiply, 2)] _CompositeMode ("Composite Mode", Float) = 0
+        [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src Blend", Float) = 1
+        [Enum(UnityEngine.Rendering.BlendMode)] _DstBlend ("Dst Blend", Float) = 1
     }
 
     SubShader
@@ -26,7 +34,7 @@ Shader "BattlePlan/VisionCone"
         Pass
         {
             Name "Forward"
-            Blend One One
+            Blend [_SrcBlend] [_DstBlend]
             ZWrite Off
             Cull Off
 
@@ -34,6 +42,7 @@ Shader "BattlePlan/VisionCone"
             #pragma vertex vert
             #pragma fragment frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "BP_FXComposite.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _ConeColor;
@@ -42,6 +51,9 @@ Shader "BattlePlan/VisionCone"
                 half _SideSoftness;
                 half _FlickerSpeed;
                 half _FlickerAmount;
+                half _CompositeMode;
+                half _SrcBlend;
+                half _DstBlend;
             CBUFFER_END
 
             struct Attributes
@@ -84,8 +96,7 @@ Shader "BattlePlan/VisionCone"
                 }
 
                 half mask = distFade * side * apex * flicker;
-                half3 col = _ConeColor.rgb * _ConeColor.a * mask;
-                return half4(col, 1);
+                return BP_Composite(_CompositeMode, _ConeColor.rgb, mask * _ConeColor.a);
             }
             ENDHLSL
         }

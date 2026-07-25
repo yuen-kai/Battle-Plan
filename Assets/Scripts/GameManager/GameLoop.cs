@@ -578,6 +578,11 @@ public class GameLoop : NetworkBehaviour
     private GameObject fogOverlayRoot;
     private Coroutine clientFogCoroutine;
 
+    // Last set the overlay above was drawn from. Presentation-only consumers (audio) read this so
+    // a cue is heard exactly when the tile it happens on is lit, and never a tick out of step.
+    private readonly HashSet<Vector2Int> clientVisibleCells = new();
+    private bool clientVisibleCellsComputed;
+
     public bool FogOfWarEnabled => fogOfWarEnabled.Value;
     public MatchOptions Options => replicatedMatchOptions.Value.Sanitized();
     public int LocalTeamIndex =>
@@ -1333,7 +1338,7 @@ public class GameLoop : NetworkBehaviour
 
             // Dodge telegraphs are planning aids, not execution VFX. Clear them on every client
             // before movement and abilities start so lines/discs cannot linger into resolution.
-            HideAbilityTelegraphsClientRpc();
+            HideAbilityTelegraphsClientRpc(executionStarting: true);
             currentPhase = "executing";
             // Smoke is thrown now rather than placed, so each screen registers when its own
             // canister lands instead of all of them up front. The window has to stay open for as
@@ -1394,7 +1399,7 @@ public class GameLoop : NetworkBehaviour
                 yield break;
 
             acceptingSmokeRegistrations = false;
-            HideAbilityTelegraphsClientRpc();
+            HideAbilityTelegraphsClientRpc(executionStarting: false);
             TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
@@ -1555,7 +1560,54 @@ public class GameLoop : NetworkBehaviour
             .Create(transform, cellWorldPositions, cellSize)
             .gameObject;
 
+        // A screen changes sightlines for both players and is already public, so its bloom is
+        // audible to both, placed at the footprint's centre.
+        BattlePlanAudio.PlayAt(AudioCueId.SmokeBloom, AverageCell(cellWorldPositions));
+
         RefreshClientFogForSmokeChange();
+    }
+
+    private static Vector3 AverageCell(Vector3[] cellWorldPositions)
+    {
+        Vector3 total = Vector3.zero;
+        foreach (Vector3 position in cellWorldPositions)
+            total += position;
+        return total / cellWorldPositions.Length;
+    }
+
+    /// <summary>
+    /// Impact sounds for collisions the server resolves and then immediately despawns. A bullet
+    /// decides what it hit inside a server-only <c>OnCollisionEnter</c> and is despawned on the same
+    /// frame, so the cue cannot ride on the projectile the way a unit's damage sound rides on its
+    /// replicated health. Hits on units need none of this and do not come through here.
+    ///
+    /// Deliberately narrow: it carries a position and a fixed two-value kind, never an arbitrary
+    /// cue, so it cannot grow into a general "play any sound" network channel. Purely presentation
+    /// — nothing in the simulation reads it, and clients cannot raise it.
+    /// </summary>
+    public enum ImpactAudioKind : byte
+    {
+        Surface = 0,
+        ShieldBlock = 1,
+    }
+
+    public void BroadcastImpactAudio(Vector3 position, ImpactAudioKind kind)
+    {
+        if (!IsServer)
+            return;
+
+        PlayImpactAudioClientRpc(position, (byte)kind);
+    }
+
+    [ClientRpc]
+    private void PlayImpactAudioClientRpc(Vector3 position, byte kind)
+    {
+        AudioCueId cue = (ImpactAudioKind)kind switch
+        {
+            ImpactAudioKind.ShieldBlock => AudioCueId.ShieldBlock,
+            _ => AudioCueId.ImpactSurface,
+        };
+        BattlePlanAudio.PlayAt(cue, position);
     }
 
     [ClientRpc]
@@ -2071,7 +2123,11 @@ public class GameLoop : NetworkBehaviour
             transform
                 .GetComponent<PlanMovement>()
                 .StartPlanning(
-                    (paths, _) => SendDodgePathsToServerRpc(paths),
+                    (paths, _) =>
+                    {
+                        CombatAudio.LocalDivesSubmitted(paths);
+                        SendDodgePathsToServerRpc(paths);
+                    },
                     endTime,
                     units,
                     diveRange
@@ -2216,6 +2272,11 @@ public class GameLoop : NetworkBehaviour
         bool isSmokeScreen
     )
     {
+        // Telegraphs are the counterplay window and are shown to both players through fog by
+        // design (§6), so the warning is audible on the same terms — placed on the target square,
+        // which is already public, never on the caster's cell.
+        BattlePlanAudio.PlayAt(AudioCueId.AbilityTelegraph, square);
+
         if (line)
         {
             Vector3 direction = (square - casterPos).normalized;
@@ -2306,7 +2367,7 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    void HideAbilityTelegraphsClientRpc()
+    void HideAbilityTelegraphsClientRpc(bool executionStarting)
     {
         foreach (GameObject telegraph in clientTelegraphs)
         {
@@ -2319,6 +2380,16 @@ public class GameLoop : NetworkBehaviour
             }
         }
         clientTelegraphs.Clear();
+
+        // Blast scorches are round-scoped: a burn from last round on a cell someone is about to
+        // walk through reads as a live hazard.
+        ScorchDecal.ClearAll();
+
+        // The deck pulse marks the planning-to-execution handover (§9.4). This RPC already runs on
+        // every peer at exactly that moment, so the flag distinguishes it from the two cleanup
+        // calls rather than needing a broadcast of its own.
+        if (executionStarting)
+            DeckPulseFX.Pulse();
     }
 
     // === KING OF THE HILL ===
@@ -2541,6 +2612,8 @@ public class GameLoop : NetworkBehaviour
         networkObject.gameObject.SetActive(true);
         networkObject.transform.SetPositionAndRotation(position, rotation);
         networkObject.GetComponent<Ability>()?.ResetForRespawn();
+        BattlePlanAudio.PlayAt(AudioCueId.UnitSpawn, position, networkObject.gameObject);
+        CombatFX.UnitSpawn(networkObject.gameObject);
     }
 
     private IEnumerable<Vector2Int> GetLivingUnitCells(int teamIndex)
@@ -3355,6 +3428,9 @@ public class GameLoop : NetworkBehaviour
             viewers,
             clientSmokeCells
         );
+        clientVisibleCells.Clear();
+        clientVisibleCells.UnionWith(visibleCells);
+        clientVisibleCellsComputed = true;
         foreach (var tile in fogOverlayTiles)
         {
             Renderer tileRenderer = tile.Value;
@@ -3398,6 +3474,22 @@ public class GameLoop : NetworkBehaviour
         }
 
         fogOverlayTiles.Clear();
+        clientVisibleCells.Clear();
+        clientVisibleCellsComputed = false;
+    }
+
+    /// <summary>
+    /// Whether the local player's team can currently see <paramref name="cell"/>, read from the
+    /// same set the fog overlay is drawn from. Presentation-only: this is what stops a positional
+    /// sound from announcing an enemy the player has not been shown. With fog off — or on a peer
+    /// that never runs the overlay, such as a headless/bot participant — everything is visible.
+    /// </summary>
+    public bool IsCellVisibleToLocalTeam(Vector2Int cell)
+    {
+        if (!FogOfWarEnabled || !clientVisibleCellsComputed)
+            return true;
+
+        return clientVisibleCells.Contains(cell);
     }
 
     void EndGame()
@@ -3429,7 +3521,7 @@ public class GameLoop : NetworkBehaviour
         forceRevealUntil.Clear();
         forceRevealToTeamUntil.Clear();
         SetCardsInteractableClientRpc(false);
-        HideAbilityTelegraphsClientRpc();
+        HideAbilityTelegraphsClientRpc(executionStarting: false);
         EndGameClientRpc(result);
     }
 
@@ -3437,6 +3529,7 @@ public class GameLoop : NetworkBehaviour
     void EndGameClientRpc(MatchResult result)
     {
         LastMatchResult = result;
+        MatchEndFX.Play();
         GameHUDController.Instance?.ShowResults(result, LocalTeamIndex, PlayAgain, ExitToMainMenu);
     }
 

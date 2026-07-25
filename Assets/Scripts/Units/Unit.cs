@@ -2,9 +2,14 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class Unit : NetworkBehaviour
 {
+    /// <summary>The world-space health fill, tinted by team in <see cref="SetHealthBarTint"/>.
+    /// Health owns its length; this owns its colour.</summary>
+    private const string HealthFillPath = "UnitCanvas/HealthBar/HealthFill";
+
     public List<Material> teamMaterials;
     private readonly NetworkVariable<int> teamIndex = new(-1);
     private readonly NetworkVariable<int> rosterSlot = new(-1);
@@ -142,6 +147,7 @@ public class Unit : NetworkBehaviour
     public void RefreshTeamPresentation()
     {
         SetTeamIndicators();
+        SetHealthBarTint();
         SetupVisionCone();
     }
 
@@ -201,6 +207,29 @@ public class Unit : NetworkBehaviour
                 };
             }
         }
+    }
+
+    /// <summary>
+    /// Paints the health fill in the team colour of whoever is watching, on the same viewer-relative
+    /// contract as the indicator props above: your crew is blue, theirs is red. The fill sits on a
+    /// world-space Canvas, so it is a saturated shape on the board — green was banned there twice
+    /// over (ArtDirection §4.4 makes green UI-only, and §4.3 forbids any saturated shape touching
+    /// the deck without ink). The --bp-ink plate behind it carries the contour; this carries the
+    /// identity.
+    ///
+    /// It has to come from code for the same reason the indicator materials do: the same unit is
+    /// blue on its owner's screen and red on the opponent's, so a serialized colour can only ever
+    /// be one of the two. The prefab is authored in --bp-red, which is what an unresolved team
+    /// falls back to here.
+    ///
+    /// Presentation only, and client-local. Health still drives the fill's length from replicated
+    /// health; nothing about the tint is read by the server, replicated, or sent anywhere.
+    /// </summary>
+    void SetHealthBarTint()
+    {
+        Transform fill = transform.Find(HealthFillPath);
+        if (fill != null && fill.TryGetComponent(out Image healthFill))
+            healthFill.color = FXPalette.TeamSrgb(TeamIndex);
     }
 
     private UnitData GetUnitData()

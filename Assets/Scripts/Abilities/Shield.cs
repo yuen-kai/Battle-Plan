@@ -286,6 +286,7 @@ public class Shield : Ability
     private void OnShieldActiveChanged(bool previousValue, bool newValue)
     {
         ApplyShieldState(newValue);
+        CombatAudio.ShieldStateChanged(gameObject, newValue);
     }
 
     private void ApplyShieldState(bool active)
@@ -304,6 +305,21 @@ public class Shield : Ability
                 identity != null ? identity.TeamIndex : -1
             );
             shieldTransform.gameObject.SetActive(active);
+
+            // Raise only. The shield GameObject IS the blocking collider, so playing a lower
+            // animation would mean holding it alive past the moment the ability ends and
+            // extending the block window by the length of the fade — a gameplay change. The raise
+            // is safe because the collider is already correct on frame one and only the visual
+            // catches up; see ShieldFX, which for the same reason animates a rim quad and the face
+            // alpha rather than the face transform.
+            if (active)
+            {
+                ShieldFX.SetActive(
+                    shieldTransform,
+                    identity != null ? identity.TeamIndex : -1,
+                    true
+                );
+            }
         }
     }
 

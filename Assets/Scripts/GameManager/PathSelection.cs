@@ -195,7 +195,10 @@ public class PathSelection : MonoBehaviour
 
         Vector3 last = CurrentPlan[^1];
         if (!ValidMove(last, currentTile, moveDist))
+        {
+            PlanningAudio.RouteRejected(currentTile);
             return;
+        }
 
         CurrentPlan.Add(currentTile);
         // The press has drawn somewhere, so it is a route being laid out rather than a click.

@@ -1,62 +1,121 @@
+/* Match setup — 520px operating column, stage on the right (ArtDirection §5.5, "Match setup"). */
+
 .join-screen {
-    background-color: var(--toy-ink);
+    background-color: var(--bp-table);
 }
 
 .join-layout {
     flex-direction: row;
     align-items: stretch;
-    padding: 34px 42px;
+    padding: 0;
 }
 
-.join-workbench {
-    width: 64%;
-    max-width: 980px;
-    min-width: 660px;
+.toybox-ui.join-screen .join-column {
+    width: 520px;
+    min-width: 520px;
+    padding: var(--bp-s7) var(--bp-s6);
+    background-color: var(--bp-deck-1);
+    border-right-width: var(--bp-bw-hair);
+    border-right-color: var(--bp-line-2);
 }
 
-.join-header {
-    min-height: 70px;
-    flex-direction: row;
-    align-items: center;
-    margin-bottom: 14px;
+.toybox-ui.join-screen .join-back-button {
+    align-self: flex-start;
+    min-height: 40px;
+    margin-bottom: var(--bp-s5);
+    padding-left: var(--bp-s2);
+    padding-right: var(--bp-s3);
+    color: var(--bp-text-3);
 }
 
-.join-back-button {
-    width: 112px;
-    min-width: 112px;
-    margin-right: var(--toy-space-panel-compact);
+.toybox-ui.join-screen .join-back-button .toy-button__label {
+    color: var(--bp-text-3);
 }
 
-.join-back-label,
-.join-tab__label {
-    -unity-font-style: bold;
-    color: var(--toy-cream);
-}
-
-.button--selected .join-tab__label {
-    color: var(--toy-ink);
+.toybox-ui.join-screen .join-back-button:hover .toy-button__label {
+    color: var(--bp-text);
 }
 
 .join-heading {
-    flex-grow: 1;
+    margin-bottom: var(--bp-s5);
 }
+
+/* --- Segmented control ------------------------------------------------------ */
 
 .join-tabs {
     width: 100%;
-    max-width: 520px;
+    height: var(--bp-target);
     flex-direction: row;
-    margin-bottom: 14px;
+    margin-bottom: var(--bp-s5);
+    padding: 0;
+    background-color: var(--bp-deck-1);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-radius: var(--bp-r-md);
 }
 
-.join-tab {
-    width: 50%;
-    margin-right: 6px;
+.toybox-ui.join-screen .join-tab {
+    flex-grow: 1;
+    flex-basis: 0;
+    width: 0;
+    min-width: 0;
+    min-height: 42px;
+    background-color: var(--bp-transparent);
+    border-width: 0;
+    border-radius: 0;
+    color: var(--bp-text-3);
 }
 
-.join-tab--last {
-    margin-right: 0;
-    margin-left: 6px;
+.toybox-ui.join-screen .join-tab .toy-button__label {
+    color: var(--bp-text-3);
 }
+
+.toybox-ui.join-screen .join-tab .toy-icon {
+    -unity-background-image-tint-color: var(--bp-text-3);
+}
+
+.toybox-ui.join-screen .join-tab:hover {
+    background-color: var(--bp-line-1);
+}
+
+.toybox-ui.join-screen .join-tab:hover .toy-button__label {
+    color: var(--bp-text-2);
+}
+
+.toybox-ui.join-screen .join-tab:hover .toy-icon {
+    -unity-background-image-tint-color: var(--bp-text-2);
+}
+
+/* Active tab: one rung up plus a 2px amber rule inset to the tab's own width. */
+.toybox-ui.join-screen .join-tab.button--selected,
+.toybox-ui.join-screen .join-tab.button--selected:hover {
+    background-color: var(--bp-deck-3);
+    border-width: 0;
+    border-bottom-width: var(--bp-bw);
+    border-bottom-color: var(--bp-amber);
+    transition-property: background-color, border-color;
+    transition-duration: var(--bp-t-base);
+    transition-timing-function: var(--bp-ease-out);
+}
+
+.toybox-ui.join-screen .join-tab.button--selected .toy-button__label {
+    color: var(--bp-text);
+}
+
+.toybox-ui.join-screen .join-tab.button--selected .toy-icon {
+    -unity-background-image-tint-color: var(--bp-text);
+}
+
+.toybox-ui.join-screen .join-tab:focus {
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
+}
+
+.toybox-ui.join-screen .join-tab:active {
+    translate: 0 0;
+}
+
+/* --- Views ------------------------------------------------------------------- */
 
 .join-content {
     flex-grow: 1;
@@ -65,55 +124,116 @@
 
 .join-content .unity-scroll-view__content-container {
     width: 100%;
-    flex-grow: 1;
 }
 
 .join-content .unity-scroller--horizontal {
     display: none;
 }
 
-.join-content .unity-scroller--vertical {
-    width: var(--toy-scroll-size);
-    background-color: var(--toy-ink);
-}
-
 .join-panel {
     width: 100%;
-    justify-content: flex-start;
+    padding-right: var(--bp-s2);
+}
+
+.join-view-heading {
+    margin-bottom: var(--bp-s4);
 }
 
 .join-section-label {
-    margin-top: var(--toy-space-lg);
+    margin-top: var(--bp-s4);
 }
 
-.mode-row {
-    flex-direction: row;
-    margin-bottom: 2px;
+/* --- Option rows --------------------------------------------------------------- */
+
+.mode-row,
+.opponent-row {
+    margin-bottom: var(--bp-s2);
 }
 
-.toybox-ui.join-screen .mode-option {
-    width: 0;
+.toybox-ui.join-screen .mode-option,
+.toybox-ui.join-screen .opponent-option {
+    width: 100%;
     min-width: 0;
-    flex-grow: 1;
-    flex-basis: 0;
-    min-height: 92px;
-    margin-top: 0;
-    margin-right: var(--toy-space-sm);
-    margin-bottom: 0;
-    margin-left: 0;
+    min-height: 64px;
+    margin-bottom: var(--bp-s2);
+    padding: 0 var(--bp-s4);
+    flex-direction: row;
     align-items: center;
-    padding: var(--toy-space-md);
-    white-space: normal;
+    justify-content: flex-start;
+    background-color: var(--bp-deck-1);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-radius: var(--bp-r-md);
 }
 
-.toybox-ui.join-screen .mode-option--last {
-    margin-right: 0;
+.toybox-ui.join-screen .opponent-option {
+    min-height: 56px;
 }
 
-.mode-option__icon {
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
+.toybox-ui.join-screen .mode-option--last,
+.toybox-ui.join-screen .opponent-option--last {
+    margin-bottom: 0;
+}
+
+.toybox-ui.join-screen .mode-option:hover,
+.toybox-ui.join-screen .opponent-option:hover {
+    background-color: var(--bp-deck-2);
+    border-color: var(--bp-line-3);
+}
+
+.toybox-ui.join-screen .mode-option:active,
+.toybox-ui.join-screen .opponent-option:active {
+    background-color: var(--bp-deck-3);
+}
+
+.toybox-ui.join-screen .mode-option:focus,
+.toybox-ui.join-screen .opponent-option:focus {
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
+}
+
+.toybox-ui.join-screen .mode-option.button--selected,
+.toybox-ui.join-screen .mode-option.button--selected:hover,
+.toybox-ui.join-screen .opponent-option.button--selected,
+.toybox-ui.join-screen .opponent-option.button--selected:hover {
+    background-color: var(--bp-blue-surface);
+    border-color: var(--bp-blue-line);
+    border-left-width: var(--bp-bw-rule);
+    border-left-color: var(--bp-blue);
+    padding-left: 14px;
+}
+
+.toybox-ui.join-screen .mode-option.button--selected .toy-icon,
+.toybox-ui.join-screen .opponent-option.button--selected .toy-icon {
+    -unity-background-image-tint-color: var(--bp-blue);
+}
+
+.toybox-ui.join-screen .mode-option.button--selected:focus,
+.toybox-ui.join-screen .opponent-option.button--selected:focus {
+    border-width: var(--bp-bw-focus);
+    border-color: var(--bp-focus-light);
+}
+
+/* Capture the Flag is permanently unavailable: no hover, no focus ring, no pick. */
+.toybox-ui.join-screen .mode-option--unavailable,
+.toybox-ui.join-screen .mode-option--unavailable:hover,
+.toybox-ui.join-screen .mode-option--unavailable:focus,
+.toybox-ui.join-screen .mode-option--unavailable:disabled,
+.toybox-ui.join-screen .mode-option--unavailable:disabled:hover {
+    opacity: 1;
+    background-color: var(--bp-deck-1);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-1);
+}
+
+.mode-option--unavailable .option-name,
+.mode-option--unavailable .option-detail {
+    color: var(--bp-text-3);
+}
+
+.option-icon {
+    margin-right: var(--bp-s3);
+    -unity-background-image-tint-color: var(--bp-text-2);
 }
 
 .option-copy {
@@ -121,293 +241,181 @@
     min-width: 0;
 }
 
-.option-copy .toy-button__label {
-    width: 100%;
-    -unity-text-align: middle-left;
-}
-
-.mode-option__name,
-.opponent-option__name {
-    font-size: var(--toy-type-body);
+.option-name {
+    font-size: var(--bp-type-body);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--bp-text);
+    -unity-text-align: middle-left;
     white-space: normal;
 }
 
-.mode-option__detail,
-.opponent-option__detail {
-    margin-top: 3px;
-    font-size: var(--toy-type-caption);
-    color: var(--toy-body-copy);
+.option-detail {
+    margin-top: 2px;
+    font-size: var(--bp-type-body-sm);
+    color: var(--bp-text-2);
+    -unity-text-align: middle-left;
     white-space: normal;
 }
 
-.mode-option__status {
-    margin-top: 3px;
-    font-size: var(--toy-type-caption);
-    color: var(--toy-muted);
+/* --- Checkboxes ------------------------------------------------------------------ */
+
+.check-row {
+    margin-top: var(--bp-s3);
 }
 
-.button--selected .mode-option__detail,
-.button--selected .opponent-option__detail {
-    color: var(--toy-dark-copy);
-}
-
-.button--selected .mode-option__name,
-.button--selected .opponent-option__name {
-    color: var(--toy-ink);
-}
-
-.mode-option:disabled .mode-option__name {
-    color: var(--toy-muted);
-}
-
-.mode-option:disabled .toy-icon {
-    opacity: 0.48;
-}
-
-.opponent-row {
-    flex-direction: row;
-    margin-bottom: 2px;
-}
-
-.toybox-ui.join-screen .opponent-option {
-    width: 210px;
-    min-height: 72px;
-    margin-right: var(--toy-space-control-top);
-    align-items: center;
-    padding-left: 14px;
-}
-
-.local-multiplayer-row {
-    margin-top: var(--toy-space-md);
-    margin-bottom: var(--toy-space-sm);
-    padding: var(--toy-space-md) 14px;
-    background-color: var(--toy-playmat-quiet);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-orange);
-    border-radius: var(--toy-radius-md);
-}
-
-.join-screen .toggle {
-    min-height: var(--toy-target-compact);
-}
-
-.local-multiplayer-toggle {
-    margin-bottom: 2px;
-}
-
-.local-multiplayer-detail {
-    padding-left: 35px;
-    font-size: var(--toy-type-caption);
+.check-detail {
+    margin-left: 30px;
+    margin-top: 2px;
+    font-size: var(--bp-type-body-sm);
+    color: var(--bp-text-2);
     white-space: normal;
 }
 
+/* UI Toolkit's Toggle owns the box-then-label order, so the fog glyph leads the
+   row instead of sitting between them. */
 .fog-row {
-    margin-top: 14px;
-    margin-bottom: var(--toy-space-xs);
-    padding: var(--toy-space-md) 14px;
     flex-direction: row;
-    align-items: center;
-    background-color: var(--toy-playmat-quiet);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-divider);
-    border-radius: var(--toy-radius-md);
+    align-items: flex-start;
+}
+
+.fog-lead {
+    padding-top: 2px;
 }
 
 .fog-icon {
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    margin-right: var(--toy-space-md);
+    margin-right: var(--bp-s2);
+    -unity-background-image-tint-color: var(--bp-text-2);
 }
 
 .fog-copy {
     flex-grow: 1;
+    min-width: 0;
 }
 
-.fog-toggle {
-    margin-bottom: 0;
+.fog-row .check-detail {
+    margin-left: 30px;
 }
 
-.fog-detail {
-    font-size: var(--toy-type-caption);
-    white-space: normal;
-}
+/* --- Actions ----------------------------------------------------------------------- */
 
 .create-action {
-    width: 280px;
-    margin-top: 6px;
-    justify-content: center;
+    width: 100%;
+    margin-top: var(--bp-s3);
 }
 
-.relay-code-panel {
-    margin-top: var(--toy-space-panel-compact);
-    padding: var(--toy-space-md) 14px;
-    background-color: var(--toy-playmat-quiet);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-divider);
-    border-radius: var(--toy-radius-md);
+/* --- Connection readout -------------------------------------------------------------- */
+
+.toybox-ui.join-screen .relay-code-panel {
+    margin-top: var(--bp-s4);
 }
 
-/* Trailing letter-spacing pads the right edge, so the box is cut narrower there. */
 .relay-code {
-    align-self: flex-start;
-    margin-top: var(--toy-space-xs);
-    margin-bottom: var(--toy-space-md);
-    padding: 6px 10px 6px 15px;
-    background-color: var(--toy-ink);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-teal);
-    border-radius: 9px;
+    min-height: var(--bp-target-lg);
+    margin-top: var(--bp-s2);
+    background-color: var(--bp-deck-0);
+    border-width: var(--bp-bw-hair);
+    border-color: var(--bp-line-2);
+    border-radius: var(--bp-r-md);
     -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    font-size: 34px;
+    font-size: var(--bp-type-num-lg);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    -unity-text-align: middle-center;
+    color: var(--bp-text);
     letter-spacing: 5px;
 }
 
 .relay-status {
-    min-height: 20px;
-    margin-bottom: 6px;
-    white-space: normal;
+    margin-bottom: var(--bp-s3);
 }
 
-.relay-cancel,
-.join-cancel {
-    width: 280px;
-    margin-top: var(--toy-space-sm);
+.toybox-ui.join-screen .relay-cancel,
+.toybox-ui.join-screen .join-cancel {
+    width: 100%;
+    margin-top: var(--bp-s2);
+}
+
+.join-input-label {
+    margin-bottom: 6px;
 }
 
 .join-code-input {
-    max-width: 430px;
+    width: 100%;
+    margin-top: 0;
 }
+
+/* --- Stage ------------------------------------------------------------------------------ */
 
 .join-stage {
     flex-grow: 1;
-    min-width: 300px;
-    justify-content: center;
-    margin-left: 32px;
+    min-width: 320px;
+    background-color: var(--bp-table);
+    overflow: hidden;
 }
 
 .join-stage__picture {
-    width: 100%;
-    max-width: 620px;
-    height: 420px;
+    flex-grow: 1;
     background-image: url("project://database/Assets/Images/JoinToyboxStage.png");
     -unity-background-scale-mode: scale-and-crop;
-    border-width: 4px;
-    border-bottom-width: 9px;
-    border-color: var(--toy-cream);
-    border-radius: 16px;
 }
 
-.compact .join-layout {
-    padding: 26px;
+/* --- Responsive ---------------------------------------------------------------------------- */
+
+.compact .toybox-ui.join-screen .join-column {
+    width: 480px;
+    min-width: 480px;
+    padding: var(--bp-s6) var(--bp-s5);
 }
 
-.compact .join-workbench {
-    width: 68%;
-    min-width: 600px;
-}
-
-.compact .join-stage {
-    min-width: 240px;
-    margin-left: 22px;
-}
-
-.compact .join-stage__picture {
-    height: 340px;
-}
-
-.narrow .join-layout {
-    padding: 24px;
-}
-
-.narrow .join-workbench {
+.narrow .toybox-ui.join-screen .join-column {
     width: 100%;
     min-width: 0;
+    border-right-width: 0;
 }
 
 .narrow .join-stage {
     display: none;
 }
 
-.phone .join-layout {
-    padding: 14px;
-}
-
-.phone .join-header {
-    align-items: flex-start;
-}
-
-.phone .join-screen .join-back-button {
-    width: 54px;
-    min-width: 54px;
-    padding-left: 11px;
-    padding-right: var(--toy-space-sm);
-}
-
-.phone .join-back-label {
-    display: none;
-}
-
-.phone .join-tabs {
-    max-width: none;
-}
-
-.phone .mode-row,
-.phone .opponent-row {
-    flex-direction: column;
-}
-
-.phone .join-screen .mode-option,
-.phone .join-screen .opponent-option {
+.phone .toybox-ui.join-screen .join-column {
     width: 100%;
     min-width: 0;
-    flex-grow: 0;
-    flex-basis: auto;
-    min-height: 68px;
-    margin-right: 0;
-    margin-bottom: var(--toy-space-sm);
+    padding: var(--bp-s5) var(--bp-s4);
 }
 
-.phone .create-action,
-.phone .relay-cancel,
-.phone .join-cancel {
-    width: 100%;
+.phone .join-heading {
+    font-size: 28px;
 }
 
-.short .join-layout {
-    padding-top: 12px;
-    padding-bottom: 12px;
+.short .toybox-ui.join-screen .join-column {
+    padding-top: var(--bp-s5);
+    padding-bottom: var(--bp-s5);
 }
 
-.short .join-header {
-    min-height: 54px;
-    margin-bottom: 6px;
+.short .toybox-ui.join-screen .join-back-button {
+    margin-bottom: var(--bp-s3);
+}
+
+.short .join-heading {
+    margin-bottom: var(--bp-s3);
 }
 
 .short .join-tabs {
-    margin-bottom: var(--toy-space-sm);
+    margin-bottom: var(--bp-s3);
 }
 
 .short .join-section-label {
-    margin-top: var(--toy-space-control-top);
+    margin-top: var(--bp-s3);
 }
 
-.short .join-screen .mode-option {
-    min-height: 68px;
+.short .toybox-ui.join-screen .mode-option {
+    min-height: 52px;
 }
 
-.short .mode-option__detail,
-.short .opponent-option__detail,
-.short .fog-detail {
+.short .toybox-ui.join-screen .opponent-option {
+    min-height: 48px;
+}
+
+.short .option-detail,
+.short .check-detail {
     display: none;
-}
-
-.short .fog-row {
-    margin-top: var(--toy-space-sm);
-    padding-top: 6px;
-    padding-bottom: 6px;
 }

@@ -18,8 +18,39 @@ public class Shooting : NetworkBehaviour
     private LineRenderer targetLaser;
     private float startAnimWidth = 0.05f;
     private float endAnimWidth = 0.2f;
+
+    // THE SERVER'S ENCODING OF LOCK PROGRESS, not a pair of palette colours. The shooting loop
+    // writes Color.Lerp(startAnimColor, endAnimColor, lockProgress) into the replicated laserColor
+    // every frame of the lock, so what actually crosses the wire is a 0..1 scalar wearing a Color.
+    // The client decodes it back out in DecodeLockProgress and never puts it on screen — see
+    // ApplyLockRamp for why the beam's hue cannot come from here.
     private Color startAnimColor = Color.white;
     private Color endAnimColor = Color.red;
+
+    // === Target-lock beam presentation, ArtDirection §8.2 ===
+
+    /// <summary>
+    /// The beam's opacity at full lock. §8.2 gives the target lock as Alpha at 0.88 in
+    /// --bp-red-deep, and the ramp lands on that figure rather than starting from it.
+    /// </summary>
+    private const float LockAlphaFull = 0.88f;
+
+    /// <summary>
+    /// Opacity the moment the lock begins. Deliberately not near zero: this beam is the only
+    /// warning the victim of a one-shot gets, so the first frame has to be a definite dark
+    /// hairline rather than a hint. The growth toward LockAlphaFull compounds with the server's
+    /// existing startAnimWidth -> endAnimWidth ramp, so the beam both widens and firms up as the
+    /// shot charges — §9.1's anticipation beat, produced by darkening rather than by brightening.
+    /// </summary>
+    private const float LockAlphaStart = 0.55f;
+
+    /// <summary>
+    /// §8.2 specifies the beam as a 0.03 core inside a 0.20 glow. <c>_CoreWidth</c> on
+    /// BattlePlan/EnergyBeam is a fraction of the line's own width rather than a world size, and
+    /// endAnimWidth is already 0.20, so the spec's two widths reduce to 0.03 / 0.20 here. The
+    /// previous 0.35 drew a 0.07 core, more than twice §8.2's.
+    /// </summary>
+    private const float LockCoreWidthFraction = 0.15f;
 
     // Network variables for laser synchronization
     private NetworkVariable<bool> isLaserEnabled = new(false);
@@ -98,18 +129,99 @@ public class Shooting : NetworkBehaviour
             targetLaser = gameObject.AddComponent<LineRenderer>();
         targetLaser.enabled = false;
 
-        // Energy-beam look: white HDR core, glow tinted by the replicated start/end colors
-        // (the white->red lock-on ramp rides the LineRenderer vertex colors).
+        // §8.2: a dark line, not a glowing one. Alpha at --bp-red-deep, no hot core — the beam
+        // reads by scoring the pale board rather than by out-shining it, and the HDR core palette
+        // §6 licenses belongs to Area Lock, which this must never out-read.
+        //
+        // Alpha has to be set through FXPalette.Composite.Apply, not by hand: _CompositeMode picks
+        // the branch inside the shader and _SrcBlend/_DstBlend are the render state that has to
+        // agree with it. Setting the mode alone leaves the blend state at the shader's One/One
+        // default, which is how this beam spent the redesign compositing additive while claiming to
+        // be alpha.
         Shader beamShader = Shader.Find("BattlePlan/EnergyBeam");
-        if (beamShader != null)
+        if (beamShader == null)
         {
-            Material beamMaterial = new(beamShader);
-            beamMaterial.SetColor("_GlowColor", Color.white);
-            beamMaterial.SetColor("_CoreColor", Color.white * 1.5f);
-            beamMaterial.SetFloat("_CoreWidth", 0.35f);
-            beamMaterial.SetFloat("_NoiseStrength", 0.2f);
-            targetLaser.material = beamMaterial;
+            Debug.LogWarning(
+                "[Shooting] BattlePlan/EnergyBeam shader not found, falling back to Sprites/Default"
+            );
+            beamShader = Shader.Find("Sprites/Default");
         }
+        if (beamShader == null)
+            return;
+
+        Material beamMaterial = new(beamShader) { hideFlags = HideFlags.HideAndDontSave };
+        if (beamMaterial.HasProperty("_GlowColor"))
+        {
+            // Both terms take the same value, as in BeamVFX.CreateLayer: one line, one colour. A
+            // lighter core would put a pale filament down the middle of a threat line.
+            beamMaterial.SetColor("_GlowColor", FXPalette.RedDeep);
+            beamMaterial.SetColor("_CoreColor", FXPalette.RedDeep);
+            beamMaterial.SetFloat("_CoreWidth", LockCoreWidthFraction);
+            beamMaterial.SetFloat("_NoiseStrength", 0.2f);
+            FXPalette.Composite.Apply(beamMaterial, FXPalette.AbovePlaneComposite);
+        }
+        else if (beamMaterial.HasProperty("_Color"))
+        {
+            // The fallback shader has one colour slot and no composite modes. It still has to be
+            // told the hue: ApplyLockRamp holds the vertex colour at white precisely so the material
+            // owns it, so a material that took no colour draws a white beam rather than a red one.
+            beamMaterial.SetColor("_Color", FXPalette.RedDeep);
+        }
+        targetLaser.sharedMaterial = beamMaterial;
+    }
+
+    /// <summary>
+    /// Puts the replicated lock ramp on screen as opacity, never as hue.
+    ///
+    /// WHICH CHANNEL OWNS WHAT. BattlePlan/EnergyBeam multiplies its material tint by the
+    /// LineRenderer's vertex colour and scales coverage by the vertex alpha, so the two are not
+    /// interchangeable: <c>.rgb</c> is a hue modulator and <c>.a</c> is an opacity modulator. §8.2
+    /// fixes the hue at --bp-red-deep, which means the material owns it and the vertex colour must
+    /// stay white — writing the replicated ramp straight onto startColor/endColor multiplies a
+    /// near-pure red by a white-to-red ramp and annihilates the crimson's green and blue tail as
+    /// the lock completes. The hue would drift while the ramp itself became invisible, because
+    /// --bp-red-deep has almost no green or blue left for the ramp to remove. Same structural trap
+    /// as authoring a tracer's team colour in both its material and its trail gradient.
+    ///
+    /// So the ramp moves to the only channel that carries no hue. A threat telegraph that firms up
+    /// is exactly what alpha is for, and on a bright board growing opacity in a near-ink colour is
+    /// growing darkness — which is the emphasis FIELD DAY actually spends.
+    /// </summary>
+    private void ApplyLockRamp(Color replicatedRamp)
+    {
+        float alpha = Mathf.Lerp(LockAlphaStart, LockAlphaFull, DecodeLockProgress(replicatedRamp));
+        targetLaser.startColor = targetLaser.endColor = new Color(1f, 1f, 1f, alpha);
+    }
+
+    /// <summary>
+    /// Recovers the 0..1 lock progress the server encoded into <see cref="laserColor"/>.
+    ///
+    /// This is the inverse of the server's <c>Color.Lerp</c>, computed by projecting the received
+    /// value onto the startAnimColor -> endAnimColor axis. Written that way rather than as "read the
+    /// green channel" because the encoding *is* those two fields: a hardcoded channel decodes
+    /// silently wrong the day someone retunes the pair, and the beam would still draw — just with
+    /// its ramp flat or running backwards, which is the kind of failure nobody files a bug for. A
+    /// projection is exact for any pair of endpoints and needs no knowledge of which one they are.
+    ///
+    /// A zero-length axis means the two endpoints have been made equal, i.e. there is no ramp to
+    /// decode, so the beam holds at <see cref="LockAlphaStart"/> instead of dividing by zero.
+    /// </summary>
+    private float DecodeLockProgress(Color replicatedRamp)
+    {
+        float axisR = endAnimColor.r - startAnimColor.r;
+        float axisG = endAnimColor.g - startAnimColor.g;
+        float axisB = endAnimColor.b - startAnimColor.b;
+
+        float axisLengthSquared = axisR * axisR + axisG * axisG + axisB * axisB;
+        if (axisLengthSquared < Mathf.Epsilon)
+            return 0f;
+
+        float projection =
+            (replicatedRamp.r - startAnimColor.r) * axisR
+            + (replicatedRamp.g - startAnimColor.g) * axisG
+            + (replicatedRamp.b - startAnimColor.b) * axisB;
+
+        return Mathf.Clamp01(projection / axisLengthSquared);
     }
 
     private void ApplyCurrentLaserState()
@@ -117,7 +229,7 @@ public class Shooting : NetworkBehaviour
         EnsureTargetLaser();
         targetLaser.SetPositions(new[] { laserStartPos.Value, laserEndPos.Value });
         targetLaser.startWidth = targetLaser.endWidth = laserWidth.Value;
-        targetLaser.startColor = targetLaser.endColor = laserColor.Value;
+        ApplyLockRamp(laserColor.Value);
         targetLaser.enabled = isLaserEnabled.Value;
     }
 
@@ -152,7 +264,7 @@ public class Shooting : NetworkBehaviour
     private void OnLaserColorChanged(Color previousValue, Color newValue)
     {
         EnsureTargetLaser();
-        targetLaser.startColor = targetLaser.endColor = newValue;
+        ApplyLockRamp(newValue);
     }
 
     /// <summary>
@@ -264,6 +376,10 @@ public class Shooting : NetworkBehaviour
 
                     isLaserEnabled.Value = true;
                     laserWidth.Value = Mathf.Lerp(startAnimWidth, endAnimWidth, lockProgress);
+                    // Carries lockProgress, not a colour to draw. Clients decode it in
+                    // DecodeLockProgress and spend it on opacity; §8.2 fixes the beam's hue on the
+                    // material. Retuning the two endpoints stays safe, repurposing this to mean a
+                    // literal beam colour does not.
                     laserColor.Value = Color.Lerp(startAnimColor, endAnimColor, lockProgress);
                     laserStartPos.Value = transform.position;
                     laserEndPos.Value = target.transform.position;

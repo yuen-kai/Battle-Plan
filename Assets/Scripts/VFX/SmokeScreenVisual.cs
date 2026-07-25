@@ -62,7 +62,22 @@ public sealed class SmokeScreenVisual : MonoBehaviour
         root.transform.SetParent(parent, true);
         SmokeScreenVisual visual = root.AddComponent<SmokeScreenVisual>();
         visual.Build(cellWorldPositions, cellSize);
+
+        // Impact frame (§9.3): the canister cracking. Hooked here rather than in Smoke.cs because
+        // this is the one place that runs on every peer at the exact moment the screen deploys —
+        // no extra RPC, and no gameplay file touched to get it.
+        if (cellWorldPositions != null && cellWorldPositions.Count > 0)
+            AbilityFX.SmokeBurst(Centre(cellWorldPositions));
+
         return visual;
+    }
+
+    private static Vector3 Centre(IReadOnlyList<Vector3> cellWorldPositions)
+    {
+        Vector3 total = Vector3.zero;
+        foreach (Vector3 cellWorldPosition in cellWorldPositions)
+            total += cellWorldPosition;
+        return total / cellWorldPositions.Count;
     }
 
     private void Build(IReadOnlyList<Vector3> cellWorldPositions, float cellSize)

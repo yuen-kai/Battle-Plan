@@ -691,7 +691,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         disconnectRecoveryStarted = true;
         sceneLoadRequested = true;
-        localStatusOverride = $"{reason} Returning to match setup...";
+        localStatusOverride = $"{reason} Returning to match setup…";
         UpdateSelectionState();
         StartCoroutine(ReturnToJoinGameAfterShutdown());
     }
@@ -748,7 +748,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         if (!IsSpawned)
         {
-            SetStatus("Connecting to match...", false);
+            SetStatus("Connecting to match…", false);
             return;
         }
 
@@ -763,7 +763,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         int confirmed = confirmedHumanCount.Value;
         SetStatus(
             confirmed >= expected
-                ? "Deploying..."
+                ? "Deploying…"
                 : $"Waiting for players ({confirmed} / {expected})",
             false
         );

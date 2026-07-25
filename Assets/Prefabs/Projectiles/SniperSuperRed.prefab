@@ -12,14 +12,38 @@ PrefabInstance:
       propertyPath: enemyTeam
       value: BlueTeam
       objectReference: {fileID: 0}
+    - target: {fileID: 1054968791189548301, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: bodyTeamMaterials.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1352511347409138935, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: bc56b0b576279634782d6098933b028e, type: 2}
+    - target: {fileID: 1968184235562939024, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: kind
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2259135653574764623, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
       propertyPath: m_ExcludeLayers.m_Bits
       value: 4480
       objectReference: {fileID: 0}
     - target: {fileID: 3689076619860397760, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
-      propertyPath: m_Materials.Array.data[0]
+      propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: bc56b0b576279634782d6098933b028e, type: 2}
+    - target: {fileID: 3963752973774399567, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.4666666
+      objectReference: {fileID: 0}
+    - target: {fileID: 3963752973774399567, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.0441176
+      objectReference: {fileID: 0}
+    - target: {fileID: 3963752973774399567, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.4666666
+      objectReference: {fileID: 0}
     - target: {fileID: 4147020618212252526, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -60,9 +84,33 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6528550390110001880, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_Time
+      value: 0.18
+      objectReference: {fileID: 0}
+    - target: {fileID: 6528550390110001880, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: b491861733d347a2b6561e2bad91a582, type: 2}
+    - target: {fileID: 6528550390110001880, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_Parameters.widthCurve.m_Curve.Array.data[0].value
+      value: 0.16
+      objectReference: {fileID: 0}
     - target: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
       propertyPath: m_Name
-      value: SniperSuperBullet
+      value: SniperSuperRed
+      objectReference: {fileID: 0}
+    - target: {fileID: 8635226725483185324, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.09
+      objectReference: {fileID: 0}
+    - target: {fileID: 8635226725483185324, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.68
+      objectReference: {fileID: 0}
+    - target: {fileID: 8635226725483185324, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.09
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

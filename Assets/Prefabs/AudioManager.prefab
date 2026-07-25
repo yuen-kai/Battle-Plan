@@ -46,4 +46,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   musicSource: {fileID: 0}
   SFXSource: {fileID: 0}
+  uiSource: {fileID: 0}
+  ambienceSource: {fileID: 0}
   buttonClick: {fileID: 8300000, guid: f2d96e1e03a83bd419b3b770b9a8f8bc, type: 3}

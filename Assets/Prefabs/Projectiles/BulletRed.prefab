@@ -16,12 +16,16 @@ PrefabInstance:
       propertyPath: enemyTeam
       value: BlueTeam
       objectReference: {fileID: 0}
+    - target: {fileID: 1352511347409138935, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 99eb1d137fefd0044a3502d6dd296d4f, type: 2}
     - target: {fileID: 2259135653574764623, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
       propertyPath: m_ExcludeLayers.m_Bits
       value: 4480
       objectReference: {fileID: 0}
     - target: {fileID: 3689076619860397760, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
-      propertyPath: m_Materials.Array.data[0]
+      propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 99eb1d137fefd0044a3502d6dd296d4f, type: 2}
     - target: {fileID: 4147020618212252526, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
@@ -64,9 +68,13 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6528550390110001880, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: b491861733d347a2b6561e2bad91a582, type: 2}
     - target: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
       propertyPath: m_Name
-      value: RedBullet
+      value: BulletRed
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -13,10 +13,13 @@ public class AreaLock : Ability
     float delayForDodge = 0.5f;
 
     // Threat-red laser regardless of team: it reads as "danger line" to both players.
-    static readonly Color LaserGlow = new(1f, 0.14f, 0.25f);
+    static Color LaserGlow => FXPalette.Red;
 
     private BeamVFX serverBeam;
     private BeamVFX clientBeam;
+
+    /// <summary>Client-local telegraph discs for the armed line. Presentation only.</summary>
+    private System.Collections.Generic.List<GroundTelegraph> armedCells;
 
     public override void ResetForRespawn()
     {
@@ -28,6 +31,7 @@ public class AreaLock : Ability
         }
         serverBeam = null;
         clientBeam = null;
+        AbilityFX.AreaLockRelease(armedCells);
     }
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
@@ -92,6 +96,14 @@ public class AreaLock : Ability
     [ClientRpc]
     private void ShowLaserClientRpc(Vector3 start, Vector3 end)
     {
+        CombatAudio.AreaLockArmed(gameObject);
+
+        // Anticipation (§9.3): a disc on every cell the line crosses, so a player can count the
+        // cells they have to leave. Runs on the host too — the host renders the server beam but
+        // has no discs of its own.
+        AbilityFX.AreaLockRelease(armedCells);
+        armedCells = AbilityFX.AreaLockArm(start, end);
+
         if (IsServer)
             return; // host already renders the server beam
 
@@ -104,6 +116,8 @@ public class AreaLock : Ability
     [ClientRpc]
     private void HideLaserClientRpc()
     {
+        CombatAudio.AreaLockEnded(gameObject);
+        AbilityFX.AreaLockRelease(armedCells);
         if (clientBeam != null)
         {
             StartCoroutine(clientBeam.FadeOut(0.2f));
@@ -188,13 +202,17 @@ public class AreaLock : Ability
 
         yield return StartCoroutine(serverBeam.Rush(rushDuration));
 
-        // Impact: shockwave on every peer; HitFlash fires everywhere via Health's
+        // Impact on every peer, host included, through one RPC — the shake and the shockwave used
+        // to be a second broadcast and a host-only duplicate. HitFlash still rides Health's
         // NetworkVariable callback when the damage below replicates.
-        ImpactFxClientRpc(endPos);
-        ImpactShockwave.Spawn(endPos, LaserGlow, 3f);
-        CameraEffects.Instance?.CameraShakeClientRpc();
+        //
+        // Lethality has to be decided here: a client cannot know the shot killed until the health
+        // value replicates, by which point the hitstop would land after the death.
+        Health victimHealth = target.GetComponent<Health>();
+        bool lethal = victimHealth != null && victimHealth.CurrentHealth <= AbilityDamage;
+        ImpactFxClientRpc(endPos, lethal);
 
-        target.GetComponent<Health>()?.TakeDamage(AbilityDamage);
+        victimHealth?.TakeDamage(AbilityDamage);
 
         StartCoroutine(cleanup());
     }
@@ -202,6 +220,7 @@ public class AreaLock : Ability
     [ClientRpc]
     private void StartRushClientRpc(float rushDuration, Vector3 startPos, Vector3 endPos)
     {
+        CombatAudio.AreaLockFired(gameObject, endPos);
         if (IsServer || clientBeam == null)
             return;
         clientBeam.SetPositions(startPos, endPos);
@@ -209,10 +228,11 @@ public class AreaLock : Ability
     }
 
     [ClientRpc]
-    private void ImpactFxClientRpc(Vector3 impactPoint)
+    private void ImpactFxClientRpc(Vector3 impactPoint, bool lethal)
     {
-        if (IsServer)
-            return; // host spawns its shockwave directly in AnimateLaserRush
-        ImpactShockwave.Spawn(impactPoint, LaserGlow, 3f);
+        CombatAudio.AreaLockImpact(gameObject, impactPoint);
+        // Victim is left null: the white flash on the body comes from Health's replicated health
+        // change, which already fires on every peer and is correct even through a fog reveal.
+        AbilityFX.AreaLockImpact(impactPoint, null, lethal);
     }
 }

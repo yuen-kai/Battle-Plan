@@ -1,5 +1,8 @@
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
+using System.Linq;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -173,6 +176,18 @@ public class UIToolkitAssetSmokeTests
         "Assets/UI/Game/GameHUD.uss",
     };
 
+    // The character-select map plate. ArenaCapture writes this file at the same size.
+    private const string PreviewPath = "Assets/Images/MapPreview.png";
+    private const int PreviewWidth = 1080;
+    private const int PreviewHeight = 720;
+
+    // Sampling and thresholds for AssertCaptureHasContent. Every sixteenth pixel is plenty to
+    // tell a picture from a fill, and both bars sit far below what the current board capture
+    // measures (spread 0.85, 139 distinct colours over 3060 samples).
+    private const int CaptureSampleStride = 16;
+    private const float MinimumLuminanceSpread = 0.15f;
+    private const int MinimumDistinctColours = 24;
+
     [TestCaseSource(nameof(ScreenContracts))]
     public void ScreenVisualTreesImportAndExposeControllerContracts(
         string assetPath,
@@ -270,48 +285,38 @@ public class UIToolkitAssetSmokeTests
         }
     }
 
+    // The plate was once a diagram drawn in C# by MapPreviewGenerator, and this test redrew it
+    // and compared bytes. It is now a GPU render of the real board (Battle Plan ▸ Art ▸ Capture
+    // Board Preview), which is not byte-reproducible across machines, drivers or quality
+    // settings: a byte comparison would pass here and fail on the next machine, which costs
+    // more to diagnose than having no test at all. What is asserted instead is everything the
+    // plate actually depends on -- the caption and the board agree, the file is at plate size,
+    // and it holds a picture rather than a cleared frame.
     [Test]
-    public void CharacterSelectionPreviewMatchesExpandedMap()
+    public void CharacterSelectionPreviewShipsCapturedBoardArt()
     {
         const string assetPath = "Assets/UI/Home/CharacterSelection.uxml";
-        const string previewPath = "Assets/Images/MapPreview.png";
         VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
-        Texture2D preview = AssetDatabase.LoadAssetAtPath<Texture2D>(previewPath);
+        Texture2D preview = AssetDatabase.LoadAssetAtPath<Texture2D>(PreviewPath);
         Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
-        Assert.That(preview, Is.Not.Null, $"Could not import {previewPath}.");
+        Assert.That(preview, Is.Not.Null, $"Could not import {PreviewPath} as a texture.");
 
         TemplateContainer tree = asset.Instantiate();
         Label caption = tree.Q<Label>(className: "map-caption");
         Assert.That(caption, Is.Not.Null);
         Assert.That(caption.text, Does.Contain("15 × 10"));
         Assert.That(caption.text, Does.Not.Contain("9 × 10"));
-        Assert.That(preview.width, Is.EqualTo(1080));
-        Assert.That(preview.height, Is.EqualTo(720));
 
-        using SHA256 sha = SHA256.Create();
-        string actualHash = System.Convert.ToBase64String(
-            sha.ComputeHash(File.ReadAllBytes(previewPath))
-        );
-        System.Type generatorType = System.Type.GetType(
-            "MapPreviewGenerator, Assembly-CSharp-Editor"
-        );
-        Assert.That(generatorType, Is.Not.Null);
-        byte[] generatedPreview = (byte[])
-            generatorType
-                .GetMethod(
-                    "BuildPreviewPng",
-                    System.Reflection.BindingFlags.Public
-                        | System.Reflection.BindingFlags.Static
-                )
-                .Invoke(null, null);
-        string generatedHash = System.Convert.ToBase64String(
-            sha.ComputeHash(generatedPreview)
-        );
+        // The imported dimensions are what the plate samples, so an importer change that
+        // downsizes or squares the texture is caught here and not on someone's screen.
         Assert.That(
-            actualHash,
-            Is.EqualTo(generatedHash),
-            "MapPreview.png is stale. Run Battle Plan/Regenerate Map Preview."
+            new Vector2Int(preview.width, preview.height),
+            Is.EqualTo(new Vector2Int(PreviewWidth, PreviewHeight)),
+            $"{PreviewPath} imports at {preview.width}×{preview.height}. The map plate is "
+                + $"authored against {PreviewWidth}×{PreviewHeight}; re-run Battle Plan ▸ Art ▸ "
+                + "Capture Board Preview, and check nPOTScale and maxTextureSize on the importer."
         );
+        AssertCaptureHasContent(PreviewPath, PreviewWidth, PreviewHeight);
     }
 
     [Test]
@@ -372,6 +377,7 @@ public class UIToolkitAssetSmokeTests
             "Assets/UI/Shared/Icons/bot.svg",
             "Assets/UI/Shared/Icons/fog.svg",
             "Assets/UI/Shared/Icons/check.svg",
+            "Assets/UI/Shared/Icons/chevron-down.svg",
         };
 
         UnityEngine.TextCore.Text.FontAsset fontAsset =
@@ -408,6 +414,169 @@ public class UIToolkitAssetSmokeTests
         Assert.That(joinStyle, Does.Not.Contain("Unity_g0I8iFX1Y3.png"));
     }
 
+    /// Every 24-grid glyph must sit on one stroke weight. A single off-weight
+    /// icon is the most visible tell of hand-assembled UI at 24px.
+    [Test]
+    public void IconSetSharesOneStrokeWeightOnTheTwentyFourGrid()
+    {
+        foreach (string iconPath in Directory.GetFiles("Assets/UI/Shared/Icons", "*.svg"))
+        {
+            string source = File.ReadAllText(iconPath);
+            if (iconPath.EndsWith("ability-flare.svg"))
+                continue;
+
+            Assert.That(
+                source,
+                Does.Contain("viewBox=\"0 0 24 24\""),
+                $"{iconPath} must be authored on the 24 grid."
+            );
+            Assert.That(
+                source,
+                Does.Contain("stroke-width=\"2\"").And.Not.Contain("stroke-width=\"2."),
+                $"{iconPath} must use the 2px system stroke."
+            );
+            Assert.That(
+                source,
+                Does.Contain("stroke-linecap=\"round\"")
+                    .And.Contain("stroke-linejoin=\"round\""),
+                $"{iconPath} must keep the set's round caps and joins."
+            );
+            Assert.That(
+                source,
+                Does.Contain("stroke=\"#fff\""),
+                $"{iconPath} must ship untinted; colour is applied by USS."
+            );
+        }
+
+        Assert.That(
+            File.Exists("Assets/UI/Shared/Icons/LICENSE-lucide.txt"),
+            Is.True,
+            "chevron-down is lifted from Lucide, so the ISC notice ships beside it."
+        );
+    }
+
+    /// Saira Condensed carries every display string. Without the generated SDF
+    /// assets the USS silently falls back to Rubik and the hierarchy disappears
+    /// with no error, so this is asserted rather than eyeballed.
+    [Test]
+    public void DisplayTypeUsesGeneratedSairaCondensedFontAssets()
+    {
+        string[] fontPaths =
+        {
+            "Assets/Fonts/SairaCondensed/SairaCondensed-SemiBold UI SDF.asset",
+            "Assets/Fonts/SairaCondensed/SairaCondensed-ExtraBold UI SDF.asset",
+        };
+
+        foreach (string fontPath in fontPaths)
+        {
+            UnityEngine.TextCore.Text.FontAsset fontAsset =
+                AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(fontPath);
+            Assert.That(
+                fontAsset,
+                Is.Not.Null,
+                $"Could not import {fontPath}. Generate it with Window ▸ TextMeshPro ▸ "
+                    + "Font Asset Creator (SDFAA, padding 9, 1024×1024, ASCII + Extended "
+                    + "ASCII plus · — … ×)."
+            );
+            Assert.That(
+                fontAsset.atlasRenderMode,
+                Is.EqualTo(UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA)
+            );
+        }
+
+        Assert.That(
+            File.Exists("Assets/Fonts/SairaCondensed/OFL.txt"),
+            Is.True,
+            "Shipping the licence file beside the TTFs is not optional."
+        );
+
+        string baseStyle = File.ReadAllText("Assets/UI/Shared/BattlePlan.uss");
+        foreach (string fontPath in fontPaths)
+        {
+            Assert.That(
+                baseStyle,
+                Does.Contain("project://database/" + fontPath),
+                "The type scale must bind the generated SDF asset, not the raw TTF."
+            );
+        }
+
+        Assert.That(baseStyle, Does.Not.Contain("SairaCondensed-SemiBold.ttf"));
+        Assert.That(baseStyle, Does.Not.Contain("SairaCondensed-ExtraBold.ttf"));
+    }
+
+    // transition-timing-function takes a keyword, never a cubic-bezier(). If the palette ever
+    // reinstates curves, USS cannot parse them and every transition silently falls back to
+    // `ease` -- motion still plays, so nothing looks broken and nobody notices. Both halves of
+    // the contract are asserted here because the failure is invisible at runtime.
+    [Test]
+    public void EasingTokensShipKeywordsAndConsumersReferenceThem()
+    {
+        const string tokenPath = "Assets/UI/Shared/TacticalToyboxTokens.uss";
+        string tokens = File.ReadAllText(tokenPath);
+
+        // Unity's keyword set: ease, linear, ease-in/out/in-out, and the -sine/-cubic/-circ/
+        // -elastic/-back/-bounce families.
+        foreach (string easing in new[] { "--bp-ease-out", "--bp-ease-in", "--bp-ease-snap" })
+        {
+            Match declared = Regex.Match(
+                tokens,
+                $@"^\s+{Regex.Escape(easing)}:\s*(?<v>[^;]+);",
+                RegexOptions.Multiline
+            );
+            Assert.That(declared.Success, Is.True, $"{easing} must be declared in {tokenPath}.");
+
+            string value = declared.Groups["v"].Value.Trim();
+            Assert.That(
+                value,
+                Does.Not.Contain("cubic-bezier"),
+                $"{easing} is '{value}'. USS transition-timing-function cannot parse "
+                    + "cubic-bezier(); the declaration is dropped and the transition silently "
+                    + "falls back to `ease`. Easing tokens must ship a Unity keyword."
+            );
+            Assert.That(
+                Regex.IsMatch(value, @"^(linear|ease(-(in|out|in-out))?"
+                    + @"(-(sine|cubic|circ|elastic|back|bounce|quad|quart|quint|expo))?)$"),
+                Is.True,
+                $"{easing} is '{value}', which is not a Unity easing keyword."
+            );
+        }
+
+        // StyleSheetPaths omits the runtime theme, which also drives transitions.
+        foreach (
+            string stylePath in StyleSheetPaths.Append("Assets/UI/Shared/BattlePlanRuntime.tss")
+        )
+        {
+            if (stylePath == tokenPath)
+            {
+                continue;
+            }
+
+            foreach (
+                Match used in Regex.Matches(
+                    File.ReadAllText(stylePath),
+                    @"transition-timing-function:\s*(?<v>[^;]+);"
+                )
+            )
+            {
+                string value = used.Groups["v"].Value.Trim();
+
+                // `linear` marks a colour cross-fade with no motion to ease. It is the one
+                // literal allowed, because the palette defines no token for it.
+                if (value == "linear")
+                {
+                    continue;
+                }
+
+                Assert.That(
+                    value,
+                    Does.StartWith("var(--bp-ease-"),
+                    $"{stylePath} hardcodes easing '{value}'. Motion curves come from the "
+                        + "Palette §9.6 tokens so the art director can retune them in one place."
+                );
+            }
+        }
+    }
+
     [Test]
     public void TacticalToyboxUsesOneTokenBackedComponentLibrary()
     {
@@ -430,19 +599,9 @@ public class UIToolkitAssetSmokeTests
         Assert.That(components, Does.Contain("@import url(\"TacticalToyboxTokens.uss\")"));
         Assert.That(components, Does.Contain(".toybox-ui"));
         Assert.That(runtimeTheme, Does.Contain("@import url(\"TacticalToyboxTokens.uss\")"));
-        Assert.That(
-            components,
-            Does.Not.Contain("rgb(").And.Not.Contain("rgba("),
-            "Shared components must consume semantic tokens instead of duplicating colors."
-        );
-        Assert.That(
-            runtimeTheme,
-            Does.Not.Contain("rgb(").And.Not.Contain("rgba("),
-            "Runtime dropdown chrome must consume the same semantic tokens."
-        );
-
         string[] tokenConsumerPaths =
         {
+            "Assets/UI/Shared/BattlePlan.uss",
             componentPath,
             runtimeThemePath,
             "Assets/UI/Title/TitleScreen.uss",
@@ -453,9 +612,21 @@ public class UIToolkitAssetSmokeTests
         foreach (string consumerPath in tokenConsumerPaths)
         {
             string consumer = File.ReadAllText(consumerPath);
+            Assert.That(
+                consumer,
+                Does.Not.Contain("rgb(").And.Not.Contain("rgba("),
+                $"{consumerPath} must consume semantic tokens instead of raw colour literals. "
+                    + "ArtBible-Palette.md is the only place a colour value is authored."
+            );
+            Assert.That(
+                System.Text.RegularExpressions.Regex.IsMatch(consumer, @"#[0-9a-fA-F]{3,8}\b"),
+                Is.False,
+                $"{consumerPath} must not author a hex literal."
+            );
+
             var tokenMatches = System.Text.RegularExpressions.Regex.Matches(
                 consumer,
-                @"var\((--toy-[a-z0-9-]+)\)"
+                @"var\((--(?:toy|bp)-[a-z0-9-]+)\)"
             );
             foreach (System.Text.RegularExpressions.Match match in tokenMatches)
             {
@@ -575,10 +746,30 @@ public class UIToolkitAssetSmokeTests
         string notchRule = style.Substring(notchStart, notchEnd - notchStart);
         Assert.That(
             notchRule,
-            Does.Contain("bottom: -31px;").And.Contain("height: 39px;"),
-            "The phase tab hangs into the band the camera viewport reserves below the top bar. "
-                + "Resizing it without retuning Game.unity's viewport rect will cover the board."
+            Does.Contain("top: 92px;").And.Contain("height: 34px;"),
+            "The phase readout is a free-floating pill 12px below the enemy contact row, "
+                + "not a tab hanging off a top bar."
         );
+        Assert.That(
+            style,
+            Does.Contain("full-screen"),
+            "Collapsing the HUD bars into floating widgets only works if Game.unity's camera "
+                + "viewport rect is full-screen; the stylesheet must keep saying so."
+        );
+        foreach (string frame in new[] { ".enemy-status-strip {", ".hud-dock {" })
+        {
+            int frameStart = style.IndexOf(frame);
+            Assert.That(frameStart, Is.GreaterThanOrEqualTo(0));
+            string frameRule = style.Substring(
+                frameStart,
+                style.IndexOf("}", frameStart) - frameStart
+            );
+            Assert.That(
+                frameRule,
+                Does.Contain("background-color: var(--bp-transparent);"),
+                $"{frame} is a positioning frame for floating widgets, not a full-bleed bar."
+            );
+        }
         Assert.That(
             style,
             Does.Contain(".toybox-ui.deployment-overlay .deployment-overlay__content")
@@ -598,6 +789,59 @@ public class UIToolkitAssetSmokeTests
         Assert.That(controller, Does.Contain("ActivateOverlay(resultsOverlay, playAgainButton)"));
         Assert.That(controller, Does.Contain("hudDock?.SetEnabled(false)"));
         Assert.That(controller, Does.Contain("!isActiveAndEnabled"));
+    }
+
+    // The old HUD reserved screen space with two full-bleed bars and Game.unity's camera was
+    // inset to match (y 0.112, height 0.83). The floating-widget HUD draws over a full-bleed
+    // board instead, so the scene has to give that space back or the board stays letterboxed
+    // against transparent frames.
+    [Test]
+    public void GameSceneCameraRendersFullBleedBehindFloatingHud()
+    {
+        const string scenePath = "Assets/Scenes/Game.unity";
+        Assert.That(
+            File.Exists(scenePath),
+            Is.True,
+            $"{scenePath} must exist to validate the HUD's camera contract."
+        );
+
+        string scene = File.ReadAllText(scenePath);
+        MatchCollection blocks = Regex.Matches(
+            scene,
+            @"m_NormalizedViewPortRect:[^\n]*\n(?<body>(?:[ \t]+[^\n]*\n){5})"
+        );
+        Assert.That(
+            blocks.Count,
+            Is.GreaterThan(0),
+            "Could not find a camera viewport rect in Game.unity."
+        );
+
+        foreach (Match block in blocks)
+        {
+            string body = block.Groups["body"].Value;
+            foreach (var field in new[] { ("x", 0f), ("y", 0f), ("width", 1f), ("height", 1f) })
+            {
+                Match value = Regex.Match(
+                    body,
+                    $@"^[ \t]+{field.Item1}:[ \t]*(?<v>[-\d.eE+]+)[ \t]*$",
+                    RegexOptions.Multiline
+                );
+                Assert.That(
+                    value.Success,
+                    Is.True,
+                    $"Camera viewport rect in Game.unity is missing '{field.Item1}'."
+                );
+                Assert.That(
+                    float.Parse(value.Groups["v"].Value, CultureInfo.InvariantCulture),
+                    Is.EqualTo(field.Item2).Within(0.0001f),
+                    "Game.unity's camera viewport rect must be full-screen "
+                        + $"(x 0, y 0, width 1, height 1) but '{field.Item1}' is "
+                        + $"{value.Groups["v"].Value}. The HUD no longer reserves layout space "
+                        + "with opaque bars, so an inset rect letterboxes the board behind "
+                        + "transparent frames."
+                );
+            }
+        }
     }
 
     [Test]
@@ -647,8 +891,13 @@ public class UIToolkitAssetSmokeTests
         );
         Assert.That(
             sharedStyle,
-            Does.Contain("border-color: var(--toy-sky);"),
-            "Focused controls need a cue distinct from selected cream borders."
+            Does.Contain("border-color: var(--bp-focus-light);"),
+            "Focus is a high-contrast ring, not a hue: team blue may not double as a focus cue."
+        );
+        Assert.That(
+            sharedStyle,
+            Does.Not.Contain("var(--toy-sky)"),
+            "Team blue is reserved for friendly state; it must not be reintroduced as chrome."
         );
     }
 
@@ -673,18 +922,21 @@ public class UIToolkitAssetSmokeTests
         );
         Assert.That(
             rosterStyle,
-            Does.Contain(".compact .roster-body {\n    height: 300px;")
+            Does.Contain(".narrow .roster-main {\n    height: 300px;"),
+            "Once the three columns stack, the unit library still needs a bounded height."
         );
         Assert.That(
             rosterStyle,
             Does.Contain(".selected-slot:disabled:hover")
-                .And.Contain("background-color: var(--toy-teal-pressed);")
+                .And.Contain("border-left-color: var(--bp-blue);"),
+            "A filled crew slot keeps its blue state rule while the crew is locked."
         );
         Assert.That(
             sharedStyle,
             Does.Contain(".status-line.label--danger")
-                .And.Contain(".button--selected:focus {\n    background-color: var(--toy-teal-pressed);")
-                .And.Contain("border-left-width: var(--toy-focus-emphasis);")
+                .And.Contain(".button--selected:focus {\n    border-width: var(--bp-bw-focus);")
+                .And.Contain("border-color: var(--bp-focus-light);"),
+            "A selected control must still show the focus ring on all four sides."
         );
         Assert.That(joinController, Does.Contain("\"status-line--danger\""));
     }
@@ -730,8 +982,8 @@ public class UIToolkitAssetSmokeTests
             checkmarkRuleStart,
             sharedStyle.IndexOf('}', checkmarkRuleStart) - checkmarkRuleStart
         );
-        Assert.That(checkmarkRule, Does.Contain("width: 22px"));
-        Assert.That(checkmarkRule, Does.Contain("height: 22px"));
+        Assert.That(checkmarkRule, Does.Contain("width: 20px"));
+        Assert.That(checkmarkRule, Does.Contain("height: 20px"));
     }
 
     [Test]
@@ -950,6 +1202,96 @@ public class UIToolkitAssetSmokeTests
             Does.Contain(".unit-option__status"),
             "The unit-option status badge needs styling."
         );
+    }
+
+    /// <summary>
+    /// Asserts a captured PNG contains an image, at the source resolution and independently of
+    /// how the texture happens to be imported.
+    ///
+    /// The file is decoded from disk rather than read off the imported Texture2D because the
+    /// captures import with Read/Write disabled and platform compression on: GetPixels would
+    /// throw, and the compressed pixels would not be the ones that were rendered. Decoding also
+    /// means the size assert here is against what was written, not against what the importer
+    /// chose to keep.
+    ///
+    /// The two content bars are deliberately coarse. Colour is quantised to five bits per
+    /// channel so driver-level rounding cannot move the count, and the thresholds only separate
+    /// a continuous-tone render from a flat one. That catches the failures worth catching: a
+    /// black frame, a cleared frame, a fully transparent frame -- and a flat-shaded diagram,
+    /// which is what the plate would become if the drawn generator ever overwrote it again.
+    /// </summary>
+    private static void AssertCaptureHasContent(string assetPath, int width, int height)
+    {
+        Assert.That(File.Exists(assetPath), Is.True, $"{assetPath} is missing.");
+
+        Texture2D decoded = new(2, 2, TextureFormat.RGBA32, false);
+        try
+        {
+            Assert.That(
+                decoded.LoadImage(File.ReadAllBytes(assetPath), false),
+                Is.True,
+                $"{assetPath} is not a decodable PNG. A capture that failed part way through "
+                    + "leaves a truncated file behind."
+            );
+            Assert.That(
+                new Vector2Int(decoded.width, decoded.height),
+                Is.EqualTo(new Vector2Int(width, height)),
+                $"{assetPath} was written at {decoded.width}×{decoded.height}, not "
+                    + $"{width}×{height}."
+            );
+
+            Color32[] pixels = decoded.GetPixels32();
+            HashSet<int> colours = new();
+            float darkest = 1f;
+            float brightest = 0f;
+            int opaque = 0;
+
+            for (int y = 0; y < decoded.height; y += CaptureSampleStride)
+            {
+                for (int x = 0; x < decoded.width; x += CaptureSampleStride)
+                {
+                    Color32 pixel = pixels[(y * decoded.width) + x];
+
+                    // A transparent pixel carries no colour, so it must not drag the range.
+                    if (pixel.a < 8)
+                        continue;
+
+                    opaque++;
+                    float luminance =
+                        ((0.2126f * pixel.r) + (0.7152f * pixel.g) + (0.0722f * pixel.b)) / 255f;
+                    darkest = Mathf.Min(darkest, luminance);
+                    brightest = Mathf.Max(brightest, luminance);
+                    colours.Add(((pixel.r >> 3) << 10) | ((pixel.g >> 3) << 5) | (pixel.b >> 3));
+                }
+            }
+
+            Assert.That(
+                opaque,
+                Is.GreaterThan(0),
+                $"{assetPath} is fully transparent. The capture cleared its target and drew "
+                    + "nothing into it."
+            );
+
+            float spread = brightest - darkest;
+            Assert.That(
+                spread,
+                Is.GreaterThanOrEqualTo(MinimumLuminanceSpread),
+                $"{assetPath} spans {spread:F3} of luminance across {opaque} samples, which is "
+                    + "a flat fill rather than a rendered image. Re-run the capture and confirm "
+                    + "it is looking at the board."
+            );
+            Assert.That(
+                colours.Count,
+                Is.GreaterThanOrEqualTo(MinimumDistinctColours),
+                $"{assetPath} holds {colours.Count} distinct colours across {opaque} samples. "
+                    + "The plate must be a render of the real board, which is continuous-tone; "
+                    + "a handful of colours means a flat fill or a flat-shaded diagram."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(decoded);
+        }
     }
 
     private static void AssertVisualTreeContract(string assetPath, string[] requiredNames)

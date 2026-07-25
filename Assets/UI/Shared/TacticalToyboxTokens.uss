@@ -1,87 +1,247 @@
 :root {
-    /* Palette and semantic states */
-    --toy-ink: rgb(27, 25, 39);
-    --toy-playmat: rgb(45, 46, 67);
-    --toy-playmat-raised: rgb(58, 59, 82);
-    --toy-playmat-hover: rgb(71, 72, 98);
-    --toy-playmat-pressed: rgb(40, 40, 58);
-    --toy-playmat-quiet: rgb(38, 36, 52);
-    --toy-cream: rgb(245, 236, 216);
-    --toy-cream-copy: rgb(232, 224, 210);
-    --toy-cream-border: rgba(245, 236, 216, 0.2);
-    --toy-cream-wash: rgba(245, 236, 216, 0.1);
-    --toy-body-copy: rgb(213, 205, 218);
-    --toy-dark-copy: rgb(48, 45, 56);
-    --toy-orange: rgb(242, 165, 74);
-    --toy-orange-hover: rgb(255, 186, 92);
-    --toy-orange-pressed: rgb(224, 143, 54);
-    --toy-orange-copy: rgb(255, 196, 116);
-    --toy-teal: rgb(85, 178, 157);
-    --toy-teal-hover: rgb(104, 198, 176);
-    --toy-teal-pressed: rgb(69, 158, 139);
-    --toy-sky: rgb(132, 211, 230);
-    --toy-tomato: rgb(233, 104, 93);
-    --toy-tomato-hover: rgb(247, 126, 115);
-    --toy-tomato-pressed: rgb(207, 83, 75);
-    --toy-tomato-copy: rgb(255, 184, 176);
-    --toy-muted: rgb(189, 182, 201);
-    --toy-muted-dark: rgb(91, 87, 107);
-    --toy-divider: rgb(78, 76, 99);
-    --toy-disabled-surface: rgb(43, 43, 58);
-    --toy-disabled-border: rgb(75, 73, 91);
-    --toy-shade: rgba(18, 17, 28, 0.88);
-    --toy-panel: rgba(45, 46, 67, 0.97);
-    --toy-transparent: rgba(0, 0, 0, 0);
+    /* ======================================================================
+       Battle Plan — FIELD DAY token contract.
+       Source of truth: docs/design/ArtBible-Palette.md
+       Do not author a colour anywhere else in the project.
 
-    /* Spacing */
-    --toy-space-xs: 4px;
-    --toy-space-sm: 8px;
-    --toy-space-md: 12px;
-    --toy-space-lg: 20px;
-    --toy-space-xl: 32px;
-    --toy-space-control-x: 16px;
-    --toy-space-control-top: 10px;
-    --toy-space-control-bottom: 12px;
-    --toy-space-control-active-top: 13px;
-    --toy-space-control-active-bottom: 9px;
-    --toy-space-panel: 24px;
-    --toy-space-panel-compact: 18px;
-    --toy-space-modal: 28px;
-    --toy-space-modal-phone: 20px;
+       Two rules that are easy to get wrong on a light board:
+       1. The deck ramp is INVERTED from Night Range. --bp-deck-0 is now the
+          LIGHTEST surface and --bp-deck-6 the darkest. Emphasis moves toward
+          ink, so every -hi and -deep step is DARKER than its base.
+       2. --bp-void is gone. Use --bp-table for full-screen beds and --bp-ink
+          for the darkest value.
+       ====================================================================== */
 
-    /* Shape and target sizes */
-    --toy-radius-sm: 6px;
-    --toy-radius-md: 10px;
-    --toy-radius-lg: 14px;
+    /* --- Ink and table — the two anchors ----------------------------------- */
+    --bp-ink: rgb(21, 26, 32);
+    --bp-table: rgb(94, 83, 70);
 
-    --toy-target-status: 28px;
-    --toy-target-compact: 44px;
-    --toy-target: 52px;
-    --toy-target-phone: 56px;
-    --toy-icon-size: 24px;
-    --toy-icon-gap: 11px;
-    --toy-scroll-size: 14px;
+    /* --- UI surface ramp — 0 is the LIGHTEST, 6 the darkest ---------------- */
+    --bp-deck-0: rgb(252, 249, 243);
+    --bp-deck-1: rgb(242, 237, 226);
+    --bp-deck-2: rgb(228, 221, 206);
+    --bp-deck-3: rgb(210, 201, 182);
+    --bp-deck-4: rgb(182, 171, 147);
+    --bp-deck-5: rgb(135, 126, 108);
+    --bp-deck-6: rgb(61, 55, 45);
 
-    /* Structural depth */
-    --toy-stroke-thin: 2px;
-    --toy-stroke: 3px;
-    --toy-depth-rest: 6px;
-    --toy-depth-pressed: 3px;
-    --toy-depth-panel: 5px;
-    --toy-depth-modal: 7px;
-    --toy-focus-width: 3px;
-    --toy-focus-emphasis: 5px;
+    /* --- World / arena — consumed by materials, mirrored here as the single source ---- */
+    --bp-ground-a: rgb(171, 182, 187);
+    --bp-ground-b: rgb(159, 170, 176);
+    --bp-ground-hill: rgb(142, 153, 158);
+    --bp-ground-line: rgb(110, 122, 128);
+    --bp-ground-paint: rgb(232, 226, 212);
+    --bp-paint: rgb(115, 124, 133);
+    --bp-paint-hazard: rgb(227, 154, 18);
+    /* Cover cap is DARKER than the body in albedo and LIGHTER on screen. Not a typo:
+       see Palette §1.4 — a horizontal face takes 1.42x the irradiance of a lit vertical one. */
+    --bp-cover: rgb(102, 112, 122);
+    --bp-cover-cap: rgb(94, 104, 113);
+    --bp-cover-plate: rgb(89, 98, 106);
+    --bp-rail: rgb(58, 52, 44);
+    --bp-sky: rgb(156, 198, 220);
+    --bp-shadow: rgb(62, 76, 85);
+    --bp-fog: rgb(197, 199, 195);
+    --bp-fog-edge: rgb(83, 90, 96);
 
-    /* Type scale */
-    --toy-type-display: 38px;
+    /* --- Team blue (friendly) ---------------------------------------------- */
+    --bp-blue: rgb(15, 92, 184);
+    --bp-blue-hi: rgb(11, 74, 147);
+    --bp-blue-deep: rgb(8, 53, 107);
+    --bp-blue-dim: rgb(147, 167, 188);
+    --bp-blue-surface: rgb(220, 234, 250);
+    --bp-blue-wash: rgba(15, 92, 184, 0.16);
+    --bp-blue-line: rgba(15, 92, 184, 0.55);
+
+    /* --- Team red (enemy / adversarial / invalid) -------------------------- */
+    --bp-red: rgb(226, 59, 69);
+    --bp-red-hi: rgb(168, 20, 42);
+    --bp-red-deep: rgb(120, 12, 28);
+    --bp-red-dim: rgb(194, 154, 160);
+    --bp-red-surface: rgb(251, 224, 227);
+    --bp-red-border: rgb(239, 174, 182);
+    --bp-red-wash: rgba(226, 59, 69, 0.16);
+    --bp-red-line: rgba(226, 59, 69, 0.55);
+
+    /* --- Signal orange — act now. Token name stays --bp-amber. ------------- */
+    --bp-amber: rgb(240, 138, 20);
+    --bp-amber-hover: rgb(210, 118, 11);
+    --bp-amber-hi: rgb(150, 80, 10);
+    --bp-amber-deep: rgb(94, 49, 3);
+    --bp-amber-surface: rgb(253, 239, 214);
+    --bp-amber-border: rgb(240, 196, 122);
+    --bp-amber-wash: rgba(240, 138, 20, 0.16);
+
+    /* --- Green — confirmed / ready. UI only, never a world colour. --------- */
+    --bp-green: rgb(12, 138, 82);
+    --bp-green-hi: rgb(7, 107, 65);
+    --bp-green-surface: rgb(220, 243, 231);
+    --bp-green-border: rgb(152, 215, 185);
+
+    /* --- Text -------------------------------------------------------------- */
+    --bp-text: rgb(26, 33, 40);
+    --bp-text-2: rgb(62, 72, 82);
+    --bp-text-3: rgb(86, 96, 105);
+    --bp-text-on-accent: rgb(27, 18, 6);
+    /* The mirror of --bp-text-on-accent: light text for the few labels that draw straight
+       onto --bp-table with no panel behind them. Values are the --bp-deck-0 and --bp-deck-2
+       rungs. 7.13:1 and 5.54:1 on table. The on-panel text/text-2 step of 0.57 is
+       unreachable here — 0.57 x 7.13 = 4.06:1, under the floor — so the secondary takes the
+       rung with headroom and the type scale carries the hierarchy. Never use on a panel. */
+    --bp-text-on-table: rgb(252, 249, 243);
+    --bp-text-on-table-2: rgb(228, 221, 206);
+
+    /* --- Lines, edges, scrims, focus --------------------------------------- */
+    --bp-line-1: rgba(21, 26, 32, 0.16);
+    --bp-line-2: rgba(21, 26, 32, 0.52);
+    --bp-line-3: rgba(21, 26, 32, 0.78);
+    --bp-edge-dark: rgba(21, 26, 32, 0.92);
+    --bp-panel: rgba(242, 237, 226, 0.96);
+    --bp-dock: rgba(228, 221, 206, 0.97);
+    --bp-scrim: rgba(21, 26, 32, 0.66);
+    --bp-focus-light: rgb(21, 26, 32);
+    --bp-focus-dark: rgb(21, 26, 32);
+    --bp-transparent: rgba(0, 0, 0, 0.00);
+
+    /* --- Spacing — 4 px base ------------------------------------------- */
+    --bp-s1: 4px;
+    --bp-s2: 8px;
+    --bp-s3: 12px;
+    --bp-s4: 16px;
+    --bp-s5: 24px;
+    --bp-s6: 32px;
+    --bp-s7: 48px;
+
+    /* --- Shape — softened toward the Toy Shelf values ------------------- */
+    --bp-r-sm: 4px;
+    --bp-r-md: 8px;
+    --bp-r-lg: 14px;
+    --bp-bw-hair: 1px;
+    --bp-bw: 2px;
+    --bp-bw-rule: 3px;
+    --bp-bw-focus: 3px;
+    --bp-edge: 4px;
+
+    /* --- Control sizes -------------------------------------------------- */
+    --bp-target-sm: 32px;
+    --bp-target: 44px;
+    --bp-target-lg: 52px;
+    --bp-target-phone: 56px;
+    --bp-icon: 24px;
+    --bp-icon-sm: 18px;
+    --bp-icon-gap: 10px;
+    --bp-scroll: 12px;
+
+    /* --- Type scale ------------------------------------------------------ */
+    --bp-type-hero: 56px;
+    --bp-type-display: 34px;
+    --bp-type-title: 22px;
+    --bp-type-subtitle: 17px;
+    --bp-type-body: 15px;
+    --bp-type-body-sm: 13px;
+    --bp-type-label: 12px;
+    --bp-type-micro: 10px;
+    --bp-type-num-lg: 26px;
+    --bp-type-num: 18px;
+    --bp-type-num-sm: 12px;
+
+    /* --- Motion ----------------------------------------------------------- */
+    --bp-t-instant: 80ms;
+    --bp-t-fast: 120ms;
+    --bp-t-base: 180ms;
+    --bp-t-slow: 280ms;
+    --bp-t-flash-in: 90ms;
+    --bp-t-flash-out: 220ms;
+    /* USS has no cubic-bezier(). These must stay keywords. See Palette §9.6. */
+    --bp-ease-out: ease-out-circ;
+    --bp-ease-in: ease-in-circ;
+    --bp-ease-snap: ease-out-back;
+
+    /* ======================================================================
+       Legacy aliases. All 73 --toy-* names below have ZERO var() consumers
+       anywhere in Assets/UI as of this writing — verify with:
+         rg -o 'var\((--toy-[a-z0-9-]+)' Assets/UI -g '*.uss' -g '*.uxml'
+       They are retained only because UIToolkitAssetSmokeTests asserts that
+       four of them are still declared. Delete the block and those four
+       assertions together, in one commit. Do not add a new --toy-* name.
+       ====================================================================== */
+    --toy-ink: var(--bp-ink);
+    --toy-playmat: var(--bp-deck-1);
+    --toy-playmat-raised: var(--bp-deck-2);
+    --toy-playmat-hover: var(--bp-deck-3);
+    --toy-playmat-pressed: var(--bp-deck-4);
+    --toy-playmat-quiet: var(--bp-deck-1);
+    --toy-cream: var(--bp-deck-0);
+    --toy-cream-copy: var(--bp-text-2);
+    --toy-cream-border: var(--bp-line-2);
+    --toy-cream-wash: var(--bp-line-1);
+    --toy-body-copy: var(--bp-text-2);
+    --toy-dark-copy: var(--bp-text-on-accent);
+    --toy-orange: var(--bp-amber);
+    --toy-orange-hover: var(--bp-amber-hover);
+    --toy-orange-pressed: var(--bp-amber-deep);
+    --toy-orange-copy: var(--bp-amber-hi);
+    --toy-teal: var(--bp-green);
+    --toy-teal-hover: var(--bp-green-hi);
+    --toy-teal-pressed: var(--bp-green-hi);
+    --toy-sky: var(--bp-blue);
+    --toy-tomato: var(--bp-red);
+    --toy-tomato-hover: var(--bp-red-hi);
+    --toy-tomato-pressed: var(--bp-red-deep);
+    --toy-tomato-copy: var(--bp-red-hi);
+    --toy-muted: var(--bp-text-3);
+    --toy-muted-dark: var(--bp-deck-4);
+    --toy-divider: var(--bp-line-2);
+    --toy-disabled-surface: var(--bp-deck-4);
+    --toy-disabled-border: var(--bp-line-1);
+    --toy-shade: var(--bp-scrim);
+    --toy-panel: var(--bp-panel);
+    --toy-transparent: var(--bp-transparent);
+
+    --toy-space-xs: var(--bp-s1);
+    --toy-space-sm: var(--bp-s2);
+    --toy-space-md: var(--bp-s3);
+    --toy-space-lg: var(--bp-s5);
+    --toy-space-xl: var(--bp-s6);
+    --toy-space-control-x: var(--bp-s4);
+    --toy-space-control-top: 14px;
+    --toy-space-control-bottom: 14px;
+    --toy-space-control-active-top: 15px;
+    --toy-space-control-active-bottom: 13px;
+    --toy-space-panel: var(--bp-s5);
+    --toy-space-panel-compact: var(--bp-s4);
+    --toy-space-modal: var(--bp-s6);
+    --toy-space-modal-phone: var(--bp-s5);
+
+    --toy-radius-sm: var(--bp-r-sm);
+    --toy-radius-md: var(--bp-r-md);
+    --toy-radius-lg: var(--bp-r-lg);
+
+    --toy-target-status: 24px;
+    --toy-target-compact: var(--bp-target);
+    --toy-target: var(--bp-target-lg);
+    --toy-target-phone: var(--bp-target-phone);
+    --toy-icon-size: var(--bp-icon);
+    --toy-icon-gap: var(--bp-icon-gap);
+    --toy-scroll-size: var(--bp-scroll);
+
+    --toy-stroke-thin: var(--bp-bw-hair);
+    --toy-stroke: var(--bp-bw);
+    --toy-depth-rest: var(--bp-edge);
+    --toy-depth-pressed: var(--bp-bw);
+    --toy-depth-panel: var(--bp-edge);
+    --toy-depth-modal: var(--bp-edge);
+    --toy-focus-width: var(--bp-bw-hair);
+    --toy-focus-emphasis: var(--bp-bw-focus);
+
+    --toy-type-display: var(--bp-type-display);
     --toy-type-title-lg: 28px;
-    --toy-type-title: 20px;
+    --toy-type-title: var(--bp-type-title);
     --toy-type-body-lg: 16px;
-    --toy-type-body: 15px;
-    --toy-type-label: 13px;
-    --toy-type-caption: 12px;
-    --toy-type-mono: 20px;
+    --toy-type-body: var(--bp-type-body);
+    --toy-type-label: var(--bp-type-label);
+    --toy-type-caption: var(--bp-type-label);
+    --toy-type-mono: var(--bp-type-num);
 
-    /* Interaction timing */
-    --toy-motion-fast: 0.1s;
+    --toy-motion-fast: var(--bp-t-fast);
 }

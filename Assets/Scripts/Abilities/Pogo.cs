@@ -53,6 +53,8 @@ public partial class Pogo : Ability
         transform.GetComponent<Movement>().moving = true;
         transform.GetComponent<Collider>().enabled = false;
 
+        LaunchFxClientRpc(startPosition);
+
         float elapsed = 0f;
 
         while (elapsed < abilityTime)
@@ -71,9 +73,9 @@ public partial class Pogo : Ability
         }
         transform.position = targetPosition;
 
-        // Landing slam on every peer + a light shake to sell the weight
+        // Landing slam on every peer. The shake rides inside LandingFxClientRpc, which already
+        // reaches everyone, instead of costing a second broadcast.
         LandingFxClientRpc(targetPosition);
-        CameraEffects.Instance?.CameraShakeClientRpc();
 
         transform.GetComponent<Collider>().enabled = true;
         // Landing is where the rider becomes shootable again, and it starts firing on the same
@@ -83,10 +85,21 @@ public partial class Pogo : Ability
         transform.GetComponent<Movement>().transitionToShooting();
     }
 
+    /// <summary>
+    /// Spring compression as the rider leaves the ground, on the launch cell so the pair of cues
+    /// reads as travel from A to B. Client-local presentation only.
+    /// </summary>
+    [ClientRpc]
+    private void LaunchFxClientRpc(Vector3 launchPosition)
+    {
+        BattlePlanAudio.PlayAt(AudioCueId.PogoLaunch, launchPosition, gameObject);
+        AbilityFX.PogoLaunch(launchPosition, GetComponent<Unit>()?.TeamIndex ?? -1);
+    }
+
     [ClientRpc]
     private void LandingFxClientRpc(Vector3 landingPosition)
     {
-        Color teamColor = GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1);
-        ImpactShockwave.Spawn(landingPosition, teamColor, 1.8f, 0.4f);
+        AbilityFX.PogoLanding(landingPosition, GetComponent<Unit>()?.TeamIndex ?? -1);
+        BattlePlanAudio.PlayAt(AudioCueId.PogoLand, landingPosition, gameObject);
     }
 }
