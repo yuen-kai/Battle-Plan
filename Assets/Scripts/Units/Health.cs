@@ -15,6 +15,7 @@ public class Health : NetworkBehaviour
     private Transform unitCanvas;
     private Transform healthBar;
     private Transform healthFill;
+    private UnityEngine.UI.Image healthFillImage;
 
     private const float TypicalMaxHealth = 100f;
 
@@ -28,6 +29,8 @@ public class Health : NetworkBehaviour
         unitCanvas = transform.Find("UnitCanvas");
         healthBar = unitCanvas != null ? unitCanvas.Find("HealthBar") : null;
         healthFill = healthBar != null ? healthBar.Find("HealthFill") : null;
+        healthFillImage =
+            healthFill != null ? healthFill.GetComponent<UnityEngine.UI.Image>() : null;
 
         currentHealth.OnValueChanged += OnHealthChanged;
         isAlive.OnValueChanged += OnAliveChanged;
@@ -145,9 +148,15 @@ public class Health : NetworkBehaviour
         // independent object so it outlives the unit's deactivation below.
         if (previousValue && !newValue)
         {
-            Color teamColor = gameObject.CompareTag("BlueTeam")
-                ? new Color(0.22f, 0.78f, 1f)
-                : new Color(1f, 0.23f, 0.33f);
+            // Viewer-relative, matching the unit body and its tracers: the ring has to read as
+            // "one of mine died" on one screen and "one of theirs" on the other.
+            Color teamColor = TeamPalette.BrightForViewer(
+                GameLoop.IsTeamFriendlyToLocalPlayer(
+                    gameObject.CompareTag("BlueTeam")
+                        ? GameLoop.HostTeamIndex
+                        : GameLoop.OpponentTeamIndex
+                )
+            );
             ImpactShockwave.Spawn(transform.position, teamColor, 2.2f, 0.5f);
         }
 
@@ -162,11 +171,13 @@ public class Health : NetworkBehaviour
         if (healthFill == null)
             return;
 
-        healthFill.localScale = new Vector3(
-            Mathf.Clamp(health / unitData.maxHealth, 0f, 1f),
-            1f,
-            1f
-        );
+        float fraction = Mathf.Clamp(health / unitData.maxHealth, 0f, 1f);
+        healthFill.localScale = new Vector3(fraction, 1f, 1f);
+
+        // Same ramp and same thresholds as the HUD card. These two bars show one number, and
+        // before this one of them was permanently green while the other was permanently red.
+        if (healthFillImage != null)
+            healthFillImage.color = TeamPalette.ForHealthFraction(fraction);
     }
 
     private void UpdateMaxHealthScale()

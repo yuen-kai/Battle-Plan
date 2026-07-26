@@ -19,6 +19,13 @@ public class GameHUDController : MonoBehaviour
     [SerializeField]
     private VisualTreeAsset unitCardTemplate;
 
+    [SerializeField]
+    private Camera boardCamera;
+
+    // Below this the reserved bars would leave no usable board, so the fit is abandoned rather
+    // than collapsing the viewport to a slit.
+    private const float MinBoardViewportHeight = 0.35f;
+
     private readonly UnitCardElement[] cards = new UnitCardElement[RosterRules.UnitsPerPlayer];
     private readonly UnitCardElement[] enemyCards =
         new UnitCardElement[RosterRules.UnitsPerPlayer];
@@ -29,6 +36,7 @@ public class GameHUDController : MonoBehaviour
     private VisualElement cardsContainer;
     private VisualElement enemyCardsContainer;
     private VisualElement hudDock;
+    private VisualElement enemyStatusStrip;
     private VisualElement hillStatusReadout;
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
@@ -76,6 +84,8 @@ public class GameHUDController : MonoBehaviour
         }
 
         root.pickingMode = PickingMode.Ignore;
+        if (boardCamera == null)
+            boardCamera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
         CacheElements();
         RegisterCallbacks();
         BuildCards();
@@ -92,6 +102,7 @@ public class GameHUDController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterCallbacks();
+        ReleaseBoardViewport();
         if (flashCoroutine != null)
         {
             StopCoroutine(flashCoroutine);
@@ -120,6 +131,7 @@ public class GameHUDController : MonoBehaviour
         cardsContainer = RequireElement<VisualElement>("unit-cards");
         enemyCardsContainer = RequireElement<VisualElement>("enemy-unit-cards");
         hudDock = RequireElement<VisualElement>("hud-dock");
+        enemyStatusStrip = RequireElement<VisualElement>("enemy-status-strip");
         deploymentOverlay = RequireElement<VisualElement>("deployment-overlay");
         resultsOverlay = RequireElement<VisualElement>("results-overlay");
         resultsPanel = RequireElement<VisualElement>("results-panel");
@@ -169,6 +181,10 @@ public class GameHUDController : MonoBehaviour
         if (lockInButton != null)
             lockInButton.clicked += OnLockInClicked;
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
+        // The bars resize on their own when breakpoints or card content change, which the root's
+        // geometry event does not report.
+        enemyStatusStrip?.RegisterCallback<GeometryChangedEvent>(OnChromeGeometryChanged);
+        hudDock?.RegisterCallback<GeometryChangedEvent>(OnChromeGeometryChanged);
         root.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
         root.RegisterCallback<NavigationCancelEvent>(
             OnNavigationCancel,
@@ -193,6 +209,8 @@ public class GameHUDController : MonoBehaviour
         if (lockInButton != null)
             lockInButton.clicked -= OnLockInClicked;
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
+        enemyStatusStrip?.UnregisterCallback<GeometryChangedEvent>(OnChromeGeometryChanged);
+        hudDock?.UnregisterCallback<GeometryChangedEvent>(OnChromeGeometryChanged);
         root.UnregisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
         root.UnregisterCallback<NavigationCancelEvent>(
             OnNavigationCancel,
@@ -448,11 +466,11 @@ public class GameHUDController : MonoBehaviour
 
         Color color =
             perspective == MessagePerspective.Friendly
-                ? new Color(0.12f, 0.5f, 0.78f, 0.18f)
+                ? TeamPalette.FlashFriendly
                 : (
                     perspective == MessagePerspective.Enemy
-                        ? new Color(0.8f, 0.12f, 0.16f, 0.1f)
-                        : new Color(0.8f, 0.65f, 0.3f, 0.14f)
+                        ? TeamPalette.FlashEnemy
+                        : TeamPalette.FlashNeutral
                 );
         flash.style.backgroundColor = color;
 
@@ -816,5 +834,61 @@ public class GameHUDController : MonoBehaviour
         root.EnableInClassList("narrow", width < 1280f);
         root.EnableInClassList("phone", width < 1120f);
         root.EnableInClassList("short", height < 960f);
+        FitBoardViewport();
+    }
+
+    private void OnChromeGeometryChanged(GeometryChangedEvent evt) => FitBoardViewport();
+
+    /// <summary>
+    /// Gives the board the screen it is not sharing with the HUD by shrinking the camera viewport
+    /// to the band between the enemy strip and the dock, so the bars occupy real estate instead of
+    /// covering the grid. Both bar heights move with the responsive breakpoints and with the
+    /// panel's scale factor, so the band is measured from live layout rather than authored as a
+    /// fixed rect in Game.unity. The hanging phase tab and the transient target-feedback bar are
+    /// deliberately left outside this reservation: they are designed to break the bar edge, and the
+    /// camera does not clear the strip it does not draw, so reserving a band the opaque bars do not
+    /// cover would expose an unpainted gap.
+    /// </summary>
+    private void FitBoardViewport()
+    {
+        if (boardCamera == null || root == null)
+            return;
+
+        float panelHeight = root.worldBound.height;
+        if (float.IsNaN(panelHeight) || panelHeight <= 0f)
+            return;
+
+        float top = BandFraction(BarEdge(enemyStatusStrip, true), panelHeight);
+        float bottom = BandFraction(panelHeight - BarEdge(hudDock, false), panelHeight);
+        float height = 1f - top - bottom;
+        if (height < MinBoardViewportHeight)
+            return;
+
+        var fitted = new Rect(0f, bottom, 1f, height);
+        if (boardCamera.rect != fitted)
+            boardCamera.rect = fitted;
+    }
+
+    // Panel space runs downwards from the top edge, so the top bar contributes its lower edge and
+    // the dock its upper edge. A dock lifted off the bottom by a breakpoint reserves that gap too.
+    private static float BarEdge(VisualElement bar, bool useLowerEdge)
+    {
+        if (bar == null || bar.resolvedStyle.display == DisplayStyle.None)
+            return float.NaN;
+        Rect bounds = bar.worldBound;
+        return useLowerEdge ? bounds.yMax : bounds.yMin;
+    }
+
+    private static float BandFraction(float band, float panelHeight)
+    {
+        if (float.IsNaN(band))
+            return 0f;
+        return Mathf.Clamp(band / panelHeight, 0f, 1f);
+    }
+
+    private void ReleaseBoardViewport()
+    {
+        if (boardCamera != null)
+            boardCamera.rect = new Rect(0f, 0f, 1f, 1f);
     }
 }

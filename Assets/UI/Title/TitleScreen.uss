@@ -18,7 +18,7 @@
 .title-wordmark {
     font-size: 66px;
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
     letter-spacing: -1.5px;
     white-space: normal;
 }
@@ -51,11 +51,11 @@
 
 .title-action__label {
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
 }
 
 .button--primary .title-action__label {
-    color: var(--toy-ink);
+    color: var(--toy-text-on-accent);
 }
 
 .title-action-row {
@@ -74,8 +74,72 @@
     margin-left: 5px;
 }
 
+/* Credits and Quit are not choices the player came here to make, so they are text under a
+   rule rather than a third pair of buttons competing with Play. */
+.title-rule {
+    height: 1px;
+    width: 100%;
+    margin-top: var(--toy-space-md);
+    background-color: var(--toy-text-border);
+}
+
 .title-action-row--quiet {
-    margin-top: var(--toy-space-xs);
+    margin-top: var(--toy-space-sm);
+    justify-content: flex-start;
+}
+
+.title-quiet-action {
+    flex-direction: row;
+    align-items: center;
+    min-height: auto;
+    min-width: auto;
+    width: auto;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: 0;
+    padding-right: 0;
+    margin: 0;
+    margin-right: var(--toy-space-lg);
+    background-color: var(--toy-transparent);
+    border-width: 0;
+    color: var(--toy-text-muted);
+    font-size: var(--toy-type-label);
+    -unity-font-style: normal;
+}
+
+.title-quiet-action--last {
+    margin-right: 0;
+}
+
+.title-quiet-action:hover {
+    background-color: var(--toy-transparent);
+    color: var(--toy-text);
+}
+
+.title-quiet-action:active {
+    background-color: var(--toy-transparent);
+    color: var(--toy-text);
+}
+
+.title-quiet-action__label {
+    color: var(--toy-text-muted);
+    font-size: var(--toy-type-label);
+}
+
+.title-quiet-action:hover .title-quiet-action__label {
+    color: var(--toy-text);
+}
+
+.toybox-ui.title-screen .toy-icon--sm {
+    width: 14px;
+    min-width: 14px;
+    height: 14px;
+    margin-right: var(--toy-space-xs);
+    -unity-background-image-tint-color: var(--toy-text-muted);
+}
+
+.toybox-ui.title-screen .title-quiet-action:hover .toy-icon--sm {
+    -unity-background-image-tint-color: var(--toy-text);
 }
 
 .title-model-stage {
@@ -87,38 +151,38 @@
 .quality-dropdown {
     min-height: var(--toy-target);
     margin-bottom: var(--toy-space-sm);
-    color: var(--toy-cream);
+    color: var(--toy-text);
     font-size: var(--toy-type-body-lg);
 }
 
 .quality-dropdown > .unity-base-field__input {
     min-height: var(--toy-target);
     padding-left: 14px;
-    background-color: var(--toy-ink);
-    color: var(--toy-cream);
+    background-color: var(--toy-inset);
+    color: var(--toy-text);
     border-width: var(--toy-focus-width);
-    border-color: var(--toy-muted-dark);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-md);
 }
 
 .quality-dropdown > .unity-base-field__input:hover {
-    border-color: var(--toy-cream);
+    border-color: var(--toy-edge-strong);
 }
 
 .quality-dropdown:focus > .unity-base-field__input,
 .quality-dropdown > .unity-base-field__input:focus {
-    border-color: var(--toy-sky);
+    border-color: var(--toy-focus);
 }
 
 .quality-dropdown:disabled {
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
     opacity: 1;
 }
 
 .quality-dropdown:disabled > .unity-base-field__input,
 .quality-dropdown:disabled > .unity-base-field__input:hover {
     background-color: var(--toy-disabled-surface);
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
     border-color: var(--toy-disabled-border);
 }
 

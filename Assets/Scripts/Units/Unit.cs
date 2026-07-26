@@ -167,10 +167,13 @@ public class Unit : NetworkBehaviour
         // Raid-style tactical flashlights: friendly cones are neutral white with only a hint of
         // cool tint; enemy cones remain a dim red warning. Fog hides enemy cones with the unit.
         // Alphas stay low: cones are additive and overlap, so they sum up fast.
+        // The friendly cone stays near-white on purpose: it is a light volume, not a team badge,
+        // and paint-coloured light reads as an effect. Only the enemy cone carries team identity,
+        // and it now carries the shared enemy red rather than a sixth one of its own.
         cone.SetColor(
             IsFriendlyToLocalPlayer
                 ? new Color(0.92f, 0.95f, 1f, 0.18f)
-                : new Color(1f, 0.3f, 0.32f, 0.10f)
+                : TeamPalette.EnemyBright.WithAlpha(0.10f)
         );
 
         // The flashlight is the weapon envelope, not fog vision:

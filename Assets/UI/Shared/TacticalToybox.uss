@@ -2,7 +2,7 @@
 
 .toybox-ui {
     -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
-    color: var(--toy-cream);
+    color: var(--toy-text);
     font-size: var(--toy-type-body);
     background-color: var(--toy-transparent);
 }
@@ -13,7 +13,7 @@
     background-color: var(--toy-panel);
     border-width: var(--toy-stroke-thin);
     border-bottom-width: var(--toy-depth-panel);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-lg);
 }
 
@@ -29,11 +29,11 @@
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
-    background-color: var(--toy-playmat-raised);
-    color: var(--toy-cream);
+    background-color: var(--toy-surface-raised);
+    color: var(--toy-text);
     border-width: var(--toy-focus-width);
     border-bottom-width: var(--toy-depth-rest);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-md);
     -unity-font-style: bold;
     font-size: var(--toy-type-body);
@@ -42,22 +42,31 @@
 }
 
 .toybox-ui .button:hover {
-    background-color: var(--toy-playmat-hover);
-    border-color: var(--toy-cream);
+    background-color: var(--toy-surface-hover);
+    border-color: var(--toy-edge-strong);
 }
 
 .toybox-ui .button:active {
     padding-top: var(--toy-space-control-active-top);
     padding-bottom: var(--toy-space-control-active-bottom);
     border-bottom-width: var(--toy-depth-pressed);
-    background-color: var(--toy-playmat-pressed);
+    background-color: var(--toy-surface-pressed);
 }
 
+/* Flat theme: the ring is a uniform two-pixel border rather than a thickening of
+   three sides around an offset bottom edge. */
 .toybox-ui .button:focus {
-    border-left-width: var(--toy-focus-emphasis);
-    border-right-width: var(--toy-focus-emphasis);
-    border-top-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-sky);
+    border-width: var(--toy-focus-emphasis);
+    border-color: var(--toy-focus);
+}
+
+/* Focus reads as primary orange everywhere except on the primary fill itself.
+   An orange ring would vanish there, and a light one only reaches 2:1 against
+   the orange; a dark ring clears 7:1. */
+.toybox-ui .button--primary:focus,
+.toybox-ui .button--primary:hover:focus,
+.toybox-ui .button--primary:active:focus {
+    border-color: var(--toy-text-on-accent);
 }
 
 .toybox-ui .button:disabled,
@@ -66,7 +75,7 @@
     padding-top: var(--toy-space-control-top);
     padding-bottom: var(--toy-space-control-bottom);
     background-color: var(--toy-disabled-surface);
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
     border-width: var(--toy-focus-width);
     border-bottom-width: var(--toy-focus-width);
     border-color: var(--toy-disabled-border);
@@ -74,62 +83,62 @@
 }
 
 .toybox-ui .button--primary {
-    background-color: var(--toy-orange);
-    color: var(--toy-ink);
-    border-color: var(--toy-ink);
+    background-color: var(--toy-primary);
+    color: var(--toy-text-on-accent);
+    border-color: var(--toy-edge);
 }
 
 .toybox-ui .button--primary:hover {
-    background-color: var(--toy-orange-hover);
-    border-color: var(--toy-cream);
+    background-color: var(--toy-primary-hover);
+    border-color: var(--toy-edge-strong);
 }
 
 .toybox-ui .button--primary:active {
-    background-color: var(--toy-orange-pressed);
+    background-color: var(--toy-primary-pressed);
 }
 
 .toybox-ui .button--selected,
 .toybox-ui .button--selected:hover {
-    background-color: var(--toy-teal);
-    color: var(--toy-ink);
-    border-color: var(--toy-cream);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-edge-strong);
 }
 
 .toybox-ui .button--selected:focus {
-    background-color: var(--toy-teal-pressed);
-    border-color: var(--toy-sky);
+    background-color: var(--toy-select-pressed);
+    border-color: var(--toy-focus);
 }
 
 .toybox-ui .button--selected:active {
-    background-color: var(--toy-teal-pressed);
+    background-color: var(--toy-select-pressed);
 }
 
 .toybox-ui .button--danger {
-    background-color: var(--toy-tomato);
-    color: var(--toy-ink);
+    background-color: var(--toy-danger);
+    color: var(--toy-text-on-deep);
 }
 
 .toybox-ui .button--danger:hover {
-    background-color: var(--toy-tomato-hover);
-    border-color: var(--toy-cream);
+    background-color: var(--toy-danger-hover);
+    border-color: var(--toy-edge-strong);
 }
 
 .toybox-ui .button--danger:active {
-    background-color: var(--toy-tomato-pressed);
+    background-color: var(--toy-danger-pressed);
 }
 
 .toybox-ui .button--flat {
     min-height: var(--toy-target-compact);
     padding: var(--toy-space-sm) var(--toy-space-md);
     background-color: var(--toy-transparent);
-    color: var(--toy-cream);
+    color: var(--toy-text);
     border-bottom-width: var(--toy-focus-width);
-    border-color: var(--toy-cream-border);
+    border-color: var(--toy-text-border);
 }
 
 .toybox-ui .button--flat:hover {
-    background-color: var(--toy-cream-wash);
-    border-color: var(--toy-cream);
+    background-color: var(--toy-text-wash);
+    border-color: var(--toy-edge-strong);
 }
 
 .toybox-ui .button--primary:disabled,
@@ -139,17 +148,17 @@
 .toybox-ui .button--danger:disabled,
 .toybox-ui .button--danger:disabled:hover {
     background-color: var(--toy-disabled-surface);
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
     border-color: var(--toy-disabled-border);
 }
 
+/* Primary is deliberately absent here; its own rule above keeps a light ring. */
 .toybox-ui .button:hover:focus,
 .toybox-ui .button:active:focus,
-.toybox-ui .button--primary:hover:focus,
 .toybox-ui .button--selected:hover:focus,
 .toybox-ui .button--danger:hover:focus,
 .toybox-ui .button--flat:hover:focus {
-    border-color: var(--toy-sky);
+    border-color: var(--toy-focus);
 }
 
 .toybox-ui .toy-icon {
@@ -158,20 +167,15 @@
     height: var(--toy-icon-size);
     margin-right: var(--toy-icon-gap);
     -unity-background-scale-mode: scale-to-fit;
-    -unity-background-image-tint-color: var(--toy-cream);
-}
-
-.toybox-ui .button--primary .toy-icon,
-.toybox-ui .button--selected .toy-icon {
-    -unity-background-image-tint-color: var(--toy-ink);
+    -unity-background-image-tint-color: var(--toy-text);
 }
 
 .toybox-ui .button:disabled .toy-icon {
-    -unity-background-image-tint-color: var(--toy-muted);
+    -unity-background-image-tint-color: var(--toy-text-muted);
 }
 
 .toybox-ui .button:disabled .toy-button__label {
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
 }
 
 .toybox-ui .toy-icon--play {
@@ -233,49 +237,49 @@
 .toybox-ui .title-xl {
     font-size: var(--toy-type-display);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
     letter-spacing: -0.5px;
 }
 
 .toybox-ui .title-lg {
     font-size: var(--toy-type-title-lg);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
     letter-spacing: -0.25px;
 }
 
 .toybox-ui .title-md {
     font-size: var(--toy-type-title);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
 }
 
 .toybox-ui .label {
     font-size: var(--toy-type-body);
-    color: var(--toy-cream-copy);
+    color: var(--toy-text-copy);
 }
 
 .toybox-ui .label--muted {
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
 }
 
 .toybox-ui .label--danger {
-    color: var(--toy-tomato-copy);
+    color: var(--toy-danger-copy);
 }
 
 .toybox-ui .label--amber {
-    color: var(--toy-orange-hover);
+    color: var(--toy-primary-copy);
 }
 
 .toybox-ui .label--blue {
-    color: var(--toy-sky);
+    color: var(--toy-team-friendly-copy);
 }
 
 .toybox-ui .section-label {
     margin-bottom: var(--toy-space-sm);
     font-size: var(--toy-type-label);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
     letter-spacing: 0;
 }
 
@@ -291,20 +295,20 @@
     background-color: var(--toy-panel);
     border-width: var(--toy-stroke-thin);
     border-bottom-width: var(--toy-depth-panel);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-md);
 }
 
 .toybox-ui .toy-readout__label {
     font-size: var(--toy-type-caption);
     -unity-font-style: bold;
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
 }
 
 .toybox-ui .toy-readout__value {
     font-size: var(--toy-type-title);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
 }
 
 .toybox-ui .toy-chip {
@@ -312,54 +316,54 @@
     padding: var(--toy-space-xs) 9px;
     align-items: center;
     justify-content: center;
-    background-color: var(--toy-playmat-quiet);
-    color: var(--toy-cream);
+    background-color: var(--toy-surface-quiet);
+    color: var(--toy-text);
     border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-sm);
     font-size: var(--toy-type-caption);
     -unity-font-style: bold;
 }
 
 .toybox-ui .toy-chip--selected {
-    background-color: var(--toy-teal);
-    color: var(--toy-ink);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
 }
 
 .toybox-ui .toy-chip--info {
-    border-color: var(--toy-sky);
+    border-color: var(--toy-primary);
 }
 
 .toybox-ui .toy-chip--danger {
-    background-color: var(--toy-tomato);
-    color: var(--toy-ink);
+    background-color: var(--toy-danger);
+    color: var(--toy-text-on-deep);
 }
 
 .toybox-ui .text-field {
     margin-top: 7px;
     margin-bottom: var(--toy-space-md);
-    color: var(--toy-cream);
+    color: var(--toy-text);
 }
 
 .toybox-ui .text-field > .unity-base-text-field__input {
     min-height: var(--toy-target);
     padding: var(--toy-space-control-top) 14px;
-    background-color: var(--toy-ink);
-    color: var(--toy-cream);
-    --unity-cursor-color: var(--toy-cream);
+    background-color: var(--toy-inset);
+    color: var(--toy-text);
+    --unity-cursor-color: var(--toy-text);
     border-width: var(--toy-focus-width);
-    border-color: var(--toy-muted-dark);
+    border-color: var(--toy-edge);
     border-radius: 9px;
     font-size: var(--toy-type-mono);
 }
 
 .toybox-ui .text-field > .unity-base-text-field__input:hover {
-    border-color: var(--toy-muted);
+    border-color: var(--toy-text-muted);
 }
 
 .toybox-ui .text-field > .unity-base-text-field__input:focus {
     border-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-sky);
+    border-color: var(--toy-focus);
 }
 
 .toybox-ui .text-field.text-field--caret-hidden > .unity-base-text-field__input {
@@ -368,7 +372,7 @@
 
 .toybox-ui .toggle {
     min-height: var(--toy-target-compact);
-    color: var(--toy-cream);
+    color: var(--toy-text);
     font-size: var(--toy-type-body);
     -unity-font-style: bold;
 }
@@ -379,29 +383,29 @@
     height: var(--toy-icon-size);
     margin-right: var(--toy-icon-gap);
     background-image: none;
-    background-color: var(--toy-ink);
+    background-color: var(--toy-inset);
     border-width: var(--toy-focus-width);
-    border-color: var(--toy-muted-dark);
+    border-color: var(--toy-edge);
     border-radius: 7px;
 }
 
 .toybox-ui .toggle:hover > .unity-toggle__input > .unity-toggle__checkmark {
-    border-color: var(--toy-cream);
+    border-color: var(--toy-edge-strong);
 }
 
 .toybox-ui .toggle:focus > .unity-toggle__input > .unity-toggle__checkmark {
     border-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-sky);
+    border-color: var(--toy-focus);
 }
 
 .toybox-ui .toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
-    background-color: var(--toy-teal);
-    border-color: var(--toy-cream);
+    background-color: var(--toy-select);
+    border-color: var(--toy-edge-strong);
 }
 
 .toybox-ui .toggle:checked:focus > .unity-toggle__input > .unity-toggle__checkmark {
     border-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-sky);
+    border-color: var(--toy-focus);
 }
 
 .toybox-ui.modal-shade,
@@ -414,7 +418,7 @@
     align-items: center;
     justify-content: center;
     padding: var(--toy-space-xl);
-    background-color: var(--toy-shade);
+    background-color: var(--toy-scrim);
 }
 
 .toybox-ui .modal {
@@ -422,18 +426,16 @@
     max-width: 92%;
     max-height: 90%;
     padding: var(--toy-space-modal);
-    background-color: var(--toy-playmat);
+    background-color: var(--toy-surface);
     border-width: var(--toy-focus-width);
     border-bottom-width: var(--toy-depth-modal);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-lg);
 }
 
 .toybox-ui .modal:focus {
-    border-left-width: var(--toy-focus-emphasis);
-    border-right-width: var(--toy-focus-emphasis);
-    border-top-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-sky);
+    border-width: var(--toy-focus-emphasis);
+    border-color: var(--toy-focus);
 }
 
 .toybox-ui .modal__header {
@@ -473,7 +475,7 @@
     margin-bottom: var(--toy-space-xs);
     font-size: var(--toy-type-caption);
     -unity-font-style: bold;
-    color: var(--toy-orange);
+    color: var(--toy-primary-copy);
     letter-spacing: 0;
 }
 
@@ -491,14 +493,14 @@
     width: 176px;
     min-width: 176px;
     padding-right: var(--toy-space-panel-compact);
-    color: var(--toy-cream);
+    color: var(--toy-text);
     -unity-font-style: bold;
 }
 
 .toybox-ui .control-copy {
     flex-grow: 1;
     min-width: 0;
-    color: var(--toy-cream-copy);
+    color: var(--toy-text-copy);
     white-space: normal;
 }
 
@@ -514,42 +516,42 @@
     min-height: var(--toy-icon-size);
     margin-top: 6px;
     margin-bottom: 8px;
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
     white-space: normal;
 }
 
 .toybox-ui .status-line--busy {
-    color: var(--toy-sky);
+    color: var(--toy-primary-copy);
 }
 
 .toybox-ui .status-line--success {
-    color: var(--toy-teal);
+    color: var(--toy-select-copy);
 }
 
 .toybox-ui .status-line.label--danger,
 .toybox-ui .status-line--danger {
-    color: var(--toy-tomato-copy);
+    color: var(--toy-danger-copy);
 }
 
 .toybox-ui .unity-scroller--vertical,
 .toybox-ui .unity-scroller--horizontal {
-    background-color: var(--toy-ink);
+    background-color: var(--toy-inset);
 }
 
 .toybox-ui .unity-scroller__low-button,
 .toybox-ui .unity-scroller__high-button {
-    background-color: var(--toy-playmat-raised);
+    background-color: var(--toy-surface-raised);
     border-color: var(--toy-divider);
 }
 
 .toybox-ui .unity-base-slider__tracker {
-    background-color: var(--toy-playmat-quiet);
+    background-color: var(--toy-surface-quiet);
     border-color: var(--toy-divider);
 }
 
 .toybox-ui .unity-base-slider__dragger {
-    background-color: var(--toy-muted-dark);
-    border-color: var(--toy-divider);
+    background-color: var(--toy-text-muted);
+    border-color: var(--toy-text-border);
 }
 
 .toybox-ui .plan-path {
@@ -562,9 +564,9 @@
 .toybox-ui .plan-path__stop {
     width: 12px;
     height: 12px;
-    background-color: var(--toy-orange);
+    background-color: var(--toy-primary);
     border-width: 2px;
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
 }
 
 .toybox-ui .plan-path__start {
@@ -574,7 +576,7 @@
 .toybox-ui .plan-path__line {
     width: 74px;
     height: 4px;
-    background-color: var(--toy-orange);
+    background-color: var(--toy-primary);
 }
 
 .phone .toybox-ui .toy-panel {

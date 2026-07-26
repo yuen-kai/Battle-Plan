@@ -4,6 +4,10 @@ using UnityEngine;
 
 public class GridSystem : MonoBehaviour
 {
+    private const int TransparentQueue = 3000;
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int LegacyColorId = Shader.PropertyToID("_Color");
+
     [SerializeField]
     private GameObject cellPrefab; // Public variable for the GameObject prefab
     public static float CellSize => GameLoop.cellSize; // Size of each grid cell
@@ -47,6 +51,7 @@ public class GridSystem : MonoBehaviour
         Vector3 currentPos,
         int dist,
         GameObject overlayPrefab,
+        Color tint,
         bool includeOrigin = true
     )
     {
@@ -73,13 +78,18 @@ public class GridSystem : MonoBehaviour
                         Quaternion.identity
                     );
                     overlayCell.transform.parent = overlay.transform;
+                    TintOverlayCell(overlayCell, tint);
                 }
             }
         }
         return overlay;
     }
 
-    public static GameObject DisplayGridDirections(Vector3 currentPos, GameObject overlayPrefab)
+    public static GameObject DisplayGridDirections(
+        Vector3 currentPos,
+        GameObject overlayPrefab,
+        Color tint
+    )
     {
         GameObject overlay = new("AbilityDirectionOverlay");
         for (int columnOffset = -1; columnOffset <= 1; columnOffset++)
@@ -102,9 +112,37 @@ public class GridSystem : MonoBehaviour
                     Quaternion.identity
                 );
                 overlayCell.transform.parent = overlay.transform;
+                TintOverlayCell(overlayCell, tint);
             }
         }
         return overlay;
+    }
+
+    /// <summary>
+    /// Tints the translucent fill of an overlay cell and leaves its opaque outline alone.
+    /// <para>
+    /// Move range and ability range are drawn from the same prefab, so before this they were the
+    /// same colour down to the byte — the board gave no clue which mode you were aiming in. The
+    /// colour that separates them therefore has to be applied per instance rather than authored
+    /// into the material. Transparency is the test for which child is the fill: the outline quad
+    /// is opaque and renders in the geometry queue.
+    /// </para>
+    /// </summary>
+    private static void TintOverlayCell(GameObject overlayCell, Color tint)
+    {
+        MaterialPropertyBlock properties = null;
+        foreach (Renderer cellRenderer in overlayCell.GetComponentsInChildren<Renderer>(true))
+        {
+            Material material = cellRenderer.sharedMaterial;
+            if (material == null || material.renderQueue < TransparentQueue)
+                continue;
+
+            properties ??= new MaterialPropertyBlock();
+            cellRenderer.GetPropertyBlock(properties);
+            properties.SetColor(BaseColorId, tint);
+            properties.SetColor(LegacyColorId, tint);
+            cellRenderer.SetPropertyBlock(properties);
+        }
     }
 
     public static Vector3 GetNearestGridCell(GameObject character)

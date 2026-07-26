@@ -1439,10 +1439,13 @@ public class PlanMovement : MonoBehaviour
         if (abilityMode && unitData.selectAbilityDirection)
             DisplayAbilityDirections();
         else
+            // The same overlay prefab draws both faces of the card, so the mode has to pick the
+            // tint here — otherwise "where I can walk" and "where I can aim" are the same colour.
             DisplayMoveRange(
                 abilityMode
                     ? (unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0)
                     : movementRange,
+                abilityMode ? TeamPalette.AbilityRange : TeamPalette.MoveRange,
                 !abilityMode || unitData.CanTargetOwnCell
             );
 
@@ -1594,7 +1597,7 @@ public class PlanMovement : MonoBehaviour
         }
     }
 
-    void DisplayMoveRange(int range, bool includeOwnCell = true)
+    void DisplayMoveRange(int range, Color tint, bool includeOwnCell = true)
     {
         Destroy(moveOverlay);
         if (selectedUnit == null)
@@ -1604,6 +1607,7 @@ public class PlanMovement : MonoBehaviour
             GridSystem.GetNearestGridCell(selectedUnit),
             range,
             moveOverlayCellPrefab,
+            tint,
             includeOwnCell
         );
     }
@@ -1616,7 +1620,8 @@ public class PlanMovement : MonoBehaviour
 
         moveOverlay = GridSystem.DisplayGridDirections(
             GridSystem.GetNearestGridCell(selectedUnit),
-            moveOverlayCellPrefab
+            moveOverlayCellPrefab,
+            TeamPalette.AbilityRange
         );
     }
 

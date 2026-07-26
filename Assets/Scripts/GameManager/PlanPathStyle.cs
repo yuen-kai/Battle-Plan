@@ -107,7 +107,7 @@ public static class PlanPathStyle
     /// </summary>
     public static Color GetBlockedEndColor(bool selected)
     {
-        return new Color(1f, 0.29f, 0.31f, selected ? 1f : UnselectedAlpha);
+        return TeamPalette.RouteBlocked.WithAlpha(selected ? 1f : UnselectedAlpha);
     }
 
     /// <summary>

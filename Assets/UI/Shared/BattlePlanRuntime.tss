@@ -5,28 +5,28 @@ VisualElement {}
 
 .unity-base-dropdown {
     -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
-    background-color: var(--toy-playmat);
-    color: var(--toy-cream);
+    background-color: var(--toy-surface);
+    color: var(--toy-text);
     font-size: var(--toy-type-body);
 }
 
 .unity-base-dropdown__container-outer {
-    background-color: var(--toy-playmat);
+    background-color: var(--toy-surface);
     border-width: var(--toy-stroke-thin);
     border-bottom-width: var(--toy-depth-panel);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-md);
 }
 
 .unity-base-dropdown__container-inner {
-    background-color: var(--toy-playmat);
+    background-color: var(--toy-surface);
 }
 
 .unity-base-dropdown__item {
     min-height: var(--toy-target-compact);
     padding: var(--toy-space-sm) var(--toy-space-md);
-    background-color: var(--toy-playmat);
-    color: var(--toy-cream);
+    background-color: var(--toy-surface);
+    color: var(--toy-text);
     border-left-width: var(--toy-stroke);
     border-left-color: var(--toy-transparent);
     font-size: var(--toy-type-body);
@@ -35,38 +35,38 @@ VisualElement {}
 }
 
 .unity-base-dropdown__item:hover {
-    background-color: var(--toy-playmat-hover);
-    color: var(--toy-cream);
-    border-left-color: var(--toy-cream);
+    background-color: var(--toy-surface-hover);
+    color: var(--toy-text);
+    border-left-color: var(--toy-edge);
 }
 
 .unity-base-dropdown__item:active {
-    background-color: var(--toy-playmat-pressed);
-    color: var(--toy-cream);
-    border-left-color: var(--toy-cream);
+    background-color: var(--toy-surface-pressed);
+    color: var(--toy-text);
+    border-left-color: var(--toy-edge);
 }
 
 .unity-base-dropdown__item:checked {
-    background-color: var(--toy-teal);
-    color: var(--toy-ink);
-    border-left-color: var(--toy-cream);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-left-color: var(--toy-edge);
 }
 
 .unity-base-dropdown__item:checked:hover {
-    background-color: var(--toy-teal-hover);
-    color: var(--toy-ink);
+    background-color: var(--toy-select-hover);
+    color: var(--toy-text-on-deep);
 }
 
 .unity-base-dropdown__item:checked:active {
-    background-color: var(--toy-teal-pressed);
-    color: var(--toy-ink);
+    background-color: var(--toy-select-pressed);
+    color: var(--toy-text-on-deep);
 }
 
 .unity-base-dropdown__item:focus,
 .unity-base-dropdown__item:hover:focus,
 .unity-base-dropdown__item:active:focus,
 .unity-base-dropdown__item:checked:focus {
-    border-left-color: var(--toy-sky);
+    border-left-color: var(--toy-focus);
 }
 
 .unity-base-dropdown__item:disabled,
@@ -74,7 +74,7 @@ VisualElement {}
 .unity-base-dropdown__item:disabled:focus,
 .unity-base-dropdown__item:disabled:active {
     background-color: var(--toy-disabled-surface);
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
     border-left-color: var(--toy-disabled-border);
     opacity: 1;
 }
@@ -83,38 +83,38 @@ VisualElement {}
 .unity-base-dropdown__item:checked:disabled:hover,
 .unity-base-dropdown__item:checked:disabled:focus,
 .unity-base-dropdown__item:checked:disabled:active {
-    background-color: var(--toy-teal);
-    color: var(--toy-ink);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
     border-left-color: var(--toy-disabled-border);
 }
 
 .unity-base-dropdown__label {
-    color: var(--toy-cream);
+    color: var(--toy-text);
     font-size: var(--toy-type-body);
 }
 
 .unity-base-dropdown__item:checked .unity-base-dropdown__label {
-    color: var(--toy-ink);
+    color: var(--toy-text-on-deep);
 }
 
 .unity-base-dropdown__item:disabled .unity-base-dropdown__label {
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
 }
 
 .unity-base-dropdown__item:checked:disabled .unity-base-dropdown__label {
-    color: var(--toy-ink);
+    color: var(--toy-text-on-deep);
 }
 
 .unity-base-dropdown__checkmark {
-    color: var(--toy-teal);
+    color: var(--toy-select-copy);
 }
 
 .unity-base-dropdown__item:checked .unity-base-dropdown__checkmark {
-    color: var(--toy-ink);
+    color: var(--toy-text-on-deep);
 }
 
 .unity-base-dropdown__item:disabled .unity-base-dropdown__checkmark {
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
 }
 
 .unity-base-dropdown__separator {

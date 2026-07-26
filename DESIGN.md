@@ -2,15 +2,15 @@
 name: Battle Plan
 description: Friendly tactical setup presented as a shelf of animated tabletop pieces
 colors:
-  toybox-ink: "#1B1927"
-  playmat: "#2D2E43"
-  playmat-raised: "#3A3B52"
-  sticker-cream: "#F5ECD8"
-  pogo-orange: "#F2A54A"
-  toy-teal: "#55B29D"
-  sky-info: "#84D3E6"
-  tomato: "#E9685D"
-  muted-copy: "#BDB6C9"
+  ground: "#1A161B"
+  surface: "#221D23"
+  surface-raised: "#2A2B2F"
+  warm-plate: "#333230"
+  copy: "#B3C1C4"
+  pogo-orange: "#F18F01"
+  select-indigo: "#5762D5"
+  danger: "#BA3A2D"
+  muted-copy: "#889497"
   title-slate: "#616E9A"
   roster-mauve: "#856287"
   join-clay: "#946251"
@@ -54,38 +54,38 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.pogo-orange}"
-    textColor: "{colors.toybox-ink}"
+    textColor: "{colors.surface}"
     typography: "{typography.label}"
     rounded: "{rounded.md}"
     padding: "10px 16px 12px"
     height: "52px"
   button-secondary:
-    backgroundColor: "{colors.playmat-raised}"
-    textColor: "{colors.sticker-cream}"
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.surface}"
     typography: "{typography.label}"
     rounded: "{rounded.md}"
     padding: "10px 16px 12px"
     height: "52px"
   button-selected:
-    backgroundColor: "{colors.toy-teal}"
-    textColor: "{colors.toybox-ink}"
+    backgroundColor: "{colors.select-indigo}"
+    textColor: "{colors.surface}"
     typography: "{typography.label}"
     rounded: "{rounded.md}"
     padding: "10px 16px 12px"
     height: "52px"
   toy-panel:
-    backgroundColor: "{colors.playmat}"
-    textColor: "{colors.sticker-cream}"
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.surface}"
     rounded: "{rounded.lg}"
     padding: "24px"
   toy-readout:
-    backgroundColor: "{colors.playmat}"
-    textColor: "{colors.sticker-cream}"
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.surface}"
     rounded: "{rounded.md}"
     padding: "12px 16px"
   status-chip:
-    backgroundColor: "{colors.playmat-raised}"
-    textColor: "{colors.sticker-cream}"
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.surface}"
     rounded: "{rounded.sm}"
     height: "28px"
 ---
@@ -109,9 +109,13 @@ The world is playful without becoming childish. It refuses both realistic milita
 
 ## Colors
 
-Use the Playmat family for solid operating surfaces, Sticker Cream for readable text and paper pieces, Pogo Orange for the primary decision, Toy Teal for selected or confirmed state, Sky Info for neutral information, and Tomato for danger or invalid state. Title Slate, Roster Mauve, and Join Clay are scene-stage backdrops; they do not replace semantic UI colors. Inactive controls remain visibly neutral rather than desaturated into illegibility.
+The interface is a dark operating surface with saturated pieces on it. Use the Surface family for panels and controls, Ground for the deepest backdrop, Warm Plate for portrait plates and recessed warmth, Copy for text, Pogo Orange for the primary decision and the focus ring, Select Indigo for a chosen mode, unit, or the friendly crew, and Danger for damage, elimination, and the enemy crew. Title Slate, Roster Mauve, and Join Clay are scene-stage backdrops; they do not replace semantic UI colors. Inactive controls remain visibly neutral rather than desaturated into illegibility.
 
-**The Quiet Backdrop Rule.** Stage backdrops sit between the Playmat ramp and the accent colors: richer than a surface so the stage reads as a deliberate color rather than gray, but never at or above the chroma of Sky Info, because saturation at that strength is how the interface marks focus and selection. All three share one lightness, a clear step above the panels, so dark models keep their silhouette while the UI stays the boldest thing on screen. A backdrop that competes with the controls in front of it is wrong regardless of how pleasant it looks alone.
+**The Ink Role Rule.** Ink and surface are separate roles, not one light/dark pair. An outline and an inset well look identical on a dark theme and move in opposite directions on a light one, so an outline is always Toybox Ink and a recessed plate is always Paper Well. An accent used as a fill and the same accent used as text are likewise different values: fills keep the canonical hue, text takes the darker `-copy` step so it stays legible on paper.
+
+**The Settled Ground Rule.** Surfaces stay close together and far from the accents, so the saturated pieces are always the brightest thing on screen. Every copy and `-copy` value is measured against Surface, so moving the ground means walking the whole text ramp with it rather than shifting the surface alone.
+
+**The Quiet Backdrop Rule.** Stage backdrops sit below the Playmat ramp and away from the accent chroma: dark enough that the paper panels in front of them read as the lit surface, but never at or above the chroma of Sky Info, because saturation at that strength is how the interface marks focus and selection. All three share one lightness, so the rounded models keep their silhouette while the UI stays the boldest thing on screen. A backdrop that competes with the controls in front of it is wrong regardless of how pleasant it looks alone.
 
 Those three values are on-screen targets, not camera settings. Menu scenes share a color grade (`Assets/Scenes/Title Screen/Global Volume Profile.asset`) that the UI layer never passes through, so each camera's Background field holds a pre-compensated input instead: Title `#757CB7`, Roster `#8C70A4`. Changing the grade or its per-scene volume weight invalidates both, so re-measure the rendered backdrop and re-derive the input rather than editing it by eye. Join Clay is a target only; that screen is opaque today and its camera never clears a visible pixel.
 
@@ -135,7 +139,7 @@ Spacing follows the documented five-step rhythm. Primary targets use the 52px co
 
 ## Elevation & Depth
 
-Depth is structural and toy-like. Interactive pieces use a 6px dark bottom edge rather than broad ambient shadows. Pressed controls visually settle into a 3px edge. World models provide real depth, so UI plates remain solid and restrained.
+Depth is flat. Interactive pieces use a single hairline border and carry elevation through surface lightness alone, with no offset bottom edge and no ambient shadow. Focus rings to a uniform two pixels. World models provide the only real depth, so UI plates stay solid and restrained.
 
 **The One Stage Rule.** Each screen has one depth-bearing character stage. Nested floating panels do not compete with it.
 

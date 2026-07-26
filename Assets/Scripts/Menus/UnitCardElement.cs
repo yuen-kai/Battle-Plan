@@ -255,7 +255,18 @@ public sealed class UnitCardElement : IDisposable
         float healthRatio = safeMaxHealth > 0f ? safeCurrentHealth / safeMaxHealth : 0f;
 
         if (healthFill != null)
+        {
             healthFill.style.width = Length.Percent(healthRatio * 100f);
+
+            // The bar used to be danger red at every level on both teams, so its colour said
+            // nothing the width had not already said. Stepping it means a glance reads condition
+            // rather than only quantity, and the thresholds live in TeamPalette so the world-space
+            // bar over the unit cannot disagree with the card.
+            string step = TeamPalette.HealthClassSuffix(healthRatio);
+            healthFill.EnableInClassList("unit-card__health-fill--high", step == "high");
+            healthFill.EnableInClassList("unit-card__health-fill--warning", step == "warning");
+            healthFill.EnableInClassList("unit-card__health-fill--critical", step == "critical");
+        }
         if (healthValue != null)
         {
             healthValue.text =

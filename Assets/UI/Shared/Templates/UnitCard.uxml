@@ -9,7 +9,7 @@
                     <ui:VisualElement class="unit-card__health-track" picking-mode="Ignore">
                         <ui:VisualElement name="unit-card-health-fill" class="unit-card__health-fill" picking-mode="Ignore" />
                     </ui:VisualElement>
-                    <ui:Label name="unit-card-health-value" text="HP UNKNOWN" class="unit-card__health-value" picking-mode="Ignore" />
+                    <ui:Label name="unit-card-health-value" text="HP UNKNOWN" class="unit-card__health-value mono" picking-mode="Ignore" />
                 </ui:VisualElement>
                 <ui:Label name="unit-card-ability" text="Move only" class="unit-card__ability" picking-mode="Ignore" />
                 <ui:Label name="unit-card-state" class="unit-card__state" picking-mode="Ignore" />

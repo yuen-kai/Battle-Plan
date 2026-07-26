@@ -350,6 +350,36 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
+    public void InterfaceTypeDefaultsToRubikAndReservesMonoForFigures()
+    {
+        string reset = File.ReadAllText("Assets/UI/Shared/BattlePlan.uss");
+        const string rubik =
+            "project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
+
+        int rootStart = reset.IndexOf(":root {");
+        Assert.That(rootStart, Is.GreaterThanOrEqualTo(0));
+        string rootRule = reset.Substring(rootStart, reset.IndexOf('}', rootStart) - rootStart);
+        Assert.That(
+            rootRule,
+            Does.Contain(rubik),
+            "Rubik is the interface family. The gameplay cards sit outside .toybox-ui scope, so a "
+                + "monospace default here renders the whole in-match HUD in a coding font."
+        );
+
+        int monoStart = reset.IndexOf(".mono {");
+        Assert.That(monoStart, Is.GreaterThanOrEqualTo(0), "The mono role needs a named class.");
+        string monoRule = reset.Substring(monoStart, reset.IndexOf('}', monoStart) - monoStart);
+        Assert.That(monoRule, Does.Contain("CascadiaCode-VariableFont_wght UI SDF.asset"));
+
+        string card = File.ReadAllText("Assets/UI/Shared/Templates/UnitCard.uxml");
+        Assert.That(
+            card,
+            Does.Contain("unit-card__health-value mono"),
+            "Health counts need tabular figures so the digits do not jitter as damage lands."
+        );
+    }
+
+    [Test]
     public void TacticalToyboxUsesRubikSdfAndVectorIcons()
     {
         const string fontPath = "Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
@@ -423,7 +453,32 @@ public class UIToolkitAssetSmokeTests
             Is.Not.Null,
             "The Toybox token source must import as a stylesheet."
         );
-        Assert.That(tokens, Does.Contain("--toy-ink:"));
+        // Tokens are named for the role they fill, not the colour they hold. Colour-literal names
+        // (ink, cream, teal, sky) survive exactly one repaint before they start lying.
+        foreach (
+            string role in new[]
+            {
+                "--toy-surface:",
+                "--toy-text:",
+                "--toy-text-on-accent:",
+                "--toy-edge:",
+                "--toy-primary:",
+                "--toy-select:",
+                "--toy-danger:",
+                "--toy-focus:",
+            }
+        )
+        {
+            Assert.That(tokens, Does.Contain(role), $"Missing semantic token {role}");
+        }
+        foreach (string hue in new[] { "--toy-ink", "--toy-cream", "--toy-teal", "--toy-sky" })
+        {
+            Assert.That(
+                tokens,
+                Does.Not.Contain(hue),
+                $"{hue} names a colour rather than a role; use the semantic token instead."
+            );
+        }
         Assert.That(tokens, Does.Contain("--toy-target:"));
         Assert.That(tokens, Does.Contain("--toy-focus-emphasis:"));
         Assert.That(tokens, Does.Contain("--toy-motion-fast:"));
@@ -576,8 +631,8 @@ public class UIToolkitAssetSmokeTests
         Assert.That(
             notchRule,
             Does.Contain("bottom: -31px;").And.Contain("height: 39px;"),
-            "The phase tab hangs into the band the camera viewport reserves below the top bar. "
-                + "Resizing it without retuning Game.unity's viewport rect will cover the board."
+            "The phase tab hangs below the reserved top bar and onto the board. The camera "
+                + "viewport only reserves the opaque bars, so deepening it covers more grid."
         );
         Assert.That(
             style,
@@ -598,6 +653,61 @@ public class UIToolkitAssetSmokeTests
         Assert.That(controller, Does.Contain("ActivateOverlay(resultsOverlay, playAgainButton)"));
         Assert.That(controller, Does.Contain("hudDock?.SetEnabled(false)"));
         Assert.That(controller, Does.Contain("!isActiveAndEnabled"));
+    }
+
+    [Test]
+    public void GameHudBarsReserveCameraSpaceInsteadOfCoveringTheBoard()
+    {
+        string controller = File.ReadAllText("Assets/Scripts/Menus/GameHUDController.cs");
+        string styles = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
+        string scene = File.ReadAllText("Assets/Scenes/Game.unity");
+
+        Assert.That(
+            controller,
+            Does.Contain("FitBoardViewport").And.Contain("boardCamera.rect = fitted"),
+            "The board camera must be fitted to the band the HUD bars leave free."
+        );
+        Assert.That(
+            controller,
+            Does.Contain("enemyStatusStrip?.RegisterCallback<GeometryChangedEvent>")
+                .And.Contain("hudDock?.RegisterCallback<GeometryChangedEvent>"),
+            "Bar heights move with breakpoints and content, so the fit must follow their geometry."
+        );
+
+        int rectStart = scene.IndexOf("m_NormalizedViewPortRect:");
+        Assert.That(rectStart, Is.GreaterThanOrEqualTo(0));
+        string rectBlock = scene.Substring(rectStart, 120);
+        Assert.That(
+            rectBlock,
+            Does.Contain("x: 0").And.Contain("y: 0").And.Contain("width: 1").And.Contain("height: 1"),
+            "Game.unity must author a full-screen viewport. GameHUDController owns the insets at "
+                + "runtime, and a stale authored crop would hide board the HUD no longer covers."
+        );
+
+        foreach (string bar in new[] { ".hud-dock {", ".enemy-status-strip {" })
+        {
+            int start = styles.IndexOf(bar);
+            Assert.That(start, Is.GreaterThanOrEqualTo(0), $"Missing rule for {bar}");
+            string rule = styles.Substring(start, styles.IndexOf('}', start) - start);
+            Assert.That(
+                rule,
+                Does.Contain("background-color: var(--toy-surface);"),
+                $"{bar} reserves camera space, so it must be fully opaque; the camera does not "
+                    + "paint the band behind it."
+            );
+        }
+
+        int compactDock = styles.IndexOf(".compact .hud-dock {");
+        Assert.That(compactDock, Is.GreaterThanOrEqualTo(0));
+        string compactRule = styles.Substring(
+            compactDock,
+            styles.IndexOf('}', compactDock) - compactDock
+        );
+        Assert.That(
+            compactRule,
+            Does.Not.Match(@"(?m)^\s+(left|right|bottom):"),
+            "Insetting the dock would leave an unpainted margin outside the camera viewport."
+        );
     }
 
     [Test]
@@ -647,8 +757,8 @@ public class UIToolkitAssetSmokeTests
         );
         Assert.That(
             sharedStyle,
-            Does.Contain("border-color: var(--toy-sky);"),
-            "Focused controls need a cue distinct from selected cream borders."
+            Does.Contain("border-color: var(--toy-focus);"),
+            "Focused controls need a cue distinct from the selected fill."
         );
     }
 
@@ -678,13 +788,17 @@ public class UIToolkitAssetSmokeTests
         Assert.That(
             rosterStyle,
             Does.Contain(".selected-slot:disabled:hover")
-                .And.Contain("background-color: var(--toy-teal-pressed);")
+                .And.Contain("background-color: var(--toy-select-pressed);")
         );
         Assert.That(
             sharedStyle,
             Does.Contain(".status-line.label--danger")
-                .And.Contain(".button--selected:focus {\n    background-color: var(--toy-teal-pressed);")
-                .And.Contain("border-left-width: var(--toy-focus-emphasis);")
+                .And.Contain(
+                    ".button--selected:focus {\n    background-color: var(--toy-select-pressed);"
+                )
+                .And.Contain("border-width: var(--toy-focus-emphasis);"),
+            "The flat theme rings focus with a uniform border instead of thickening three sides "
+                + "around an offset bottom edge."
         );
         Assert.That(joinController, Does.Contain("\"status-line--danger\""));
     }

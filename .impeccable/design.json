@@ -4,96 +4,214 @@
   "title": "Design System: Battle Plan",
   "extensions": {
     "colorMeta": {
-      "toybox-ink": {
+      "ground": {
         "role": "neutral",
-        "displayName": "Toybox Ink",
-        "canonical": "#1B1927",
-        "tonalRamp": ["#15131E", "#1B1927", "#29263A", "#3B374E", "#575168", "#7B7489", "#ABA5B4", "#EEEAF1"]
+        "displayName": "Ground",
+        "canonical": "#1A161B",
+        "tonalRamp": [
+          "#0E0C0F",
+          "#1A161B",
+          "#221D23",
+          "#2C262E",
+          "#38313A",
+          "#4F4653",
+          "#7A7080",
+          "#B3C1C4"
+        ]
       },
-      "playmat": {
+      "surface": {
         "role": "neutral",
-        "displayName": "Playmat",
-        "canonical": "#2D2E43",
-        "tonalRamp": ["#181923", "#232432", "#2D2E43", "#41425A", "#5E6078", "#84869A", "#B5B6C2", "#EEEFF2"]
+        "displayName": "Surface",
+        "canonical": "#221D23",
+        "tonalRamp": [
+          "#151217",
+          "#1A161B",
+          "#221D23",
+          "#2C262E",
+          "#38313A",
+          "#605669",
+          "#9AA6A9",
+          "#E0E9EB"
+        ]
       },
-      "playmat-raised": {
+      "surface-raised": {
         "role": "neutral",
-        "displayName": "Raised Playmat",
-        "canonical": "#3A3B52",
-        "tonalRamp": ["#1C1D28", "#2B2C3D", "#3A3B52", "#50516A", "#6D6E86", "#9192A4", "#BDBDC8", "#F0F0F3"]
+        "displayName": "Raised Surface",
+        "canonical": "#2A2B2F",
+        "tonalRamp": [
+          "#151217",
+          "#1E1F23",
+          "#26282C",
+          "#2A2B2F",
+          "#38393E",
+          "#5A5B61",
+          "#B3C1C4",
+          "#D6DBDD"
+        ]
       },
-      "sticker-cream": {
+      "warm-plate": {
         "role": "neutral",
-        "displayName": "Sticker Cream",
-        "canonical": "#F5ECD8",
-        "tonalRamp": ["#2D281F", "#4E4432", "#716147", "#948064", "#B7A181", "#D5C2A3", "#E9DCC1", "#F5ECD8"]
+        "displayName": "Portrait Plate",
+        "canonical": "#333230",
+        "tonalRamp": [
+          "#1A1917",
+          "#242320",
+          "#2C2B28",
+          "#333230",
+          "#38312A",
+          "#4A4238",
+          "#8C8378",
+          "#C9C4BB"
+        ]
+      },
+      "copy": {
+        "role": "neutral",
+        "displayName": "Copy",
+        "canonical": "#B3C1C4",
+        "tonalRamp": [
+          "#1A161B",
+          "#2C262E",
+          "#4F4653",
+          "#707C7F",
+          "#889497",
+          "#B3C1C4",
+          "#D3DEE0",
+          "#E0E9EB"
+        ]
       },
       "pogo-orange": {
         "role": "primary",
         "displayName": "Pogo Orange",
-        "canonical": "#F2A54A",
-        "tonalRamp": ["#33200D", "#5B3813", "#87551D", "#B6762B", "#D99038", "#F2A54A", "#F8C483", "#FDEBD1"]
+        "canonical": "#F18F01",
+        "tonalRamp": [
+          "#2A1900",
+          "#4A2C00",
+          "#7A4800",
+          "#CD7800",
+          "#F18F01",
+          "#FFA528",
+          "#F6AA44",
+          "#FBDCAE"
+        ]
       },
-      "toy-teal": {
+      "select-indigo": {
         "role": "secondary",
-        "displayName": "Toy Teal",
-        "canonical": "#55B29D",
-        "tonalRamp": ["#102722", "#183F36", "#245E51", "#347F6D", "#45A088", "#55B29D", "#8DCEBF", "#D7F1EA"]
+        "displayName": "Select Indigo",
+        "canonical": "#5762D5",
+        "tonalRamp": [
+          "#12142B",
+          "#1E2247",
+          "#2C3170",
+          "#3C45A4",
+          "#4A54C0",
+          "#5762D5",
+          "#96A0F3",
+          "#D6DAFB"
+        ]
       },
-      "sky-info": {
+      "danger": {
         "role": "tertiary",
-        "displayName": "Sky Info",
-        "canonical": "#84D3E6",
-        "tonalRamp": ["#10272D", "#183F49", "#245E6C", "#367F91", "#55A4B8", "#84D3E6", "#B5E6F0", "#E6F7FA"]
-      },
-      "tomato": {
-        "role": "tertiary",
-        "displayName": "Tomato",
-        "canonical": "#E9685D",
-        "tonalRamp": ["#311310", "#54201C", "#7A2F2A", "#A34039", "#CB534A", "#E9685D", "#F19B93", "#FBE0DD"]
+        "displayName": "Danger",
+        "canonical": "#BA3A2D",
+        "tonalRamp": [
+          "#2A0D09",
+          "#471410",
+          "#6E1F18",
+          "#A02E23",
+          "#BA3A2D",
+          "#C6422E",
+          "#F08A7C",
+          "#F8D5CF"
+        ]
       },
       "muted-copy": {
         "role": "neutral",
         "displayName": "Muted Copy",
-        "canonical": "#BDB6C9",
-        "tonalRamp": ["#24212A", "#3C3746", "#575062", "#716A7D", "#8E869A", "#AAA3B6", "#BDB6C9", "#EEEAF1"]
+        "canonical": "#889497",
+        "tonalRamp": [
+          "#1A161B",
+          "#2C262E",
+          "#464E50",
+          "#606B6D",
+          "#889497",
+          "#A6B0B2",
+          "#C6CFD1",
+          "#E0E9EB"
+        ]
       },
       "title-periwinkle": {
         "role": "neutral",
         "displayName": "Title Periwinkle",
         "canonical": "#7698BD",
-        "tonalRamp": ["#17202B", "#26384C", "#38536F", "#4D7092", "#6289AC", "#7698BD", "#A7BDD3", "#E4ECF3"]
+        "tonalRamp": [
+          "#17202B",
+          "#26384C",
+          "#38536F",
+          "#4D7092",
+          "#6289AC",
+          "#7698BD",
+          "#A7BDD3",
+          "#E4ECF3"
+        ]
       },
       "roster-mauve": {
         "role": "neutral",
         "displayName": "Roster Mauve",
         "canonical": "#AA8BAA",
-        "tonalRamp": ["#2A202A", "#473747", "#654F65", "#846B84", "#9B7E9B", "#AA8BAA", "#CDB9CD", "#F0E8F0"]
+        "tonalRamp": [
+          "#2A202A",
+          "#473747",
+          "#654F65",
+          "#846B84",
+          "#9B7E9B",
+          "#AA8BAA",
+          "#CDB9CD",
+          "#F0E8F0"
+        ]
       },
       "join-clay": {
         "role": "neutral",
         "displayName": "Join Clay",
         "canonical": "#B07F72",
-        "tonalRamp": ["#2C1D19", "#4A302A", "#6A463D", "#8B5E52", "#A37164", "#B07F72", "#D1ABA2", "#F1E4E0"]
+        "tonalRamp": [
+          "#2C1D19",
+          "#4A302A",
+          "#6A463D",
+          "#8B5E52",
+          "#A37164",
+          "#B07F72",
+          "#D1ABA2",
+          "#F1E4E0"
+        ]
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Screen titles and the Battle Plan wordmark." },
-      "title": { "displayName": "Title", "purpose": "Panel and unit headings." },
-      "body": { "displayName": "Body", "purpose": "Short instructions and recovery copy." },
-      "label": { "displayName": "Label", "purpose": "Buttons, tabs, and compact state labels." },
-      "mono": { "displayName": "Mono Value", "purpose": "Relay codes and compact technical values only." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "Screen titles and the Battle Plan wordmark."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel and unit headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Short instructions and recovery copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, tabs, and compact state labels."
+      },
+      "mono": {
+        "displayName": "Mono Value",
+        "purpose": "Relay codes and compact technical values only."
+      }
     },
     "shadows": [
       {
         "name": "toy-edge",
-        "value": "0 6px 0 #1B1927",
-        "purpose": "Firm structural bottom edge for controls and plates."
-      },
-      {
-        "name": "toy-edge-pressed",
-        "value": "0 3px 0 #1B1927",
-        "purpose": "Pressed state that visually settles into the play surface."
+        "value": "inset 0 0 0 1px #3C353E",
+        "purpose": "One hairline at rest. This theme is flat; elevation is carried by surface lightness."
       }
     ],
     "motion": [
@@ -109,17 +227,35 @@
       }
     ],
     "breakpoints": [
-      { "name": "compact", "value": "1500px" },
-      { "name": "narrow", "value": "1000px" },
-      { "name": "phone", "value": "680px" },
-      { "name": "short", "value": "800px height" }
+      {
+        "name": "compact",
+        "value": "1500px"
+      },
+      {
+        "name": "narrow",
+        "value": "1000px"
+      },
+      {
+        "name": "phone",
+        "value": "680px"
+      },
+      {
+        "name": "short",
+        "value": "800px height"
+      }
     ],
     "implementation": {
       "tokens": "Assets/UI/Shared/TacticalToyboxTokens.uss",
       "components": "Assets/UI/Shared/TacticalToybox.uss",
       "scopeClass": "toybox-ui",
-      "loadOrder": ["BattlePlan.uss", "TacticalToybox.uss", "screen stylesheet"],
-      "isolatedSubsystems": ["Gameplay unit and ability cards"]
+      "loadOrder": [
+        "BattlePlan.uss",
+        "TacticalToybox.uss",
+        "screen stylesheet"
+      ],
+      "isolatedSubsystems": [
+        "Gameplay unit and ability cards"
+      ]
     }
   },
   "components": [
@@ -129,7 +265,7 @@
       "refersTo": "button-primary",
       "description": "The single next-step action in a decision group.",
       "html": "<button class=\"ds-btn-primary\">Play</button>",
-      "css": ".ds-btn-primary { min-height:52px; padding:10px 16px 12px; border:3px solid #1B1927; border-bottom-width:6px; border-radius:10px; background:#F2A54A; color:#1B1927; font:700 15px Rubik, sans-serif; transition:background 100ms ease-out, border-color 100ms ease-out; } .ds-btn-primary:hover { background:#FFBA5C; border-color:#F5ECD8; } .ds-btn-primary:focus-visible { border-width:5px 5px 6px; border-color:#84D3E6; outline:none; } .ds-btn-primary:active { border-bottom-width:3px; padding-top:13px; padding-bottom:9px; }"
+      "css": ".ds-btn-primary { min-height:52px; padding:10px 16px 12px; border:3px solid #393839; border-bottom-width:6px; border-radius:10px; background:#F18F01; color:#393839; font:700 15px Rubik, sans-serif; transition:background 100ms ease-out, border-color 100ms ease-out; } .ds-btn-primary:hover { background:#FFA528; border-color:#1A161B; } .ds-btn-primary:focus-visible { border-width:5px 5px 6px; border-color:#F18F01; outline:none; } .ds-btn-primary:active { border-bottom-width:3px; padding-top:13px; padding-bottom:9px; }"
     },
     {
       "name": "Secondary Button",
@@ -137,7 +273,7 @@
       "refersTo": "button-secondary",
       "description": "A tactile action that does not compete with the primary step.",
       "html": "<button class=\"ds-btn-secondary\">Controls</button>",
-      "css": ".ds-btn-secondary { min-height:52px; padding:10px 16px 12px; border:3px solid #1B1927; border-bottom-width:6px; border-radius:10px; background:#3A3B52; color:#F5ECD8; font:700 15px Rubik, sans-serif; transition:background 100ms ease-out, border-color 100ms ease-out; } .ds-btn-secondary:hover { background:#474862; border-color:#F5ECD8; } .ds-btn-secondary:focus-visible { border-width:5px 5px 6px; border-color:#84D3E6; outline:none; } .ds-btn-secondary:active { border-bottom-width:3px; }"
+      "css": ".ds-btn-secondary { min-height:52px; padding:10px 16px 12px; border:3px solid #393839; border-bottom-width:6px; border-radius:10px; background:#2A2B2F; color:#393839; font:700 15px Rubik, sans-serif; transition:background 100ms ease-out, border-color 100ms ease-out; } .ds-btn-secondary:hover { background:#38313A; border-color:#1A161B; } .ds-btn-secondary:focus-visible { border-width:5px 5px 6px; border-color:#F18F01; outline:none; } .ds-btn-secondary:active { border-bottom-width:3px; }"
     },
     {
       "name": "Selected Option",
@@ -145,7 +281,7 @@
       "refersTo": "button-selected",
       "description": "A chosen mode, opponent, or unit.",
       "html": "<button class=\"ds-btn-selected\">Elimination</button>",
-      "css": ".ds-btn-selected { min-height:52px; padding:10px 16px 12px; border:3px solid #F5ECD8; border-bottom-width:6px; border-radius:10px; background:#55B29D; color:#1B1927; font:700 15px Rubik, sans-serif; } .ds-btn-selected:hover { background:#55B29D; } .ds-btn-selected:focus-visible { border-width:5px 5px 6px; border-color:#84D3E6; background:#459E8B; outline:none; }"
+      "css": ".ds-btn-selected { min-height:52px; padding:10px 16px 12px; border:3px solid #1A161B; border-bottom-width:6px; border-radius:10px; background:#5762D5; color:#393839; font:700 15px Rubik, sans-serif; } .ds-btn-selected:hover { background:#5762D5; } .ds-btn-selected:focus-visible { border-width:5px 5px 6px; border-color:#F18F01; background:#3C45A4; outline:none; }"
     },
     {
       "name": "Toy Panel",
@@ -153,7 +289,7 @@
       "refersTo": "toy-panel",
       "description": "An opaque operating surface placed beside or over the world character stage.",
       "html": "<section class=\"ds-toy-panel\"><h2>Pick your crew</h2><p>Choose five units.</p></section>",
-      "css": ".ds-toy-panel { padding:24px; border:2px solid #1B1927; border-bottom-width:5px; border-radius:14px; background:#2D2E43; color:#F5ECD8; font:400 15px Rubik, sans-serif; } .ds-toy-panel h2 { margin:0 0 8px; font-size:20px; } .ds-toy-panel p { margin:0; color:#BDB6C9; }"
+      "css": ".ds-toy-panel { padding:24px; border:2px solid #393839; border-bottom-width:5px; border-radius:14px; background:#221D23; color:#393839; font:400 15px Rubik, sans-serif; } .ds-toy-panel h2 { margin:0 0 8px; font-size:20px; } .ds-toy-panel p { margin:0; color:#889497; }"
     },
     {
       "name": "Toy Readout",
@@ -161,7 +297,7 @@
       "refersTo": "toy-readout",
       "description": "A compact opaque plate for phase, timer, match, and objective information.",
       "html": "<section class=\"ds-toy-readout\"><span>Match</span><strong>Elimination · Player</strong></section>",
-      "css": ".ds-toy-readout { padding:12px 16px; border:2px solid #1B1927; border-bottom-width:5px; border-radius:10px; background:#2D2E43; color:#F5ECD8; font:400 15px Rubik, sans-serif; }"
+      "css": ".ds-toy-readout { padding:12px 16px; border:2px solid #393839; border-bottom-width:5px; border-radius:10px; background:#221D23; color:#393839; font:400 15px Rubik, sans-serif; }"
     },
     {
       "name": "Status Chip",
@@ -169,26 +305,26 @@
       "refersTo": "status-chip",
       "description": "A short state token for fog, objective control, busy, success, or danger.",
       "html": "<span class=\"ds-status-chip\">Fog on</span>",
-      "css": ".ds-status-chip { min-height:28px; padding:4px 9px; border:2px solid #1B1927; border-radius:6px; background:#3A3B52; color:#F5ECD8; font:700 12px Rubik, sans-serif; }"
+      "css": ".ds-status-chip { min-height:28px; padding:4px 9px; border:2px solid #393839; border-radius:6px; background:#2A2B2F; color:#393839; font:700 12px Rubik, sans-serif; }"
     },
     {
       "name": "Relay Input",
       "kind": "input",
       "description": "Large code entry with a stable focus border.",
       "html": "<input class=\"ds-relay-input\" value=\"AB12CD\" aria-label=\"Relay code\">",
-      "css": ".ds-relay-input { min-height:52px; padding:10px 14px; border:3px solid #575168; border-radius:10px; background:#1B1927; color:#F5ECD8; font:700 20px 'Cascadia Code', monospace; } .ds-relay-input:hover { border-color:#BDB6C9; } .ds-relay-input:focus-visible { border-width:5px; border-color:#84D3E6; outline:none; }"
+      "css": ".ds-relay-input { min-height:52px; padding:10px 14px; border:3px solid #393839; border-radius:10px; background:#151216; color:#393839; font:700 20px 'Cascadia Code', monospace; } .ds-relay-input:hover { border-color:#889497; } .ds-relay-input:focus-visible { border-width:5px; border-color:#F18F01; outline:none; }"
     },
     {
       "name": "Plan Path",
       "kind": "custom",
       "description": "One compact route cue per wide screen.",
       "html": "<div class=\"ds-plan-path\"><span class=\"ds-plan-start\"></span><span class=\"ds-plan-line\"></span><span class=\"ds-plan-stop\"></span></div>",
-      "css": ".ds-plan-path { display:flex; align-items:center; height:22px; } .ds-plan-start,.ds-plan-stop { width:12px; height:12px; background:#F2A54A; border:2px solid #1B1927; } .ds-plan-start { border-radius:50%; } .ds-plan-line { width:74px; height:4px; background:#F2A54A; }"
+      "css": ".ds-plan-path { display:flex; align-items:center; height:22px; } .ds-plan-start,.ds-plan-stop { width:12px; height:12px; background:#F18F01; border:2px solid #393839; } .ds-plan-start { border-radius:50%; } .ds-plan-line { width:74px; height:4px; background:#F18F01; }"
     }
   ],
   "narrative": {
     "northStar": "The Tactical Toy Shelf",
-    "overview": "Battle Plan should feel like opening a well-loved strategy game and finding its pieces already acting out the next match. Rounded low-poly characters, off-axis poses, and occasional goofy animation supply the charm. The interface behaves like the printed play surface around them: solid, concise, and easy to operate.",
+    "overview": "Battle Plan should feel like opening a well-loved strategy game and finding its pieces already acting out the next match. Rounded low-poly characters, off-axis poses, and occasional goofy animation supply the charm. The interface behaves like the printed play surface around them: warm paper, firm ink outlines, solid, concise, and easy to operate.",
     "keyCharacteristics": [
       "Real in-world character models behind reserved transparent UI regions.",
       "Chunky, tactile controls with firm outlines and short offset depth.",
@@ -200,6 +336,16 @@
       {
         "name": "The Character Color Rule",
         "body": "Saturated colors identify a decision or state. They do not decorate empty space.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Role Rule",
+        "body": "Ink and surface are separate roles, not one light/dark pair. Outlines are always ink; recessed plates are always the paper well. An accent used as a fill keeps its canonical hue, while the same accent used as text takes the darker copy step.",
+        "section": "colors"
+      },
+      {
+        "name": "The Settled Paper Rule",
+        "body": "The board stock sits well below white so the accents stay the brightest thing on screen. Copy values are measured against Playmat, so moving the paper means walking the whole text ramp with it.",
         "section": "colors"
       },
       {

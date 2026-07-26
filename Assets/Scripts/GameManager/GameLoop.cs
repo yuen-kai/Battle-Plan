@@ -274,8 +274,6 @@ public class GameLoop : NetworkBehaviour
 
     public UnitDatabase allUnits;
 
-    public List<Color> teamColors;
-
     public Color executingMoves;
     public List<Material> teamMaterials;
 
@@ -530,12 +528,14 @@ public class GameLoop : NetworkBehaviour
     private GameObject hillOverlayRoot;
     private Material hillOverlayMaterial;
     private MaterialPropertyBlock hillOverlayProperties;
-    private static readonly int HillGlowColorId = Shader.PropertyToID("_GlowColor");
-    private static readonly int HillRingWidthId = Shader.PropertyToID("_RingWidth");
-    private static readonly int HillEdgeSoftnessId = Shader.PropertyToID("_EdgeSoftness");
-    private static readonly int HillIntensityId = Shader.PropertyToID("_Intensity");
-    private static readonly int HillPulseSpeedId = Shader.PropertyToID("_PulseSpeed");
-    private static readonly int HillPulseAmountId = Shader.PropertyToID("_PulseAmount");
+    private static readonly int HillBaseColorId = Shader.PropertyToID("_BaseColor");
+
+    // The boundary is drawn as four flat strips around the pad rather than a glow under it: a
+    // line reads as a border you are inside or outside of, which is the only thing the player
+    // needs from it. Width and height are world units on the deck plane.
+    private const float HillBoundaryWidth = 0.12f;
+    private const float HillBoundaryHeight = 0.05f;
+    private static Color HillUncontestedColour => TeamPalette.HillUnclaimed;
 #if UNITY_EDITOR
     private readonly Dictionary<ulong, string> devHillPresentationReports = new();
 #endif
@@ -2238,7 +2238,7 @@ public class GameLoop : NetworkBehaviour
             GameObject laserObject = new("AbilityTelegraphLine");
             LineRenderer lr = laserObject.AddComponent<LineRenderer>();
             lr.material = new Material(Shader.Find("Sprites/Default"));
-            lr.startColor = lr.endColor = new Color(1f, 0.5f, 0f, 0.8f);
+            lr.startColor = lr.endColor = TeamPalette.AbilityTelegraph.WithAlpha(0.8f);
             lr.startWidth = lr.endWidth = 0.15f;
             lr.positionCount = 2;
             lr.SetPosition(0, casterPos);
@@ -2267,7 +2267,7 @@ public class GameLoop : NetworkBehaviour
             marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
             var rend = marker.GetComponent<Renderer>();
             rend.material = new Material(Shader.Find("Sprites/Default"));
-            rend.material.color = new Color(1f, 0.5f, 0f, 0.5f);
+            rend.material.color = TeamPalette.AbilityTelegraph.WithAlpha(0.5f);
             clientTelegraphs.Add(marker);
         }
         else
@@ -2286,7 +2286,9 @@ public class GameLoop : NetworkBehaviour
         GameObject marker = new($"AbilityTelegraphCell_{cell.x}_{cell.y}");
         LineRenderer lineRenderer = marker.AddComponent<LineRenderer>();
         lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
-        lineRenderer.startColor = lineRenderer.endColor = new Color(1f, 0.5f, 0f, 0.85f);
+        lineRenderer.startColor = lineRenderer.endColor = TeamPalette.AbilityTelegraph.WithAlpha(
+            0.85f
+        );
         lineRenderer.startWidth = lineRenderer.endWidth = 0.08f;
         lineRenderer.loop = true;
         lineRenderer.positionCount = 4;
@@ -2571,38 +2573,76 @@ public class GameLoop : NetworkBehaviour
         if (hillOverlayRoot != null)
             return;
 
-        Shader glowShader = Shader.Find("BattlePlan/GroundGlow");
-        if (glowShader == null)
+        Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
+        if (unlit == null)
         {
             Debug.LogError(
-                "[GameLoop] BattlePlan/GroundGlow shader is required for the hill overlay."
+                "[GameLoop] URP Unlit shader is required for the hill boundary."
             );
             return;
         }
 
         hillOverlayRoot = new GameObject("KingOfTheHillOverlay");
         hillOverlayRoot.transform.SetParent(transform, true);
-        hillOverlayMaterial = new Material(glowShader) { name = "KingOfTheHillOverlay (Runtime)" };
+        hillOverlayMaterial = new Material(unlit) { name = "KingOfTheHillBoundary (Runtime)" };
         hillOverlayProperties = new MaterialPropertyBlock();
 
-        foreach (
-            Vector2Int cell in KingOfTheHillCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x)
-        )
-        {
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            marker.name = $"HillCell_{cell.x}_{cell.y}";
-            marker.transform.SetParent(hillOverlayRoot.transform, true);
-            marker.transform.position = gridCoordToWorld(cell) + Vector3.up * 0.075f;
-            marker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            marker.transform.localScale = Vector3.one * (cellSize * 0.92f);
-            Destroy(marker.GetComponent<Collider>());
+        GetHillPadBounds(out Vector3 min, out Vector3 max);
+        float y = HillBoundaryHeight;
+        float w = HillBoundaryWidth;
+        float spanX = max.x - min.x;
+        float spanZ = max.z - min.z;
+        float midX = (min.x + max.x) * 0.5f;
+        float midZ = (min.z + max.z) * 0.5f;
 
-            Renderer markerRenderer = marker.GetComponent<Renderer>();
-            markerRenderer.sharedMaterial = hillOverlayMaterial;
-            markerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            markerRenderer.receiveShadows = false;
-            hillOverlayRenderers.Add(markerRenderer);
+        // Corners are covered by the two full-length side strips, so the end strips stop short
+        // of them and no two strips overlap and double their alpha.
+        AddHillBoundaryStrip("South", new Vector3(midX, y, min.z), new Vector2(spanX, w));
+        AddHillBoundaryStrip("North", new Vector3(midX, y, max.z), new Vector2(spanX, w));
+        AddHillBoundaryStrip("West", new Vector3(min.x, y, midZ), new Vector2(w, spanZ - w * 2f));
+        AddHillBoundaryStrip("East", new Vector3(max.x, y, midZ), new Vector2(w, spanZ - w * 2f));
+    }
+
+    /// <summary>
+    /// Outer edge of the hill pad in world space, half a cell out from the outermost hill cells.
+    /// </summary>
+    private void GetHillPadBounds(out Vector3 min, out Vector3 max)
+    {
+        var first = true;
+        min = max = Vector3.zero;
+        foreach (Vector2Int cell in KingOfTheHillCells)
+        {
+            Vector3 centre = gridCoordToWorld(cell);
+            if (first)
+            {
+                min = max = centre;
+                first = false;
+                continue;
+            }
+            min = Vector3.Min(min, centre);
+            max = Vector3.Max(max, centre);
         }
+
+        float half = cellSize * 0.5f;
+        min -= new Vector3(half, 0f, half);
+        max += new Vector3(half, 0f, half);
+    }
+
+    private void AddHillBoundaryStrip(string edge, Vector3 centre, Vector2 size)
+    {
+        GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        strip.name = $"HillBoundary_{edge}";
+        strip.transform.SetParent(hillOverlayRoot.transform, true);
+        strip.transform.position = centre;
+        strip.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        strip.transform.localScale = new Vector3(size.x, size.y, 1f);
+        Destroy(strip.GetComponent<Collider>());
+
+        Renderer stripRenderer = strip.GetComponent<Renderer>();
+        stripRenderer.sharedMaterial = hillOverlayMaterial;
+        stripRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        stripRenderer.receiveShadows = false;
+        hillOverlayRenderers.Add(stripRenderer);
     }
 
     private void UpdateKingOfTheHillOverlay(HillControlState state)
@@ -2610,27 +2650,22 @@ public class GameLoop : NetworkBehaviour
         if (hillOverlayProperties == null || hillOverlayRenderers.Count == 0)
             return;
 
+        // The pad is the one thing both seats must name the same way, so it takes the absolute
+        // team colour rather than the viewer-relative one every other team-tinted visual uses.
         bool controlled =
-            state.Status == HillControlStatus.Controlled
-            && state.ControllingTeamIndex >= 0
-            && state.ControllingTeamIndex < teamColors.Count;
+            state.Status == HillControlStatus.Controlled && state.ControllingTeamIndex >= 0;
         Color color = controlled
-            ? teamColors[state.ControllingTeamIndex]
-            : new Color(0.95f, 0.64f, 0.2f, 1f);
-        color.a = controlled ? 0.58f : 0.36f;
+            ? TeamPalette.ForTeamIndex(state.ControllingTeamIndex)
+            : HillUncontestedColour;
+        color.a = 1f;
 
         hillOverlayProperties.Clear();
-        hillOverlayProperties.SetColor(HillGlowColorId, color);
-        hillOverlayProperties.SetFloat(HillRingWidthId, 1f);
-        hillOverlayProperties.SetFloat(HillEdgeSoftnessId, controlled ? 0.32f : 0.45f);
-        hillOverlayProperties.SetFloat(HillIntensityId, controlled ? 1.25f : 0.72f);
-        hillOverlayProperties.SetFloat(HillPulseSpeedId, controlled ? 0.7f : 0f);
-        hillOverlayProperties.SetFloat(HillPulseAmountId, controlled ? 0.16f : 0f);
+        hillOverlayProperties.SetColor(HillBaseColorId, color);
 
-        foreach (Renderer markerRenderer in hillOverlayRenderers)
+        foreach (Renderer stripRenderer in hillOverlayRenderers)
         {
-            if (markerRenderer != null)
-                markerRenderer.SetPropertyBlock(hillOverlayProperties);
+            if (stripRenderer != null)
+                stripRenderer.SetPropertyBlock(hillOverlayProperties);
         }
     }
 
@@ -4502,7 +4537,7 @@ public class GameLoop : NetworkBehaviour
             );
             return executingMoves;
         }
-        return teamColors[teamNames.IndexOf(team)];
+        return TeamPalette.ForTeamIndex(teamNames.IndexOf(team));
     }
 
     /// <summary>
@@ -4511,8 +4546,8 @@ public class GameLoop : NetworkBehaviour
     /// Unit materials and vision cones already work this way; anything else that colours by team
     /// has to agree, or the same shot reads as friendly on one screen and hostile on the other.
     /// </summary>
-    public static readonly Color FriendlyTeamColor = new(0.22f, 0.78f, 1f);
-    public static readonly Color EnemyTeamColor = new(1f, 0.23f, 0.33f);
+    public static Color FriendlyTeamColor => TeamPalette.Friendly;
+    public static Color EnemyTeamColor => TeamPalette.Enemy;
 
     public static bool IsTeamFriendlyToLocalPlayer(int teamIndex)
     {
@@ -4521,7 +4556,7 @@ public class GameLoop : NetworkBehaviour
 
     public static Color GetTeamColorForViewer(int teamIndex)
     {
-        return IsTeamFriendlyToLocalPlayer(teamIndex) ? FriendlyTeamColor : EnemyTeamColor;
+        return TeamPalette.ForViewer(IsTeamFriendlyToLocalPlayer(teamIndex));
     }
 
     public Material GetTeamMaterial(string team)

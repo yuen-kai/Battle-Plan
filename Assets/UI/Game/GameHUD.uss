@@ -26,9 +26,9 @@
     height: 78px;
 }
 
-/* Centred tab hanging off the bottom edge of the top bar. The camera viewport
-   is tuned so the board starts below it, so changing its depth means retuning
-   Game.unity's viewport rect too. */
+/* Centred tab hanging off the bottom edge of the top bar. GameHUDController reserves camera space
+   for the opaque bars only, so this tab is one of the few pieces that still crosses onto the board;
+   deepening it covers more of the grid. */
 .phase-notch {
     position: absolute;
     left: 0;
@@ -45,7 +45,7 @@
     align-items: center;
     padding: 0 20px;
     background-color: var(--toy-panel);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-bottom-width: var(--toy-stroke-thin);
     border-left-width: var(--toy-stroke-thin);
     border-right-width: var(--toy-stroke-thin);
@@ -57,29 +57,34 @@
     width: 9px;
     height: 9px;
     margin-right: 11px;
-    background-color: var(--toy-orange);
+    background-color: var(--toy-primary);
     border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-sm);
 }
 
 .phase-notch .phase-label {
     font-size: 17px;
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
     letter-spacing: 0;
 }
 
+/* These were amber and red, a pair that sits 1.25:1 apart in luminance and
+   collapses to a CIE76 distance of 7 under tritanopia — the phase label was the
+   one place the player learns whose turn it is. The team pair is 96 apart at
+   worst across all three simulations, and it says the same thing the units on
+   the board are already saying. */
 .phase-notch .phase-label--friendly {
-    color: var(--toy-orange-hover);
+    color: var(--toy-team-friendly-copy);
 }
 
 .phase-notch .phase-label--enemy {
-    color: var(--toy-tomato-copy);
+    color: var(--toy-team-enemy-copy);
 }
 
 .phase-notch .phase-label--neutral {
-    color: var(--toy-cream);
+    color: var(--toy-text);
 }
 
 .phase-notch .timer-label {
@@ -87,11 +92,16 @@
     -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
     font-size: 19px;
     -unity-font-style: bold;
-    color: var(--toy-orange);
+    color: var(--toy-primary-copy);
 }
 
+/* Urgency was signalled by hue alone, on a pair that merges under tritanopia and
+   is 1.25:1 in luminance — for a five-second warning that is the whole message
+   riding on one channel. Size and weight carry it too now, so the timer changes
+   even in greyscale. */
 .phase-notch .timer-label--urgent {
-    color: var(--toy-tomato-copy);
+    font-size: 24px;
+    color: var(--toy-danger-copy);
 }
 
 .hud-top .hill-status-readout {
@@ -113,23 +123,31 @@
     align-self: flex-start;
     font-size: var(--toy-type-caption);
     -unity-font-style: bold;
-    color: var(--toy-orange-hover);
+    color: var(--toy-primary-copy);
     letter-spacing: 0;
 }
 
+/* The pad is the one thing both seats must name identically, so this readout
+   takes the absolute team colours GameLoop paints the hill with rather than the
+   interaction tokens it used to borrow.
+
+   The -copy variants rather than the cores: these are hairlines on dark chrome,
+   and the core ultramarine is dark enough that a one-pixel line of it only
+   reaches 2.2:1 there. Cores paint fills and unit bodies; line work on the dark
+   HUD takes the lifted pair. Both read as unmistakably the team colour. */
 .hud-top .hill-status--blue {
-    color: var(--toy-cream);
-    border-color: var(--toy-sky);
+    color: var(--toy-text);
+    border-color: var(--toy-team-friendly-copy);
 }
 
 .hud-top .hill-status--red {
-    color: var(--toy-cream);
-    border-color: var(--toy-tomato);
+    color: var(--toy-text);
+    border-color: var(--toy-team-enemy-copy);
 }
 
 .hud-top .hill-status--contested {
-    color: var(--toy-cream);
-    border-color: var(--toy-orange);
+    color: var(--toy-text);
+    border-color: var(--toy-primary);
 }
 
 .hud-dock {
@@ -139,9 +157,9 @@
     bottom: 0;
     min-height: 0;
     padding: 8px 16px;
-    background-color: rgba(7, 12, 19, 0.94);
+    background-color: var(--toy-surface);
     border-top-width: 1px;
-    border-color: rgb(48, 65, 80);
+    border-color: var(--toy-edge);
 }
 
 .hud-dock__row {
@@ -157,10 +175,10 @@
     max-width: 640px;
     min-height: 30px;
     padding: 5px 10px;
-    background-color: rgb(13, 21, 29);
-    color: rgb(225, 231, 235);
+    background-color: var(--toy-surface-quiet);
+    color: var(--toy-text);
     border-left-width: 3px;
-    border-left-color: rgb(123, 141, 156);
+    border-left-color: var(--toy-text-muted);
     font-size: 11px;
     -unity-font-style: bold;
     -unity-text-align: middle-left;
@@ -172,15 +190,15 @@
 }
 
 .target-feedback--error {
-    background-color: rgb(42, 20, 23);
-    color: rgb(255, 211, 207);
-    border-left-color: rgb(255, 126, 118);
+    background-color: var(--toy-danger-tint);
+    color: var(--toy-danger-copy);
+    border-left-color: var(--toy-danger);
 }
 
 .target-feedback--success {
-    background-color: rgb(41, 32, 17);
-    color: rgb(255, 231, 188);
-    border-left-color: rgb(235, 174, 69);
+    background-color: var(--toy-primary-wash);
+    color: var(--toy-primary-copy);
+    border-left-color: var(--toy-primary);
 }
 
 .hud-header-actions {
@@ -197,9 +215,9 @@
     align-items: center;
     margin-right: 8px;
     padding-left: 10px;
-    background-color: rgb(13, 21, 29);
+    background-color: var(--toy-surface-quiet);
     border-left-width: 2px;
-    border-left-color: rgb(226, 157, 46);
+    border-left-color: var(--toy-primary);
 }
 
 .planning-commit__status {
@@ -208,7 +226,7 @@
     margin-right: 8px;
     font-size: 10px;
     -unity-font-style: bold;
-    color: rgb(235, 178, 76);
+    color: var(--toy-primary-copy);
     letter-spacing: 1px;
     white-space: nowrap;
 }
@@ -222,21 +240,23 @@
 }
 
 .planning-commit--ready .planning-commit__status {
-    color: rgb(235, 178, 76);
+    color: var(--toy-primary-copy);
 }
 
+/* Committed states read as select-indigo so they stay distinct from the amber
+   "ready to act" state; focus orange would collapse the two. */
 .planning-commit--sending .planning-commit__status,
 .planning-commit--waiting .planning-commit__status,
 .planning-commit--unlocking .planning-commit__status {
-    color: rgb(112, 187, 236);
+    color: var(--toy-select-copy);
 }
 
 .planning-commit--locked {
-    border-left-color: rgb(100, 193, 249);
+    border-left-color: var(--toy-select);
 }
 
 .planning-commit--locked .planning-commit__status {
-    color: rgb(139, 208, 245);
+    color: var(--toy-select-copy);
 }
 
 .hud-controls-button {
@@ -252,9 +272,9 @@
     right: 0;
     top: 0;
     padding: 16px 16px 8px 16px;
-    background-color: rgba(7, 12, 19, 0.94);
+    background-color: var(--toy-surface);
     border-bottom-width: 1px;
-    border-color: rgb(48, 65, 80);
+    border-color: var(--toy-edge);
 }
 
 .enemy-unit-cards {
@@ -321,29 +341,29 @@
     min-height: 96px;
     flex-direction: row;
     overflow: hidden;
-    background-color: rgb(13, 22, 31);
-    border-width: 1px;
-    border-color: rgb(48, 65, 80);
-    border-radius: 2px;
+    background-color: var(--toy-surface-raised);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-md);
 }
 
 .unit-card--selected {
-    background-color: rgb(25, 37, 47);
-    border-color: rgb(231, 167, 58);
+    background-color: var(--toy-primary-wash);
+    border-color: var(--toy-primary-pressed);
 }
 
 .unit-card--ability {
-    background-color: rgb(59, 35, 20);
-    border-color: rgb(177, 108, 43);
+    background-color: var(--toy-primary-tint);
+    border-color: var(--toy-primary-pressed);
 }
 
 .unit-card--ability.unit-card--selected {
-    border-color: rgb(255, 190, 92);
+    border-color: var(--toy-primary);
 }
 
 .unit-card--disabled {
     opacity: 0.55;
-    border-color: rgb(92, 56, 60);
+    border-color: var(--toy-danger-pressed);
 }
 
 .unit-card__select {
@@ -364,25 +384,25 @@
 }
 
 .unit-card__select:hover {
-    background-color: rgb(23, 36, 48);
+    background-color: var(--toy-surface-hover);
 }
 
 .unit-card__select:focus {
-    background-color: rgb(27, 41, 54);
-    border-color: rgb(237, 174, 65);
+    background-color: var(--toy-surface-hover);
+    border-color: var(--toy-focus);
 }
 
 .unit-card--ability .unit-card__select {
-    background-color: rgb(59, 35, 20);
+    background-color: var(--toy-primary-tint);
 }
 
 .unit-card--ability .unit-card__select:hover {
-    background-color: rgb(76, 44, 23);
+    background-color: var(--toy-primary-wash);
 }
 
 .unit-card--ability .unit-card__select:focus {
-    background-color: rgb(71, 41, 22);
-    border-color: rgb(255, 208, 134);
+    background-color: var(--toy-primary-wash);
+    border-color: var(--toy-focus);
 }
 
 .unit-card__ability-vignette {
@@ -394,13 +414,17 @@
     opacity: 0;
     background-image: url("project://database/Assets/UI/Shared/Icons/ability-flare.svg");
     -unity-background-scale-mode: stretch-to-fill;
-    -unity-background-image-tint-color: rgb(242, 165, 74);
+    -unity-background-image-tint-color: var(--toy-primary);
     transition-duration: 0.14s;
     transition-property: opacity;
 }
 
+/* A warm cast behind the card, not a graphic on top of it. At the old 0.42 the flare
+   painted opaque brown shapes across the label; even at 0.13 its peak was still a
+   solid brown. The amber border and label carry the state, so this only needs to
+   warm the surface. */
 .unit-card--ability .unit-card__ability-vignette {
-    opacity: 0.42;
+    opacity: 0.06;
 }
 
 .unit-card__portrait {
@@ -408,7 +432,7 @@
     width: 80px;
     min-width: 80px;
     -unity-background-scale-mode: scale-to-fit;
-    background-color: rgb(7, 13, 20);
+    background-color: var(--toy-warm);
 }
 
 .unit-card__copy {
@@ -422,7 +446,7 @@
 .unit-card__name {
     font-size: 15px;
     -unity-font-style: bold;
-    color: rgb(239, 243, 246);
+    color: var(--toy-text);
     white-space: normal;
 }
 
@@ -438,45 +462,68 @@
     height: 5px;
     margin-right: 7px;
     overflow: hidden;
-    background-color: rgb(48, 31, 36);
-    border-radius: 1px;
+    background-color: var(--toy-surface-pressed);
+    border-radius: 3px;
 }
 
+/* The fill was danger red at every level on both teams, so its colour repeated
+   what its width already said. UnitCardElement drives these three from the
+   thresholds in TeamPalette, which the world-space bar over the unit reads too
+   — the two bars show one number and used to disagree about its colour. */
 .unit-card__health-fill {
     width: 0%;
     height: 100%;
-    background-color: rgb(226, 82, 82);
+    background-color: var(--toy-health-high);
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color;
+}
+
+.unit-card__health-fill--high {
+    background-color: var(--toy-health-high);
+}
+
+.unit-card__health-fill--warning {
+    background-color: var(--toy-health-warning);
+}
+
+.unit-card__health-fill--critical {
+    background-color: var(--toy-health-critical);
 }
 
 .unit-card__health-value {
     min-width: 68px;
     font-size: 10px;
     -unity-font-style: bold;
-    color: rgb(229, 235, 240);
+    color: var(--toy-text);
     -unity-text-align: middle-right;
 }
 
 .unit-card__ability {
     margin-top: 4px;
     font-size: 11px;
-    color: rgb(159, 174, 187);
+    color: var(--toy-text-muted);
     white-space: normal;
 }
 
 .unit-card--ability .unit-card__ability {
-    color: rgb(255, 210, 143);
+    color: var(--toy-primary-copy);
     -unity-font-style: bold;
 }
 
-.unit-card--ability-cooldown .unit-card__ability {
-    color: rgb(126, 137, 147);
+/* Muted clears AA on the card at rest but not on the two lightest fills it can
+   land on — the hovered card and the ability tint, both of which moved up when
+   the surface ladder gained a real step. Copy is still a step below the name and
+   reads at 4.9:1 on each. De-emphasised has to stay readable. */
+.unit-card--ability-cooldown .unit-card__ability,
+.unit-card__select:hover .unit-card__ability {
+    color: var(--toy-text-copy);
 }
 
 .unit-card__state {
     min-height: 0;
     margin-top: 4px;
     font-size: 11px;
-    color: rgb(255, 126, 118);
+    color: var(--toy-danger-copy);
     letter-spacing: 1px;
 }
 
@@ -499,7 +546,7 @@
     height: 22px;
     background-image: url("project://database/Assets/UI/Shared/Icons/flip-card.svg");
     -unity-background-scale-mode: scale-to-fit;
-    -unity-background-image-tint-color: rgb(205, 216, 225);
+    -unity-background-image-tint-color: var(--toy-text-muted);
 }
 
 .unit-card__cooldown {
@@ -512,7 +559,7 @@
     font-size: 12px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
-    color: rgb(225, 231, 235);
+    color: var(--toy-text);
 }
 
 .unit-card--selected .unit-card__flip-indicator {
@@ -524,11 +571,11 @@
 }
 
 .unit-card--selected .unit-card__flip-icon {
-    -unity-background-image-tint-color: rgb(231, 167, 58);
+    -unity-background-image-tint-color: var(--toy-primary-pressed);
 }
 
 .unit-card--ability .unit-card__flip-icon {
-    -unity-background-image-tint-color: rgb(255, 210, 143);
+    -unity-background-image-tint-color: var(--toy-primary-copy);
 }
 
 .unit-card__flip-indicator--cooldown,
@@ -539,30 +586,34 @@
 .unit-card__flip-indicator--cooldown .unit-card__flip-icon,
 .unit-card--selected .unit-card__flip-indicator--cooldown .unit-card__flip-icon {
     opacity: 0.22;
-    -unity-background-image-tint-color: rgb(126, 137, 147);
+    -unity-background-image-tint-color: var(--toy-text-muted);
 }
 
 .unit-card__flip-indicator--cooldown .unit-card__cooldown {
-    color: rgb(171, 181, 189);
+    color: var(--toy-text-muted);
 }
 
 .unit-card--disabled .unit-card__flip-indicator {
     opacity: 0.45;
 }
 
+/* The enemy strip's whole identity is this border, so it carries the team red
+   the enemy units on the board are painted with, not the destructive-action red. */
 .unit-card--enemy {
     min-height: 72px;
-    background-color: rgb(24, 16, 22);
-    border-color: rgb(107, 55, 62);
+    background-color: var(--toy-surface-quiet);
+    border-color: var(--toy-team-enemy);
 }
 
+/* On a dark card "stronger" means brighter, so the active enemy ring steps up to
+   the light copy red rather than down to the deep one. */
 .unit-card--enemy-active {
-    border-color: rgb(168, 70, 75);
+    border-color: var(--toy-team-enemy-copy);
 }
 
 .unit-card--enemy-eliminated {
-    background-color: rgb(16, 15, 19);
-    border-color: rgb(74, 62, 68);
+    background-color: var(--toy-disabled-surface);
+    border-color: var(--toy-disabled-border);
 }
 
 .unit-card--enemy .unit-card__select {
@@ -580,7 +631,7 @@
 .unit-card--enemy .unit-card__portrait {
     width: 52px;
     min-width: 52px;
-    background-color: rgb(12, 10, 14);
+    background-color: var(--toy-warm);
 }
 
 .unit-card--enemy .unit-card__copy {
@@ -609,22 +660,22 @@
     margin-top: 0;
     font-size: 10px;
     -unity-font-style: bold;
-    color: rgb(255, 139, 132);
+    color: var(--toy-danger-copy);
     letter-spacing: 0;
 }
 
 .unit-card--enemy-eliminated .unit-card__name,
 .unit-card--enemy-eliminated .unit-card__ability,
 .unit-card--enemy-eliminated .unit-card__health-value {
-    color: rgb(136, 144, 151);
+    color: var(--toy-text-muted);
 }
 
 .unit-card--enemy-eliminated .unit-card__health-fill {
-    background-color: rgb(91, 66, 70);
+    background-color: var(--toy-edge);
 }
 
 .unit-card--enemy-eliminated .unit-card__state {
-    color: rgb(196, 139, 139);
+    color: var(--toy-text-muted);
 }
 
 .unit-card--enemy .unit-card__flip-indicator,
@@ -641,7 +692,7 @@
     align-items: center;
     justify-content: center;
     padding: var(--toy-space-xl);
-    background-color: var(--toy-ink);
+    background-color: var(--toy-surface);
 }
 
 .toybox-ui.deployment-overlay .deployment-overlay__content {
@@ -655,9 +706,9 @@
     width: 82px;
     height: 6px;
     margin-bottom: var(--toy-space-lg);
-    background-color: var(--toy-orange);
+    background-color: var(--toy-primary);
     border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-sm);
 }
 
@@ -665,7 +716,7 @@
     font-size: var(--toy-type-title-lg);
     -unity-font-style: bold;
     -unity-text-align: middle-center;
-    color: var(--toy-cream);
+    color: var(--toy-text);
 }
 
 .deployment-overlay__status {
@@ -673,15 +724,15 @@
     font-size: var(--toy-type-body);
     -unity-text-align: middle-center;
     white-space: normal;
-    color: var(--toy-muted);
+    color: var(--toy-text-muted);
 }
 
 .results-overlay {
-    background-color: var(--toy-shade);
+    background-color: var(--toy-scrim);
 }
 
 .controls-overlay {
-    background-color: var(--toy-shade);
+    background-color: var(--toy-scrim);
 }
 
 .toybox-ui.results-overlay .results-panel {
@@ -703,9 +754,9 @@
     height: 6px;
     margin-top: var(--toy-space-sm);
     margin-bottom: var(--toy-space-md);
-    background-color: var(--toy-orange);
+    background-color: var(--toy-primary);
     border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-ink);
+    border-color: var(--toy-edge);
     border-radius: var(--toy-radius-sm);
 }
 
@@ -713,7 +764,7 @@
     margin-bottom: var(--toy-space-sm);
     font-size: var(--toy-type-display);
     -unity-font-style: bold;
-    color: var(--toy-cream);
+    color: var(--toy-text);
     white-space: normal;
 }
 
@@ -728,10 +779,12 @@
     margin-left: var(--toy-space-sm);
 }
 
+/* The dock reserves camera space rather than floating over the board, so it stays flush to the
+   screen edges at every breakpoint; the camera does not paint the band behind it, and insetting it
+   would leave that margin unpainted. */
 .compact .hud-dock {
-    left: 16px;
-    right: 16px;
-    bottom: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
 }
 
 .compact .unit-card-host {

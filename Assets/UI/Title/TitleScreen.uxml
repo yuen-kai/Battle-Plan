@@ -26,12 +26,13 @@
                             <ui:Label text="Settings" class="toy-button__label title-action__label" picking-mode="Ignore" />
                         </ui:Button>
                     </ui:VisualElement>
+                    <ui:VisualElement class="title-rule" picking-mode="Ignore" />
                     <ui:VisualElement class="title-action-row title-action-row--quiet">
-                        <ui:Button name="credits-button" class="button button--flat title-action title-action--half">
-                            <ui:VisualElement class="toy-icon toy-icon--credits" picking-mode="Ignore" />
-                            <ui:Label text="Credits" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                        <ui:Button name="credits-button" class="title-quiet-action">
+                            <ui:VisualElement class="toy-icon toy-icon--credits toy-icon--sm" picking-mode="Ignore" />
+                            <ui:Label text="Credits" class="title-quiet-action__label" picking-mode="Ignore" />
                         </ui:Button>
-                        <ui:Button name="quit-button" text="Quit" class="button button--flat title-action title-action--half title-action--row-last" />
+                        <ui:Button name="quit-button" text="Quit" class="title-quiet-action title-quiet-action--last" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
