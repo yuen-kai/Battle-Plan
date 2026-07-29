@@ -1,0 +1,70 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="../Shared/BattlePlan.uss" />
+    <ui:Style src="../Shared/TacticalToybox.uss" />
+    <ui:Style src="CharactersScreen.uss" />
+    <ui:VisualElement name="screen" class="screen toybox-screen toybox-ui characters-screen">
+        <ui:VisualElement class="screen-frame characters-layout">
+            <ui:VisualElement class="toy-panel class-bar">
+                <ui:Button name="title-button" class="button button--flat characters-back">
+                    <ui:VisualElement class="toy-icon toy-icon--back" picking-mode="Ignore" />
+                    <ui:Label text="Title" class="toy-button__label" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:Label text="Characters" class="title-md class-bar__title" picking-mode="Ignore" />
+                <ui:VisualElement class="divider" picking-mode="Ignore" />
+                <ui:Label text="Classes" class="section-label" picking-mode="Ignore" />
+                <ui:VisualElement name="class-filters" class="class-filters" />
+                <ui:Label name="roster-count" text="5 units" class="label label--muted class-bar__count" picking-mode="Ignore" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="carousel-stage" class="carousel-stage">
+                <ui:VisualElement class="carousel-controls">
+                    <ui:Button name="carousel-prev-button" class="button carousel-arrow" tooltip="Previous character">
+                        <ui:VisualElement class="toy-icon toy-icon--chevron-left" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:VisualElement name="carousel-dots" class="carousel-dots" picking-mode="Ignore" />
+                    <ui:Button name="carousel-next-button" class="button carousel-arrow" tooltip="Next character">
+                        <ui:VisualElement class="toy-icon toy-icon--chevron-right" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="dossier" class="toy-panel characters-dossier">
+                <ui:ScrollView mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="dossier-scroll">
+                    <ui:VisualElement class="dossier-top" picking-mode="Ignore">
+                        <ui:Label name="unit-class" text="Assault" class="dossier-class" picking-mode="Ignore" />
+                        <ui:Label name="unit-name" text="Soldier" class="title-xl dossier-name" picking-mode="Ignore" />
+                        <ui:Label name="unit-description" text="Jack of all trades." class="label dossier-description" picking-mode="Ignore" />
+                        <ui:Label name="unit-playstyle" text="Holds ground in the middle of the board and trades at mid range." class="label dossier-playstyle" picking-mode="Ignore" />
+
+                        <ui:VisualElement class="divider" picking-mode="Ignore" />
+
+                        <ui:Label text="Profile" class="section-label" picking-mode="Ignore" />
+                        <ui:VisualElement name="stat-list" class="stat-list" picking-mode="Ignore" />
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="dossier-bottom" picking-mode="Ignore">
+                        <ui:VisualElement class="divider" picking-mode="Ignore" />
+                        <ui:Label text="Ability" class="section-label" picking-mode="Ignore" />
+                        <ui:VisualElement class="ability-block" picking-mode="Ignore">
+                            <ui:VisualElement class="ability-block__head" picking-mode="Ignore">
+                                <ui:Label name="ability-name" text="Grenade" class="title-md ability-block__name" picking-mode="Ignore" />
+                                <ui:Label name="ability-cooldown" text="Every 4 rounds" class="toy-chip ability-block__cooldown" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                            <ui:Label name="ability-detail" text="Toss a timed area blast to pressure space or start a fight." class="label ability-block__detail" picking-mode="Ignore" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="divider" picking-mode="Ignore" />
+                        <ui:VisualElement class="verdict-row" picking-mode="Ignore">
+                            <ui:Label text="Strengths" class="verdict-row__key verdict-row__key--good" picking-mode="Ignore" />
+                            <ui:Label name="unit-strengths" text="Versatile." class="verdict-row__copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="verdict-row verdict-row--last" picking-mode="Ignore">
+                            <ui:Label text="Weaknesses" class="verdict-row__key verdict-row__key--bad" picking-mode="Ignore" />
+                            <ui:Label name="unit-weaknesses" text="Outclassed up close." class="verdict-row__copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,378 @@
+/* Composition and staging only. Semantic colour, control states, and type sizes come from
+   TacticalToyboxTokens.uss through the component library.
+
+   Three columns: the class filter rail, the turntable the roster stands on, and the dossier. The
+   middle column is the only transparent one — it is the stage, and nothing is drawn over it
+   except the carousel's own controls, which sit below where the models stand. */
+
+.characters-screen {
+    background-color: var(--toy-transparent);
+}
+
+.characters-layout {
+    flex-direction: row;
+    align-items: stretch;
+    padding: 30px 44px 28px 44px;
+}
+
+/* Class rail */
+
+.toybox-ui.characters-screen .class-bar {
+    width: 216px;
+    min-width: 216px;
+    padding: var(--toy-space-control-x) var(--toy-space-control-x) var(--toy-space-lg) var(--toy-space-control-x);
+}
+
+.toybox-ui.characters-screen .characters-back {
+    min-height: var(--toy-target-compact);
+    margin: 0;
+    padding-left: var(--toy-space-md);
+    padding-right: var(--toy-space-control-x);
+    align-self: flex-start;
+}
+
+.class-bar__title {
+    margin-top: var(--toy-space-md);
+    margin-left: 2px;
+}
+
+.toybox-ui.characters-screen .class-bar .divider {
+    margin-top: var(--toy-space-md);
+    margin-bottom: var(--toy-space-md);
+}
+
+.class-filters {
+    flex-grow: 0;
+}
+
+/* Filters read as a stack of switches rather than chips: this is the screen's primary navigation,
+   so each one gets a full-width target and the chosen one carries the selection accent. */
+.class-filter {
+    width: 100%;
+    min-height: var(--toy-target-compact);
+    margin: 0;
+    margin-bottom: 5px;
+    padding: var(--toy-space-sm) var(--toy-space-md);
+    background-color: var(--toy-surface-quiet);
+    color: var(--toy-text-muted);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-sm);
+    font-size: var(--toy-type-label);
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, border-color, color;
+}
+
+.class-filter:hover {
+    background-color: var(--toy-surface-hover);
+    border-color: var(--toy-edge-strong);
+    color: var(--toy-text);
+}
+
+.class-filter:focus {
+    border-width: var(--toy-focus-emphasis);
+    border-color: var(--toy-focus);
+}
+
+.toybox-ui.characters-screen .class-bar__count {
+    margin-top: auto;
+    padding-top: var(--toy-space-md);
+    font-size: var(--toy-type-caption);
+}
+
+/* Turntable stage */
+
+.carousel-stage {
+    flex-grow: 1;
+    min-width: 0;
+    margin-left: var(--toy-space-lg);
+    margin-right: var(--toy-space-lg);
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* Below the disk, never over the models. */
+.carousel-controls {
+    flex-direction: row;
+    align-items: center;
+    padding: 7px 10px;
+    background-color: var(--toy-panel);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-md);
+}
+
+.toybox-ui.characters-screen .carousel-arrow {
+    width: var(--toy-target-compact);
+    min-width: var(--toy-target-compact);
+    min-height: 34px;
+    margin: 0;
+    padding: 0;
+    justify-content: center;
+}
+
+.toybox-ui.characters-screen .carousel-arrow .toy-icon {
+    margin-right: 0;
+}
+
+.carousel-dots {
+    flex-direction: row;
+    align-items: center;
+    padding-left: var(--toy-space-md);
+    padding-right: var(--toy-space-md);
+}
+
+.carousel-dot {
+    width: 7px;
+    height: 7px;
+    margin-left: 5px;
+    margin-right: 5px;
+    background-color: var(--toy-text-muted);
+    border-radius: 4px;
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, width;
+}
+
+.carousel-dot--current {
+    width: 20px;
+    background-color: var(--toy-select-copy);
+}
+
+/* Dossier */
+
+.toybox-ui.characters-screen .characters-dossier {
+    width: 430px;
+    min-width: 430px;
+    padding: var(--toy-space-panel-compact) 22px;
+}
+
+.dossier-scroll {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+/* Content reads from the top and stops. Pinning the ability block to the bottom of a full-height
+   column was tried and left a void through the middle of the panel, which reads as a broken
+   layout; trailing space at the foot of a stats column does not. */
+.dossier-scroll .unity-scroll-view__content-container {
+    padding-right: var(--toy-space-md);
+}
+
+.dossier-bottom {
+    margin-top: var(--toy-space-xs);
+}
+
+.dossier-scroll > .unity-scroll-view__vertical-scroller {
+    width: var(--toy-scroll-size);
+    background-color: var(--toy-inset);
+}
+
+/* The class sits above the name as a quiet eyebrow: it is a grouping, not a state, so it stays
+   neutral and lets the accents keep meaning selection. */
+.dossier-class {
+    margin-bottom: 2px;
+    font-size: var(--toy-type-caption);
+    -unity-font-style: bold;
+    color: var(--toy-text-muted);
+    letter-spacing: 1px;
+}
+
+.dossier-name {
+    margin-bottom: 6px;
+}
+
+/* The unit description is a one-word joke on most of the roster ("Boing", "Boom"), so it stays a
+   quiet caption and the play-style line under it carries the actual reading weight.
+
+   Both labels also carry .label, and `.toybox-ui .label` outranks a lone class selector — sizing
+   them from one has no effect and leaves the pair looking identical. Hence the screen scope. */
+.toybox-ui.characters-screen .dossier-description {
+    font-size: var(--toy-type-caption);
+    color: var(--toy-text-muted);
+    white-space: normal;
+}
+
+.toybox-ui.characters-screen .dossier-playstyle {
+    margin-top: var(--toy-space-sm);
+    font-size: var(--toy-type-body);
+    color: var(--toy-text-copy);
+    white-space: normal;
+}
+
+/* Combat profile */
+
+.stat-list {
+    margin-top: 2px;
+}
+
+.trait-row {
+    min-height: 30px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.trait-row__key {
+    width: 92px;
+    min-width: 92px;
+    font-size: var(--toy-type-label);
+    color: var(--toy-text-muted);
+}
+
+.trait-scale {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Discrete steps rather than a continuous bar: this screen is deciding whether a character looks
+   fun, and a bar invites reading a precise value off it that the pips deliberately do not carry.
+   The ramp stays neutral because a trait is a gauge, not a decision the accents should mark. */
+.trait-pip {
+    width: 30px;
+    height: 9px;
+    margin-right: 5px;
+    background-color: var(--toy-inset);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: 3px;
+}
+
+.trait-pip--on {
+    background-color: var(--toy-text-copy);
+    border-color: var(--toy-text-copy);
+}
+
+/* Ability */
+
+.ability-block__head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.ability-block__name {
+    flex-grow: 1;
+    min-width: 0;
+    white-space: normal;
+}
+
+.ability-block__cooldown {
+    flex-shrink: 0;
+    margin-left: var(--toy-space-md);
+}
+
+.ability-block__detail {
+    color: var(--toy-text-copy);
+    white-space: normal;
+}
+
+/* Per-unit verdicts. Only the key is tinted, and it borrows the health ramp rather than danger:
+   a weakness is a condition to plan around, not an error the player has made. */
+.verdict-row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: var(--toy-space-sm);
+}
+
+.verdict-row--last {
+    margin-bottom: 0;
+}
+
+.verdict-row__key {
+    width: 92px;
+    min-width: 92px;
+    font-size: var(--toy-type-caption);
+    -unity-font-style: bold;
+}
+
+.verdict-row__key--good {
+    color: var(--toy-health-high);
+}
+
+.verdict-row__key--bad {
+    color: var(--toy-health-warning);
+}
+
+/* A zero basis is what makes the copy wrap. Left on auto the label asks for its full single-line
+   width, and a flex row hands it that instead of the space actually left beside the key. */
+.verdict-row__copy {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+    font-size: var(--toy-type-label);
+    color: var(--toy-text-copy);
+    white-space: normal;
+}
+
+/* Breakpoints */
+
+.compact .characters-layout {
+    padding: 22px 28px;
+}
+
+.compact .characters-screen .class-bar {
+    width: 190px;
+    min-width: 190px;
+}
+
+.compact .characters-screen .characters-dossier {
+    width: 390px;
+    min-width: 390px;
+}
+
+.compact .carousel-stage {
+    margin-left: var(--toy-space-md);
+    margin-right: var(--toy-space-md);
+}
+
+/* The stage cannot survive three columns on a narrow window, and the dossier is the content. The
+   class rail collapses to icons-free short labels and the turntable gives up its space. */
+.narrow .characters-layout {
+    padding: var(--toy-space-panel-compact);
+}
+
+.narrow .characters-screen .class-bar {
+    width: 168px;
+    min-width: 168px;
+}
+
+.narrow .carousel-stage {
+    display: none;
+}
+
+.narrow .characters-screen .characters-dossier {
+    flex-grow: 1;
+    width: auto;
+    min-width: 0;
+    margin-left: var(--toy-space-md);
+}
+
+.phone .characters-screen .class-bar {
+    width: 132px;
+    min-width: 132px;
+    padding: var(--toy-space-md) var(--toy-space-sm) var(--toy-space-md) var(--toy-space-sm);
+}
+
+.phone .class-bar__count {
+    display: none;
+}
+
+.phone .trait-row__key,
+.phone .verdict-row__key {
+    width: 76px;
+    min-width: 76px;
+}
+
+.phone .trait-pip {
+    width: 22px;
+}
+
+.short .characters-layout {
+    padding-top: var(--toy-space-control-top);
+    padding-bottom: var(--toy-space-control-top);
+}
+
+.short .class-bar__title {
+    display: none;
+}

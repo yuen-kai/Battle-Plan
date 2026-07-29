@@ -14,9 +14,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   unitModel: {fileID: 5730507131329954583, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
   unitName: Soldier
+  unitClass: 0
   unitDescription: Jack of all trades.
+  playStyle: Holds ground in the middle of the board and trades at mid range.
+  weaponName: Mid-range rifle
+  strengths: Versatile, and strong against mid-range threats.
+  weaknesses: Outclassed at extreme range and in close quarters.
   unitSprite: {fileID: 21300000, guid: 4311808404f2b456e9afebd81d87d4b8, type: 3}
+  unavailableForRoster: 0
   abilityName: Grenade
+  abilityDescription: Toss a timed area blast to pressure space or start a fight.
   abilitySprite: {fileID: 21300000, guid: 4311808404f2b456e9afebd81d87d4b8, type: 3}
   moveDist: 3
   moveSpeed: 1
@@ -42,6 +49,8 @@ MonoBehaviour:
   abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1
   abilitySquareRange: 5
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
   abilityRadius: 1.6
   selectTime: 4
   responseRange: 3

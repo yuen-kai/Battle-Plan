@@ -5,16 +5,24 @@
 - **Blocked on determinism.** The match cannot be re-simulated: movement steps on `Time.deltaTime` inside `yield return null` loops (`Movement.cs:195`), `Time.timeScale` scales those steps, bullets are PhysX rigidbodies resolved by collision callbacks, shot cadence quantizes to frames via `WaitForSeconds`, target ties break on `FindGameObjectsWithTag` order (`Shooting.cs:447`), and `UnityEngine.Random` is a global stream shared with VFX. Seeding the spread alone changes nothing.
 - Two ways forward: (a) record combat events — shooter, target, damage, timestamp — and render them on a timeline beside the plans, cheap and needs no determinism; or (b) convert combat/movement to a fixed-timestep seeded simulation, which is a rewrite but is also the prerequisite for the seeded self-play the experiments catalog wants (EXP-A02/A03).
 
-- X **Last-known-position fog ghosts**
-  - Leaving a translucent marker where an enemy was last seen is client-local and already listed as the top Phase 2 fog item in `FogOfWar-and-DamageRebalance.md` §1.8, which calls it a big usability win.
+X **Last-known-position fog ghosts**
 
-- [ ] **Character info with real stats**
-  - The roster screen shows portrait, name, description, and ability name only, so players pick a crew without seeing the range bands, HP, damage, or cooldowns that the entire skill ceiling is built on.
-  - [ ] Create an all characters screen, linked from title
-    - [ ] carosel with the character model on it
-    - [ ] stats
-    - [ ] ability info
-  - [ ] Sort characters by classes
+- Leaving a translucent marker where an enemy was last seen is client-local and already listed as the top Phase 2 fog item in `FogOfWar-and-DamageRebalance.md` §1.8, which calls it a big usability win.
+
+- [x] **All characters screen** — `Assets/Scenes/Characters.unity`, linked from the title's Characters button
+  - [x] Carousel/rail — the roster stands on a turntable (`CharacterCarousel`). Drag, wheel, arrows, or the arrow keys spin it; a flick coasts past several units and only snaps once it slows, so it never feels notched.
+  - [x] Character models — spawned from `UnitData.unitModel` into a deactivated holder so `Awake` never runs, then stripped of every MonoBehaviour (which covers `NetworkObject` and all `NetworkBehaviour`s), colliders, and the in-world HUD. No gameplay prefab is ever activated for decoration.
+  - [x] Stats/ability info auto-updating — the dossier on the right follows the focused unit live, and is deliberately **not** a spec sheet. The screen is where someone decides whether a character looks fun, so it shows no raw figures at all: five traits (Toughness, Firepower, Range, Mobility, Vision) on a five-pip scale, each scaled against the best in the catalog so a sixth character rescales everyone. Exact numbers stay on the unit assets and in the in-match HUD.
+  - [x] Plain-language copy per unit — `UnitData` gained `playStyle`, `weaponName`, `abilityDescription`, `strengths`, and `weaknesses`, filled from the roster table in `Overview.md`. `unitDescription` is a one-word joke on most of the roster ("Boing", "Boom"), so it drops to a quiet caption and the play-style sentence under it carries how the unit is actually played. The eyebrow reads "class · weapon", the ability shows its one-line description instead of derived targeting geometry, and strengths/weaknesses close the panel. These are **per-unit**, not per-class. Cooldown is phrased as "Every N rounds" rather than "N-round cooldown", which is the same rule stated as when you get it back.
+  - [x] Sort characters by classes — new `UnitClass` field on `UnitData`, named and ordered from the roster table in `Overview.md` (Assault, Initiator, Controller, Mobility, Support). The ring is ordered by class, and the vertical rail on the left filters to one class or shows all.
+  - Model facing: all five prefabs agree — an assembled unit faces **+Z** with its root unrotated, which is what `Quaternion.LookRotation` aims and therefore correct by Unity's own convention. The carousel just points each seat's forward down its outward radius with `LookRotation`, so there is no magic angle and no per-unit table. The mesh yaws inside the prefabs do differ (270° on Commander, Shotgunner, Soldier; 90° on Sniper, PogoRider) but the FBXs differ to match. `displayPoses` is left empty and exists only for a future model that breaks the convention.
+- [x] **Unit prefabs: base plate and body alignment** — fixed in the prefabs, not worked around in the menu.
+  - Gameplay seats a unit by its **capsule collider bottom** (`Helper.heightOffset`), so that is the board plane. Measured against it, only the Sniper was built right: the Commander, PogoRider, and Soldier floated their base puck 0.23 above the board, the Shotgunner floated its puck 0.60, and four of the five had feet sunk through or hovering over their own plate (−0.28 to +0.12).
+  - The Shotgunner's outlier came from its root Y scale of **1.0** where every other unit uses **1.56**, so the shared puck offset from `Unit.prefab` resolved to a different world height on it.
+  - All five now put the puck bottom exactly on the collider bottom and the feet exactly on the puck's top face, so the puck is the lowest visible thing on every unit. Colliders were deliberately left untouched — they are the hit and line-of-sight volume, and `heightOffset` assumes they stay centred on the root.
+  - **Do not measure these models with `Renderer.bounds`.** The character meshes are `SkinnedMeshRenderer`s, which report padded animation bounds reaching below the real geometry — 0.236 units on the Shotgunner, 0.171 on the Commander, 0 on the Soldier's plain `MeshRenderer`. Aligning to that padding seats the padding on the ground and leaves the unit hovering by exactly that much. Both the prefab pass and `CharacterCarousel.TryFindLowestPoint` read true vertex positions instead, baking skinned meshes first.
+  - This was a gameplay defect, not only a menu one: feet were clipping into the board and the Shotgunner's cell marker hovered. All 270 edit-mode tests pass after the change.
+  - One follow-up this surfaced, pre-existing and art-side: **three of five characters have no idle animation.** Commander and Soldier carry no `Animator` at all; PogoRider and Shotgunner have one with no controller; only Sniper has `Sniper anim`. Models therefore stand in their authored pose. Acceptable for now against the toy-shelf read, but the roster wants a shared idle.
 - [x] **Audio and settings persistence**
   - `AudioManager` holds a music source, an SFX source, and a click clip but has empty `Start`/`Update` with no volume UI, and the quality dropdown resets every launch because nothing is saved.
 - [x] **Reconnect grace**

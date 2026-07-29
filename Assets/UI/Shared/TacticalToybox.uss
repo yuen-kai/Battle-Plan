@@ -234,6 +234,14 @@
     background-image: url("project://database/Assets/UI/Shared/Icons/check.svg");
 }
 
+.toybox-ui .toy-icon--chevron-left {
+    background-image: url("project://database/Assets/UI/Shared/Icons/chevron-left.svg");
+}
+
+.toybox-ui .toy-icon--chevron-right {
+    background-image: url("project://database/Assets/UI/Shared/Icons/chevron-right.svg");
+}
+
 .toybox-ui .title-xl {
     font-size: var(--toy-type-display);
     -unity-font-style: bold;

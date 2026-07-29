@@ -13,6 +13,7 @@ public class TitleScreenUIController : MonoBehaviour
     private VisualElement activeModal;
     private SettingsPanelBinder settings;
     private Button playButton;
+    private Button charactersButton;
     private Button settingsButton;
     private Button controlsButton;
     private Button creditsButton;
@@ -59,6 +60,7 @@ public class TitleScreenUIController : MonoBehaviour
         creditsModal = RequireElement<VisualElement>("credits-modal");
         settings = new SettingsPanelBinder(settingsModal, nameof(TitleScreenUIController));
         playButton = RequireElement<Button>("play-button");
+        charactersButton = RequireElement<Button>("characters-button");
         settingsButton = RequireElement<Button>("settings-button");
         controlsButton = RequireElement<Button>("controls-button");
         creditsButton = RequireElement<Button>("credits-button");
@@ -69,6 +71,7 @@ public class TitleScreenUIController : MonoBehaviour
         clickSoundButtons = new[]
         {
             playButton,
+            charactersButton,
             settingsButton,
             controlsButton,
             creditsButton,
@@ -107,6 +110,8 @@ public class TitleScreenUIController : MonoBehaviour
 
         if (playButton != null)
             playButton.clicked += StartGame;
+        if (charactersButton != null)
+            charactersButton.clicked += OpenCharacters;
         if (settingsButton != null)
             settingsButton.clicked += OpenSettings;
         if (controlsButton != null)
@@ -142,6 +147,8 @@ public class TitleScreenUIController : MonoBehaviour
 
         if (playButton != null)
             playButton.clicked -= StartGame;
+        if (charactersButton != null)
+            charactersButton.clicked -= OpenCharacters;
         if (settingsButton != null)
             settingsButton.clicked -= OpenSettings;
         if (controlsButton != null)
@@ -170,6 +177,11 @@ public class TitleScreenUIController : MonoBehaviour
     private void StartGame()
     {
         SceneManager.LoadScene("JoinGame");
+    }
+
+    private void OpenCharacters()
+    {
+        SceneManager.LoadScene("Characters");
     }
 
     private void OpenSettings()
