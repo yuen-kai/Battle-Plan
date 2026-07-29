@@ -15,18 +15,14 @@ public class Shooting : NetworkBehaviour
 
     private string enemyTeam;
 
-    private LineRenderer targetLaser;
-    private float startAnimWidth = 0.05f;
-    private float endAnimWidth = 0.2f;
-    private Color startAnimColor = Color.white;
-    private Color endAnimColor = Color.red;
+    private TargetLaserVisual targetLaser;
 
-    // Network variables for laser synchronization
-    private NetworkVariable<bool> isLaserEnabled = new(false);
-    private NetworkVariable<Vector3> laserStartPos = new();
-    private NetworkVariable<Vector3> laserEndPos = new();
-    private NetworkVariable<float> laserWidth = new();
-    private NetworkVariable<Color> laserColor = new();
+    // One replicated value written once per lock, rather than five written every frame. The beam's
+    // geometry follows both units' live transforms and its ramp is a pure function of elapsed
+    // server time, so each peer can animate the whole thing from the instant the lock began.
+    // A NetworkVariable rather than an RPC because object-scoped RPCs are dropped while a unit is
+    // NetworkHidden for fog, whereas a variable resyncs on NetworkShow.
+    private readonly NetworkVariable<TargetLockState> targetLock = new();
 
     private List<GameObject> bullets = new();
     private int currentAmmo;
@@ -41,20 +37,15 @@ public class Shooting : NetworkBehaviour
 
     // CONTROLLER
     // All setup is in OnNetworkSpawn (not Start) so a fog NetworkShow re-runs it and the current
-    // laser NetworkVariable values are applied to a freshly (re)created LineRenderer.
+    // lock state is applied to a freshly (re)created beam.
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
         EnsureTargetLaser();
 
-        // Subscribe to network variable changes on all clients
-        isLaserEnabled.OnValueChanged += OnLaserEnabledChanged;
-        laserStartPos.OnValueChanged += OnLaserPositionChanged;
-        laserEndPos.OnValueChanged += OnLaserPositionChanged;
-        laserWidth.OnValueChanged += OnLaserWidthChanged;
-        laserColor.OnValueChanged += OnLaserColorChanged;
-        ApplyCurrentLaserState();
+        targetLock.OnValueChanged += OnTargetLockChanged;
+        targetLaser.SetLock(targetLock.Value);
 
         if (!IsServer)
         {
@@ -71,12 +62,7 @@ public class Shooting : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
-        // Unsubscribe from network variable changes
-        isLaserEnabled.OnValueChanged -= OnLaserEnabledChanged;
-        laserStartPos.OnValueChanged -= OnLaserPositionChanged;
-        laserEndPos.OnValueChanged -= OnLaserPositionChanged;
-        laserWidth.OnValueChanged -= OnLaserWidthChanged;
-        laserColor.OnValueChanged -= OnLaserColorChanged;
+        targetLock.OnValueChanged -= OnTargetLockChanged;
 
         if (IsServer)
         {
@@ -93,32 +79,9 @@ public class Shooting : NetworkBehaviour
         if (targetLaser != null)
             return;
 
-        targetLaser = GetComponent<LineRenderer>();
+        targetLaser = GetComponent<TargetLaserVisual>();
         if (targetLaser == null)
-            targetLaser = gameObject.AddComponent<LineRenderer>();
-        targetLaser.enabled = false;
-
-        // Energy-beam look: white HDR core, glow tinted by the replicated start/end colors
-        // (the white->red lock-on ramp rides the LineRenderer vertex colors).
-        Shader beamShader = Shader.Find("BattlePlan/EnergyBeam");
-        if (beamShader != null)
-        {
-            Material beamMaterial = new(beamShader);
-            beamMaterial.SetColor("_GlowColor", Color.white);
-            beamMaterial.SetColor("_CoreColor", Color.white * 1.5f);
-            beamMaterial.SetFloat("_CoreWidth", 0.35f);
-            beamMaterial.SetFloat("_NoiseStrength", 0.2f);
-            targetLaser.material = beamMaterial;
-        }
-    }
-
-    private void ApplyCurrentLaserState()
-    {
-        EnsureTargetLaser();
-        targetLaser.SetPositions(new[] { laserStartPos.Value, laserEndPos.Value });
-        targetLaser.startWidth = targetLaser.endWidth = laserWidth.Value;
-        targetLaser.startColor = targetLaser.endColor = laserColor.Value;
-        targetLaser.enabled = isLaserEnabled.Value;
+            targetLaser = gameObject.AddComponent<TargetLaserVisual>();
     }
 
     private void SetAllowShooting(bool toggle)
@@ -131,28 +94,47 @@ public class Shooting : NetworkBehaviour
         stillShooting = toggle;
     }
 
-    private void OnLaserEnabledChanged(bool previousValue, bool newValue)
+    private void OnTargetLockChanged(TargetLockState previousValue, TargetLockState newValue)
     {
         EnsureTargetLaser();
-        targetLaser.enabled = newValue;
+        targetLaser.SetLock(newValue);
     }
 
-    private void OnLaserPositionChanged(Vector3 previousValue, Vector3 newValue)
+    /// <summary>
+    /// Publishes a lock once, when it is acquired. Re-locking the same target is a no-op so the
+    /// value stays clean of per-frame writes; a new target replaces it and restarts the ramp.
+    /// </summary>
+    private void BeginTargetLock(GameObject target, float duration)
     {
-        EnsureTargetLaser();
-        targetLaser.SetPositions(new[] { laserStartPos.Value, laserEndPos.Value });
+        if (!IsServer)
+            return;
+
+        NetworkObject targetObject = target != null ? target.GetComponent<NetworkObject>() : null;
+        if (targetObject == null || duration <= 0f)
+        {
+            ClearTargetLock();
+            return;
+        }
+
+        if (
+            targetLock.Value.Active
+            && targetLock.Value.TargetObjectId == targetObject.NetworkObjectId
+        )
+        {
+            return;
+        }
+
+        targetLock.Value = new TargetLockState(
+            targetObject.NetworkObjectId,
+            NetworkManager.ServerTime.Time,
+            duration
+        );
     }
 
-    private void OnLaserWidthChanged(float previousValue, float newValue)
+    private void ClearTargetLock()
     {
-        EnsureTargetLaser();
-        targetLaser.startWidth = targetLaser.endWidth = newValue;
-    }
-
-    private void OnLaserColorChanged(Color previousValue, Color newValue)
-    {
-        EnsureTargetLaser();
-        targetLaser.startColor = targetLaser.endColor = newValue;
+        if (IsServer && targetLock.Value.Active)
+            targetLock.Value = default;
     }
 
     /// <summary>
@@ -179,7 +161,7 @@ public class Shooting : NetworkBehaviour
     {
         if (shootingCoroutine != null)
             StopCoroutine(shootingCoroutine);
-        isLaserEnabled.Value = false;
+        ClearTargetLock();
 
         allowShooting = true;
         stillShooting = true;
@@ -238,7 +220,7 @@ public class Shooting : NetworkBehaviour
                 //Refind target
                 if (target == null || !lineOfSight(target))
                 {
-                    isLaserEnabled.Value = false;
+                    ClearTargetLock();
                     target = FindNearestEnemy();
                     if (target)
                     {
@@ -260,20 +242,14 @@ public class Shooting : NetworkBehaviour
                         (target.transform.position - transform.position).normalized
                     ); // Track target
 
-                    float lockProgress = 1 - remainingTargetLockTime / unitData.targetLockDuration;
-
-                    isLaserEnabled.Value = true;
-                    laserWidth.Value = Mathf.Lerp(startAnimWidth, endAnimWidth, lockProgress);
-                    laserColor.Value = Color.Lerp(startAnimColor, endAnimColor, lockProgress);
-                    laserStartPos.Value = transform.position;
-                    laserEndPos.Value = target.transform.position;
+                    BeginTargetLock(target, unitData.targetLockDuration);
 
                     remainingTargetLockTime -= Time.deltaTime;
 
                     yield return null;
                     continue;
                 }
-                isLaserEnabled.Value = false;
+                ClearTargetLock();
 
                 transform.rotation = Quaternion.LookRotation(
                     (target.transform.position - transform.position).normalized
@@ -328,22 +304,24 @@ public class Shooting : NetworkBehaviour
         float spreadAngle = Random.Range(-spread, spread);
         Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
 
-        GameObject bullet = NetworkHelper.Spawn(
-            bulletPrefab,
-            transform.position,
-            Quaternion.LookRotation(shootDirection)
+        Vector3 origin = transform.position;
+        bullets.Add(
+            CreateBullet(
+                bulletPrefab,
+                origin,
+                shootDirection,
+                bulletSpeed,
+                damage,
+                backstabMultiplier,
+                range,
+                backstabAngle,
+                authoritative: true
+            )
         );
-        bullets.Add(bullet);
 
-        Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
-        Bullet bulletScript = bullet.GetComponent<Bullet>();
-
-        bulletRb.linearVelocity = shootDirection * bulletSpeed * GameLoop.cellSize;
-        bulletScript.damage = damage;
-        bulletScript.backstabMultiplier = backstabMultiplier;
-        bulletScript.range = range * GameLoop.cellSize;
-        bulletScript.backstabAngle = backstabAngle;
-        bulletScript.enemyTeam = enemyTeam;
+        // Clients need the tracer, not the arithmetic: damage is resolved on the authoritative copy
+        // above, and spread is already folded into the direction so every peer draws the same shot.
+        FireBulletClientRpc(origin, shootDirection, bulletSpeed);
 
         currentAmmo--;
 
@@ -351,6 +329,57 @@ public class Shooting : NetworkBehaviour
         {
             GetComponent<AnimationHandler>().TriggerAnimation("Shoot");
         }
+    }
+
+    /// <summary>
+    /// Draws the tracer on every other peer. Object-scoped, so a shot from a unit this client
+    /// cannot see stays invisible to it, which is what fog already implies but network-spawned
+    /// bullets never honoured.
+    /// </summary>
+    [ClientRpc]
+    private void FireBulletClientRpc(Vector3 origin, Vector3 direction, float bulletSpeed)
+    {
+        if (IsServer)
+            return; // the authoritative copy is already in flight
+
+        CreateBullet(
+            ResolveBulletPrefab(),
+            origin,
+            direction,
+            bulletSpeed,
+            unitData.damage,
+            unitData.backstabMultiplier,
+            unitData.bulletRange,
+            unitData.backstabAngle,
+            authoritative: false
+        );
+    }
+
+    private GameObject CreateBullet(
+        GameObject bulletPrefab,
+        Vector3 origin,
+        Vector3 direction,
+        float bulletSpeed,
+        float damage,
+        float backstabMultiplier,
+        float range,
+        float backstabAngle,
+        bool authoritative
+    )
+    {
+        GameObject bullet = Instantiate(bulletPrefab, origin, Quaternion.LookRotation(direction));
+        bullet
+            .GetComponent<Bullet>()
+            .Initialize(
+                direction * bulletSpeed * GameLoop.cellSize,
+                damage,
+                backstabMultiplier,
+                range * GameLoop.cellSize,
+                backstabAngle,
+                ResolveEnemyTeam(),
+                authoritative
+            );
+        return bullet;
     }
 
     private GameObject ResolveBulletPrefab()
@@ -532,5 +561,146 @@ public class Shooting : NetworkBehaviour
             return true;
         }
         return false;
+    }
+}
+
+/// <summary>
+/// A lock-on as replicated: who is being locked, when the lock started on the server clock, and how
+/// long it runs. The beam's endpoints come from the two units' live transforms and its ramp is a
+/// pure function of elapsed time, so none of that needs replicating and this is written once per
+/// lock rather than every frame.
+/// </summary>
+public struct TargetLockState : INetworkSerializable, System.IEquatable<TargetLockState>
+{
+    public bool Active;
+    public ulong TargetObjectId;
+    public double StartServerTime;
+    public float Duration;
+
+    public TargetLockState(ulong targetObjectId, double startServerTime, float duration)
+    {
+        Active = true;
+        TargetObjectId = targetObjectId;
+        StartServerTime = startServerTime;
+        Duration = Mathf.Max(0.0001f, duration);
+    }
+
+    /// <summary>Ramp position, 0 at acquisition through 1 when the shot is released.</summary>
+    public float ProgressAt(double serverTime)
+    {
+        return Mathf.Clamp01((float)((serverTime - StartServerTime) / Duration));
+    }
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref Active);
+        serializer.SerializeValue(ref TargetObjectId);
+        serializer.SerializeValue(ref StartServerTime);
+        serializer.SerializeValue(ref Duration);
+    }
+
+    public bool Equals(TargetLockState other)
+    {
+        return Active == other.Active
+            && TargetObjectId == other.TargetObjectId
+            && StartServerTime.Equals(other.StartServerTime)
+            && Duration.Equals(other.Duration);
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is TargetLockState other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return System.HashCode.Combine(Active, TargetObjectId, StartServerTime, Duration);
+    }
+}
+
+/// <summary>
+/// Local-only lock-on beam. Every peer animates it from the replicated <see cref="TargetLockState"/>
+/// and the live transforms of the two units, which is why the lock itself costs a single replicated
+/// write instead of a per-frame stream of endpoints, widths and colours.
+/// </summary>
+[RequireComponent(typeof(LineRenderer))]
+public sealed class TargetLaserVisual : MonoBehaviour
+{
+    private const float StartWidth = 0.05f;
+    private const float EndWidth = 0.2f;
+    private static readonly Color StartColor = Color.white;
+    private static readonly Color EndColor = Color.red;
+
+    private LineRenderer beam;
+    private TargetLockState lockState;
+    private Transform target;
+
+    private void Awake()
+    {
+        beam = GetComponent<LineRenderer>();
+        beam.positionCount = 2;
+        beam.enabled = false;
+
+        // Energy-beam look: white HDR core, glow tinted by the white->red lock-on ramp riding the
+        // LineRenderer vertex colors.
+        Shader beamShader = Shader.Find("BattlePlan/EnergyBeam");
+        if (beamShader != null)
+        {
+            Material beamMaterial = new(beamShader);
+            beamMaterial.SetColor("_GlowColor", Color.white);
+            beamMaterial.SetColor("_CoreColor", Color.white * 1.5f);
+            beamMaterial.SetFloat("_CoreWidth", 0.35f);
+            beamMaterial.SetFloat("_NoiseStrength", 0.2f);
+            beam.material = beamMaterial;
+        }
+    }
+
+    public void SetLock(TargetLockState state)
+    {
+        lockState = state;
+        target = null;
+        if (beam != null)
+            beam.enabled = state.Active;
+    }
+
+    private void LateUpdate()
+    {
+        if (beam == null || !lockState.Active)
+            return;
+
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager == null || (target == null && !TryResolveTarget(manager)))
+        {
+            // A target this peer cannot see yet leaves the beam dark rather than drawing to a
+            // position fog has not disclosed.
+            beam.enabled = false;
+            return;
+        }
+
+        float progress = lockState.ProgressAt(manager.ServerTime.Time);
+        beam.enabled = true;
+        beam.SetPosition(0, transform.position);
+        beam.SetPosition(1, target.position);
+        beam.startWidth = beam.endWidth = Mathf.Lerp(StartWidth, EndWidth, progress);
+        beam.startColor = beam.endColor = Color.Lerp(StartColor, EndColor, progress);
+    }
+
+    private bool TryResolveTarget(NetworkManager manager)
+    {
+        if (
+            manager.SpawnManager == null
+            || !manager.SpawnManager.SpawnedObjects.TryGetValue(
+                lockState.TargetObjectId,
+                out NetworkObject targetObject
+            )
+            || targetObject == null
+        )
+        {
+            return false;
+        }
+
+        target = targetObject.transform;
+        return true;
     }
 }

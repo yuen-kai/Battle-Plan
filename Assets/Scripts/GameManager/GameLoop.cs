@@ -600,6 +600,12 @@ public class GameLoop : NetworkBehaviour
     private GameObject fogOverlayCellPrefab;
 
     private const float FogUpdateIntervalSeconds = 0.15f;
+
+    // Unit transforms replicate as one batched, fog-filtered snapshot per client rather than a
+    // NetworkTransform per unit. Ten independent 30Hz streams collapse into one 15Hz message, which
+    // matters most on WebGL: every NGO message is a reliable-ordered WebSocket frame, so message
+    // count costs more than message size once a frame stalls and holds up everything behind it.
+    private const float UnitPositionSyncIntervalSeconds = 1f / 15f;
     private static int FogEdgeMaskId => Shader.PropertyToID("_EdgeMask");
 
     // Match-wide and server-authored so enemy NetworkHide state and every client's overlay
@@ -618,6 +624,7 @@ public class GameLoop : NetworkBehaviour
     private readonly Dictionary<GameObject, Vector2Int> lastFogCells = new();
     private bool serverFogDirty = true;
     private Coroutine serverFogCoroutine;
+    private Coroutine unitPositionSyncCoroutine;
 
     // Client: pooled 150-tile dark overlay from local-owned units plus the public smoke mirror.
     private readonly Dictionary<Vector2Int, Renderer> fogOverlayTiles = new();
@@ -720,6 +727,9 @@ public class GameLoop : NetworkBehaviour
         GameHUDController.Instance?.SetMatchSummary(replicatedMatchOptions.Value);
         RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
         Unit.RefreshAllTeamPresentation();
+
+        if (IsServer)
+            StartServerUnitPositionSync();
 
         if (IsClient && FogOfWarEnabled)
             StartClientFog();
@@ -2941,6 +2951,129 @@ public class GameLoop : NetworkBehaviour
                 StartClientFog();
             else
                 StopClientFog();
+        }
+    }
+
+    /// <summary>
+    /// Starts the batched transform broadcast that replaces per-unit NetworkTransform. Runs for the
+    /// whole match regardless of the fog setting, because with fog off every unit is simply visible
+    /// to everyone rather than the broadcast being unnecessary.
+    /// </summary>
+    private void StartServerUnitPositionSync()
+    {
+        if (!IsServer || unitPositionSyncCoroutine != null)
+            return;
+
+        unitPositionSyncCoroutine = StartCoroutine(ServerUnitPositionLoop());
+    }
+
+    private void StopServerUnitPositionSync()
+    {
+        if (unitPositionSyncCoroutine == null)
+            return;
+
+        StopCoroutine(unitPositionSyncCoroutine);
+        unitPositionSyncCoroutine = null;
+    }
+
+    private IEnumerator ServerUnitPositionLoop()
+    {
+        List<ulong> ids = new();
+        List<Vector3> positions = new();
+        List<float> yaws = new();
+
+        while (IsServer && IsSpawned)
+        {
+            yield return new WaitForSeconds(UnitPositionSyncIntervalSeconds);
+
+            if (NetworkManager == null || !NetworkManager.IsListening)
+                continue;
+
+            foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+            {
+                // The host reads the authoritative transforms directly; only remote clients need a
+                // copy, and each gets only what its own team is allowed to see.
+                if (clientId == NetworkManager.ServerClientId)
+                    continue;
+
+                int viewerTeamIndex = GetTeamIndexForClient(clientId);
+                if (viewerTeamIndex < 0)
+                    continue;
+
+                ids.Clear();
+                positions.Clear();
+                yaws.Clear();
+
+                foreach (var team in allTeamUnitObjects)
+                {
+                    if (team.Value == null)
+                        continue;
+
+                    foreach (GameObject unit in team.Value)
+                    {
+                        if (unit == null || !unit.activeInHierarchy)
+                            continue;
+
+                        bool ownTeam = team.Key == viewerTeamIndex;
+                        if (
+                            !ownTeam
+                            && FogOfWarEnabled
+                            && !CanTeamObserveUnit(viewerTeamIndex, unit)
+                        )
+                        {
+                            continue;
+                        }
+
+                        NetworkObject netObj = unit.GetComponent<NetworkObject>();
+                        if (netObj == null || !netObj.IsSpawned)
+                            continue;
+
+                        ids.Add(netObj.NetworkObjectId);
+                        positions.Add(unit.transform.position);
+                        yaws.Add(unit.transform.eulerAngles.y);
+                    }
+                }
+
+                if (ids.Count > 0)
+                {
+                    SyncUnitPositionsClientRpc(
+                        ids.ToArray(),
+                        positions.ToArray(),
+                        yaws.ToArray(),
+                        NetworkHelper.ToClient(clientId)
+                    );
+                }
+            }
+        }
+    }
+
+    [ClientRpc]
+    private void SyncUnitPositionsClientRpc(
+        ulong[] unitIds,
+        Vector3[] positions,
+        float[] yaws,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        if (IsServer || NetworkManager == null || NetworkManager.SpawnManager == null)
+            return;
+
+        for (int i = 0; i < unitIds.Length; i++)
+        {
+            if (
+                !NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+                    unitIds[i],
+                    out NetworkObject netObj
+                )
+                || netObj == null
+            )
+            {
+                continue;
+            }
+
+            UnitTransformInterpolator
+                .For(netObj.gameObject)
+                .SetTarget(positions[i], yaws[i], UnitPositionSyncIntervalSeconds);
         }
     }
 

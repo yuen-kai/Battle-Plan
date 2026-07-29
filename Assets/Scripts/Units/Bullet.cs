@@ -1,9 +1,14 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Unity.Netcode;
 
-public class Bullet : NetworkBehaviour
+/// <summary>
+/// A shot in flight. Bullets are no longer network objects: the server instantiates an authoritative
+/// one that resolves damage, and every peer instantiates its own visual-only copy from a single
+/// <c>FireBulletClientRpc</c>. Travel time is gameplay here - at three cells per second a shot is
+/// airborne long enough for its target to walk out of it - so the server still simulates a real
+/// projectile rather than resolving the hit at the muzzle.
+/// </summary>
+public class Bullet : MonoBehaviour
 {
     private static readonly HashSet<Bullet> activeServerBullets = new();
 
@@ -21,6 +26,12 @@ public class Bullet : NetworkBehaviour
 
     private float maxLifetime = 8f;
     private float timeElapsed = 0f;
+
+    /// <summary>
+    /// Only the server's copy applies damage. Every other copy is a tracer that flies the same path
+    /// and stops on the same geometry, purely so the shot is visible.
+    /// </summary>
+    private bool isAuthoritative;
 
     public static int ActiveServerBulletCount => activeServerBullets.Count;
 
@@ -41,17 +52,36 @@ public class Bullet : NetworkBehaviour
         return GameLoop.GetEnemyTeamIndex(GameLoop.GetTeamIndex(damageableTeam));
     }
 
-    public override void OnNetworkSpawn()
+    /// <summary>
+    /// Arms the shot. Called immediately after instantiation rather than from Awake, because the
+    /// damage figures and the team it may hit are only known to the caller.
+    /// </summary>
+    public void Initialize(
+        Vector3 velocity,
+        float shotDamage,
+        float shotBackstabMultiplier,
+        float shotRange,
+        float shotBackstabAngle,
+        string damageableTeam,
+        bool authoritative
+    )
     {
-        // Paint the shot before the server-only guard below switches this component off on clients.
-        ApplyTeamPresentation();
-        if (!IsServer)
-        {
-            enabled = false;
-            return;
-        }
-        activeServerBullets.Add(this);
+        damage = shotDamage;
+        backstabMultiplier = shotBackstabMultiplier;
+        range = shotRange;
+        backstabAngle = shotBackstabAngle;
+        enemyTeam = damageableTeam;
+        isAuthoritative = authoritative;
         startPosition = transform.position;
+
+        Rigidbody body = GetComponent<Rigidbody>();
+        if (body != null)
+            body.linearVelocity = velocity;
+
+        ApplyTeamPresentation();
+
+        if (authoritative)
+            activeServerBullets.Add(this);
     }
 
     /// <summary>
@@ -73,12 +103,6 @@ public class Bullet : NetworkBehaviour
             : teamMaterials[1];
     }
 
-    public override void OnNetworkDespawn()
-    {
-        activeServerBullets.Remove(this);
-        base.OnNetworkDespawn();
-    }
-
     private void OnDestroy()
     {
         activeServerBullets.Remove(this);
@@ -88,13 +112,13 @@ public class Bullet : NetworkBehaviour
     {
         if (IsPathBlockedBySmoke(transform.position))
         {
-            NetworkHelper.Instance.Despawn(gameObject);
+            Destroy(gameObject);
             return;
         }
 
         if (Vector3.Distance(startPosition, transform.position) > range || timeElapsed > maxLifetime)
         {
-            NetworkHelper.Instance.Despawn(gameObject);
+            Destroy(gameObject);
             return;
         }
         timeElapsed += Time.deltaTime;
@@ -102,14 +126,10 @@ public class Bullet : NetworkBehaviour
 
     private void OnCollisionEnter(Collision other) // built-in function
     {
-        if (!IsServer)
-        {
-            enabled = false;
-            return;
-        }
         GameObject hitObject = other.gameObject;
         if (
-            hitObject.CompareTag(enemyTeam)
+            isAuthoritative
+            && hitObject.CompareTag(enemyTeam)
             && !IsPathBlockedBySmoke(hitObject.transform.position)
         )
         {
@@ -117,7 +137,7 @@ public class Bullet : NetworkBehaviour
             hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
         }
 
-        NetworkHelper.Instance.Despawn(gameObject);
+        Destroy(gameObject);
     }
 
     private bool IsPathBlockedBySmoke(Vector3 destination)
