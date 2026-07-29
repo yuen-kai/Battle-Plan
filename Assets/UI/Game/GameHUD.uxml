@@ -1,6 +1,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Style src="../Shared/BattlePlan.uss" />
     <ui:Style src="../Shared/TacticalToybox.uss" />
+    <ui:Style src="../Shared/Settings.uss" />
     <ui:Style src="GameHUD.uss" />
     <ui:VisualElement name="screen" class="screen game-screen" picking-mode="Ignore">
         <ui:VisualElement name="hud-flash" class="hud-flash" picking-mode="Ignore" />
@@ -9,6 +10,10 @@
             <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
 
             <ui:VisualElement class="hud-top toybox-ui" picking-mode="Ignore">
+                <ui:VisualElement name="rejoin-notice" class="rejoin-notice toy-readout hidden" picking-mode="Ignore">
+                    <ui:Label name="rejoin-notice-title" text="Opponent dropped" class="rejoin-notice__key toy-readout__label" picking-mode="Ignore" />
+                    <ui:Label name="rejoin-notice-status" text="Rejoin window closed" class="rejoin-notice__value toy-chip" picking-mode="Ignore" />
+                </ui:VisualElement>
                 <ui:VisualElement name="hill-status-readout" class="hill-status-readout toy-readout hidden" picking-mode="Ignore">
                     <ui:Label text="Hill control" class="hill-status-readout__key toy-readout__label" picking-mode="Ignore" />
                     <ui:Label name="hill-status-label" text="No control · 0/3" class="hill-status-readout__value toy-chip" picking-mode="Ignore" />
@@ -35,6 +40,7 @@
                         <ui:Button name="lock-in-button" text="Lock in" class="button button--primary planning-commit__button" tooltip="Lock current orders" />
                     </ui:VisualElement>
                     <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
+                    <ui:Button name="settings-button" text="Settings" class="button hud-settings-button" tooltip="Audio and display settings" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -95,13 +101,83 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="settings-overlay" class="modal-shade settings-overlay toybox-ui hidden">
+            <ui:VisualElement name="settings-panel" class="modal settings-panel" focusable="true" tabindex="-1">
+                <ui:Label text="Settings" class="title-lg" picking-mode="Ignore" />
+                <ui:VisualElement class="divider" picking-mode="Ignore" />
+                <ui:ScrollView name="settings-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="settings-scroll">
+                    <ui:Label text="Volume" class="section-label settings-section-label settings-section-label--first" picking-mode="Ignore" />
+                    <ui:VisualElement class="setting-row">
+                        <ui:Label text="Master" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:Slider name="master-volume-slider" low-value="0" high-value="1" value="1" class="toy-slider setting-row__control" />
+                        <ui:Label name="master-volume-value" text="100%" class="setting-row__value mono" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="setting-row">
+                        <ui:Label text="Music" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:Slider name="music-volume-slider" low-value="0" high-value="1" value="1" class="toy-slider setting-row__control" />
+                        <ui:Label name="music-volume-value" text="100%" class="setting-row__value mono" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="setting-row">
+                        <ui:Label text="Effects" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:Slider name="sfx-volume-slider" low-value="0" high-value="1" value="1" class="toy-slider setting-row__control" />
+                        <ui:Label name="sfx-volume-value" text="100%" class="setting-row__value mono" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Label text="Display" class="section-label settings-section-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="setting-row setting-row--single">
+                        <ui:Label text="Quality" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:DropdownField name="quality-dropdown" class="quality-dropdown setting-row__control" />
+                    </ui:VisualElement>
+                </ui:ScrollView>
+                <ui:Label text="The round keeps running while this is open." class="label label--muted settings-live-note" picking-mode="Ignore" />
+                <ui:Button name="settings-close-button" text="Return to match" class="button button--primary modal-close" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <ui:VisualElement name="results-overlay" class="modal-shade results-overlay toybox-ui hidden">
             <ui:VisualElement name="results-panel" class="modal results-panel" focusable="true" tabindex="-1">
-                <ui:ScrollView name="results-scroll" mode="Vertical" class="results-scroll" focusable="true" tabindex="0">
+                <ui:ScrollView name="results-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="results-scroll" focusable="true" tabindex="0">
                     <ui:Label text="Battle report" class="section-label" picking-mode="Ignore" />
                     <ui:VisualElement class="results-mark" picking-mode="Ignore" />
                     <ui:Label name="results-status" text="Match complete" class="results-status" picking-mode="Ignore" />
                     <ui:VisualElement class="divider" picking-mode="Ignore" />
+                    <ui:Label name="report-empty" text="No rounds were recorded for this match." class="report-empty hidden" picking-mode="Ignore" />
+                    <ui:VisualElement name="report-reveal" class="report-reveal hidden">
+                        <ui:Label text="What both crews ordered" class="section-label" picking-mode="Ignore" />
+                        <ui:VisualElement class="report-stepper">
+                            <ui:Button name="report-prev-button" text="Previous" class="button report-step-button" />
+                            <ui:Label name="report-round-label" text="Round 1 of 1" class="report-round-label mono" picking-mode="Ignore" />
+                            <ui:Button name="report-next-button" text="Next" class="button report-step-button" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="report-body" picking-mode="Ignore">
+                        <ui:VisualElement class="report-board-column" picking-mode="Ignore">
+                        <ui:Label name="report-summary" text="" class="report-summary" picking-mode="Ignore" />
+                        <ui:VisualElement name="report-board" class="report-board" picking-mode="Ignore" />
+                        <ui:VisualElement class="report-legend" picking-mode="Ignore">
+                            <ui:VisualElement class="report-legend__item" picking-mode="Ignore">
+                                <ui:VisualElement class="report-legend__glyph report-legend__glyph--start" picking-mode="Ignore" />
+                                <ui:Label text="Started" class="report-legend__label" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="report-legend__item" picking-mode="Ignore">
+                                <ui:VisualElement class="report-legend__glyph report-legend__glyph--end" picking-mode="Ignore" />
+                                <ui:Label text="Ended" class="report-legend__label" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="report-legend__item" picking-mode="Ignore">
+                                <ui:VisualElement class="report-legend__glyph report-legend__glyph--dodge" picking-mode="Ignore" />
+                                <ui:Label text="Dodged" class="report-legend__label" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="report-legend__item" picking-mode="Ignore">
+                                <ui:VisualElement class="report-legend__glyph report-legend__glyph--ability" picking-mode="Ignore" />
+                                <ui:Label text="Ability" class="report-legend__label" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="report-legend__item" picking-mode="Ignore">
+                                <ui:Label text="×" class="report-legend__glyph report-legend__glyph--dead" picking-mode="Ignore" />
+                                <ui:Label text="Eliminated" class="report-legend__label" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="report-orders" class="report-orders" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:ScrollView>
                 <ui:VisualElement class="results-actions">
                     <ui:Button name="play-again-button" text="Play again" class="button button--primary results-button" />

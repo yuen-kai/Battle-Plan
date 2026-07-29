@@ -12,6 +12,10 @@ using UnityEngine.UIElements;
 [Category("GameplayNetwork")]
 public class GameplayNetworkEditModeTests
 {
+    // Id 2 was Capture the Flag before it was dropped. A peer on an older build can still put it
+    // on the wire, so sanitization must keep folding unknown ids back to Elimination.
+    private const GameMode RetiredGameModeId = (GameMode)2;
+
     [SetUp]
     public void SetUp()
     {
@@ -42,7 +46,7 @@ public class GameplayNetworkEditModeTests
         Assert.That(sanitizedKingOfTheHill.GameModeDisplayName, Is.EqualTo("King of the Hill"));
 
         MatchOptions unsupported = defaults;
-        unsupported.gameMode = GameMode.CaptureTheFlag;
+        unsupported.gameMode = RetiredGameModeId;
         Assert.That(unsupported.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
 
         MatchOptions invalid = new()
@@ -2252,6 +2256,421 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void BattleReport_NetworkRoundTripPreservesEveryCommittedOrder()
+    {
+        BattleReport written = new() { gameMode = GameMode.KingOfTheHill };
+        written.crew.Add(
+            new BattleReportCrewMember
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                catalogIndex = 3,
+                maxHealth = 80,
+            }
+        );
+        written.crew.Add(
+            new BattleReportCrewMember
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 4,
+                catalogIndex = 1,
+                maxHealth = 120,
+            }
+        );
+
+        BattleReportRound round = new()
+        {
+            roundNumber = 7,
+            hillControllerTeamIndex = GameLoop.OpponentTeamIndex,
+            hillStreak = 2,
+            hillContested = false,
+        };
+        round.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Ability,
+                startCell = new Vector2Int(3, 2),
+                endCell = new Vector2Int(3, 2),
+                hasAbilityTarget = true,
+                abilityTarget = new Vector2Int(9, 6),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 55,
+                path = new List<Vector2Int>(),
+            }
+        );
+        round.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 4,
+                order = BattleReportOrder.Dodge,
+                startCell = new Vector2Int(9, 6),
+                endCell = new Vector2Int(9, 8),
+                aliveAtRoundEnd = false,
+                diedThisRound = true,
+                healthAtRoundEnd = 0,
+                path = new List<Vector2Int>
+                {
+                    new(9, 6),
+                    new(9, 7),
+                    new(9, 8),
+                },
+            }
+        );
+        written.rounds.Add(round);
+
+        using FastBufferWriter writer = new(1024, Allocator.Temp);
+        writer.WriteNetworkSerializable(written);
+        using FastBufferReader reader = new(writer, Allocator.Temp);
+        reader.ReadNetworkSerializable(out BattleReport read);
+
+        Assert.That(read.gameMode, Is.EqualTo(GameMode.KingOfTheHill));
+        Assert.That(read.crew.Count, Is.EqualTo(2));
+        Assert.That(
+            read.TryGetCrewMember(GameLoop.OpponentTeamIndex, 4, out BattleReportCrewMember member),
+            Is.True
+        );
+        Assert.That(member.catalogIndex, Is.EqualTo(1));
+        Assert.That(member.maxHealth, Is.EqualTo(120));
+
+        Assert.That(read.rounds.Count, Is.EqualTo(1));
+        BattleReportRound readRound = read.rounds[0];
+        Assert.That(readRound.roundNumber, Is.EqualTo(7));
+        Assert.That(readRound.hillControllerTeamIndex, Is.EqualTo(GameLoop.OpponentTeamIndex));
+        Assert.That(readRound.hillStreak, Is.EqualTo(2));
+        Assert.That(readRound.hillContested, Is.False);
+        Assert.That(readRound.entries.Count, Is.EqualTo(2));
+
+        BattleReportEntry ability = readRound.entries[0];
+        Assert.That(ability.order, Is.EqualTo(BattleReportOrder.Ability));
+        Assert.That(ability.hasAbilityTarget, Is.True);
+        Assert.That(ability.abilityTarget, Is.EqualTo(new Vector2Int(9, 6)));
+        Assert.That(ability.startCell, Is.EqualTo(new Vector2Int(3, 2)));
+        Assert.That(ability.healthAtRoundEnd, Is.EqualTo(55));
+        Assert.That(ability.path, Is.Empty);
+
+        BattleReportEntry dodge = readRound.entries[1];
+        Assert.That(dodge.order, Is.EqualTo(BattleReportOrder.Dodge));
+        Assert.That(dodge.diedThisRound, Is.True);
+        Assert.That(dodge.aliveAtRoundEnd, Is.False);
+        Assert.That(
+            dodge.path,
+            Is.EqualTo(
+                new List<Vector2Int>
+                {
+                    new(9, 6),
+                    new(9, 7),
+                    new(9, 8),
+                }
+            )
+        );
+    }
+
+    [Test]
+    public void BattleReport_NegativeHillControllerSurvivesRoundTrip()
+    {
+        BattleReport written = new() { gameMode = GameMode.KingOfTheHill };
+        written.rounds.Add(
+            new BattleReportRound
+            {
+                roundNumber = 1,
+                hillControllerTeamIndex = GameLoop.NoHillController,
+                hillContested = true,
+            }
+        );
+
+        using FastBufferWriter writer = new(128, Allocator.Temp);
+        writer.WriteNetworkSerializable(written);
+        using FastBufferReader reader = new(writer, Allocator.Temp);
+        reader.ReadNetworkSerializable(out BattleReport read);
+
+        Assert.That(
+            read.rounds[0].hillControllerTeamIndex,
+            Is.EqualTo(GameLoop.NoHillController),
+            "An uncontrolled hill is -1, so the controller field cannot be an unsigned byte."
+        );
+        Assert.That(read.rounds[0].hillContested, Is.True);
+    }
+
+    [Test]
+    public void BattleReport_RecordingIsBoundedAndRevealedOnlyAtMatchEnd()
+    {
+        string source = File.ReadAllText("Assets/Scripts/GameManager/GameLoop.cs");
+
+        Assert.That(
+            source,
+            Does.Contain("RecordBattleReportPlans(paths)"),
+            "Orders must be captured after the dodge window folds dives into the plan."
+        );
+        Assert.That(
+            source.IndexOf("RecordBattleReportPlans(paths)", System.StringComparison.Ordinal),
+            Is.LessThan(source.IndexOf("ExecuteMoves(paths);", System.StringComparison.Ordinal)),
+            "diveUnitsThisRound is cleared by ExecuteMoves, so dodges must be read before it runs."
+        );
+        Assert.That(
+            BattleReport.MaxRecordedRounds,
+            Is.GreaterThan(GameLoop.HillControlRoundsToWin),
+            "The cap must never truncate the shortest possible King of the Hill win."
+        );
+
+        MethodInfo send = typeof(GameLoop).GetMethod(
+            "SendBattleReportClientRpc",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        Assert.That(send, Is.Not.Null);
+        Assert.That(
+            send.GetCustomAttribute<ClientRpcAttribute>(),
+            Is.Not.Null,
+            "The reveal is server-authored and pushed to clients, never requested by them."
+        );
+    }
+
+    /// <summary>
+    /// Wires the HUD's report elements without running OnEnable, matching the inactive-GameObject
+    /// pattern the other HUD tests use.
+    /// </summary>
+    private static void BindReportElements(GameHUDController controller, VisualElement root)
+    {
+        void Bind(string field, VisualElement element)
+        {
+            typeof(GameHUDController)
+                .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(controller, element);
+        }
+
+        VisualElement board = root.Q<VisualElement>("report-board");
+        Bind("reportReveal", root.Q<VisualElement>("report-reveal"));
+        Bind("reportBoardElement", board);
+        Bind("reportOrders", root.Q<VisualElement>("report-orders"));
+        Bind("reportEmpty", root.Q<Label>("report-empty"));
+        Bind("reportRoundLabel", root.Q<Label>("report-round-label"));
+        Bind("reportSummary", root.Q<Label>("report-summary"));
+        Bind("reportPrevButton", root.Q<Button>("report-prev-button"));
+        Bind("reportNextButton", root.Q<Button>("report-next-button"));
+
+        typeof(GameHUDController)
+            .GetField("reportBoard", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(controller, new BattleReportBoard(board));
+    }
+
+    private static BattleReport BuildTwoRoundReport()
+    {
+        BattleReport report = new() { gameMode = GameMode.KingOfTheHill };
+        for (int team = 0; team < GameLoop.TeamCount; team++)
+        {
+            report.crew.Add(
+                new BattleReportCrewMember
+                {
+                    teamIndex = team,
+                    rosterSlot = 0,
+                    catalogIndex = 0,
+                    maxHealth = 120,
+                }
+            );
+        }
+
+        BattleReportRound first = new() { roundNumber = 1, hillContested = true };
+        first.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Move,
+                startCell = new Vector2Int(1, 1),
+                endCell = new Vector2Int(1, 3),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 120,
+                path = new List<Vector2Int>
+                {
+                    new(1, 1),
+                    new(1, 2),
+                    new(1, 3),
+                },
+            }
+        );
+        first.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Ability,
+                startCell = new Vector2Int(10, 8),
+                endCell = new Vector2Int(10, 8),
+                hasAbilityTarget = true,
+                abilityTarget = new Vector2Int(7, 5),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 96,
+                path = new List<Vector2Int>(),
+            }
+        );
+
+        BattleReportRound second = new()
+        {
+            roundNumber = 2,
+            hillControllerTeamIndex = GameLoop.OpponentTeamIndex,
+            hillStreak = 1,
+        };
+        second.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Dodge,
+                startCell = new Vector2Int(1, 3),
+                endCell = new Vector2Int(2, 3),
+                aliveAtRoundEnd = false,
+                diedThisRound = true,
+                healthAtRoundEnd = 0,
+                path = new List<Vector2Int> { new(1, 3), new(2, 3) },
+            }
+        );
+        second.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Held,
+                startCell = new Vector2Int(10, 8),
+                endCell = new Vector2Int(10, 8),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 96,
+                path = new List<Vector2Int>(),
+            }
+        );
+
+        report.rounds.Add(first);
+        report.rounds.Add(second);
+        return report;
+    }
+
+    [Test]
+    public void BattleReportReveal_OpensOnFinalRoundAndNamesEveryCommittedOrder()
+    {
+        VisualTreeAsset hudAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            "Assets/UI/Game/GameHUD.uxml"
+        );
+        Assert.That(hudAsset, Is.Not.Null);
+
+        GameObject hudObject = new("Battle report reveal test");
+        hudObject.SetActive(false);
+        try
+        {
+            UIDocument document = hudObject.AddComponent<UIDocument>();
+            document.visualTreeAsset = hudAsset;
+            GameHUDController controller = hudObject.AddComponent<GameHUDController>();
+            VisualElement root = document.rootVisualElement;
+            BindReportElements(controller, root);
+
+            controller.SetBattleReport(BuildTwoRoundReport(), GameLoop.HostTeamIndex);
+
+            Label roundLabel = root.Q<Label>("report-round-label");
+            Assert.That(
+                roundLabel.text,
+                Is.EqualTo("Round 2 of 2"),
+                "The reveal opens on the round the player just lived through."
+            );
+            Assert.That(root.Q<VisualElement>("report-reveal").ClassListContains("hidden"), Is.False);
+            Assert.That(root.Q<Label>("report-empty").ClassListContains("hidden"), Is.True);
+            Assert.That(root.Q<Button>("report-next-button").enabledSelf, Is.False);
+            Assert.That(root.Q<Button>("report-prev-button").enabledSelf, Is.True);
+
+            VisualElement orders = root.Q<VisualElement>("report-orders");
+            List<VisualElement> rows = orders
+                .Query<VisualElement>(className: "report-order-row")
+                .ToList();
+            Assert.That(rows.Count, Is.EqualTo(2), "One row per unit in the round.");
+            Assert.That(
+                orders.Query<Label>(className: "report-team-heading").ToList().Count,
+                Is.EqualTo(2),
+                "Rows are grouped into the viewer's crew and the opponent's."
+            );
+
+            string friendlyOrder = rows[0].Q<Label>(className: "report-order-row__order").text;
+            Assert.That(friendlyOrder, Does.Contain("Dodged"));
+            Assert.That(rows[0].ClassListContains("report-order-row--dead"), Is.True);
+            Assert.That(rows[0].ClassListContains("report-order-row--enemy"), Is.False);
+            Assert.That(
+                rows[0].Q<Label>(className: "report-order-row__state").text,
+                Is.EqualTo("Eliminated")
+            );
+
+            Assert.That(rows[1].ClassListContains("report-order-row--enemy"), Is.True);
+            Assert.That(
+                rows[1].Q<Label>(className: "report-order-row__state").text,
+                Is.EqualTo("96/120 HP")
+            );
+
+            Label summary = root.Q<Label>("report-summary");
+            Assert.That(summary.text, Does.Contain("You lost 1 unit"));
+            Assert.That(
+                summary.text,
+                Does.Contain($"They held the hill (1/{GameLoop.HillControlRoundsToWin})")
+            );
+
+            // Stepping back must reach the round whose ability target the loser wants explained.
+            typeof(GameHUDController)
+                .GetMethod("StepReportRound", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(controller, new object[] { -1 });
+
+            Assert.That(roundLabel.text, Is.EqualTo("Round 1 of 2"));
+            Assert.That(root.Q<Button>("report-prev-button").enabledSelf, Is.False);
+            Assert.That(root.Q<Button>("report-next-button").enabledSelf, Is.True);
+            Assert.That(summary.text, Does.Contain("No one was eliminated."));
+            Assert.That(summary.text, Does.Contain("The hill was contested."));
+
+            List<VisualElement> firstRoundRows = orders
+                .Query<VisualElement>(className: "report-order-row")
+                .ToList();
+            Assert.That(
+                firstRoundRows[1].Q<Label>(className: "report-order-row__order").text,
+                Does.Contain("Ability on (7, 5)"),
+                "The reveal must name where an enemy ability was actually aimed."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(hudObject);
+        }
+    }
+
+    [Test]
+    public void BattleReportReveal_FallsBackToANoticeWhenNothingWasRecorded()
+    {
+        VisualTreeAsset hudAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            "Assets/UI/Game/GameHUD.uxml"
+        );
+        GameObject hudObject = new("Empty battle report test");
+        hudObject.SetActive(false);
+        try
+        {
+            UIDocument document = hudObject.AddComponent<UIDocument>();
+            document.visualTreeAsset = hudAsset;
+            GameHUDController controller = hudObject.AddComponent<GameHUDController>();
+            VisualElement root = document.rootVisualElement;
+            BindReportElements(controller, root);
+
+            // A match that ends before any round resolves still has to close cleanly.
+            controller.SetBattleReport(null, GameLoop.HostTeamIndex);
+            Assert.That(root.Q<VisualElement>("report-reveal").ClassListContains("hidden"), Is.True);
+            Assert.That(root.Q<Label>("report-empty").ClassListContains("hidden"), Is.False);
+            Assert.That(root.Q<Label>("report-round-label").text, Is.Empty);
+
+            controller.SetBattleReport(new BattleReport(), GameLoop.HostTeamIndex);
+            Assert.That(
+                root.Q<VisualElement>("report-reveal").ClassListContains("hidden"),
+                Is.True,
+                "A report with no rounds is as empty as no report at all."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(hudObject);
+        }
+    }
+
+    [Test]
     public void MatchResult_InvalidWinnerAndDrawConstructionsThrow()
     {
         Assert.That(
@@ -2361,9 +2780,9 @@ public class GameplayNetworkEditModeTests
             "Only Elimination and King of the Hill may survive sanitization."
         );
 
-        MatchOptions ctf = MatchOptions.Default;
-        ctf.gameMode = GameMode.CaptureTheFlag;
-        Assert.That(ctf.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
+        MatchOptions retired = MatchOptions.Default;
+        retired.gameMode = RetiredGameModeId;
+        Assert.That(retired.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
     }
 
     [Test]

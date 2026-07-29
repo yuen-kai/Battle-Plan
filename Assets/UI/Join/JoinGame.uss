@@ -48,8 +48,14 @@
     margin-bottom: 14px;
 }
 
+/* Same split as the title screen's action row: two 50% tabs plus the gap and
+   Unity's built-in Button side margin overflow the tab strip. */
 .join-tab {
-    width: 50%;
+    width: 0;
+    min-width: 0;
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-left: 0;
     margin-right: 6px;
 }
 
@@ -140,12 +146,6 @@
     font-size: var(--toy-type-caption);
     color: var(--toy-text-copy);
     white-space: normal;
-}
-
-.mode-option__status {
-    margin-top: 3px;
-    font-size: var(--toy-type-caption);
-    color: var(--toy-text-muted);
 }
 
 .button--selected .mode-option__detail,

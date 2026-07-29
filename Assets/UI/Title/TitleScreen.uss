@@ -32,9 +32,14 @@
     width: 100%;
 }
 
+/* Unity's built-in Button style carries a 3px side margin. Left unzeroed it
+   insets every action from the divider and the credits row below, and it is
+   what pushed the half-width row past the panel edge. */
 .title-action {
     margin-top: 5px;
     margin-bottom: 5px;
+    margin-left: 0;
+    margin-right: 0;
 }
 
 .toybox-ui.title-screen .title-play {
@@ -63,9 +68,14 @@
     flex-direction: row;
 }
 
+/* Split the row by growth rather than by a 50% width: two halves plus the
+   10px between them add up to more than the row, and the excess spilled to
+   the right of Play instead of shrinking. */
 .title-action--half {
-    width: 50%;
+    width: 0;
     min-width: 0;
+    flex-grow: 1;
+    flex-basis: 0;
     margin-right: 5px;
 }
 
@@ -148,43 +158,8 @@
     height: 100%;
 }
 
-.quality-dropdown {
-    min-height: var(--toy-target);
-    margin-bottom: var(--toy-space-sm);
-    color: var(--toy-text);
-    font-size: var(--toy-type-body-lg);
-}
-
-.quality-dropdown > .unity-base-field__input {
-    min-height: var(--toy-target);
-    padding-left: 14px;
-    background-color: var(--toy-inset);
-    color: var(--toy-text);
-    border-width: var(--toy-focus-width);
-    border-color: var(--toy-edge);
-    border-radius: var(--toy-radius-md);
-}
-
-.quality-dropdown > .unity-base-field__input:hover {
-    border-color: var(--toy-edge-strong);
-}
-
-.quality-dropdown:focus > .unity-base-field__input,
-.quality-dropdown > .unity-base-field__input:focus {
-    border-color: var(--toy-focus);
-}
-
-.quality-dropdown:disabled {
-    color: var(--toy-text-muted);
-    opacity: 1;
-}
-
-.quality-dropdown:disabled > .unity-base-field__input,
-.quality-dropdown:disabled > .unity-base-field__input:hover {
-    background-color: var(--toy-disabled-surface);
-    color: var(--toy-text-muted);
-    border-color: var(--toy-disabled-border);
-}
+/* The settings panel's rows, columns, and quality field live in Assets/UI/Shared/Settings.uss so
+   the in-match overlay draws the same panel. */
 
 .credit-row {
     margin-top: var(--toy-space-sm);
@@ -249,8 +224,12 @@
     flex-direction: column;
 }
 
+/* The row stacks on phone, so growth would apply to height and collapse both
+   buttons against an auto-height row. */
 .phone .title-action--half {
     width: 100%;
+    flex-grow: 0;
+    flex-basis: auto;
     margin-left: 0;
     margin-right: 0;
 }

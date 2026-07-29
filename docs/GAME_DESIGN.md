@@ -12,7 +12,8 @@ Battle Plan is a **1v1 simultaneous-turn positional strategy game** ("auto-battl
 movement paths"). Both players secretly plan movement paths for their five-unit squad on a shared
 grid during a timed **planning phase**. When time expires, the round **executes simultaneously**:
 all units follow their paths, then automatically acquire targets and shoot once they stop. A player
-wins by eliminating all enemy units.
+wins by eliminating all enemy units, or — in King of the Hill — by holding the center for three
+consecutive rounds (§2).
 
 Design shorthand from the original pitch: *"Chess, but simultaneous, with guns"* / *"Frozen Synapse
 but simpler, with special abilities"* / *"XCOM but multiplayer and simultaneous"* / *"Valorant but
@@ -24,8 +25,10 @@ you control big-picture movement, not the characters"*.
 - **Implemented July 2026:** planning-phase move-or-ability choice with an opponent "dodge/dive"
   response window at execution start (§2), **fog of war** (§6), Commander Smoke Screen, and the
   current combat profile (§4, §9).
-- **Planned but not currently functional** (see §8): additional game modes such as escort.
-  Reroute is retained only as design history; Smoke Screen is the Commander's live ability.
+- **Game modes:** Elimination and King of the Hill, and nothing else. No third mode is designed or
+  committed. Capture the Flag was dropped in July 2026 — the enum value, the disabled Join button,
+  and its tests are gone rather than left as a promise. Reroute is retained only as design history;
+  Smoke Screen is the Commander's live ability.
 
 The original 1-sheet pitch lived in `BattlePlan 1 Sheet Pitch.txt` (deleted from working tree, in
 git history) and a pitch-level roster summary lives in `Overview.md` at the repo root. **Treat both
@@ -68,6 +71,12 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
    - The server computes threatened enemies per activation: within `responseRange` cells of the
      target square (`Helper.GetObjectsInRange`), or of the line (`GetUnitsInRangeOfLine`).
      Threatened units get their `UnitCanvas/Alert` icon enabled network-wide.
+   - **Only Grenade and Area Lock open a dodge window.** Pogo, Shield Rush, and Smoke ship with
+     `responseRange = 0` deliberately: a dodge answers an ability that *strikes a cell*, and these
+     three reposition or deny instead. Pogo in particular is self-balancing by distance — jumping
+     next to an enemy accepts return fire on arrival, jumping away trades pressure for
+     maneuverability — so a dodge would cancel the reward for the safe option while leaving the
+     risk of the aggressive one. Treat this as a standing design ruling, not an oversight.
    - If anyone is threatened, that client gets a dive-planning window
      (`timeDivePerUnit × alerted count`): `StartDodgePlanningClientRpc` reuses
      `PlanMovement.StartPlanning` restricted to the alerted units with `diveRange` as the step
@@ -109,6 +118,25 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
    (`teamSize(team) > 0`, tag-based). When it exits, `EndGame` → `EndGameClientRpc` shows
    "You win!/You lose!" plus *Play Again* (both players must accept; reloads `HomeScreen`) and
    *Main Menu* (disconnects; loads `Title Screen`).
+
+### Game modes (`GameMode` in `MatchOptions.cs`)
+
+Two modes, chosen at match creation. Eliminated units stay dead in both —
+`GameLoop.RespawnEnabledGameModes` is deliberately empty, so the respawn lifecycle exists for a
+future mode but no current mode opts in.
+
+- **Elimination** — wipe the other crew. A simultaneous double wipe is an explicit draw
+  (`MatchResultReason.SimultaneousElimination`).
+- **King of the Hill** — `GameLoop.KingOfTheHillCells` is a fixed **12-cell block, columns 6–8 ×
+  rows 3–6**, drawn at runtime only in this mode. After each round `ResolveKingOfTheHillRound`
+  reads presence: one team's units alone in the block is *Controlled*, both teams present is
+  *Contested* and resets the streak. **Three consecutive controlled rounds**
+  (`HillControlRoundsToWin = 3`) wins. Elimination takes precedence — the loop checks living teams
+  before scoring the hill, so wiping the crew ends the match immediately.
+
+Either mode can also end in `MatchResultReason.DisconnectForfeit` when a peer drops mid-match.
+`MatchOptions.Sanitized()` folds any unrecognized mode id back to Elimination, which is what keeps
+a peer on a stale build from starting a mode this one cannot run.
 
 **Design history:** abilities were originally meant to activate mid-execution (the commented-out
 `ActivateAbility.cs` pipeline). That was reworked (July 2026) into the implemented model above:
@@ -412,10 +440,11 @@ Code-level (from reading, not speculation):
 - `GridSystem.gridWidth/gridHeight` (15×10) are dead serialized fields kept in sync for Inspector
   clarity; the authoritative size comes from `GridSystem.ColumnCount/RowCount` and
   `GameLoop.gridBounds`.
-- `AudioManager.cs` is an empty stub.
-- Pitch/Overview.md drift: Sniper's "Target Lock" is implemented as `targetLockDuration`, only
-  PogoRider has a backstab bonus, and Overview still labels the now-eligible Smoke Commander
-  unavailable. §4 and the serialized assets are authoritative.
+- `AudioManager.cs` carries `musicSource`, `SFXSource`, and a `buttonClick` clip but has no logic —
+  `Start`/`Update` are empty and nothing binds volume, so there is no audio settings surface.
+- Pitch/Overview.md drift: Sniper's "Target Lock" is implemented as `targetLockDuration`. Overview's
+  roster, cooldowns, Commander availability, and King of the Hill rules were reconciled in July 2026.
+  §4 and the serialized assets remain authoritative for stats.
 
 Historical verification: `DevE2ETest` passed 33/33 on July 17 2026 against the pre-fog build and
 34/34 after the original fog/damage rebalance. For the July 20 miss-allowance profile, Unity

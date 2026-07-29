@@ -38,18 +38,11 @@
                                     <ui:Label text="Knock out the other crew." class="toy-button__label mode-option__detail" />
                                 </ui:VisualElement>
                             </ui:Button>
-                            <ui:Button name="king-button" class="button mode-option">
+                            <ui:Button name="king-button" class="button mode-option mode-option--last">
                                 <ui:VisualElement class="toy-icon toy-icon--hill mode-option__icon" picking-mode="Ignore" />
                                 <ui:VisualElement class="option-copy" picking-mode="Ignore">
                                     <ui:Label text="King of the Hill" class="toy-button__label mode-option__name" />
                                     <ui:Label text="Hold the middle." class="toy-button__label mode-option__detail" />
-                                </ui:VisualElement>
-                            </ui:Button>
-                            <ui:Button name="flag-button" enabled="false" class="button mode-option mode-option--last">
-                                <ui:VisualElement class="toy-icon toy-icon--flag mode-option__icon" picking-mode="Ignore" />
-                                <ui:VisualElement class="option-copy" picking-mode="Ignore">
-                                    <ui:Label text="Capture the Flag" class="toy-button__label mode-option__name" />
-                                    <ui:Label text="Coming later" class="toy-button__label mode-option__status" />
                                 </ui:VisualElement>
                             </ui:Button>
                         </ui:VisualElement>

@@ -5,7 +5,6 @@ public enum GameMode : byte
 {
     Elimination = 0,
     KingOfTheHill = 1,
-    CaptureTheFlag = 2,
 }
 
 public enum OpponentType : byte

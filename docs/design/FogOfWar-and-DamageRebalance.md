@@ -1,6 +1,13 @@
 # Design Spec: Fog of War + Weapon Damage Rebalance
 
-**Status:** Approved design — source of truth for implementation.
+> **Status: partly shipped, partly superseded — not a source of truth.**
+> **Deliverable 1 (fog of war) shipped** and its vision model is still accurate, with one exception:
+> the Sniper ships at `visionRange` **7**, not the 8 proposed in §1.1. The Phase 2 enhancement
+> list in §1.8 is still open work.
+> **Deliverable 2 (damage rebalance) was never shipped as written** and is superseded by the
+> miss-allowance profile in `docs/GAME_DESIGN.md` §4/§9. Do not implement any number below §"Deliverable 2".
+> For current combat values read `Assets/UnitStats/*.asset`; for current rules read `docs/GAME_DESIGN.md`.
+
 **Scope:** Two features for Battle-Plan (Unity 6000.3.1f1, Netcode for GameObjects, host-based 1v1).
 **Author role:** Design/interpretation lead. A coding agent implements from this doc.
 
@@ -23,7 +30,7 @@ These were verified by reading the code; the implementer should not re-litigate 
 | Server-side auto-targeting already does physics LoS raycasts vs `"Walls"` + enemy-team layer, capped at `targetRange * cellSize` | `Shooting.lineOfSight()`, `Shooting.FindNearestEnemy()` |
 | Sniper's weapon target-lock laser is rendered from `NetworkVariable`s on the sniper's own object (`isLaserEnabled`, `laserStartPos`, …) → automatically hidden/resynced with `NetworkShow/NetworkHide` | `Shooting.cs` laser NetworkVariables |
 | Area Lock's telegraph is `ShowLaserClientRpc` **on the sniper's own NetworkObject** → will be dropped for a client the sniper is hidden from (§1.7) | `AreaLock.ShowLaserClientRpc()` |
-| The **ability activation flow is currently disabled** — `ActivateAbility.cs` and `Reroute.cs` are fully commented out and `PlanMovement.AbilitySelection()` is a TODO. Ability–fog rules in §1.7 are specs for when that flow is re-enabled; only Area Lock/Grenade/Pogo/Shield component code exists and is reachable via `Ability.ExecuteAbility` | `Assets/Scripts/Abilities/ActivateAbility.cs`, `Reroute.cs`, `PlanMovement.AbilitySelection()` |
+| ~~The **ability activation flow is currently disabled**~~ — **no longer true.** Ability selection is live end to end: plans carry a target square, `SanitizeAbilityPlan` validates them, and `CollectAbilityActivations` / `RunDodgePhase` / `RunAbility` execute them. `ActivateAbility.cs` and `Reroute.cs` remain commented out as history and are not part of the path. The §1.7 ability–fog rules describe shipped behavior, not future behavior | `GameLoop.CollectAbilityActivations`, `SanitizeAbilityPlan`, `RunDodgePhase` |
 | Overlay pattern to reuse: `GridSystem.DisplayGridRange(pos, dist, prefab)` draws a **Manhattan diamond** of instantiated tile prefabs | `GridSystem.DisplayGridRange()` |
 | Per-team perspective: each client's `TeamCamera` is placed by `InitializeCameraPositionClientRpc(teamIndex)`; team index = index into `GameLoop.allTeamUnits` | `GameLoop.InitializeCameraPosition()` |
 | Project convention: gameplay logic preferentially added to `GameLoop.cs`; grid math helpers live in `GridSystem.cs` | `.cursor/rules/unity-csharp-conventions.mdc` |
@@ -52,7 +59,7 @@ Add `public int visionRange` to `UnitData` (new `[Header("=== VISION PARAMETERS 
 |---|---|---|---|
 | Soldier | 4 | **5** | Duelist baseline; sees slightly past his engagement range. |
 | Shotgunner | 2 | **3** | Initiator with the shortest sight — must push blind into fog, which is his job; makes Shield Rush entries a real gamble for the enemy. |
-| Sniper | 7 | **8** | Controller — the team's eyes. 8 Manhattan on a 15×10 board covers one lane but not both deep flanks; wall occlusion (18 sparse cover cells across three lanes) still carves shadows to rotate through. Deliberately NOT map-wide. |
+| Sniper | 7 | **8** *(shipped as 7)* | Controller — the team's eyes. Manhattan sight on a 15×10 board covers one lane but not both deep flanks; wall occlusion (18 sparse cover cells across three lanes) still carves shadows to rotate through. Deliberately NOT map-wide. The shipped asset uses 7 and the Sniper's `targetRange` dropped to 5, so the vision-exceeds-reach constraint still holds. |
 | PogoRider | 7 | **7** | Scout/flanker; equal to weapon range. Jump behind lines doubles as vision denial-breaking. |
 | Commander | 5 | **6** | Support awareness; sees more than he can shoot so Override (when re-enabled) has information to work with. |
 
@@ -165,19 +172,39 @@ Reminder: the activation flow is currently commented out (§0); implement these 
 5. Client fog tile overlay, pooled, local-only (§1.4). New serialized field `fogOverlayCellPrefab` on `GameLoop` (it already owns overlay-ish refs and per-client UI).
 6. Sniper force-reveal hooks in `Shooting` (target lock) and `AreaLock` (§1.7).
 
-**Phase 2 (optional enhancements, in priority order):**
+**Phase 2 (still open, in priority order):**
 - **Last-known-position ghosts:** when an enemy leaves vision, leave a static translucent marker at its last seen cell until it's re-sighted or the round ends. Big usability win; client-local (client knows what it last saw).
 - **Reveal linger:** 0.4 s grace before hiding a unit that left vision (reduces flicker at vision edges during execution).
 - **Reveal-on-fire:** firing reveals the shooter's cell to the enemy team for 1 s (`ForceReveal` from `Shooting.FireBullet`).
 - **Bullet visibility filtering:** hide bullets whose entire flight path is in fog.
-- `Shield` state → NetworkVariable.
-- Planning-phase "threat memory": show enemy positions as of *end of last execution* even if they've since… (not applicable — units don't move between phases; skip).
+
+**Pulled into Phase 1 and shipped:**
+- `Shield` state is a `NetworkVariable<bool> shieldActive` (`Assets/Scripts/Abilities/Shield.cs`); it could not be deferred once Shield became reachable every round.
+- `Health` uses `NetworkVariable<float> currentHealth` + `NetworkVariable<bool> isAlive`, replacing the fog-fragile ClientRpcs.
+
+**Dropped:** planning-phase "threat memory" — units don't move between phases, so it adds nothing.
 
 ---
 
 # Deliverable 2 — Weapon damage rebalance
 
-## 2.1 Current values (verified)
+> **Superseded — do not implement.** This deliverable aimed at "one clean magazine kills a standard
+> unit." The project went the other way: `docs/GAME_DESIGN.md` §4/§9 targets **3 ± 1 magazines** with
+> explicit miss allowances, so every proposed number below (Soldier 25, Shotgun 18, Sniper 110, Pogo
+> 30, Commander 12, Area Lock 220) is wrong for the current build. What actually shipped:
+>
+> | Unit | `damage` | `targetRange` | `visionRange` | `maxHealth` |
+> |---|---:|---:|---:|---:|
+> | Soldier | 10 | 4 | 5 | 120 |
+> | Shotgunner | 8 | 2 | 3 | 160 |
+> | Sniper | 50 | 5 | 7 | 80 |
+> | PogoRider | 12 (×2 backstab) | 7 | 7 | 120 |
+> | Commander | 8 | 5 | 6 | 120 |
+>
+> Grenade deals 80 and Area Lock deals a flat 130 decoupled from the rifle. The rest of this section
+> is kept only to record why the one-magazine target was rejected.
+
+## 2.1 Values as they stood when this spec was written (now historical)
 
 All from the `UnitData` ScriptableObjects in `Assets/UnitStats/*.asset` (fields defined in `Assets/Scripts/Units/UnitData.cs`), plus two ability constants in code:
 

@@ -235,6 +235,19 @@ public class GameLoop : NetworkBehaviour
     private PathsDict dodgeDivePaths;
     private readonly HashSet<int> dodgeResponsesReceived = new();
     private int maxDiveRangeThisRound;
+
+    // Server time the open dodge window closes on, and the telegraphs standing behind it. Both
+    // exist so a seat reclaimed inside the window can be handed the same window back rather than
+    // a fresh one; outside a window the deadline is 0.
+    private double dodgeWindowEndTime;
+    private readonly HashSet<int> dodgeCasterTeams = new();
+    private readonly List<(
+        Vector3 origin,
+        Vector3 square,
+        float radiusCells,
+        bool line,
+        bool smokeScreen
+    )> activeTelegraphs = new();
     private int runningAbilities;
 
     // A unit that walks into a rifle is shot at the whole way in, because movement is what holds
@@ -547,6 +560,40 @@ public class GameLoop : NetworkBehaviour
     private bool matchEnded;
     private bool disconnectRecoveryStarted;
 
+    // === RECONNECT GRACE ===
+    // A dropped seat holds the round loop instead of ending the match. Execution and dodge windows
+    // are never suspended (physics and in-flight abilities cannot be frozen safely and both are
+    // already bounded); the hold is taken at the round boundary, and a drop during planning unwinds
+    // the round so the returning player is not handed a board they never planned for.
+    private int rejoinHoldTeamIndex = -1;
+    private double rejoinHoldDeadline;
+    private readonly HashSet<ulong> pendingRejoinRestores = new();
+
+    // A claimant that is approved but never finishes NGO synchronisation leaves the seat reading as
+    // filled, so the hold needs its own bound on top of the seat's window.
+    private const float RejoinSyncSeconds = 15f;
+
+    // Client-side: stop retrying early enough that the fallback to the lobby still lands inside the
+    // server's window rather than racing the forfeit.
+    private const float ClientRejoinSafetyMarginSeconds = 5f;
+
+    // PlanMovement submits the moment its deadline passes, so a dodge prompt handed back with
+    // almost nothing left on it would spend the team's one response on an empty dive. Below this
+    // much remaining server time the returning player is given no prompt at all instead.
+    public const float RejoinDodgeMinimumSeconds = 1.5f;
+    private const float ClientRejoinRetrySeconds = 1.5f;
+
+    private bool IsHoldingForRejoin => rejoinHoldTeamIndex >= 0;
+
+    // === BATTLE REPORT ===
+    // Built server-side across the match and withheld until FinishGame. Replicating it earlier
+    // would hand a client the enemy's committed orders mid-match.
+    private BattleReport battleReport;
+    private BattleReportRound openReportRound;
+
+    /// <summary>The reveal for the match that just ended, available on every client.</summary>
+    public BattleReport LastBattleReport { get; private set; }
+
     // === FOG OF WAR ===
     [Header("Fog of War")]
     [SerializeField]
@@ -595,6 +642,7 @@ public class GameLoop : NetworkBehaviour
     /// <summary>Deterministically ordered snapshot; callers cannot mutate the authoritative set.</summary>
     public IReadOnlyList<Vector2Int> ActiveSmokeCells =>
         activeSmokeCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x).ToArray();
+
     public HillControlState HillControl => replicatedHillControl.Value;
     public MatchResult? LastMatchResult { get; private set; }
 #if UNITY_EDITOR
@@ -622,10 +670,20 @@ public class GameLoop : NetworkBehaviour
         fogOfWarEnabled.OnValueChanged += OnFogOfWarEnabledChanged;
         replicatedHillControl.OnValueChanged += OnHillControlChanged;
         if (NetworkManager != null)
+        {
             NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
+            NetworkManager.OnClientConnectedCallback += OnClientConnected;
+        }
         matchEnded = false;
         LastMatchResult = null;
+        LastBattleReport = null;
+        battleReport = null;
+        openReportRound = null;
         disconnectRecoveryStarted = false;
+        rejoinHoldTeamIndex = -1;
+        rejoinHoldDeadline = 0d;
+        pendingRejoinRestores.Clear();
+        GameHUDController.Instance?.HideRejoinNotice();
         activeSmokeCells.Clear();
         ClearSmokeScreenVisualsLocal();
 
@@ -668,6 +726,7 @@ public class GameLoop : NetworkBehaviour
 
         if (IsServer)
         {
+            BeginReconnectGraceForMatch();
             StartGame();
             StartCoroutine(StartGameLoopAfterFogSetup());
             InitializeCameraPosition();
@@ -691,7 +750,16 @@ public class GameLoop : NetworkBehaviour
         fogOfWarEnabled.OnValueChanged -= OnFogOfWarEnabledChanged;
         replicatedHillControl.OnValueChanged -= OnHillControlChanged;
         if (NetworkManager != null)
+        {
             NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
+            NetworkManager.OnClientConnectedCallback -= OnClientConnected;
+        }
+        if (IsServer)
+            ReconnectGrace.Server.EndMatch();
+        rejoinHoldTeamIndex = -1;
+        rejoinHoldDeadline = 0d;
+        pendingRejoinRestores.Clear();
+        GameHUDController.Instance?.HideRejoinNotice();
         StopServerFog(false);
         forceRevealUntil.Clear();
         forceRevealToTeamUntil.Clear();
@@ -752,6 +820,29 @@ public class GameLoop : NetworkBehaviour
 
         teamParticipants[teamIndex] = participantId;
         teamRosters[teamIndex] = (int[])roster.Clone();
+    }
+
+    /// <summary>
+    /// Repoints an already configured team at a new participant ID, keeping its roster. Reconnects
+    /// arrive with a fresh NGO client ID, and the crew that is already on the board belongs to the
+    /// seat rather than to the connection that used to hold it.
+    /// </summary>
+    public static void ReassignTeamParticipant(int teamIndex, ulong participantId)
+    {
+        if (teamIndex < 0 || teamIndex >= TeamCount)
+            throw new System.ArgumentOutOfRangeException(nameof(teamIndex));
+        if (!teamParticipants.ContainsKey(teamIndex))
+            throw new System.InvalidOperationException("That logical team is not configured.");
+        if (participantId == BotParticipantId)
+            throw new System.ArgumentException("A seat cannot be reassigned to the bot.");
+        if (teamParticipants.Any(entry => entry.Key != teamIndex && entry.Value == participantId))
+        {
+            throw new System.ArgumentException(
+                "A participant cannot be assigned to more than one logical team."
+            );
+        }
+
+        teamParticipants[teamIndex] = participantId;
     }
 
     private void EnsureTeamConfiguration()
@@ -1138,7 +1229,10 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void SetCardsInteractableClientRpc(bool interactable)
+    private void SetCardsInteractableClientRpc(
+        bool interactable,
+        ClientRpcParams clientRpcParams = default
+    )
     {
         GameHUDController.Instance?.SetCardsInteractable(interactable);
     }
@@ -1196,6 +1290,13 @@ public class GameLoop : NetworkBehaviour
 
         while (!matchEnded && Enumerable.Range(0, TeamCount).All(HasLivingTeamUnits))
         {
+            if (IsHoldingForRejoin)
+            {
+                yield return StartCoroutine(WaitForRejoinOrForfeit());
+                if (matchEnded || !IsSpawned || IsHoldingForRejoin)
+                    yield break;
+            }
+
             ClearActiveSmokeCells();
             roundNumber++;
             submittedTeamPaths.Clear();
@@ -1245,7 +1346,7 @@ public class GameLoop : NetworkBehaviour
                 if (devSubmittedPaths != null)
                     devEndPlanningNow = true;
 
-                while (!devEndPlanningNow && devMode && !matchEnded)
+                while (!devEndPlanningNow && devMode && !matchEnded && !IsHoldingForRejoin)
                     yield return null;
             }
             else
@@ -1256,6 +1357,7 @@ public class GameLoop : NetworkBehaviour
                 double allTeamsCommittedAt = -1d;
                 while (
                     !matchEnded
+                    && !IsHoldingForRejoin
                     && NetworkManager.Singleton != null
                     && NetworkManager.Singleton.ServerTime.Time < endTime + 1
                 )
@@ -1276,6 +1378,17 @@ public class GameLoop : NetworkBehaviour
                 }
             }
             planningChangesOpen = false;
+
+            // A drop mid-planning unwinds the round rather than resolving it: half the board would
+            // otherwise stand still through an execution its commander never saw. The same round
+            // number is planned again from scratch once the seat is filled.
+            if (IsHoldingForRejoin && !matchEnded && IsSpawned)
+            {
+                FinishPlanningClientRpc();
+                SetCardsInteractableClientRpc(false);
+                roundNumber--;
+                continue;
+            }
 
             if (
                 matchEnded
@@ -1346,6 +1459,9 @@ public class GameLoop : NetworkBehaviour
             ApplyFriendlyEndCellSeparation(paths);
             Dictionary<GameObject, Vector2Int> cellsBeforeExecution = CaptureUnitCells();
 
+            // Both crews' final orders, captured while dives are still distinguishable from moves.
+            RecordBattleReportPlans(paths);
+
             ExecuteMoves(paths);
 
             // Fire abilities alongside movement; each ability handles its own pauses/transitions.
@@ -1396,6 +1512,7 @@ public class GameLoop : NetworkBehaviour
             acceptingSmokeRegistrations = false;
             HideAbilityTelegraphsClientRpc();
             TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
+            RecordBattleReportOutcomes();
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
             // path resolves a survivor or simultaneous-wipe draw.
@@ -1537,7 +1654,10 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void ShowSmokeScreenClientRpc(Vector3[] cellWorldPositions)
+    private void ShowSmokeScreenClientRpc(
+        Vector3[] cellWorldPositions,
+        ClientRpcParams clientRpcParams = default
+    )
     {
         ClearSmokeScreenVisualsLocal();
         if (!IsClient)
@@ -1798,6 +1918,8 @@ public class GameLoop : NetworkBehaviour
 
         // Telegraph every activation to all clients (both players see what's coming — the
         // counterplay window is the point; the Sniper's lock laser is the model).
+        dodgeWindowEndTime = 0d;
+        activeTelegraphs.Clear();
         foreach (var (unit, square, data) in activations)
         {
             Vector3 effectSquare = ResolveAbilityEffectSquare(unit, square, data);
@@ -1807,12 +1929,24 @@ public class GameLoop : NetworkBehaviour
             Vector3 telegraphOrigin = data.responseDistLine
                 ? unit.transform.position
                 : effectSquare;
+            bool isSmokeScreen = unit.GetComponent<Smoke>() != null;
+            // Kept so a rejoining seat can be shown the same already-sanitized payload rather
+            // than having the caster's position re-derived for it.
+            activeTelegraphs.Add(
+                (
+                    telegraphOrigin,
+                    effectSquare,
+                    data.abilityRadius,
+                    data.responseDistLine,
+                    isSmokeScreen
+                )
+            );
             ShowAbilityTelegraphClientRpc(
                 telegraphOrigin,
                 effectSquare,
                 data.abilityRadius,
                 data.responseDistLine,
-                unit.GetComponent<Smoke>() != null
+                isSmokeScreen
             );
         }
 
@@ -1881,6 +2015,10 @@ public class GameLoop : NetworkBehaviour
             .Select(identity => identity.TeamIndex)
             .ToHashSet();
         SetDodgeGuidanceForHumanTeams(casterTeamsAwaitingDodge);
+        // Kept for the length of the window so a seat that comes back inside it can be told the
+        // same thing it was told when the window opened.
+        dodgeCasterTeams.Clear();
+        dodgeCasterTeams.UnionWith(casterTeamsAwaitingDodge);
 
         if (
             botPlayer != null
@@ -1917,6 +2055,7 @@ public class GameLoop : NetworkBehaviour
             int mostAlerted = dodgeAlerted.Values.Max(set => set.Count);
             float window = activations.Max(entry => entry.data.timeDivePerUnit) * mostAlerted;
             double endTime = NetworkManager.Singleton.ServerTime.Time + window;
+            dodgeWindowEndTime = endTime;
 
             foreach (var kvp in dodgeAlerted)
             {
@@ -1942,10 +2081,12 @@ public class GameLoop : NetworkBehaviour
                 );
             }
 
+            // Reads the field rather than the local so a window extended after it opened (a
+            // returning seat, or the dev hook) is waited out rather than closed on the old value.
             while (
                 dodgeResponsesReceived.Count < dodgeAlerted.Count
                 && !matchEnded
-                && NetworkManager.Singleton.ServerTime.Time < endTime + 1
+                && NetworkManager.Singleton.ServerTime.Time < dodgeWindowEndTime + 1
             )
             {
                 yield return null;
@@ -1964,6 +2105,8 @@ public class GameLoop : NetworkBehaviour
         SetDodgeAlerts(false);
         dodgeAlerted = null;
         dodgeDivePaths = null;
+        dodgeWindowEndTime = 0d;
+        dodgeCasterTeams.Clear();
     }
 
     public static string GetDodgeGuidance(bool isThreatened, bool isCaster)
@@ -2018,7 +2161,7 @@ public class GameLoop : NetworkBehaviour
         return !isAbilityPlan && path != null && path.Count > 1;
     }
 
-    void SetDodgeAlerts(bool active)
+    void SetDodgeAlerts(bool active, ulong? onlyClientId = null)
     {
         if (dodgeAlerted == null)
             return;
@@ -2028,6 +2171,7 @@ public class GameLoop : NetworkBehaviour
                 !TryGetHumanClientId(teamEntry.Key, out ulong clientId)
                 || NetworkManager.Singleton == null
                 || !NetworkManager.Singleton.ConnectedClients.ContainsKey(clientId)
+                || (onlyClientId.HasValue && clientId != onlyClientId.Value)
             )
             {
                 continue;
@@ -2066,6 +2210,9 @@ public class GameLoop : NetworkBehaviour
         }
         if (units.Count == 0)
             return;
+
+        // A settings or controls sheet left open would cost this player the window.
+        GameHUDController.Instance?.DismissOpenSheets();
 
         StartCoroutine(
             transform
@@ -2213,7 +2360,8 @@ public class GameLoop : NetworkBehaviour
         Vector3 square,
         float radiusCells,
         bool line,
-        bool isSmokeScreen
+        bool isSmokeScreen,
+        ClientRpcParams clientRpcParams = default
     )
     {
         if (line)
@@ -2408,6 +2556,7 @@ public class GameLoop : NetworkBehaviour
             controllingTeamIndex
         );
         replicatedHillControl.Value = next;
+        RecordBattleReportHill(next);
 
         if (next.Status != HillControlStatus.Controlled || next.Streak < HillControlRoundsToWin)
         {
@@ -3390,6 +3539,7 @@ public class GameLoop : NetworkBehaviour
             viewers,
             clientSmokeCells
         );
+
         foreach (var tile in fogOverlayTiles)
         {
             Renderer tileRenderer = tile.Value;
@@ -3465,6 +3615,13 @@ public class GameLoop : NetworkBehaviour
         forceRevealToTeamUntil.Clear();
         SetCardsInteractableClientRpc(false);
         HideAbilityTelegraphsClientRpc();
+
+        // A match can end mid-execution, so close the open round before the reveal ships. The
+        // report goes first: EndGameClientRpc opens the results overlay that renders it.
+        RecordBattleReportOutcomes();
+        if (battleReport != null)
+            SendBattleReportClientRpc(battleReport);
+
         EndGameClientRpc(result);
     }
 
@@ -3520,6 +3677,7 @@ public class GameLoop : NetworkBehaviour
     void ExitToMainMenu()
     {
         GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
+        ReconnectSession.Clear();
         NetworkManager networkManager = NetworkManager.Singleton;
         if (networkManager != null && networkManager.IsListening)
         {
@@ -3563,6 +3721,9 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        // Leaving on purpose closes the seat straight away rather than burning the rejoin window
+        // on somebody who has already walked away.
+        ReconnectGrace.Server.Forfeit(sender);
         DisablePlayAgainButtonClientRpc();
         NetworkManager.DisconnectClient(sender);
     }
@@ -3624,6 +3785,16 @@ public class GameLoop : NetworkBehaviour
         if (!IsServer)
         {
             disconnectRecoveryStarted = true;
+            if (!matchEnded && ReconnectSession.CanAttemptRejoin)
+            {
+                GameHUDController.Instance?.ShowRejoinNotice(
+                    "Connection lost",
+                    ReconnectGrace.GraceSeconds - ClientRejoinSafetyMarginSeconds
+                );
+                StartCoroutine(RejoinOrReturnToJoinGame());
+                return;
+            }
+
             GameHUDController.Instance?.SetPhase("Host disconnected", MessagePerspective.Enemy);
             StartCoroutine(ReturnClientToJoinGameAfterShutdown());
             return;
@@ -3639,8 +3810,421 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        if (
+            ReconnectGrace.Server.TryBeginGrace(clientId, ReconnectGrace.Now, out int heldTeamIndex)
+        )
+        {
+            BeginRejoinHold(heldTeamIndex);
+            return;
+        }
+
         int winnerTeam = GetEnemyTeamIndex(disconnectedTeam);
         FinishGame(MatchResult.ForWinner(winnerTeam, MatchResultReason.DisconnectForfeit));
+    }
+
+    private void OnClientConnected(ulong clientId)
+    {
+        if (!IsServer || !pendingRejoinRestores.Remove(clientId))
+            return;
+
+        int teamIndex = GetTeamIndexForClient(clientId);
+        if (teamIndex < 0)
+            return;
+
+        RestoreRejoinedParticipant(teamIndex, clientId);
+        if (rejoinHoldTeamIndex == teamIndex)
+            EndRejoinHold();
+    }
+
+    /// <summary>
+    /// Binds every remote human seat to the identity that connected with it. The host is skipped:
+    /// it is the server, so there is nothing left to rejoin once it goes.
+    /// </summary>
+    private void BeginReconnectGraceForMatch()
+    {
+        if (!IsServer || NetworkManager == null)
+            return;
+
+        List<(int teamIndex, ulong clientId)> seats = new();
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (
+                TryGetHumanClientId(teamIndex, out ulong clientId)
+                && clientId != NetworkManager.ServerClientId
+            )
+            {
+                seats.Add((teamIndex, clientId));
+            }
+        }
+
+        ReconnectGrace.Server.BeginMatch(seats);
+    }
+
+    private void BeginRejoinHold(int teamIndex)
+    {
+        if (rejoinHoldTeamIndex == teamIndex)
+            return;
+
+        rejoinHoldTeamIndex = teamIndex;
+        rejoinHoldDeadline = ReconnectGrace.Now + ReconnectGrace.GraceSeconds;
+        Debug.Log(
+            $"[GameLoop] Team {teamIndex} dropped; holding the match for "
+                + $"{ReconnectGrace.GraceSeconds:0}s."
+        );
+        ShowRejoinNoticeClientRpc(teamIndex, ReconnectGrace.GraceSeconds);
+    }
+
+    private void EndRejoinHold()
+    {
+        if (!IsHoldingForRejoin)
+            return;
+
+        rejoinHoldTeamIndex = -1;
+        rejoinHoldDeadline = 0d;
+        HideRejoinNoticeClientRpc();
+    }
+
+    private void ForfeitHeldSeat(int teamIndex)
+    {
+        if (ReconnectGrace.Server.TryGetSeatClientId(teamIndex, out ulong seatClientId))
+            ReconnectGrace.Server.Forfeit(seatClientId);
+        pendingRejoinRestores.Clear();
+        EndRejoinHold();
+        Debug.Log($"[GameLoop] Rejoin window closed for team {teamIndex}.");
+        FinishGame(
+            MatchResult.ForWinner(
+                GetEnemyTeamIndex(teamIndex),
+                MatchResultReason.DisconnectForfeit
+            )
+        );
+    }
+
+    /// <summary>
+    /// Holds the round loop while a seat is empty. The only two ways out are the seat being filled
+    /// again and the window closing, so the player still at the board is never waiting unbounded.
+    /// </summary>
+    private IEnumerator WaitForRejoinOrForfeit()
+    {
+        currentPhase = "waiting";
+        Time.timeScale = 1f;
+        SetCardsInteractableClientRpc(false);
+        setOverlayUITextClientRpc("Opponent disconnected", MessagePerspective.Enemy);
+
+        while (IsHoldingForRejoin && !matchEnded && !disconnectRecoveryStarted && IsSpawned)
+        {
+            double now = ReconnectGrace.Now;
+            if (ReconnectGrace.Server.TryConsumeExpiredSeat(now, out int expiredTeamIndex))
+            {
+                ForfeitHeldSeat(expiredTeamIndex);
+                yield break;
+            }
+
+            // Backstop for a claimant that was approved but never finished synchronising: the seat
+            // reads as filled, so nothing above would ever expire it.
+            if (now >= rejoinHoldDeadline)
+            {
+                ForfeitHeldSeat(rejoinHoldTeamIndex);
+                yield break;
+            }
+
+            yield return null;
+        }
+    }
+
+    /// <summary>
+    /// Server: points a logical team at the client ID that just proved it owns the seat. Called
+    /// from connection approval, before NGO synchronises the connection, so the visibility delegate
+    /// already recognises the returning player when its observer set is rebuilt.
+    /// </summary>
+    public void ServerReattachParticipant(int teamIndex, ulong clientId)
+    {
+        if (
+            !IsServer
+            || teamIndex < 0
+            || teamIndex >= TeamCount
+            || IsBotParticipant(clientId)
+            || IsBotTeam(teamIndex)
+        )
+        {
+            return;
+        }
+
+        // Called from the approval callback, so this reports rather than throws: a match that can
+        // no longer place the seat must not take the connection handshake down with it.
+        if (!TryGetConfiguredParticipantId(teamIndex, out ulong seatedParticipant))
+        {
+            Debug.LogError($"[GameLoop] Team {teamIndex} is not configured; cannot reattach.");
+            return;
+        }
+
+        int alreadyHeldTeam = GetTeamIndexForClient(clientId);
+        if (alreadyHeldTeam >= 0 && alreadyHeldTeam != teamIndex)
+        {
+            Debug.LogError($"[GameLoop] Client {clientId} already holds team {alreadyHeldTeam}.");
+            return;
+        }
+
+        if (seatedParticipant != clientId)
+            ReassignTeamParticipant(teamIndex, clientId);
+        if (IsSpawned)
+        {
+            if (teamIndex == HostTeamIndex)
+                teamZeroParticipant.Value = clientId;
+            else
+                teamOneParticipant.Value = clientId;
+        }
+
+        // Ownership and per-client cards can only be restored once NGO has finished synchronising
+        // the connection, because both need the client in each object's observer set.
+        pendingRejoinRestores.Add(clientId);
+        rejoinHoldDeadline = ReconnectGrace.Now + RejoinSyncSeconds;
+        serverFogDirty = true;
+    }
+
+    /// <summary>
+    /// Hands a synchronised returning player back everything that was keyed to its old connection:
+    /// ownership of its own crew, its unit cards, the enemy contact cards, and its board camera.
+    /// Enemy visibility is left to the fog pass, which is the only thing entitled to decide it.
+    /// </summary>
+    private void RestoreRejoinedParticipant(int teamIndex, ulong clientId)
+    {
+        int[] roster = GetConfiguredRoster(teamIndex);
+        GameObject[] units = GetTeamUnits(teamIndex);
+        for (int i = 0; i < units.Length; i++)
+        {
+            GameObject unit = units[i];
+            bool living = IsLivingUnit(unit);
+            NetworkObject netObj = unit != null ? unit.GetComponent<NetworkObject>() : null;
+            if (netObj != null && netObj.IsSpawned)
+            {
+                if (living && !netObj.IsNetworkVisibleTo(clientId))
+                    netObj.NetworkShow(clientId);
+                if (netObj.OwnerClientId != clientId)
+                    netObj.ChangeOwnership(clientId);
+            }
+
+            if (roster == null || i >= roster.Length)
+                continue;
+
+            Unit unitIdentity = unit != null ? unit.GetComponent<Unit>() : null;
+            SetUnitCardClientRpc(
+                i,
+                roster[i],
+                unitIdentity != null ? unitIdentity.AbilityCooldownRoundsRemaining : 0,
+                NetworkHelper.ToClient(clientId)
+            );
+
+            // A card is only ever greyed out by the one-shot RPC fired when the unit died, so a
+            // rebuilt HUD would otherwise offer a dead slot as if it were still orderable.
+            if (!living)
+                SetCardDisabledClientRpc(i, true, NetworkHelper.ToClient(clientId));
+        }
+
+        RefreshAllEnemyUnitCards();
+        InitializeCameraPositionClientRpc(teamIndex, NetworkHelper.ToClient(clientId));
+        SetCardsInteractableClientRpc(false, NetworkHelper.ToClient(clientId));
+        if (!RestoreRejoinedDodgeWindow(teamIndex, clientId))
+        {
+            setOverlayUITextClientRpc(
+                "Reconnected",
+                MessagePerspective.Friendly,
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+
+        // A client only ever learns where smoke is from the RPC fired when the canister landed, so a
+        // seat reclaimed mid-round comes back with an empty smoke set and computes a wider vision
+        // than the server's: its fog overlay under-reports and its fog memory is gated on cells it
+        // cannot see.
+        if (activeSmokeCells.Count > 0)
+        {
+            ShowSmokeScreenClientRpc(
+                ActiveSmokeCells.Select(gridCoordToWorld).ToArray(),
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+
+        serverFogDirty = true;
+        Debug.Log($"[GameLoop] Team {teamIndex} resumed the match as client {clientId}.");
+    }
+
+    /// <summary>
+    /// Whether a returning seat may be handed the open dodge window back. Mirrors what
+    /// SendDodgePathsToServerRpc will accept from it, so the prompt is never offered for a
+    /// submission the server would refuse. The deadline is NGO server time, the clock the client
+    /// measures the prompt against; it advances on unscaled delta, so these are real seconds and
+    /// dev fast-forward does not shorten the window.
+    /// </summary>
+    public static bool CanRestoreDodgePrompt(
+        double serverTime,
+        double windowEndTime,
+        bool teamIsAlerted,
+        bool teamAlreadyAnswered
+    )
+    {
+        return teamIsAlerted
+            && !teamAlreadyAnswered
+            && windowEndTime > 0d
+            && windowEndTime - serverTime >= RejoinDodgeMinimumSeconds;
+    }
+
+    /// <summary>
+    /// Re-derives an open dodge window for a seat that came back inside it. Telegraphs go back to
+    /// anyone returning while the window stands, because they are information both players already
+    /// have. The alert icons and the dive prompt only go back when the server would still accept a
+    /// dive from this team, so a returning player is never given a prompt whose submission is
+    /// already dead. The deadline is resent verbatim, so what comes back is the remainder of the
+    /// window the opponent is playing against and never a fresh one. Returns whether the window
+    /// claimed this client's guidance line; a seat returning outside one gets the plain notice.
+    /// </summary>
+    private bool RestoreRejoinedDodgeWindow(int teamIndex, ulong clientId)
+    {
+        if (dodgeAlerted == null || currentPhase != "dodging" || NetworkManager == null)
+            return false;
+
+        ClientRpcParams target = NetworkHelper.ToClient(clientId);
+        foreach (var telegraph in activeTelegraphs)
+        {
+            ShowAbilityTelegraphClientRpc(
+                telegraph.origin,
+                telegraph.square,
+                telegraph.radiusCells,
+                telegraph.line,
+                telegraph.smokeScreen,
+                target
+            );
+        }
+
+        // devMode drives dodges from DevInput on the server, so there is no client prompt to give
+        // back. A team already counted as answered must not be prompted again: the second
+        // submission would be refused and the player would believe a dive was queued.
+        bool teamIsAlerted = dodgeAlerted.TryGetValue(teamIndex, out HashSet<GameObject> alerted);
+        bool promptRestored = false;
+        if (
+            !devMode
+            && CanRestoreDodgePrompt(
+                NetworkManager.ServerTime.Time,
+                dodgeWindowEndTime,
+                teamIsAlerted,
+                dodgeResponsesReceived.Contains(teamIndex)
+            )
+        )
+        {
+            NetworkObjectReference[] refs = alerted
+                .Select(unit => unit != null ? unit.GetComponent<NetworkObject>() : null)
+                .Where(netObj => netObj != null && netObj.IsSpawned)
+                .Select(netObj => (NetworkObjectReference)netObj)
+                .ToArray();
+            if (refs.Length > 0)
+            {
+                SetDodgeAlerts(true, clientId);
+                StartDodgePlanningClientRpc(
+                    dodgeWindowEndTime,
+                    refs,
+                    maxDiveRangeThisRound,
+                    target
+                );
+                promptRestored = true;
+                Debug.Log(
+                    $"[GameLoop] Team {teamIndex} returned inside the dodge window with "
+                        + $"{dodgeWindowEndTime - NetworkManager.ServerTime.Time:0.#}s left on it."
+                );
+            }
+        }
+
+        // Guidance follows what this seat can actually do, not what it was: the threatened line is
+        // the only one that asks for an input, so a seat whose prompt was withheld reads as the
+        // caster it is, or as waiting, rather than being told to dodge with nothing to dodge with.
+        bool isCaster = dodgeCasterTeams.Contains(teamIndex);
+        setOverlayUITextClientRpc(
+            GetDodgeGuidance(promptRestored, isCaster),
+            GetDodgeGuidancePerspective(promptRestored, isCaster),
+            target
+        );
+        return true;
+    }
+
+    [ClientRpc]
+    private void ShowRejoinNoticeClientRpc(int droppedTeamIndex, float graceSeconds)
+    {
+        GameHUDController.Instance?.HideDeployment();
+        GameHUDController.Instance?.ShowRejoinNotice(
+            LocalTeamIndex == droppedTeamIndex ? "Reconnecting" : "Opponent dropped",
+            graceSeconds
+        );
+    }
+
+    [ClientRpc]
+    private void HideRejoinNoticeClientRpc()
+    {
+        GameHUDController.Instance?.HideRejoinNotice();
+    }
+
+    /// <summary>
+    /// Client: retries the connection that just dropped for as long as the server would still hold
+    /// the seat, then gives up to the lobby rather than sitting on a dead match.
+    /// </summary>
+    private IEnumerator RejoinOrReturnToJoinGame()
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager != null && manager.IsListening && !manager.ShutdownInProgress)
+            manager.Shutdown();
+        while (manager != null && (manager.IsListening || manager.ShutdownInProgress))
+            yield return null;
+
+        double deadline =
+            ReconnectGrace.Now + ReconnectGrace.GraceSeconds - ClientRejoinSafetyMarginSeconds;
+        int attempt = 0;
+        while (manager != null && ReconnectSession.CanAttemptRejoin && ReconnectGrace.Now < deadline)
+        {
+            attempt++;
+            System.Threading.Tasks.Task preparation = ReconnectSession.PrepareTransportAsync();
+            while (!preparation.IsCompleted)
+                yield return null;
+
+            if (preparation.IsFaulted || preparation.IsCanceled)
+            {
+                Debug.LogWarning(
+                    "[GameLoop] Rejoin transport preparation failed: "
+                        + preparation.Exception?.GetBaseException().Message
+                );
+            }
+            else
+            {
+                ReconnectSession.ApplyConnectionPayload(manager);
+                if (manager.StartClient())
+                {
+                    while (
+                        manager.IsListening
+                        && !manager.IsConnectedClient
+                        && ReconnectGrace.Now < deadline
+                    )
+                    {
+                        yield return null;
+                    }
+
+                    if (manager.IsConnectedClient)
+                    {
+                        Debug.Log($"[GameLoop] Rejoined the match on attempt {attempt}.");
+                        GameHUDController.Instance?.HideRejoinNotice();
+                        yield break;
+                    }
+                }
+            }
+
+            if (manager.IsListening || manager.ShutdownInProgress)
+                manager.Shutdown();
+            while (manager.IsListening || manager.ShutdownInProgress)
+                yield return null;
+
+            yield return new WaitForSecondsRealtime(ClientRejoinRetrySeconds);
+        }
+
+        Debug.Log($"[GameLoop] Rejoin abandoned after {attempt} attempt(s).");
+        GameHUDController.Instance?.HideRejoinNotice();
+        GameHUDController.Instance?.SetPhase("Disconnected", MessagePerspective.Enemy);
+        ReconnectSession.Clear();
+        yield return StartCoroutine(ReturnClientToJoinGameAfterShutdown());
     }
 
     private IEnumerator ReturnHostToJoinGameAfterShutdown()
@@ -4226,6 +4810,178 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
+    /// <summary>
+    /// DEV: drops a team's human seat for real. The host kicks the connection rather than faking a
+    /// hold, so the whole path runs: NGO teardown on that client, the server's grace hold, and the
+    /// client's own retry. Server-only.
+    /// </summary>
+    public bool DevDropParticipant(int teamIndex)
+    {
+        if (!IsServer || NetworkManager == null)
+        {
+            Debug.LogWarning("[GameLoop] DevDropParticipant must be called on the server/host.");
+            return false;
+        }
+        if (matchEnded)
+        {
+            Debug.LogWarning("[GameLoop] The match has already ended.");
+            return false;
+        }
+        if (!TryGetHumanClientId(teamIndex, out ulong clientId))
+        {
+            Debug.LogWarning($"[GameLoop] Team {teamIndex} has no human seat to drop.");
+            return false;
+        }
+        if (clientId == NetworkManager.ServerClientId)
+        {
+            Debug.LogWarning("[GameLoop] The host's own seat has nothing left to rejoin.");
+            return false;
+        }
+        if (!NetworkManager.ConnectedClients.ContainsKey(clientId))
+        {
+            Debug.LogWarning($"[GameLoop] Client {clientId} is already gone.");
+            return false;
+        }
+
+        Debug.Log($"[GameLoop] Dev-dropping team {teamIndex} (client {clientId}).");
+        NetworkManager.DisconnectClient(clientId);
+        return true;
+    }
+
+    /// <summary>DEV: closes an open rejoin window now so the forfeit path resolves immediately.</summary>
+    public bool DevExpireRejoinGrace()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("[GameLoop] DevExpireRejoinGrace must be called on the server/host.");
+            return false;
+        }
+
+        bool expired = ReconnectGrace.Server.ExpireNow(ReconnectGrace.Now);
+        Debug.Log(
+            expired
+                ? "[GameLoop] Rejoin window pulled to now."
+                : "[GameLoop] No rejoin window is open."
+        );
+        return expired;
+    }
+
+    /// <summary>DEV: one-line reconnect state for DevInput.Dump().</summary>
+    public string DevDescribeRejoinState()
+    {
+        double now = ReconnectGrace.Now;
+        string hold = IsHoldingForRejoin
+            ? $"holding team {rejoinHoldTeamIndex} "
+                + $"({ReconnectGrace.Server.RemainingSeconds(now):0.#}s left)"
+            : "not holding";
+        return $"{hold}; seats: {ReconnectGrace.Server.Describe(now)}";
+    }
+
+    /// <summary>
+    /// DEV: the server's smoke footprint next to the local client's mirror of it. A seat that came
+    /// back mid-round without the resend reads server=n client=0, which is the shape of a client
+    /// computing a wider vision than the server allows.
+    /// </summary>
+    public string DevDescribeSmokeModel()
+    {
+        return $"smoke server={activeSmokeCells.Count} [{DevDescribeCells(activeSmokeCells)}] "
+            + $"client={clientSmokeCells.Count} [{DevDescribeCells(clientSmokeCells)}]";
+    }
+
+    /// <summary>
+    /// DEV: the open dodge window as the server sees it, next to what this peer was actually
+    /// handed. A seat that came back without the re-derivation reads localTelegraphs=0 prompt=no
+    /// while the server still reports the window open and the team unanswered.
+    /// </summary>
+    public string DevDescribeDodgeWindow()
+    {
+        double remaining =
+            NetworkManager != null && dodgeWindowEndTime > 0d
+                ? dodgeWindowEndTime - NetworkManager.ServerTime.Time
+                : 0d;
+        string alerted =
+            dodgeAlerted == null
+                ? "none"
+                : string.Join(
+                    ",",
+                    dodgeAlerted
+                        .OrderBy(entry => entry.Key)
+                        .Select(entry => $"team{entry.Key}x{entry.Value.Count}")
+                );
+        string answered =
+            dodgeResponsesReceived.Count == 0
+                ? "none"
+                : string.Join(",", dodgeResponsesReceived.OrderBy(teamIndex => teamIndex));
+        bool prompt = PlanMovement.Instance != null && PlanMovement.Instance.CanEditPlan;
+        return $"dodge: alerted={alerted} answered={answered} remaining={remaining:0.#}s "
+            + $"serverTelegraphs={activeTelegraphs.Count} "
+            + $"localTelegraphs={clientTelegraphs.Count} prompt={(prompt ? "live" : "no")}";
+    }
+
+    /// <summary>
+    /// DEV: pushes the open dodge window's deadline out and re-issues the prompt, so a drop and
+    /// rejoin can be driven inside a window that is otherwise only a few seconds long. Re-issuing
+    /// restarts each prompted client's planning session, so extend before anybody draws a dive.
+    /// </summary>
+    public bool DevExtendDodgeWindow(float extraSeconds)
+    {
+        if (!IsServer || NetworkManager == null)
+        {
+            Debug.LogWarning("[GameLoop] DevExtendDodgeWindow must be called on the server/host.");
+            return false;
+        }
+        if (dodgeAlerted == null || dodgeWindowEndTime <= 0d)
+        {
+            Debug.LogWarning("[GameLoop] No dodge window is open.");
+            return false;
+        }
+
+        dodgeWindowEndTime += Mathf.Max(0f, extraSeconds);
+        foreach (var teamEntry in dodgeAlerted)
+        {
+            if (
+                dodgeResponsesReceived.Contains(teamEntry.Key)
+                || !TryGetHumanClientId(teamEntry.Key, out ulong clientId)
+                || !NetworkManager.ConnectedClients.ContainsKey(clientId)
+            )
+            {
+                continue;
+            }
+
+            NetworkObjectReference[] refs = teamEntry
+                .Value.Select(unit => unit != null ? unit.GetComponent<NetworkObject>() : null)
+                .Where(netObj => netObj != null && netObj.IsSpawned)
+                .Select(netObj => (NetworkObjectReference)netObj)
+                .ToArray();
+            if (refs.Length == 0)
+                continue;
+
+            StartDodgePlanningClientRpc(
+                dodgeWindowEndTime,
+                refs,
+                maxDiveRangeThisRound,
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+
+        Debug.Log(
+            "[GameLoop] Dodge window extended to "
+                + $"{dodgeWindowEndTime - NetworkManager.ServerTime.Time:0.#}s remaining."
+        );
+        return true;
+    }
+
+    private static string DevDescribeCells(IEnumerable<Vector2Int> cells)
+    {
+        return string.Join(
+            ",",
+            cells
+                .OrderBy(cell => cell.y)
+                .ThenBy(cell => cell.x)
+                .Select(cell => $"{cell.x}:{cell.y}")
+        );
+    }
+
     /// <summary>DEV: gives every agent-controlled living unit a deterministic stay-put fallback.</summary>
     void DevFillStationaryForControlledTeams(PathsDict dict)
     {
@@ -4269,6 +5025,193 @@ public class GameLoop : NetworkBehaviour
             }
         }
         diveUnitsThisRound.Clear();
+    }
+
+    // === BATTLE REPORT RECORDING (server) ===
+
+    /// <summary>
+    /// Captures roster identity once. Called on the first recorded round rather than at spawn
+    /// because units and their <see cref="Health"/> components only exist after StartGame.
+    /// </summary>
+    private void EnsureBattleReportStarted()
+    {
+        if (battleReport != null)
+            return;
+
+        battleReport = new BattleReport { gameMode = Options.gameMode };
+
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            int[] roster = GetConfiguredRoster(teamIndex);
+            GameObject[] units = GetTeamUnits(teamIndex);
+
+            for (int slot = 0; slot < units.Length; slot++)
+            {
+                Health health = units[slot] != null ? units[slot].GetComponent<Health>() : null;
+                battleReport.crew.Add(
+                    new BattleReportCrewMember
+                    {
+                        teamIndex = teamIndex,
+                        rosterSlot = slot,
+                        catalogIndex =
+                            roster != null && slot < roster.Length ? roster[slot] : -1,
+                        maxHealth = health != null ? Mathf.CeilToInt(health.MaxHealth) : 0,
+                    }
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Snapshots what every unit committed to this round. Must run after the dodge window has
+    /// folded dives into <paramref name="paths"/> and before <c>ExecuteMoves</c> clears
+    /// <c>diveUnitsThisRound</c>, because that set is the only record of who dodged.
+    /// </summary>
+    private void RecordBattleReportPlans(PathsDict paths)
+    {
+        if (!IsServer)
+            return;
+
+        EnsureBattleReportStarted();
+        if (battleReport.rounds.Count >= BattleReport.MaxRecordedRounds)
+        {
+            openReportRound = null;
+            return;
+        }
+
+        BattleReportRound round = new() { roundNumber = roundNumber };
+
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            GameObject[] units = GetTeamUnits(teamIndex);
+            for (int slot = 0; slot < units.Length; slot++)
+            {
+                GameObject unit = units[slot];
+                BattleReportEntry entry = new()
+                {
+                    teamIndex = teamIndex,
+                    rosterSlot = slot,
+                    path = new List<Vector2Int>(),
+                };
+
+                if (!IsLivingUnit(unit))
+                {
+                    entry.order = BattleReportOrder.Eliminated;
+                    round.entries.Add(entry);
+                    continue;
+                }
+
+                entry.startCell = GridSystem.ConvertToGridCoords(unit.transform.position);
+                entry.endCell = entry.startCell;
+                entry.aliveAtRoundEnd = true;
+
+                bool hasPlan = paths != null && paths.TryGetValue(unit, out var plan);
+                (bool isAbility, List<Vector3> route) = hasPlan ? paths[unit] : (false, null);
+                List<Vector2Int> cells = ToGridPath(route);
+
+                if (diveUnitsThisRound.Contains(unit))
+                {
+                    entry.order = BattleReportOrder.Dodge;
+                    entry.path = cells;
+                }
+                else if (isAbility)
+                {
+                    entry.order = BattleReportOrder.Ability;
+                    if (cells.Count >= 2)
+                    {
+                        entry.hasAbilityTarget = true;
+                        entry.abilityTarget = cells[^1];
+                    }
+                }
+                else if (cells.Count >= 2)
+                {
+                    entry.order = BattleReportOrder.Move;
+                    entry.path = cells;
+                }
+                else
+                {
+                    entry.order = BattleReportOrder.Held;
+                }
+
+                round.entries.Add(entry);
+            }
+        }
+
+        battleReport.rounds.Add(round);
+        openReportRound = round;
+    }
+
+    private static List<Vector2Int> ToGridPath(List<Vector3> route)
+    {
+        List<Vector2Int> cells = new();
+        if (route == null)
+            return cells;
+
+        foreach (Vector3 position in route)
+        {
+            Vector2Int cell = GridSystem.ConvertToGridCoords(position);
+            if (cells.Count == 0 || cells[^1] != cell)
+                cells.Add(cell);
+        }
+
+        return cells;
+    }
+
+    /// <summary>
+    /// Closes the open round with where everyone actually ended up. Idempotent, because a match
+    /// can finish mid-execution (disconnect, KOTH) and both paths need the final round recorded.
+    /// </summary>
+    private void RecordBattleReportOutcomes()
+    {
+        if (!IsServer || openReportRound == null)
+            return;
+
+        BattleReportRound round = openReportRound;
+        openReportRound = null;
+
+        for (int i = 0; i < round.entries.Count; i++)
+        {
+            BattleReportEntry entry = round.entries[i];
+            if (entry.order == BattleReportOrder.Eliminated)
+                continue;
+
+            GameObject[] units = GetTeamUnits(entry.teamIndex);
+            GameObject unit =
+                entry.rosterSlot >= 0 && entry.rosterSlot < units.Length
+                    ? units[entry.rosterSlot]
+                    : null;
+            Health health = unit != null ? unit.GetComponent<Health>() : null;
+
+            entry.aliveAtRoundEnd = IsLivingUnit(unit);
+            entry.diedThisRound = !entry.aliveAtRoundEnd;
+            entry.healthAtRoundEnd =
+                health != null ? Mathf.Max(0, Mathf.CeilToInt(health.CurrentHealth)) : 0;
+            if (unit != null)
+                entry.endCell = GridSystem.ConvertToGridCoords(unit.transform.position);
+
+            round.entries[i] = entry;
+        }
+    }
+
+    /// <summary>
+    /// Stamps the objective state onto the round that produced it. Separate from
+    /// <see cref="RecordBattleReportOutcomes"/> because the hill is scored after outcomes settle.
+    /// </summary>
+    private void RecordBattleReportHill(HillControlState state)
+    {
+        if (!IsServer || battleReport == null || battleReport.rounds.Count == 0)
+            return;
+
+        BattleReportRound round = battleReport.rounds[^1];
+        round.hillControllerTeamIndex = state.ControllingTeamIndex;
+        round.hillStreak = state.Streak;
+        round.hillContested = state.Status == HillControlStatus.Contested;
+    }
+
+    [ClientRpc]
+    private void SendBattleReportClientRpc(BattleReport report)
+    {
+        LastBattleReport = report;
     }
 
     /// <summary>Living units of both teams, in team then roster order.</summary>

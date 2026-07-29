@@ -150,6 +150,34 @@
     border-color: var(--toy-primary);
 }
 
+/* Mirrors the hill readout across the top bar. It has to sit outside the phase notch: the notch
+   keeps reporting the round's own phase, and "someone left" is a different question from "what am
+   I doing", so overwriting one with the other would cost the player both answers. */
+.hud-top .rejoin-notice {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 260px;
+    min-height: 72px;
+    align-items: stretch;
+    padding: 10px 14px 12px 14px;
+    border-color: var(--toy-danger);
+}
+
+.hud-top .rejoin-notice__key {
+    margin-bottom: 5px;
+    letter-spacing: 0;
+}
+
+.hud-top .rejoin-notice__value {
+    align-self: flex-start;
+    font-size: var(--toy-type-caption);
+    -unity-font-style: bold;
+    color: var(--toy-danger-copy);
+    border-color: var(--toy-danger);
+    letter-spacing: 0;
+}
+
 .hud-dock {
     position: absolute;
     left: 0;
@@ -259,11 +287,18 @@
     color: var(--toy-select-copy);
 }
 
-.hud-controls-button {
+.hud-controls-button,
+.hud-settings-button {
     min-height: 44px;
     flex-shrink: 0;
     padding: 6px 11px;
     font-size: 11px;
+}
+
+/* Each dock chip is spaced by the one on its left, the way the commit cluster spaces itself, so the
+   rightmost chip stays flush with the dock's edge. */
+.hud-controls-button {
+    margin-right: 8px;
 }
 
 .enemy-status-strip {
@@ -735,6 +770,24 @@
     background-color: var(--toy-scrim);
 }
 
+.settings-overlay {
+    background-color: var(--toy-scrim);
+}
+
+/* Shorter than the controls sheet, so the phase banner above and the dock below stay readable
+   behind it. The round does not stop for this panel and the player may be watching the timer while
+   they reach for a level. */
+.toybox-ui.settings-overlay .settings-panel {
+    max-height: 62%;
+    align-items: stretch;
+}
+
+.settings-live-note {
+    margin-top: var(--toy-space-md);
+    font-size: var(--toy-type-caption);
+    white-space: normal;
+}
+
 .toybox-ui.results-overlay .results-panel {
     width: 620px;
     align-items: stretch;
@@ -777,6 +830,256 @@
 .results-button {
     min-width: 170px;
     margin-left: var(--toy-space-sm);
+}
+
+/* === BATTLE REPORT REVEAL === */
+
+.report-empty {
+    margin-top: var(--toy-space-sm);
+    font-size: var(--toy-type-body);
+    color: var(--toy-text-muted);
+    white-space: normal;
+}
+
+.report-reveal {
+    margin-top: var(--toy-space-sm);
+}
+
+.report-stepper {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-sm);
+}
+
+.report-step-button {
+    min-width: 118px;
+}
+
+.report-round-label {
+    flex-grow: 1;
+    font-size: var(--toy-type-body-lg);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--toy-text);
+}
+
+/* Board and order list sit side by side so the panel spends its width instead of its height; the
+   whole reveal has to fit without the board being cut in half by the scroll view. */
+.report-body {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.report-board-column {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: var(--toy-space-md);
+}
+
+/* The painter letterboxes a 15:10 board inside whatever box it is given, so the height here only
+   has to be close; it decides how much of the panel the picture is allowed to claim. */
+.report-board {
+    height: 306px;
+    background-color: var(--toy-ground);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-md);
+}
+
+.report-board__badge {
+    position: absolute;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    color: var(--toy-text-on-deep);
+    background-color: var(--toy-team-friendly-deep);
+    border-radius: 50%;
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-ground);
+}
+
+.report-board__badge--enemy {
+    background-color: var(--toy-team-enemy-deep);
+}
+
+/* Above the board rather than below it: this is the sentence that answers "what just happened",
+   and under a 300px board it lands past the fold of the scroll view. */
+.report-summary {
+    min-height: 20px;
+    margin-bottom: var(--toy-space-sm);
+    font-size: var(--toy-type-body);
+    color: var(--toy-text-copy);
+    white-space: normal;
+}
+
+.report-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-sm);
+}
+
+.report-legend__item {
+    flex-direction: row;
+    align-items: center;
+    margin-right: var(--toy-space-md);
+}
+
+.report-legend__glyph {
+    width: 14px;
+    height: 14px;
+    margin-right: var(--toy-space-xs);
+    background-color: var(--toy-text-muted);
+}
+
+.report-legend__glyph--start {
+    border-radius: 50%;
+}
+
+.report-legend__glyph--end {
+    border-radius: 2px;
+}
+
+/* Dashed strokes are the board's mark for "this was not the plan"; the swatch has to say the same
+   thing, and a two-pixel dashed rule is the closest USS gets to the painted line. */
+.report-legend__glyph--dodge {
+    height: 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-top-width: 2px;
+    border-top-color: var(--toy-text-muted);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    opacity: 0.7;
+}
+
+.report-legend__glyph--ability {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 2px;
+    border-color: var(--toy-primary);
+    border-radius: 50%;
+}
+
+.report-legend__glyph--dead {
+    background-color: rgba(0, 0, 0, 0);
+    font-size: var(--toy-type-body);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--toy-danger-copy);
+}
+
+.report-legend__label {
+    font-size: var(--toy-type-caption);
+    color: var(--toy-text-muted);
+}
+
+/* Wide enough that "Moved 3 cells to (12, 4)" and an HP readout both fit on one row; below this the
+   order text clips mid-coordinate, which reads as a rendering bug rather than a truncation. */
+.report-orders {
+    width: 368px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.report-order-row {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.report-order-row__badge {
+    width: 20px;
+    height: 20px;
+    margin-right: var(--toy-space-sm);
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    font-size: var(--toy-type-caption);
+    color: var(--toy-text-on-deep);
+    background-color: var(--toy-team-friendly-deep);
+    border-radius: 50%;
+}
+
+.report-order-row--enemy .report-order-row__badge {
+    background-color: var(--toy-team-enemy-deep);
+}
+
+.report-order-row__name {
+    width: 92px;
+    flex-shrink: 0;
+    font-size: var(--toy-type-label);
+    -unity-font-style: bold;
+    color: var(--toy-team-friendly-copy);
+    overflow: hidden;
+}
+
+.report-order-row--enemy .report-order-row__name {
+    color: var(--toy-team-enemy-copy);
+}
+
+/* The order text is the only part allowed to give up room; letting it grow unbounded pushed the
+   whole column past the panel and produced a horizontal scrollbar. */
+.report-order-row__order {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: var(--toy-type-label);
+    color: var(--toy-text-copy);
+    overflow: hidden;
+}
+
+.report-order-row__state {
+    flex-shrink: 0;
+    margin-left: var(--toy-space-xs);
+    font-size: var(--toy-type-caption);
+    color: var(--toy-text-muted);
+}
+
+.report-order-row--dead .report-order-row__order,
+.report-order-row--dead .report-order-row__state {
+    color: var(--toy-danger-copy);
+}
+
+.report-order-row--gone .report-order-row__name,
+.report-order-row--gone .report-order-row__order,
+.report-order-row--gone .report-order-row__state {
+    color: var(--toy-text-muted);
+}
+
+.report-team-heading {
+    margin-top: var(--toy-space-sm);
+    font-size: var(--toy-type-caption);
+    -unity-font-style: bold;
+    color: var(--toy-text-muted);
+}
+
+/* Below this the board and the order list would each be too narrow to read, so the reveal becomes
+   one column and the panel scrolls instead. */
+.narrow .report-body,
+.phone .report-body {
+    flex-direction: column;
+}
+
+.narrow .report-board-column,
+.phone .report-board-column {
+    width: 100%;
+    margin-right: 0;
+}
+
+.narrow .report-orders,
+.phone .report-orders {
+    width: 100%;
+}
+
+.phone .report-board,
+.short .report-board {
+    height: 220px;
+}
+
+.phone .report-order-row__name {
+    width: 100px;
 }
 
 /* The dock reserves camera space rather than floating over the board, so it stays flush to the
@@ -873,6 +1176,10 @@
     width: 244px;
 }
 
+.narrow .rejoin-notice {
+    width: 244px;
+}
+
 .phone .hud-dock {
     padding-left: 10px;
     padding-right: 10px;
@@ -927,7 +1234,8 @@
     padding-right: 10px;
 }
 
-.phone .hud-controls-button {
+.phone .hud-controls-button,
+.phone .hud-settings-button {
     min-height: 44px;
     padding-left: 8px;
     padding-right: 8px;
@@ -1029,6 +1337,27 @@
     align-self: stretch;
 }
 
+/* Kept opposite the hill readout at every breakpoint: on a phone both can be up at once, and the
+   one that says the match is paused must not be the one that gets covered. */
+.phone .rejoin-notice {
+    top: 0;
+    left: 0;
+    right: auto;
+    width: 210px;
+    min-height: 62px;
+    padding: 7px 10px 9px 10px;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.phone .rejoin-notice__key {
+    display: none;
+}
+
+.phone .rejoin-notice__value {
+    align-self: stretch;
+}
+
 .phone .deployment-overlay {
     padding: var(--toy-space-panel-compact);
 }
@@ -1059,7 +1388,8 @@
     padding-bottom: 3px;
 }
 
-.short .hud-controls-button {
+.short .hud-controls-button,
+.short .hud-settings-button {
     min-height: 44px;
     padding-top: 4px;
     padding-bottom: 4px;
@@ -1083,7 +1413,8 @@
     font-size: 17px;
 }
 
-.phone.short .hud-controls-button {
+.phone.short .hud-controls-button,
+.phone.short .hud-settings-button {
     min-height: 44px;
     padding-top: 7px;
     padding-bottom: 7px;
@@ -1094,6 +1425,15 @@
     right: 0;
     top: 0;
     width: 56%;
+    min-height: 54px;
+    padding: 6px 10px 8px 10px;
+}
+
+.phone.short .rejoin-notice {
+    left: 0;
+    right: auto;
+    top: 0;
+    width: 42%;
     min-height: 54px;
     padding: 6px 10px 8px 10px;
 }

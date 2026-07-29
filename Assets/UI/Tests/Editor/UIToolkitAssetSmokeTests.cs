@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using NUnit.Framework;
@@ -42,7 +44,6 @@ public class UIToolkitAssetSmokeTests
                 "title-button",
                 "elimination-button",
                 "king-button",
-                "flag-button",
                 "player-opponent-button",
                 "ai-opponent-button",
                 "local-multiplayer-row",
@@ -109,6 +110,14 @@ public class UIToolkitAssetSmokeTests
                 "results-status",
                 "play-again-button",
                 "main-menu-button",
+                "report-empty",
+                "report-reveal",
+                "report-prev-button",
+                "report-round-label",
+                "report-next-button",
+                "report-board",
+                "report-summary",
+                "report-orders",
             },
         },
     };
@@ -849,20 +858,116 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
-    public void JoinEnablesKingOfTheHillButKeepsCaptureTheFlagUnavailable()
+    public void JoinOffersEliminationAndKingOfTheHillWithNoDisabledModes()
     {
         const string assetPath = "Assets/UI/Join/JoinGame.uxml";
         VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
         Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
 
         TemplateContainer tree = asset.Instantiate();
+        Button elimination = tree.Q<Button>("elimination-button");
         Button king = tree.Q<Button>("king-button");
-        Button flag = tree.Q<Button>("flag-button");
 
+        Assert.That(elimination, Is.Not.Null);
         Assert.That(king, Is.Not.Null);
-        Assert.That(flag, Is.Not.Null);
+        Assert.That(elimination.enabledSelf, Is.True);
         Assert.That(king.enabledSelf, Is.True);
-        Assert.That(flag.enabledSelf, Is.False);
+
+        List<Button> modeOptions = tree.Query<Button>(className: "mode-option").ToList();
+        Assert.That(
+            modeOptions.Count,
+            Is.EqualTo(2),
+            "The mode row must only advertise modes the build can actually play."
+        );
+        Assert.That(
+            modeOptions.TrueForAll(option => option.enabledSelf),
+            Is.True,
+            "A disabled mode button advertises a mode that does not exist."
+        );
+    }
+
+    /// <summary>
+    /// The reveal is built and tested but deliberately not shown to players: a static per-round
+    /// summary was judged the weaker half of the idea, and the replay that would replace it is
+    /// blocked on determinism work. This pins "present but dormant" so it cannot switch itself back
+    /// on, and so the markup is not quietly deleted while the recording pipeline still feeds it.
+    /// </summary>
+    [Test]
+    public void GameHudBattleReportRevealIsBuiltButNotShownToPlayers()
+    {
+        const string assetPath = "Assets/UI/Game/GameHUD.uxml";
+        VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
+        Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
+
+        TemplateContainer tree = asset.Instantiate();
+        ScrollView resultsScroll = tree.Q<ScrollView>("results-scroll");
+        Assert.That(resultsScroll, Is.Not.Null);
+
+        // Querying from the scroll view rather than the tree proves containment, so re-enabling is
+        // one class away rather than a re-layout.
+        VisualElement reveal = resultsScroll.Q<VisualElement>("report-reveal");
+        Label empty = resultsScroll.Q<Label>("report-empty");
+
+        Assert.That(reveal, Is.Not.Null);
+        Assert.That(empty, Is.Not.Null);
+        Assert.That(reveal.Q<VisualElement>("report-board"), Is.Not.Null);
+        Assert.That(reveal.Q<VisualElement>("report-orders"), Is.Not.Null);
+        Assert.That(reveal.Q<Label>("report-round-label"), Is.Not.Null);
+        Assert.That(reveal.Q<Label>("report-summary"), Is.Not.Null);
+        Assert.That(reveal.Q<Button>("report-prev-button"), Is.Not.Null);
+        Assert.That(reveal.Q<Button>("report-next-button"), Is.Not.Null);
+
+        Assert.That(
+            reveal.ClassListContains("hidden"),
+            Is.True,
+            "The reveal is on hold; the results overlay must open as a verdict plus two buttons."
+        );
+        Assert.That(empty.ClassListContains("hidden"), Is.True);
+
+        string controller = File.ReadAllText("Assets/Scripts/Menus/GameHUDController.cs");
+        Assert.That(
+            controller,
+            Does.Not.Match(@"ShowResults\([^)]*BattleReport"),
+            "Nothing on the match-end path may feed the reveal while it is on hold."
+        );
+
+        string styles = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
+        Assert.That(styles, Does.Contain(".report-board"));
+        Assert.That(
+            styles,
+            Does.Contain(".report-board__badge"),
+            "Roster-slot badges are the only link between a painted route and its order row."
+        );
+    }
+
+    [Test]
+    public void BattleReportRevealIsWithheldUntilTheMatchEnds()
+    {
+        string gameLoop = File.ReadAllText("Assets/Scripts/GameManager/GameLoop.cs");
+
+        Assert.That(
+            gameLoop,
+            Does.Contain("SendBattleReportClientRpc"),
+            "The reveal reaches clients through a dedicated RPC."
+        );
+
+        int recordCall = gameLoop.IndexOf("RecordBattleReportPlans(paths)", StringComparison.Ordinal);
+        int sendCall = gameLoop.IndexOf("SendBattleReportClientRpc(battleReport)", StringComparison.Ordinal);
+        int finishGame = gameLoop.IndexOf("private void FinishGame(", StringComparison.Ordinal);
+
+        Assert.That(recordCall, Is.GreaterThan(-1), "Plans must be recorded during the round.");
+        Assert.That(sendCall, Is.GreaterThan(-1));
+        Assert.That(
+            sendCall,
+            Is.GreaterThan(finishGame),
+            "Replicating committed orders before FinishGame would hand a client the enemy's plans "
+                + "mid-match, which is exactly what fog of war exists to deny."
+        );
+        Assert.That(
+            gameLoop.IndexOf("SendBattleReportClientRpc", recordCall, StringComparison.Ordinal),
+            Is.EqualTo(sendCall),
+            "The only send site must be the one inside FinishGame."
+        );
     }
 
     [Test]

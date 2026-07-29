@@ -40,7 +40,6 @@ public class JoinGameUIController : MonoBehaviour
     private Button titleButton;
     private Button eliminationButton;
     private Button kingButton;
-    private Button flagButton;
     private Button createMatchButton;
     private Button joinMatchButton;
     private Button cancelHostButton;
@@ -140,7 +139,6 @@ public class JoinGameUIController : MonoBehaviour
         titleButton = RequireElement<Button>("title-button");
         eliminationButton = RequireElement<Button>("elimination-button");
         kingButton = RequireElement<Button>("king-button");
-        flagButton = RequireElement<Button>("flag-button");
         createMatchButton = RequireElement<Button>("create-match-button");
         joinMatchButton = RequireElement<Button>("join-match-button");
         cancelHostButton = RequireElement<Button>("cancel-host-button");
@@ -321,7 +319,6 @@ public class JoinGameUIController : MonoBehaviour
 
         eliminationButton?.SetEnabled(true);
         kingButton?.SetEnabled(true);
-        flagButton?.SetEnabled(false);
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
         joinCodeInput?.SetValueWithoutNotify(string.Empty);
         localMultiplayerToggle?.SetValueWithoutNotify(false);
@@ -561,6 +558,10 @@ public class JoinGameUIController : MonoBehaviour
             RegisterNetworkCallbacks(networkManager, operationVersion);
             CacheTransportDefaults();
 
+            // The host is the server: if it goes, so does the match it would reconnect to.
+            ReconnectSession.Clear();
+            ReconnectSession.ApplyConnectionPayload(networkManager);
+
             if (options.IsBotMatch)
             {
                 RestoreDirectTransport();
@@ -659,6 +660,8 @@ public class JoinGameUIController : MonoBehaviour
             EnsureCurrentOperation(operationVersion);
 
             SetJoinStatus("Connecting...", false);
+            ReconnectSession.RememberRelayClient(joinCode);
+            ReconnectSession.ApplyConnectionPayload(networkManager);
             bool clientStarted = networkManager.StartClient();
             EnsureCurrentOperation(operationVersion);
             if (!clientStarted)
@@ -747,6 +750,8 @@ public class JoinGameUIController : MonoBehaviour
         bool isError
     )
     {
+        // Backing out of the lobby is deliberate; there is no match left worth rejoining.
+        ReconnectSession.Clear();
         NetworkManager networkManager = NetworkManager.Singleton;
         if (
             networkManager != null
@@ -977,7 +982,6 @@ public class JoinGameUIController : MonoBehaviour
         titleButton?.SetEnabled(enabled);
         eliminationButton?.SetEnabled(enabled);
         kingButton?.SetEnabled(enabled);
-        flagButton?.SetEnabled(false);
         createMatchButton?.SetEnabled(enabled);
         joinMatchButton?.SetEnabled(enabled);
         playerOpponentButton?.SetEnabled(enabled);

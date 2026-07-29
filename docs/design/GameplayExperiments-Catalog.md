@@ -40,8 +40,9 @@ The registry contains **59 experiment families**:
 - 5 audio-foundation and feedback experiments.
 
 The explicit opposing directions are: more cover versus open rotations; starting charges versus
-late recharge; role-shaped lethality versus blanket scalar softening; 2v2 versus 4v4; consecutive
-versus cumulative KOTH; Pogo stat reductions versus more visible counterplay; Sniper four/three/two
+late recharge (both superseded by the shipped cooldown economy); role-shaped lethality versus
+blanket scalar softening; 2v2 versus 4v4; consecutive
+versus cumulative KOTH; Pogo stat reductions versus more visible landing cues; Sniper four/three/two
 shot breakpoints; and rich versus restrained information.
 
 ## 1. Current ground truth
@@ -54,7 +55,8 @@ The baseline for every experiment in this dossier is:
 `GridSystem.RowCount = 10`);
 - **18 symmetric wall cells**; movement blocks each full cell, while a convex octagonal physics
 collider trims 0.4 world units from each corner for bullet-sized diagonal peeks;
-- a centered **six-cell hill**, columns 6–8 and rows 4–5;
+- a centered **twelve-cell hill**, columns 6–8 and rows 3–6 (`GameLoop.KingOfTheHillCells`), won by
+holding sole control for three consecutive rounds (`HillControlRoundsToWin = 3`);
 - production spawns distributed evenly across rows 0 and 9, with a two-column edge inset when
 space permits;
 - exactly **five units per team**, controlled by `RosterRules.UnitsPerPlayer`; repeats are allowed,
@@ -88,6 +90,10 @@ submissions through `endTime + 1`, so these are client deadlines rather than str
 - An ability replaces that unit’s normal movement order for the round.
 - Every current unit starts ready. A valid post-dodge activation starts a per-kit cooldown:
   Pogo 2, Shield Rush 2, Smoke Screen 2, Grenade 3, and Area Lock 4 full rounds.
+- **Terminology:** the old `uses`-based charge economy is gone; the field is now
+  `abilityCooldownRounds`. Where later sections say "charges fixed" as a control, read it as "hold
+  the ability economy constant." Sections that treat a charge *count* as the variable (EXP-C01,
+  EXP-C02) are labeled superseded rollback arms and describe the pre-cooldown design.
 - Eliminated units remain dead in both supported modes. The reusable respawn lifecycle is preserved
 but no current mode opts into it.
 - Elimination has no round cap. A team wipe ends the match.
@@ -95,7 +101,12 @@ but no current mode opts into it.
 - A full-team wipe remains terminal in KOTH; simultaneous wipes draw.
 - Grenade and Area Lock can create a dodge phase. A submitted dodge replaces the unit’s original
 order and cancels that unit’s own planned ability.
-- Pogo, Shield Rush, and Smoke currently have no dodge response range.
+- Pogo, Shield Rush, and Smoke have **no dodge response range, by design**. A dodge answers an
+ability that strikes a cell; these three reposition or deny rather than strike. **Pogo is a
+standing ruling, not an open question:** the jump is a plan-time commitment that is self-balancing
+by distance — landing close to an enemy accepts return fire on arrival, and landing far trades
+pressure for maneuverability. Adding a dodge would cancel the reward for the safe option while
+leaving the risk of the aggressive one, so no experiment may propose a Pogo dodge window.
 
 ### 1.3 Live unit and ability values
 
@@ -160,14 +171,21 @@ power/counts. Current implementation supports several plausible causes:
 1. **Small action budget magnifies every death.** In 5v5, the first death removes one fifth of a
   team’s future movement, fire, vision, and ability options. The miss-allowance profile is intended
   to make that loss follow sustained exposure rather than routine first contact.
-2. **Late planning is more compressed, not less.** The client deadline budget falls from 15 to 5
-  seconds as pieces disappear, even though each late decision becomes more consequential.
-3. **Ability texture expires early.** Every kit has one match-long use, so later rounds can collapse
-  into movement plus auto-fire.
+2. **Total planning time shrinks as the match gets more consequential.** `GetPlanningDurationSeconds`
+  is `max(12s, 6s × largest living crew)`, so the window falls 30 → 24 → 18 → 12 seconds as pieces
+  disappear. Note the 12-second floor means *per-unit* time actually rises from 6s to 12s, so the
+  pressure is on reading the whole board late, not on issuing each order.
+3. **Ability cadence may be too slow rather than too scarce.** The one-use-per-match economy was
+  replaced by round cooldowns (Pogo/Shield/Smoke 2, Grenade 3, Area Lock 4), so kits no longer run
+  dry — but a 4-round gap can still leave stretches of movement plus auto-fire.
 4. **KOTH has opposite pacing failure modes.** Three uncontested controls can finish quickly, while
   repeated contests can reset the streak indefinitely.
-5. **Some counterplay is asymmetric for accidental reasons.** Grenade and Area Lock offer a dodge
-  response; Pogo’s wall-ignoring flank and backstab do not.
+5. ~~**Some counterplay is asymmetric for accidental reasons.**~~ **Withdrawn (July 28, 2026).** The
+  asymmetry is a ruling, not an accident: Grenade and Area Lock strike a place, so a dodge is the
+  answer, while Pogo's jump only *moves the rider*. Its counterplay is spatial and already paid at
+  plan time — land near an enemy and the rider eats fire on arrival, land far away and the jump
+  bought maneuverability instead of pressure. A dodge window would negate the safe half of that
+  trade and leave the risky half intact. See §1.2.
 6. **The current bot is not a neutral balance oracle.** It tends to collapse range bands and sends
   every KOTH unit toward the hill.
 7. **Clarity may be suppressing perceived depth.** Order completeness, the movement cost of using
@@ -235,7 +253,7 @@ The historical green report is neither an immutable regression artifact nor bala
 
 **Production-parity balance fixture**
 
-- Current 15 × 10 board, 18 walls, six-cell hill, production spawns, fog, and 5v5 baseline.
+- Current 15 × 10 board, 18 walls, twelve-cell hill, production spawns, fog, and 5v5 baseline.
 - Mirrored rosters and side swaps.
 - Used for pacing, balance, map, ability, and bot-outcome evidence.
 
@@ -372,10 +390,15 @@ clustered interval. Pair the rubric with the quantitative match record.
 
 ### 2.5 Target hypotheses
 
-These targets are design hypotheses, not observed facts:
+**These are loose orientation ranges, not acceptance thresholds.** They exist to catch results that
+are obviously off — a ninety-second match or a twenty-round grind — and nothing more. Pacing is
+judged by the design owner playing the game, and that judgment overrides these numbers. A match
+inside every range can still be boring, and one outside them can still be the best match of the
+session; neither outcome is a finding on its own. Never report an experiment as passed or failed on
+these ranges, and never tune toward them.
 
-- **4–8 minutes** per match at normal time scale;
-- **5–9 meaningful rounds**;
+- roughly **4–8 minutes** per match at normal time scale;
+- roughly **5–9 meaningful rounds**;
 - first blood usually in **round 2 or 3**;
 - at least **two non-obvious choices per player per round**;
 - lethal exchanges remain decisive when positioning is clearly lost.
@@ -919,30 +942,30 @@ unit’s range, while multiple threats on one unit aggregate by maximum rather t
 - **Owners / files / rollback:** Gameplay + multiplayer + bot + QA; `GameLoop.cs`,
 `PlanMovement.cs`, `BotPlayer.cs`. Restore shared maximum as one rollback.
 
-#### EXP-C05 — Pogo landing counterplay
+#### EXP-C05 — Pogo landing legibility
 
 - [ ] **Select EXP-C05**
 
 **Status:** Viable experiment
 
 - **Details:** Compare the current generic destination marker with a Pogo-specific landing/
-trajectory cue, a brief reveal on landing, or a real dodge response. Each arm leaves Pogo’s
-movement and damage untouched so the test isolates whether clearer counterplay is enough.
+trajectory cue or a brief reveal on landing. Each arm leaves Pogo’s movement and damage untouched
+so the test isolates whether clearer **legibility** is enough. A dodge response is **out of scope**
+per the §1.2 ruling — this experiment may make the jump easier to read and answer positionally, but
+never negotiable after commitment.
 - **Problem / defense:** Pogo can jump through walls and threaten a 72-damage clean backstab
-magazine. Its target
-square already receives the shared public generic ability marker, but Pogo has no dodge response
-and the marker does not explain wall-ignoring movement or rear-angle danger.
+magazine. Its target square already receives the shared public generic ability marker, but the
+marker does not explain wall-ignoring movement or rear-angle danger, so opponents may be losing to
+a commitment they could have countered by facing or spacing.
 - **Arms / primary variable:** Existing generic marker control; enhanced Pogo-specific landing/
-trajectory cue; brief landing reveal; a Pogo-specific response window. Each is a separate arm
-with all Pogo stats fixed.
+trajectory cue; brief landing reveal. Each is a separate arm with all Pogo stats fixed.
 - **Controls & evidence:** Do not combine telegraph/reveal with a mobility, range, or backstab nerf.
-- **Metrics:** Flank attempts, adaptation of facing/formation, backstab conversion, response success,
-Pogo survival, and fairness/depth rubric.
+- **Metrics:** Flank attempts, adaptation of facing/formation, backstab conversion, Pogo survival,
+and fairness/depth rubric.
 - **Gate / protocol:** Fog-safe payload exposes no more location data than the existing target-square
 telegraph unless the reveal arm explicitly authorizes it; damage and movement remain unchanged.
 Human evidence is mandatory.
-- **Dependencies / conflicts:** EXP-C04 budget isolation for response-window arms. Conflicts Pogo
-stat tuning vs added counterplay.
+- **Dependencies / conflicts:** Conflicts Pogo stat tuning vs added legibility.
 - **Owners / files / rollback:** Gameplay + VFX + multiplayer; `Pogo.cs`, `GameLoop.cs`. Remove the
 presentation/response hook, leaving stats untouched.
 
@@ -1201,27 +1224,28 @@ from dense cover; Sniper and Smoke may gain from openness.
 - **Owners / files / rollback:** Level + balance; alternate layout snapshots. Current 18-wall set is
 immutable control.
 
-#### EXP-E04 — Fixed-six-cell hill shape
+#### EXP-E04 — Fixed-twelve-cell hill shape
 
 - [ ] **Select EXP-E04**
 
 **Status:** Viable experiment
 
-- **Details:** Keep exactly six objective cells and the same center, but rearrange them into the
-current rectangle, a diagonal split, or a vertical diamond. This changes approach angles and how
-many hill cells one ability covers without changing total scoring capacity.
+- **Details:** Keep exactly twelve objective cells and the same center, but rearrange them into the
+current deep rectangle, a wide bar, or a diagonal split. This changes approach angles and how many
+hill cells one ability covers without changing total scoring capacity.
 - **Problem / defense:** Shape controls approach angles and ability coverage independently of total
 hill capacity. Shape should be tested before size.
-- **Arms / primary variable:** Current 3 × 2 rectangle; six-cell diagonal split
-`{(5,4),(6,4),(7,4),(7,5),(8,5),(9,5)}`; six-cell vertical diamond
-`{(7,3),(6,4),(7,4),(7,5),(8,5),(7,6)}`, subject to wall validation.
-- **Controls & evidence:** Exactly six cells, same centroid, walls/spawns/scoring fixed.
+- **Arms / primary variable:** Current 3 × 4 rectangle (columns 6–8, rows 3–6); twelve-cell wide bar
+`{(7,3),(5,4),(6,4),(7,4),(8,4),(9,4),(5,5),(6,5),(7,5),(8,5),(9,5),(7,6)}`; twelve-cell diagonal
+split `{(5,3),(6,3),(7,3),(6,4),(7,4),(8,4),(6,5),(7,5),(8,5),(7,6),(8,6),(9,6)}`, subject to wall
+validation. Every arm is point-symmetric about the board center (7, 4.5).
+- **Controls & evidence:** Exactly twelve cells, same centroid, walls/spawns/scoring fixed.
 - **Metrics:** Contest rate, units committed, control flips, ability coverage percentage, first
 control, and rounds to win.
 - **Gate / protocol:** In-bounds, rotational symmetry, connectivity/reachability, no walls, and
 maximum hill cells covered by one Smoke/Grenade/Area Lock; paired KOTH seed blocks follow §2.2.
 - **Dependencies / conflicts:** Precedes hill-size changes.
-- **Owners / files / rollback:** Level + balance; hill profile in `GameLoop.cs`. Restore 3 × 2 set.
+- **Owners / files / rollback:** Level + balance; `GameLoop.KingOfTheHillCells`. Restore the 3 × 4 set.
 
 #### EXP-E05 — Hill size
 
@@ -1229,13 +1253,14 @@ maximum hill cells covered by one Smoke/Grenade/Area Lock; paired KOTH seed bloc
 
 **Status:** Deferred until EXP-E04
 
-- **Details:** After shape is understood, compare a tight two-cell center, the current six cells,
-and a broad ten-cell ridge. A smaller hill concentrates fights; a larger one permits split
+- **Details:** After shape is understood, compare a tight four-cell center, the current twelve cells,
+and a broad twenty-cell ridge. A smaller hill concentrates fights; a larger one permits split
 occupation and multi-angle contests but may be easier for whole teams to enter.
 - **Problem / defense:** A tighter hill can make contests decisive; a wider hill can create
 multi-front occupation. Size also changes ability coverage and unit capacity.
-- **Arms / primary variable:** Two-cell center, six-cell control, and ten-cell 5 × 2 ridge, only
-after fixed-six shape evidence.
+- **Arms / primary variable:** Four-cell center column `{(7,3),(7,4),(7,5),(7,6)}`, twelve-cell
+control, and a twenty-cell 5 × 4 ridge (columns 5–9, rows 3–6), only after fixed-twelve shape
+evidence.
 - **Controls & evidence:** Shape family, scoring, spawns, walls, and stats fixed within a size arm.
 - **Metrics:** Contest/empty rate, units on hill, single-ability coverage, control flips, and match
 duration.
@@ -1243,7 +1268,7 @@ duration.
 accidentally cover the entire treatment unless that is the declared hypothesis.
 - **Dependencies / conflicts:** KOTH scoring and team size alter capacity; never change them in the
 same run.
-- **Owners / files / rollback:** Level + balance + UI; map profile. Six-cell baseline remains default.
+- **Owners / files / rollback:** Level + balance + UI; map profile. Twelve-cell baseline remains default.
 
 #### EXP-E06 — Hill-approach shoulder cover
 
@@ -1507,11 +1532,12 @@ seconds; screenshots at normal/compact sizes.
 
 **Status:** Viable experiment
 
-- **Details:** When an ability is selected, show its remaining charges, range/shape, whether it
-offers a dodge, and the fact that the caster will not make its normal move. The experiment
-compares a compact warning with a richer selected-card detail strip.
-- **Problem / defense:** Cards show remaining use but do not make the immediate cost—no normal move
-this round—or the target shape/dodgeability obvious at the decision point.
+- **Details:** When an ability is selected, show its cooldown state (ready, or rounds remaining),
+range/shape, whether it offers the opponent a dodge, and the fact that the caster will not make its
+normal move. The experiment compares a compact warning with a richer selected-card detail strip.
+- **Problem / defense:** Cards show readiness but do not make the immediate cost—no normal move
+this round—or the target shape and dodgeability obvious at the decision point. Dodgeability is
+per-kit and permanent (§1.2), so it is a stable fact worth teaching on the card.
 - **Arms / primary variable:** Compact “stays this round” consequence; then a selected-card detail
 strip for range, shape, and response; current card as control.
 - **Controls & evidence:** Ability rules and counts fixed; exact values come from authoritative data,
@@ -1821,7 +1847,7 @@ These are unordered cross-references; the registry entries contain the rationale
   EXP-B12;
 - 4v4 ↔ 6v6: EXP-B05, with 5v5 control;
 - consecutive ↔ cumulative KOTH: EXP-B08’s matched-threshold two-factor matrix;
-- Pogo stat tuning ↔ added counterplay: EXP-C05/D03/D04;
+- Pogo stat tuning ↔ added landing legibility: EXP-C05/D03/D04;
 - Sniper four/three/two-shot breakpoints: EXP-D05 with Area Lock held independently;
 - rich ↔ restrained information/feedback: EXP-G01–G09 and H02–H05.
 
@@ -1844,7 +1870,8 @@ policy experiment;
 
 - Cumulative-to-3 appears only as EXP-B08’s matched-threshold falsification cell.
 - Sniper 30/40/60 are explicit four/three/two-shot EXP-D05 arms.
-- Pogo mobility, range, backstab, and counterplay are isolated in EXP-C05/D03/D04.
+- Pogo mobility, range, backstab, and landing legibility are isolated in EXP-C05/D03/D04. A Pogo
+dodge window is ruled out (§1.2) and is not an available arm.
 - Reroute, new characters, and new modes remain outside this dossier.
 - Charge-on-death and Elimination healing remain labeled falsification arms.
 - One match or a compact mechanics fixture never supports a balance conclusion.

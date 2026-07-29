@@ -52,17 +52,39 @@ public class GameHUDController : MonoBehaviour
     private Button lockInButton;
     private Button playAgainButton;
     private Button mainMenuButton;
+    private VisualElement reportReveal;
+    private VisualElement reportBoardElement;
+    private VisualElement reportOrders;
+    private Label reportEmpty;
+    private Label reportRoundLabel;
+    private Label reportSummary;
+    private Button reportPrevButton;
+    private Button reportNextButton;
+    private BattleReportBoard reportBoard;
+    private BattleReport activeReport;
+    private int reportRoundIndex;
+    private int reportLocalTeamIndex;
     private Button controlsButton;
     private VisualElement controlsOverlay;
     private VisualElement controlsPanel;
     private Button controlsCloseButton;
+    private Button settingsButton;
+    private VisualElement settingsOverlay;
+    private VisualElement settingsPanel;
+    private Button settingsCloseButton;
+    private SettingsPanelBinder settings;
     private VisualElement activeOverlay;
+    private VisualElement rejoinNotice;
+    private Label rejoinNoticeTitle;
+    private Label rejoinNoticeStatus;
     private Action playAgainAction;
     private Action mainMenuAction;
     private Coroutine flashCoroutine;
+    private Coroutine rejoinNoticeCoroutine;
     private bool callbacksRegistered;
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
+    public string RejoinNoticeText => rejoinNoticeStatus?.text ?? string.Empty;
 
     private void OnEnable()
     {
@@ -92,7 +114,9 @@ public class GameHUDController : MonoBehaviour
         ConsoleUiNavigation.ConfigureButtons(root);
         HideResults();
         CloseControlsOverlay(false);
+        CloseSettingsOverlay(false);
         ClearTargetFeedback();
+        HideRejoinNotice();
         HidePlanningCommit();
         ShowDeployment();
         SetCardsInteractable(false);
@@ -102,11 +126,18 @@ public class GameHUDController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterCallbacks();
+        // A level chosen mid-match survives leaving it, even if the sheet never got closed.
+        GameSettings.Flush();
         ReleaseBoardViewport();
         if (flashCoroutine != null)
         {
             StopCoroutine(flashCoroutine);
             flashCoroutine = null;
+        }
+        if (rejoinNoticeCoroutine != null)
+        {
+            StopCoroutine(rejoinNoticeCoroutine);
+            rejoinNoticeCoroutine = null;
         }
         flash?.RemoveFromClassList("hud-flash--active");
 
@@ -139,10 +170,22 @@ public class GameHUDController : MonoBehaviour
         timerLabel = RequireElement<Label>("timer-label");
         hillStatusReadout = RequireElement<VisualElement>("hill-status-readout");
         hillStatusLabel = RequireElement<Label>("hill-status-label");
+        rejoinNotice = RequireElement<VisualElement>("rejoin-notice");
+        rejoinNoticeTitle = RequireElement<Label>("rejoin-notice-title");
+        rejoinNoticeStatus = RequireElement<Label>("rejoin-notice-status");
         deploymentStatus = RequireElement<Label>("deployment-status");
         resultsStatus = RequireElement<Label>("results-status");
         playAgainButton = RequireElement<Button>("play-again-button");
         mainMenuButton = RequireElement<Button>("main-menu-button");
+        reportReveal = RequireElement<VisualElement>("report-reveal");
+        reportBoardElement = RequireElement<VisualElement>("report-board");
+        reportOrders = RequireElement<VisualElement>("report-orders");
+        reportEmpty = RequireElement<Label>("report-empty");
+        reportRoundLabel = RequireElement<Label>("report-round-label");
+        reportSummary = RequireElement<Label>("report-summary");
+        reportPrevButton = RequireElement<Button>("report-prev-button");
+        reportNextButton = RequireElement<Button>("report-next-button");
+        reportBoard = new BattleReportBoard(reportBoardElement);
         targetFeedbackLabel = root.Q<Label>("target-feedback-label");
         planningCommit = root.Q<VisualElement>("planning-commit");
         planningCommitStatus = root.Q<Label>("planning-commit-status");
@@ -151,6 +194,11 @@ public class GameHUDController : MonoBehaviour
         controlsOverlay = root.Q<VisualElement>("controls-overlay");
         controlsPanel = controlsOverlay?.Q<VisualElement>(className: "controls-panel");
         controlsCloseButton = root.Q<Button>("controls-close-button");
+        settingsButton = root.Q<Button>("settings-button");
+        settingsOverlay = RequireElement<VisualElement>("settings-overlay");
+        settingsPanel = RequireElement<VisualElement>("settings-panel");
+        settingsCloseButton = RequireElement<Button>("settings-close-button");
+        settings = new SettingsPanelBinder(settingsOverlay, nameof(GameHUDController));
     }
 
     private T RequireElement<T>(string elementName)
@@ -174,10 +222,20 @@ public class GameHUDController : MonoBehaviour
             playAgainButton.clicked += OnPlayAgainClicked;
         if (mainMenuButton != null)
             mainMenuButton.clicked += OnMainMenuClicked;
+        if (reportPrevButton != null)
+            reportPrevButton.clicked += OnReportPreviousClicked;
+        if (reportNextButton != null)
+            reportNextButton.clicked += OnReportNextClicked;
+        resultsPanel?.RegisterCallback<KeyDownEvent>(OnResultsKeyDown);
         if (controlsButton != null)
             controlsButton.clicked += ShowControlsOverlay;
         if (controlsCloseButton != null)
             controlsCloseButton.clicked += HideControlsOverlay;
+        if (settingsButton != null)
+            settingsButton.clicked += ShowSettingsOverlay;
+        if (settingsCloseButton != null)
+            settingsCloseButton.clicked += HideSettingsOverlay;
+        settings.Bind();
         if (lockInButton != null)
             lockInButton.clicked += OnLockInClicked;
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
@@ -202,10 +260,20 @@ public class GameHUDController : MonoBehaviour
             playAgainButton.clicked -= OnPlayAgainClicked;
         if (mainMenuButton != null)
             mainMenuButton.clicked -= OnMainMenuClicked;
+        if (reportPrevButton != null)
+            reportPrevButton.clicked -= OnReportPreviousClicked;
+        if (reportNextButton != null)
+            reportNextButton.clicked -= OnReportNextClicked;
+        resultsPanel?.UnregisterCallback<KeyDownEvent>(OnResultsKeyDown);
         if (controlsButton != null)
             controlsButton.clicked -= ShowControlsOverlay;
         if (controlsCloseButton != null)
             controlsCloseButton.clicked -= HideControlsOverlay;
+        if (settingsButton != null)
+            settingsButton.clicked -= ShowSettingsOverlay;
+        if (settingsCloseButton != null)
+            settingsCloseButton.clicked -= HideSettingsOverlay;
+        settings.Unbind();
         if (lockInButton != null)
             lockInButton.clicked -= OnLockInClicked;
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
@@ -531,6 +599,66 @@ public class GameHUDController : MonoBehaviour
         };
     }
 
+    /// <summary>
+    /// Raises the "someone dropped" readout with a live countdown to the end of the rejoin window.
+    /// The remaining player has to be able to decide whether to keep waiting, so the seconds are
+    /// shown rather than an indefinite spinner.
+    /// </summary>
+    public void ShowRejoinNotice(string headline, float secondsRemaining)
+    {
+        if (rejoinNotice == null)
+            return;
+
+        if (rejoinNoticeTitle != null)
+            rejoinNoticeTitle.text = string.IsNullOrWhiteSpace(headline)
+                ? "Opponent dropped"
+                : headline;
+        rejoinNotice.RemoveFromClassList("hidden");
+        SetRejoinCountdown(secondsRemaining);
+
+        if (rejoinNoticeCoroutine != null)
+            StopCoroutine(rejoinNoticeCoroutine);
+        rejoinNoticeCoroutine = StartCoroutine(RejoinNoticeCountdown(secondsRemaining));
+    }
+
+    public void HideRejoinNotice()
+    {
+        if (rejoinNoticeCoroutine != null)
+        {
+            StopCoroutine(rejoinNoticeCoroutine);
+            rejoinNoticeCoroutine = null;
+        }
+
+        rejoinNotice?.AddToClassList("hidden");
+    }
+
+    public static string FormatRejoinCountdown(float secondsRemaining)
+    {
+        int seconds = Mathf.Max(0, Mathf.CeilToInt(secondsRemaining));
+        return seconds > 0 ? $"Rejoin window · {seconds}s" : "Rejoin window closed";
+    }
+
+    private void SetRejoinCountdown(float secondsRemaining)
+    {
+        if (rejoinNoticeStatus != null)
+            rejoinNoticeStatus.text = FormatRejoinCountdown(secondsRemaining);
+    }
+
+    private IEnumerator RejoinNoticeCountdown(float secondsRemaining)
+    {
+        // Unscaled: the window is wall-clock on the server too, and dev fast-forward must not make
+        // the readout disagree with the deadline it is counting to.
+        while (secondsRemaining > 0f)
+        {
+            yield return null;
+            secondsRemaining -= Time.unscaledDeltaTime;
+            SetRejoinCountdown(secondsRemaining);
+        }
+
+        SetRejoinCountdown(0f);
+        rejoinNoticeCoroutine = null;
+    }
+
     public void ShowDeployment(string status = null)
     {
         if (deploymentStatus != null)
@@ -569,10 +697,274 @@ public class GameHUDController : MonoBehaviour
         mainMenuAction = onMainMenu;
         SetResultButtonsEnabled(true, true);
         CloseControlsOverlay(false);
+        CloseSettingsOverlay(false);
         HideDeployment();
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);
+    }
+
+    // === BATTLE REPORT REVEAL ===
+
+    /// <summary>
+    /// Loads the match reveal and opens it on the last round, which is the one the player just
+    /// lived through and the only one they have a question about yet.
+    /// </summary>
+    public void SetBattleReport(BattleReport report, int localTeamIndex)
+    {
+        activeReport = report != null && report.HasContent ? report : null;
+        reportLocalTeamIndex = localTeamIndex;
+        reportRoundIndex = activeReport != null ? activeReport.rounds.Count - 1 : 0;
+
+        bool hasReport = activeReport != null;
+        reportReveal?.EnableInClassList("hidden", !hasReport);
+        reportEmpty?.EnableInClassList("hidden", hasReport);
+        RenderReportRound();
+    }
+
+    private void OnReportPreviousClicked() => StepReportRound(-1);
+
+    private void OnReportNextClicked() => StepReportRound(1);
+
+    private void StepReportRound(int delta)
+    {
+        if (activeReport == null)
+            return;
+
+        int next = Mathf.Clamp(reportRoundIndex + delta, 0, activeReport.rounds.Count - 1);
+        if (next == reportRoundIndex)
+            return;
+
+        reportRoundIndex = next;
+        RenderReportRound();
+    }
+
+    /// <summary>Arrow keys step rounds so the reveal is usable without aiming at two small buttons.</summary>
+    private void OnResultsKeyDown(KeyDownEvent evt)
+    {
+        if (activeReport == null)
+            return;
+
+        if (evt.keyCode == KeyCode.LeftArrow)
+            StepReportRound(-1);
+        else if (evt.keyCode == KeyCode.RightArrow)
+            StepReportRound(1);
+        else
+            return;
+
+        evt.StopPropagation();
+    }
+
+    private void RenderReportRound()
+    {
+        if (activeReport == null)
+        {
+            reportBoard?.SetRound(null, null, reportLocalTeamIndex);
+            reportOrders?.Clear();
+            if (reportRoundLabel != null)
+                reportRoundLabel.text = string.Empty;
+            if (reportSummary != null)
+                reportSummary.text = string.Empty;
+            return;
+        }
+
+        BattleReportRound round = activeReport.rounds[reportRoundIndex];
+        reportBoard?.SetRound(activeReport, round, reportLocalTeamIndex);
+
+        if (reportRoundLabel != null)
+        {
+            reportRoundLabel.text =
+                $"Round {round.roundNumber} of {activeReport.rounds[^1].roundNumber}";
+        }
+
+        reportPrevButton?.SetEnabled(reportRoundIndex > 0);
+        reportNextButton?.SetEnabled(reportRoundIndex < activeReport.rounds.Count - 1);
+
+        if (reportSummary != null)
+            reportSummary.text = BuildRoundSummary(round);
+
+        BuildOrderRows(round);
+    }
+
+    private string BuildRoundSummary(BattleReportRound round)
+    {
+        int friendlyLosses = 0;
+        int enemyLosses = 0;
+        foreach (BattleReportEntry entry in round.entries)
+        {
+            if (!entry.diedThisRound)
+                continue;
+            if (entry.teamIndex == reportLocalTeamIndex)
+                friendlyLosses++;
+            else
+                enemyLosses++;
+        }
+
+        string losses = (friendlyLosses, enemyLosses) switch
+        {
+            (0, 0) => "No one was eliminated.",
+            (0, _) => Pluralize(enemyLosses, "enemy unit", "enemy units") + " eliminated.",
+            (_, 0) => "You lost " + Pluralize(friendlyLosses, "unit", "units") + ".",
+            _ =>
+                $"You lost {Pluralize(friendlyLosses, "unit", "units")}; "
+                + $"{Pluralize(enemyLosses, "enemy unit", "enemy units")} eliminated.",
+        };
+
+        if (activeReport.gameMode != GameMode.KingOfTheHill)
+            return losses;
+
+        string hill;
+        if (round.hillContested)
+            hill = "The hill was contested.";
+        else if (round.hillControllerTeamIndex == GameLoop.NoHillController)
+            hill = "The hill was empty.";
+        else
+        {
+            string holder = round.hillControllerTeamIndex == reportLocalTeamIndex ? "You" : "They";
+            hill =
+                $"{holder} held the hill "
+                + $"({round.hillStreak}/{GameLoop.HillControlRoundsToWin}).";
+        }
+
+        return $"{losses} {hill}";
+    }
+
+    private static string Pluralize(int count, string singular, string plural)
+    {
+        return count == 1 ? $"1 {singular}" : $"{count} {plural}";
+    }
+
+    private void BuildOrderRows(BattleReportRound round)
+    {
+        if (reportOrders == null)
+            return;
+
+        reportOrders.Clear();
+        AddOrderTeamSection(round, reportLocalTeamIndex, "Your crew");
+        AddOrderTeamSection(round, GetEnemyReportTeamIndex(), "Their crew");
+    }
+
+    private int GetEnemyReportTeamIndex()
+    {
+        return reportLocalTeamIndex == GameLoop.HostTeamIndex
+            ? GameLoop.OpponentTeamIndex
+            : GameLoop.HostTeamIndex;
+    }
+
+    private void AddOrderTeamSection(BattleReportRound round, int teamIndex, string heading)
+    {
+        Label headingLabel = new(heading) { pickingMode = PickingMode.Ignore };
+        headingLabel.AddToClassList("report-team-heading");
+        reportOrders.Add(headingLabel);
+
+        foreach (BattleReportEntry entry in round.entries)
+        {
+            if (entry.teamIndex != teamIndex)
+                continue;
+            reportOrders.Add(BuildOrderRow(entry));
+        }
+    }
+
+    private VisualElement BuildOrderRow(BattleReportEntry entry)
+    {
+        bool friendly = entry.teamIndex == reportLocalTeamIndex;
+        bool gone = entry.order == BattleReportOrder.Eliminated;
+
+        VisualElement row = new() { pickingMode = PickingMode.Ignore };
+        row.AddToClassList("report-order-row");
+        row.EnableInClassList("report-order-row--enemy", !friendly);
+        row.EnableInClassList("report-order-row--dead", entry.diedThisRound);
+        row.EnableInClassList("report-order-row--gone", gone);
+
+        Label badge = new((entry.rosterSlot + 1).ToString()) { pickingMode = PickingMode.Ignore };
+        badge.AddToClassList("report-order-row__badge");
+        row.Add(badge);
+
+        Label name = new(ResolveUnitName(entry)) { pickingMode = PickingMode.Ignore };
+        name.AddToClassList("report-order-row__name");
+        row.Add(name);
+
+        Label order = new(DescribeOrder(entry)) { pickingMode = PickingMode.Ignore };
+        order.AddToClassList("report-order-row__order");
+        row.Add(order);
+
+        Label state = new(DescribeState(entry)) { pickingMode = PickingMode.Ignore };
+        state.AddToClassList("report-order-row__state");
+        row.Add(state);
+
+        return row;
+    }
+
+    private string ResolveUnitName(BattleReportEntry entry)
+    {
+        if (
+            activeReport == null
+            || !activeReport.TryGetCrewMember(
+                entry.teamIndex,
+                entry.rosterSlot,
+                out BattleReportCrewMember member
+            )
+        )
+        {
+            return $"Unit {entry.rosterSlot + 1}";
+        }
+
+        UnitDatabase catalog = GameLoop.Instance != null ? GameLoop.Instance.allUnits : null;
+        if (
+            catalog?.units == null
+            || member.catalogIndex < 0
+            || member.catalogIndex >= catalog.units.Count
+            || catalog.units[member.catalogIndex] == null
+        )
+        {
+            return $"Unit {entry.rosterSlot + 1}";
+        }
+
+        return catalog.units[member.catalogIndex].unitName;
+    }
+
+    private static string DescribeOrder(BattleReportEntry entry)
+    {
+        switch (entry.order)
+        {
+            case BattleReportOrder.Eliminated:
+                return "Already eliminated";
+            case BattleReportOrder.Ability:
+                return entry.hasAbilityTarget
+                    ? $"Ability on ({entry.abilityTarget.x}, {entry.abilityTarget.y})"
+                    : "Ability";
+            case BattleReportOrder.Dodge:
+                return $"Dodged to ({entry.endCell.x}, {entry.endCell.y})";
+            case BattleReportOrder.Move:
+                int steps = Mathf.Max(0, (entry.path?.Count ?? 1) - 1);
+                return $"Moved {Pluralize(steps, "cell", "cells")} "
+                    + $"to ({entry.endCell.x}, {entry.endCell.y})";
+            default:
+                return $"Held ({entry.startCell.x}, {entry.startCell.y})";
+        }
+    }
+
+    private string DescribeState(BattleReportEntry entry)
+    {
+        if (entry.order == BattleReportOrder.Eliminated)
+            return string.Empty;
+        if (entry.diedThisRound)
+            return "Eliminated";
+
+        if (
+            activeReport != null
+            && activeReport.TryGetCrewMember(
+                entry.teamIndex,
+                entry.rosterSlot,
+                out BattleReportCrewMember member
+            )
+            && member.maxHealth > 0
+        )
+        {
+            return $"{entry.healthAtRoundEnd}/{member.maxHealth} HP";
+        }
+
+        return $"{entry.healthAtRoundEnd} HP";
     }
 
     public void HideResults()
@@ -642,6 +1034,46 @@ public class GameHUDController : MonoBehaviour
     {
         controlsOverlay?.AddToClassList("hidden");
         ClearActiveOverlay(controlsOverlay, restoreFocus ? controlsButton : null);
+    }
+
+    /// <summary>
+    /// Opens the levels over a running round. The match is not paused and nothing is re-sent on
+    /// close: the sheet only borrows the dock the way the controls sheet does, and hands it back.
+    /// </summary>
+    private void ShowSettingsOverlay()
+    {
+        if (settingsOverlay == null || IsShowing(resultsOverlay))
+            return;
+
+        settings.ShowStoredSettings();
+        settingsOverlay.RemoveFromClassList("hidden");
+        settingsOverlay.BringToFront();
+        ActivateOverlay(settingsOverlay, settings.FirstControl);
+    }
+
+    private void HideSettingsOverlay()
+    {
+        CloseSettingsOverlay(true);
+    }
+
+    /// <summary>
+    /// Card interactability is deliberately left alone. The overlay disables the dock as a whole and
+    /// re-enables that one flag, so each card keeps whatever the phase or a pending rejoin last set
+    /// on it and closing the sheet cannot hand back a card the match wanted disabled.
+    /// </summary>
+    private void CloseSettingsOverlay(bool restoreFocus)
+    {
+        // Volume writes stream in while a slider is dragged, so the disk write waits for the exit.
+        if (IsShowing(settingsOverlay))
+            GameSettings.Flush();
+
+        settingsOverlay?.AddToClassList("hidden");
+        ClearActiveOverlay(settingsOverlay, restoreFocus ? settingsButton : null);
+    }
+
+    private static bool IsShowing(VisualElement overlay)
+    {
+        return overlay != null && !overlay.ClassListContains("hidden");
     }
 
     private void ActivateOverlay(VisualElement overlay, VisualElement focusTarget)
@@ -718,6 +1150,15 @@ public class GameHUDController : MonoBehaviour
             if (CanGrabFocus(controlsPanel))
                 return controlsPanel;
         }
+        else if (overlay == settingsOverlay)
+        {
+            if (CanGrabFocus(settings?.FirstControl))
+                return settings.FirstControl;
+            if (CanGrabFocus(settingsCloseButton))
+                return settingsCloseButton;
+            if (CanGrabFocus(settingsPanel))
+                return settingsPanel;
+        }
 
         return CanGrabFocus(overlay) ? overlay : null;
     }
@@ -730,6 +1171,21 @@ public class GameHUDController : MonoBehaviour
             && element.canGrabFocus;
     }
 
+    /// <summary>
+    /// A dropdown builds its list outside the sheet that opened it, so the guard below has to let
+    /// that list through; otherwise picking a quality level would snap focus back to the first row.
+    /// </summary>
+    private static bool IsInRuntimeDropdown(VisualElement element)
+    {
+        for (VisualElement current = element; current != null; current = current.parent)
+        {
+            if (current.ClassListContains("unity-base-dropdown"))
+                return true;
+        }
+
+        return false;
+    }
+
     private void OnFocusIn(FocusInEvent evt)
     {
         VisualElement focused = evt.target as VisualElement;
@@ -739,6 +1195,7 @@ public class GameHUDController : MonoBehaviour
             || focused == null
             || focused == activeOverlay
             || activeOverlay.Contains(focused)
+            || IsInRuntimeDropdown(focused)
         )
         {
             return;
@@ -759,31 +1216,64 @@ public class GameHUDController : MonoBehaviour
 
     private void OnKeyDown(KeyDownEvent evt)
     {
-        if (
-            evt.keyCode != KeyCode.Escape
-            || controlsOverlay == null
-            || controlsOverlay.ClassListContains("hidden")
-        )
-        {
+        if (evt.keyCode != KeyCode.Escape || !TryDismissOpenSheet(true))
             return;
-        }
 
-        HideControlsOverlay();
         evt.StopImmediatePropagation();
     }
 
     private void OnNavigationCancel(NavigationCancelEvent evt)
     {
-        if (
-            controlsOverlay == null
-            || controlsOverlay.ClassListContains("hidden")
-        )
-        {
+        if (!TryDismissOpenSheet(true))
             return;
+
+        evt.StopImmediatePropagation();
+    }
+
+    /// <summary>
+    /// Closes whichever sheet the player left open because the match now needs the board. Called
+    /// when a dodge prompt begins: that window is a few seconds long, so a panel someone is reading
+    /// costs them units. Focus is dropped rather than handed back, because the button that reopens
+    /// the sheet must not be sitting under the next keypress and an arrow key must not still reach a
+    /// slider inside a sheet that has gone away. Card interactability stays the match's to set.
+    /// </summary>
+    public void DismissOpenSheets()
+    {
+        VisualElement focused = root?.focusController?.focusedElement as VisualElement;
+        bool focusWasInASheet =
+            focused != null
+            && (
+                (settingsOverlay != null && settingsOverlay.Contains(focused))
+                || (controlsOverlay != null && controlsOverlay.Contains(focused))
+            );
+
+        if (!TryDismissOpenSheet(false))
+            return;
+
+        if (focusWasInASheet)
+            focused.Blur();
+    }
+
+    /// <summary>
+    /// Dismisses the sheet the player opened, innermost first. Reports whether anything was open so
+    /// Escape and cancel stay untouched during a round and keep reaching the match itself, and so a
+    /// dismissal with nothing open never touches the dock.
+    /// </summary>
+    private bool TryDismissOpenSheet(bool restoreFocus)
+    {
+        if (IsShowing(settingsOverlay))
+        {
+            CloseSettingsOverlay(restoreFocus);
+            return true;
         }
 
-        HideControlsOverlay();
-        evt.StopImmediatePropagation();
+        if (IsShowing(controlsOverlay))
+        {
+            CloseControlsOverlay(restoreFocus);
+            return true;
+        }
+
+        return false;
     }
 
     public static bool IsPointerOverUI(Vector2 screenPosition)
