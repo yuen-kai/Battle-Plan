@@ -99,7 +99,50 @@ public class JoinGameUIController : MonoBehaviour
         CacheTransportDefaults();
         RegisterCallbacks();
         ConfigureInitialState();
-        ShowPanel(PanelState.Create, true);
+        if (!TryStartTutorialMatch())
+            ShowPanel(PanelState.Create, true);
+    }
+
+    /// <summary>
+    /// The tutorial is launched from the title screen but still needs this scene's NetworkManager,
+    /// so it passes through here and creates its loopback host without the player touching the
+    /// lobby. The setup chrome is hidden for the second that takes, leaving the screen's own
+    /// backdrop, so the match-setup screen never flashes up on the way to the board.
+    /// <see cref="NetworkHandler"/> then skips character selection.
+    /// </summary>
+    private bool TryStartTutorialMatch()
+    {
+        if (!TutorialSession.IsActive)
+            return false;
+
+        // Arriving here with a host already requested means the tutorial did not survive its boot,
+        // so the session is dropped and the lobby shown rather than stranding the player on an
+        // empty screen.
+        if (TutorialSession.HostStartRequested)
+        {
+            TutorialSession.End();
+            return false;
+        }
+
+        VisualElement screen = root.Q<VisualElement>("screen");
+        if (screen != null)
+        {
+            foreach (VisualElement child in screen.Children())
+                child.AddToClassList("hidden");
+        }
+
+        TutorialSession.HostStartRequested = true;
+        pendingOptions = TutorialSession.BuildMatchOptions();
+        fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
+
+        // Deferred a frame: this runs from OnEnable, which is not ordered against the scene's
+        // NetworkManager waking up, and CreateMatch needs the singleton.
+        root.schedule.Execute(() =>
+        {
+            if (isActiveAndEnabled && TutorialSession.IsActive)
+                CreateMatch();
+        });
+        return true;
     }
 
     private void OnDisable()

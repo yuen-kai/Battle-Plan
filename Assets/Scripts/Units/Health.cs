@@ -70,7 +70,11 @@ public class Health : NetworkBehaviour
         if (!IsServer || !isAlive.Value)
             return;
 
-        currentHealth.Value = Mathf.Max(0f, currentHealth.Value - damage);
+        // The tutorial sandbox teaches; it does not kill. Hits still land and still read on the
+        // health bar, but neither crew can be eliminated, so a fumbled dodge cannot end the lesson
+        // script early or hand a first-time player a defeat.
+        float floor = TutorialSession.IsActive ? 1f : 0f;
+        currentHealth.Value = Mathf.Max(floor, currentHealth.Value - damage);
         if (currentHealth.Value > 0f)
         {
             GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);

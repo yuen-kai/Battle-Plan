@@ -13,6 +13,7 @@ public class TitleScreenUIController : MonoBehaviour
     private VisualElement activeModal;
     private SettingsPanelBinder settings;
     private Button playButton;
+    private Button tutorialButton;
     private Button charactersButton;
     private Button settingsButton;
     private Button controlsButton;
@@ -27,6 +28,9 @@ public class TitleScreenUIController : MonoBehaviour
 
     private void OnEnable()
     {
+        // Reaching the title always means no match is pending, including a tutorial the player
+        // backed out of before it started.
+        TutorialSession.End();
         MatchOptions.SetCurrent(MatchOptions.Default);
 
         document = GetComponent<UIDocument>();
@@ -60,6 +64,7 @@ public class TitleScreenUIController : MonoBehaviour
         creditsModal = RequireElement<VisualElement>("credits-modal");
         settings = new SettingsPanelBinder(settingsModal, nameof(TitleScreenUIController));
         playButton = RequireElement<Button>("play-button");
+        tutorialButton = RequireElement<Button>("tutorial-button");
         charactersButton = RequireElement<Button>("characters-button");
         settingsButton = RequireElement<Button>("settings-button");
         controlsButton = RequireElement<Button>("controls-button");
@@ -71,6 +76,7 @@ public class TitleScreenUIController : MonoBehaviour
         clickSoundButtons = new[]
         {
             playButton,
+            tutorialButton,
             charactersButton,
             settingsButton,
             controlsButton,
@@ -110,6 +116,8 @@ public class TitleScreenUIController : MonoBehaviour
 
         if (playButton != null)
             playButton.clicked += StartGame;
+        if (tutorialButton != null)
+            tutorialButton.clicked += StartTutorial;
         if (charactersButton != null)
             charactersButton.clicked += OpenCharacters;
         if (settingsButton != null)
@@ -147,6 +155,8 @@ public class TitleScreenUIController : MonoBehaviour
 
         if (playButton != null)
             playButton.clicked -= StartGame;
+        if (tutorialButton != null)
+            tutorialButton.clicked -= StartTutorial;
         if (charactersButton != null)
             charactersButton.clicked -= OpenCharacters;
         if (settingsButton != null)
@@ -176,6 +186,17 @@ public class TitleScreenUIController : MonoBehaviour
 
     private void StartGame()
     {
+        SceneManager.LoadScene("JoinGame");
+    }
+
+    /// <summary>
+    /// The tutorial still needs the join scene's NetworkManager, so it routes through there and
+    /// creates its own loopback host on arrival instead of showing the lobby.
+    /// </summary>
+    private void StartTutorial()
+    {
+        TutorialSession.Begin();
+        MatchOptions.SetCurrent(TutorialSession.BuildMatchOptions());
         SceneManager.LoadScene("JoinGame");
     }
 

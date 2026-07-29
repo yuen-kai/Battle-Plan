@@ -30,6 +30,15 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="hud-dock" class="hud-dock">
+            <ui:VisualElement name="lesson-popup" class="lesson-popup toybox-ui hidden" picking-mode="Ignore">
+                <ui:VisualElement class="lesson-popup__card toy-panel" picking-mode="Ignore">
+                    <ui:Label name="lesson-popup-label" class="lesson-popup__copy" picking-mode="Ignore" />
+                    <ui:Button name="lesson-popup-button" text="Got it" class="button button--primary lesson-popup__button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="coach-prompt" class="coach-prompt hidden" picking-mode="Ignore">
+                <ui:Label name="coach-prompt-label" class="coach-prompt__copy" picking-mode="Ignore" />
+            </ui:VisualElement>
             <ui:Label name="target-feedback-label" class="target-feedback hidden" picking-mode="Ignore" />
 
             <ui:VisualElement class="hud-dock__row">

@@ -229,6 +229,80 @@
     border-left-color: var(--toy-primary);
 }
 
+/* Tutorial coaching line. Rides the band above the target-feedback bar and stays centred, so it
+   reads as guidance about the board rather than feedback about the last click. */
+.coach-prompt {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -80px;
+    align-items: center;
+    opacity: 0;
+    transition-duration: 0.14s;
+    transition-property: opacity;
+}
+
+.coach-prompt--visible {
+    opacity: 1;
+}
+
+/* Tutorial lesson. The beats worth stopping to read get a card instead of a strip, sat well above
+   the instruction line. Anchored to the dock rather than the screen centre so a lesson never lands
+   on top of the fight it is describing. */
+.lesson-popup {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -210px;
+    align-items: center;
+    opacity: 0;
+    transition-duration: 0.16s;
+    transition-property: opacity;
+}
+
+.lesson-popup--visible {
+    opacity: 1;
+}
+
+.toybox-ui.lesson-popup .lesson-popup__card {
+    max-width: 700px;
+    padding: 20px 30px 16px 30px;
+    align-items: center;
+    border-left-width: 4px;
+    border-left-color: var(--toy-primary);
+}
+
+.lesson-popup__copy {
+    font-size: 20px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--toy-text);
+    white-space: normal;
+}
+
+/* The card waits for the player rather than a clock, so the dismiss is the only timing control. */
+.toybox-ui.lesson-popup .lesson-popup__button {
+    margin-top: 16px;
+    min-width: 140px;
+}
+
+.coach-prompt__copy {
+    max-width: 560px;
+    padding: 9px 16px;
+    background-color: var(--toy-panel);
+    color: var(--toy-text);
+    border-width: var(--toy-stroke-thin);
+    border-bottom-width: var(--toy-depth-panel);
+    border-left-width: 3px;
+    border-color: var(--toy-edge);
+    border-left-color: var(--toy-primary);
+    border-radius: var(--toy-radius-md);
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
 .hud-header-actions {
     flex-direction: row;
     flex-shrink: 0;

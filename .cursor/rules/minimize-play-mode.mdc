@@ -19,7 +19,8 @@ Running the game slows the user's machine. Treat Play mode as a scarce resource.
 - Stop (or pause via `manage_editor`) before thinking: if you need to analyze results, read files, or plan next steps, exit/pause Play first. Unity must not sit running while you deliberate.
 
 ## Knowing when to stop (no fixed waits)
-Never sleep for a fixed duration and hope the game is done. Use the observable signals:
+Never sleep for a fixed duration and hope the game is done — see `never-sleep-poll-instead`, which
+owns this. Poll the observable signals instead:
 - `GameLoop.currentPhase` — "planning" / "dodging" / "executing" / "idle" (poll via `execute_code`).
 - `DevInput.Dump()` — phase, unit cells/alive, network state, dodge-window membership.
 - `DevE2ETest.Report` / `[E2E]` console lines — the suite logs a final `RESULT:` line on completion.

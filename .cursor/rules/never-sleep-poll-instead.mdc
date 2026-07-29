@@ -1,0 +1,43 @@
+---
+description: Never block on fixed sleeps waiting for async work (tests, compiles, Play sessions) - poll the completion signal instead
+alwaysApply: true
+---
+
+# Never Sleep. Poll.
+
+Every long-running thing here publishes a completion signal. Read it. Do not guess a duration and
+sleep, and never sleep "to be safe" after a job has already reported done.
+
+## The loop
+1. Kick the job off.
+2. **Immediately** read its signal — no wait before the first read.
+3. If it is not done, read again straight away. The tool round-trip is the only delay there should
+   be. Only when a job is genuinely long (a multi-minute build) may you wait, and then in short
+   slices, never one long block.
+
+## Signals to read
+| Job | Signal |
+|---|---|
+| Edit-mode / play-mode tests | `get_test_job(job_id)` → `status`, `result.summary` |
+| Compile / import | `read_console` errors, then `mcpforunity://editor/state` → `advice.ready_for_tools` |
+| Tutorial E2E | `DevTutorialE2ETest.LastReport` (survives the domain reload), `IsDone`, `Passed` |
+| Other dev harnesses | `DevE2ETest.Report` / `DevBotE2ETest.Report`, `[E2E]` console lines, `RESULT:` |
+| Round/phase progress | `GameLoop.currentPhase`, `DevInput.Dump()` |
+| Background shell | the terminal file, or the end-of-turn completion notification |
+
+## Rules
+- `AwaitShell` with no `shell_id` is a blind sleep. Do not use it to wait on Unity work.
+- These runs are seconds, not minutes. A 15-second sleep on a 1-second job is a bug in your process.
+- If a signal does not survive what you are doing, persist it — the console buffer is wiped by
+  domain reload, which is why the E2E report is parked in `SessionState`.
+- If polling shows no progress, diagnose with `execute_code` (read live state) instead of waiting
+  longer. A stalled job will not unstall because you slept.
+- Prefer self-stopping harnesses that set a done flag and exit Play mode themselves.
+
+```
+// ❌ BAD
+run_tests(...); AwaitShell(35000); get_test_job(...)
+
+// ✅ GOOD
+run_tests(...); get_test_job(...)   // still running? call get_test_job again immediately
+```

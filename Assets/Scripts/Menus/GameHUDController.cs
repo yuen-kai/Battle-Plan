@@ -47,6 +47,12 @@ public class GameHUDController : MonoBehaviour
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
+    private VisualElement coachPrompt;
+    private Label coachPromptLabel;
+    private VisualElement lessonPopup;
+    private Label lessonPopupLabel;
+    private Button lessonPopupButton;
+    private Action lessonDismissAction;
     private VisualElement planningCommit;
     private Label planningCommitStatus;
     private Button lockInButton;
@@ -82,6 +88,7 @@ public class GameHUDController : MonoBehaviour
     private Coroutine flashCoroutine;
     private Coroutine rejoinNoticeCoroutine;
     private bool callbacksRegistered;
+    private bool timerSuppressed;
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
     public string RejoinNoticeText => rejoinNoticeStatus?.text ?? string.Empty;
@@ -187,6 +194,11 @@ public class GameHUDController : MonoBehaviour
         reportNextButton = RequireElement<Button>("report-next-button");
         reportBoard = new BattleReportBoard(reportBoardElement);
         targetFeedbackLabel = root.Q<Label>("target-feedback-label");
+        coachPrompt = root.Q<VisualElement>("coach-prompt");
+        coachPromptLabel = root.Q<Label>("coach-prompt-label");
+        lessonPopup = root.Q<VisualElement>("lesson-popup");
+        lessonPopupLabel = root.Q<Label>("lesson-popup-label");
+        lessonPopupButton = root.Q<Button>("lesson-popup-button");
         planningCommit = root.Q<VisualElement>("planning-commit");
         planningCommitStatus = root.Q<Label>("planning-commit-status");
         lockInButton = root.Q<Button>("lock-in-button");
@@ -238,6 +250,8 @@ public class GameHUDController : MonoBehaviour
         settings.Bind();
         if (lockInButton != null)
             lockInButton.clicked += OnLockInClicked;
+        if (lessonPopupButton != null)
+            lessonPopupButton.clicked += OnLessonDismissClicked;
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         // The bars resize on their own when breakpoints or card content change, which the root's
         // geometry event does not report.
@@ -276,6 +290,8 @@ public class GameHUDController : MonoBehaviour
         settings.Unbind();
         if (lockInButton != null)
             lockInButton.clicked -= OnLockInClicked;
+        if (lessonPopupButton != null)
+            lessonPopupButton.clicked -= OnLessonDismissClicked;
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         enemyStatusStrip?.UnregisterCallback<GeometryChangedEvent>(OnChromeGeometryChanged);
         hudDock?.UnregisterCallback<GeometryChangedEvent>(OnChromeGeometryChanged);
@@ -473,6 +489,76 @@ public class GameHUDController : MonoBehaviour
         SetTargetFeedback(string.Empty, false);
     }
 
+    /// <summary>
+    /// Shows the tutorial's current instruction, or clears it when the message is empty. Only one
+    /// instruction is ever on screen: the caller replaces it rather than stacking prompts.
+    /// </summary>
+    public void SetCoachPrompt(string message)
+    {
+        if (coachPrompt == null || coachPromptLabel == null)
+            return;
+
+        bool visible = !string.IsNullOrWhiteSpace(message);
+        coachPromptLabel.text = visible ? message : string.Empty;
+        coachPrompt.EnableInClassList("hidden", !visible);
+        coachPrompt.EnableInClassList("coach-prompt--visible", visible);
+    }
+
+    /// <summary>
+    /// Shows a tutorial lesson, the larger card used for the points worth stopping to read, as
+    /// opposed to the instruction line telling the player what to do right now. The card has no
+    /// timer: it stays up until <paramref name="onDismiss"/> is triggered from its own button.
+    /// </summary>
+    public void SetLessonPopup(string message, string dismissLabel = "Got it", Action onDismiss = null)
+    {
+        if (lessonPopup == null || lessonPopupLabel == null)
+            return;
+
+        bool visible = !string.IsNullOrWhiteSpace(message);
+        lessonDismissAction = visible ? onDismiss : null;
+        lessonPopupLabel.text = visible ? message : string.Empty;
+        lessonPopup.EnableInClassList("hidden", !visible);
+        lessonPopup.EnableInClassList("lesson-popup--visible", visible);
+        if (lessonPopupButton != null)
+            lessonPopupButton.text = dismissLabel;
+    }
+
+    private void OnLessonDismissClicked()
+    {
+        Action dismiss = lessonDismissAction;
+        SetLessonPopup(string.Empty);
+        dismiss?.Invoke();
+    }
+
+    /// <summary>
+    /// Hides the planning countdown for modes paced by the player rather than a clock. The planner
+    /// keeps pushing values every frame, so the suppression lives here rather than at the source.
+    /// </summary>
+    public void SuppressTimer(bool suppressed)
+    {
+        if (timerSuppressed == suppressed)
+            return;
+
+        timerSuppressed = suppressed;
+        if (suppressed && timerLabel != null)
+        {
+            timerLabel.text = string.Empty;
+            timerLabel.RemoveFromClassList("timer-label--urgent");
+        }
+    }
+
+    /// <summary>
+    /// Trims both strips to the crew size actually fielded, so a sandbox match with fewer units
+    /// does not leave unconfigured cards standing in the dock.
+    /// </summary>
+    public void SetFieldedCardCount(int fieldedCount)
+    {
+        for (int i = 0; i < cards.Length; i++)
+            cards[i]?.Root?.EnableInClassList("hidden", i >= fieldedCount);
+        for (int i = 0; i < enemyCards.Length; i++)
+            enemyCards[i]?.Root?.EnableInClassList("hidden", i >= fieldedCount);
+    }
+
     public void SetCardDisabled(int cardIndex, bool disabled)
     {
         if (TryGetCard(cardIndex, out UnitCardElement card))
@@ -516,7 +602,7 @@ public class GameHUDController : MonoBehaviour
 
     public void SetTimer(float seconds)
     {
-        if (timerLabel == null)
+        if (timerLabel == null || timerSuppressed)
             return;
 
         int displayedSeconds = Mathf.Max(0, Mathf.CeilToInt(seconds));

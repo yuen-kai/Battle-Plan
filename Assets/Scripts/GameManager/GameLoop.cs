@@ -26,6 +26,10 @@ public enum MatchResultReason : byte
     SimultaneousElimination,
     KingOfTheHill,
     DisconnectForfeit,
+
+    // The tutorial sandbox closes when its last lesson lands rather than when a crew dies, so it
+    // reports an outcome that is neither a victory nor a defeat.
+    TutorialComplete,
 }
 
 public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
@@ -78,6 +82,8 @@ public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
     {
         if (!IsValid)
             return "Match complete.";
+        if (Reason == MatchResultReason.TutorialComplete)
+            return "Tutorial complete.";
         if (Outcome == MatchOutcome.Draw)
         {
             return Reason == MatchResultReason.SimultaneousElimination
@@ -232,6 +238,14 @@ public class GameLoop : NetworkBehaviour
     // dodge window to submit short dive paths that REPLACE their planned move (and cancel their
     // own ability plan, if any).
     public Dictionary<int, HashSet<GameObject>> dodgeAlerted; // logical team -> alerted units
+
+    // Teams handed a dodge window during the current round. `dodgeAlerted` only exists while the
+    // window is open, and a window every alerted team answers immediately never survives a frame,
+    // so round-scoped observers read this instead. Cleared as each round opens.
+    private readonly HashSet<int> dodgeAlertedTeamsThisRound = new();
+    public bool WasTeamAlertedToDodgeThisRound(int teamIndex) =>
+        dodgeAlertedTeamsThisRound.Contains(teamIndex);
+
     private PathsDict dodgeDivePaths;
     private readonly HashSet<int> dodgeResponsesReceived = new();
     private int maxDiveRangeThisRound;
@@ -375,8 +389,19 @@ public class GameLoop : NetworkBehaviour
 
     private readonly List<Vector2Int[]> spawns = CreateSpawnLayout(devMode);
 
+    /// <summary>
+    /// Units actually fielded per team this match. Rosters are always the configured crew length
+    /// so validation and <see cref="ConfigureTeam"/> stay untouched; the tutorial sandbox simply
+    /// spawns fewer of them.
+    /// </summary>
+    public static int UnitsPerTeamThisMatch =>
+        TutorialSession.IsActive ? TutorialSession.UnitsPerTeam : RosterRules.UnitsPerPlayer;
+
     private static List<Vector2Int[]> CreateSpawnLayout(bool useDevLayout)
     {
+        if (TutorialSession.IsActive)
+            return TutorialSession.CreateSpawnLayout();
+
         List<Vector2Int[]> layout = new(TeamCount);
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
@@ -512,7 +537,10 @@ public class GameLoop : NetworkBehaviour
     // Game Settings
     const float planningTimePerUnit = 6f;
     const float minimumPlanningTime = 12f;
-    const float planningUndoGraceSeconds = 3f;
+    // How long both crews stay locked in before the round resolves, leaving a last window to
+    // unlock. The tutorial keeps the same beat so the pause a student learns here is the one they
+    // will meet in a real match.
+    const float planningUndoGraceSeconds = 1f;
 
     // Actions
     public static System.Action<bool> OrderAllowShooting;
@@ -527,6 +555,7 @@ public class GameLoop : NetworkBehaviour
         (Vector3 position, Quaternion rotation)
     > unitSpawnTransforms = new();
     private BotPlayer botPlayer;
+    private TutorialDirector tutorialDirector;
     private int roundNumber;
     private bool planningChangesOpen;
     private double planningDeadline;
@@ -723,6 +752,11 @@ public class GameLoop : NetworkBehaviour
             StartCoroutine(ReturnHostToJoinGameAfterShutdown());
             return;
         }
+
+        // The tutorial only ever runs on a loopback host, so one director both scripts the
+        // opponent server-side and drives the coaching prompts on the same client.
+        if (TutorialSession.IsActive && tutorialDirector == null)
+            tutorialDirector = gameObject.AddComponent<TutorialDirector>();
 
         GameHUDController.Instance?.SetMatchSummary(replicatedMatchOptions.Value);
         RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
@@ -1021,6 +1055,8 @@ public class GameLoop : NetworkBehaviour
             }
         }
 
+        SetFieldedCardCountClientRpc(UnitsPerTeamThisMatch);
+
         // Setup teams by explicit logical index.
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
@@ -1054,15 +1090,16 @@ public class GameLoop : NetworkBehaviour
                 $"Team {teamIndex} has an invalid roster ({rosterValidation.Reason})."
             );
         }
-        if (spawnPositions == null || spawnPositions.Count != RosterRules.UnitsPerPlayer)
+        int fieldedCount = Mathf.Min(teamUnits.Length, UnitsPerTeamThisMatch);
+        if (spawnPositions == null || spawnPositions.Count < fieldedCount)
         {
             throw new System.InvalidOperationException(
-                $"Team {teamIndex} requires exactly {RosterRules.UnitsPerPlayer} spawn positions."
+                $"Team {teamIndex} requires at least {fieldedCount} spawn positions."
             );
         }
 
-        allTeamUnitObjects[teamIndex] = new GameObject[teamUnits.Length];
-        for (int i = 0; i < teamUnits.Length; i++)
+        allTeamUnitObjects[teamIndex] = new GameObject[fieldedCount];
+        for (int i = 0; i < fieldedCount; i++)
         {
             NetworkObject.VisibilityDelegate visibility = IsAuthorizedGameplayObserver;
             GameObject unit = IsBotParticipant(participantId)
@@ -1109,6 +1146,16 @@ public class GameLoop : NetworkBehaviour
                 );
             }
         }
+    }
+
+    /// <summary>
+    /// Trims both card strips to the crew size this match actually fields, so the tutorial's lone
+    /// unit does not sit beside four empty slots.
+    /// </summary>
+    [ClientRpc]
+    void SetFieldedCardCountClientRpc(int fieldedCount)
+    {
+        GameHUDController.Instance?.SetFieldedCardCount(fieldedCount);
     }
 
     [ClientRpc]
@@ -1309,6 +1356,7 @@ public class GameLoop : NetworkBehaviour
 
             ClearActiveSmokeCells();
             roundNumber++;
+            dodgeAlertedTeamsThisRound.Clear();
             submittedTeamPaths.Clear();
             latestTeamPlanVersions.Clear();
             retractedTeamPathFallbacks.Clear();
@@ -1328,7 +1376,11 @@ public class GameLoop : NetworkBehaviour
             int largestLivingTeamSize = Enumerable
                 .Range(0, TeamCount)
                 .Max(teamIndex => GetTeamUnits(teamIndex).Count(IsLivingUnit));
-            float timerLength = GetPlanningDurationSeconds(largestLivingTeamSize);
+            // The tutorial is paced by the student, not a clock: the window is long enough to read
+            // a prompt in and the HUD hides the countdown, so the round ends when they lock in.
+            float timerLength = TutorialSession.IsActive
+                ? TutorialSession.PlanningSeconds
+                : GetPlanningDurationSeconds(largestLivingTeamSize);
             double startTime = NetworkManager.Singleton.ServerTime.Time;
             double endTime = startTime + timerLength;
             planningDeadline = endTime;
@@ -1344,6 +1396,17 @@ public class GameLoop : NetworkBehaviour
                     botPlayer.TeamIndex
                 );
                 latestTeamPlanVersions[botPlayer.TeamIndex] = 0;
+            }
+
+            // The tutorial opponent is scripted, so its orders replace whatever the bot decided.
+            // The bot is left in place to answer dodge windows, which need no scripting.
+            if (tutorialDirector != null)
+            {
+                submittedTeamPaths[OpponentTeamIndex] = SanitizePaths(
+                    tutorialDirector.CreateEnemyPlan(),
+                    OpponentTeamIndex
+                );
+                latestTeamPlanVersions[OpponentTeamIndex] = 0;
             }
 
             if (devMode)
@@ -2003,6 +2066,7 @@ public class GameLoop : NetworkBehaviour
         dodgeAlerted = dodgeAlerted
             .Where(kvp => kvp.Value.Count > 0)
             .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        dodgeAlertedTeamsThisRound.UnionWith(dodgeAlerted.Keys);
 
         if (dodgeAlerted.Count == 0)
         {
@@ -2048,6 +2112,26 @@ public class GameLoop : NetworkBehaviour
             dodgeResponsesReceived.Add(botPlayer.TeamIndex);
         }
 
+        // The tutorial's opponent dives toward the student rather than simply clear of the blast,
+        // so the round it throws its own ability opens from a range that actually threatens them.
+        if (
+            tutorialDirector != null
+            && dodgeAlerted.TryGetValue(OpponentTeamIndex, out HashSet<GameObject> taughtAlerted)
+        )
+        {
+            PathsDict scriptedDives = SanitizePaths(
+                tutorialDirector.CreateEnemyDodge(taughtAlerted, activations, maxDiveRangeThisRound),
+                OpponentTeamIndex,
+                maxDiveRangeThisRound
+            );
+            foreach (var kvp in scriptedDives)
+            {
+                if (taughtAlerted.Contains(kvp.Key))
+                    dodgeDivePaths[kvp.Key] = kvp.Value;
+            }
+            dodgeResponsesReceived.Add(OpponentTeamIndex);
+        }
+
         if (devMode)
         {
             bool humanResponseNeeded = dodgeAlerted.Keys.Any(teamIndex =>
@@ -2063,7 +2147,11 @@ public class GameLoop : NetworkBehaviour
         else
         {
             int mostAlerted = dodgeAlerted.Values.Max(set => set.Count);
-            float window = activations.Max(entry => entry.data.timeDivePerUnit) * mostAlerted;
+            // Three seconds is no time at all to read a first prompt and answer it, so the tutorial
+            // window is effectively open-ended; the client closes it the moment a dive is drawn.
+            float window = TutorialSession.IsActive
+                ? TutorialSession.PlanningSeconds
+                : activations.Max(entry => entry.data.timeDivePerUnit) * mostAlerted;
             double endTime = NetworkManager.Singleton.ServerTime.Time + window;
             dodgeWindowEndTime = endTime;
 
@@ -3731,6 +3819,20 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
+    /// <summary>
+    /// Closes the tutorial sandbox once its last lesson has landed, instead of waiting for a crew
+    /// to be wiped out. The open planning session is ended first so the board stops taking orders
+    /// behind the results overlay. Server-only.
+    /// </summary>
+    public void FinishTutorial()
+    {
+        if (!IsServer || matchEnded)
+            return;
+
+        FinishPlanningClientRpc();
+        FinishGame(MatchResult.ForWinner(HostTeamIndex, MatchResultReason.TutorialComplete));
+    }
+
     private void FinishGame(MatchResult result)
     {
         if (matchEnded)
@@ -3742,6 +3844,18 @@ public class GameLoop : NetworkBehaviour
         LastMatchResult = result;
         currentPhase = "idle";
         Time.timeScale = 1f;
+
+        // Whatever the player does from the results overlay is an ordinary match, so the sandbox
+        // closes here rather than leaking its crew size into the next one.
+        if (TutorialSession.IsActive)
+        {
+            GameHUDController.Instance?.SetCoachPrompt(string.Empty);
+            GameHUDController.Instance?.SetLessonPopup(string.Empty);
+            GameHUDController.Instance?.SuppressTimer(false);
+            TutorialSession.MarkCompleted();
+            TutorialSession.End();
+        }
+
         ClearActiveSmokeCells();
         SetFogOfWarEnabled(false);
         forceRevealUntil.Clear();
@@ -3802,8 +3916,22 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        bool replayTutorial = tutorialDirector != null;
         ResetMatchState();
         NetworkHelper.CleanupAllNetworkObjects();
+
+        // "Play again" after the tutorial means the tutorial, not a crew-selection screen the
+        // student has never been shown. The host is still up, so the sandbox is simply rebuilt.
+        if (replayTutorial)
+        {
+            TutorialSession.Begin();
+            MatchOptions.SetCurrent(TutorialSession.BuildMatchOptions());
+            ConfigureTeam(HostTeamIndex, NetworkManager.ServerClientId, TutorialSession.BuildRoster());
+            ConfigureTeam(OpponentTeamIndex, BotParticipantId, TutorialSession.BuildRoster());
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
         NetworkManager.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
     }
 

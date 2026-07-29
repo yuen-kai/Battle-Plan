@@ -218,7 +218,7 @@ public class PlanMovement : MonoBehaviour
             &&
             planningActive
             && units == null
-            && teamCharacters.Count < RosterRules.UnitsPerPlayer
+            && teamCharacters.Count < GameLoop.UnitsPerTeamThisMatch
             && NetworkManager.Singleton != null
             && NetworkManager.Singleton.IsListening
             && NetworkManager.Singleton.ServerTime.Time < endTime
@@ -274,6 +274,13 @@ public class PlanMovement : MonoBehaviour
                     AbilitySelection();
                 }
             }
+
+            // A dodge response has no lock-in chip, so it normally rides the window's clock out.
+            // The tutorial opens that window wide instead and ends it here, on the release of the
+            // drag, which is what lets a first-time player take the dodge at their own pace.
+            if (ShouldCommitTutorialDodgeNow())
+                SubmitCurrentPlan(sessionVersion);
+
             yield return null;
         }
 
@@ -449,6 +456,24 @@ public class PlanMovement : MonoBehaviour
         GameHUDController.Instance?.SetTimer(0f);
         if (hideCommit)
             GameHUDController.Instance?.HidePlanningCommit();
+    }
+
+    /// <summary>
+    /// True once a tutorial student has dragged an alerted unit somewhere new and let go. Only
+    /// dodge sessions qualify: planning sessions have a lock-in chip to commit with.
+    /// </summary>
+    private bool ShouldCommitTutorialDodgeNow()
+    {
+        if (!TutorialSession.IsActive || useUnitCards || planningSubmitted)
+            return false;
+        // Held means the drag is still being drawn; the commit waits for the release rather than
+        // firing on the first cell crossed.
+        if (Input.GetMouseButton(0) || selectedUnit == null)
+            return false;
+
+        return plans.TryGetValue(selectedUnit, out (bool, List<Vector3>) plan)
+            && !plan.Item1
+            && (plan.Item2?.Count ?? 0) > 1;
     }
 
     private void SubmitCurrentPlan(int sessionVersion)

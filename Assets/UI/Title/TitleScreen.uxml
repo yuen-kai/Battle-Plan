@@ -17,6 +17,10 @@
                         <ui:VisualElement class="toy-icon toy-icon--play" picking-mode="Ignore" />
                         <ui:Label text="Play" class="toy-button__label title-action__label" picking-mode="Ignore" />
                     </ui:Button>
+                    <ui:Button name="tutorial-button" class="button title-action">
+                        <ui:VisualElement class="toy-icon toy-icon--flag" picking-mode="Ignore" />
+                        <ui:Label text="Tutorial" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                    </ui:Button>
                     <ui:Button name="characters-button" class="button title-action">
                         <ui:VisualElement class="toy-icon toy-icon--player" picking-mode="Ignore" />
                         <ui:Label text="Characters" class="toy-button__label title-action__label" picking-mode="Ignore" />

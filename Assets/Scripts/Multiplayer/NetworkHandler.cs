@@ -179,6 +179,27 @@ public class NetworkHandler : NetworkBehaviour
             return;
 
         acceptingConnections = false;
+        if (TutorialSession.IsActive)
+        {
+            // The tutorial picks its own crew, so it goes straight to the board rather than through
+            // character selection.
+            GameLoop.ResetMatchState();
+            GameLoop.ConfigureTeam(
+                GameLoop.HostTeamIndex,
+                NetworkManager.ServerClientId,
+                TutorialSession.BuildRoster()
+            );
+            GameLoop.ConfigureTeam(
+                GameLoop.OpponentTeamIndex,
+                GameLoop.BotParticipantId,
+                TutorialSession.BuildRoster()
+            );
+
+            sceneLoadRequested = true;
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
         if (GameLoop.devMode)
         {
             GameLoop.ResetMatchState();
