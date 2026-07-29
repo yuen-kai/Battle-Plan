@@ -110,6 +110,8 @@ public static class DevInput
 #if UNITY_EDITOR
         DevMppmAutoJoin.ConfigureLoopbackTransport(nm);
 #endif
+        ReconnectSession.Clear();
+        ReconnectSession.ApplyConnectionPayload(nm);
         if (!nm.StartHost())
         {
 #if UNITY_EDITOR
@@ -348,6 +350,53 @@ public static class DevInput
     /// <summary>Alias of SubmitPlans: the server already auto-fills unset units, so this just submits.</summary>
     public static void ResolveRound() => SubmitPlans();
 
+    // ---- Reconnect grace -------------------------------------------------------------------
+
+    /// <summary>
+    /// Kick a team's human seat from the host so the real reconnect path runs: the client tears
+    /// NGO down and starts retrying, and the match holds instead of forfeiting. Defaults to the
+    /// opponent seat. Only a remote human can be dropped — a bot has no connection to lose, and
+    /// the host is the server. Watch Dump() for the countdown.
+    /// </summary>
+    public static bool DropParticipant(int team = GameLoop.OpponentTeamIndex)
+    {
+        if (GameLoop.Instance == null)
+        {
+            Debug.LogWarning("[DevInput] No GameLoop; is a match running?");
+            return false;
+        }
+
+        return GameLoop.Instance.DevDropParticipant(team);
+    }
+
+    /// <summary>Close the open rejoin window now, forcing the DisconnectForfeit end condition.</summary>
+    public static bool ExpireRejoinGrace()
+    {
+        if (GameLoop.Instance == null)
+        {
+            Debug.LogWarning("[DevInput] No GameLoop; is a match running?");
+            return false;
+        }
+
+        return GameLoop.Instance.DevExpireRejoinGrace();
+    }
+
+    /// <summary>
+    /// Push the open dodge window's deadline out so a drop and rejoin fit inside it. The window is
+    /// only a few seconds by default, which is not long enough to reconnect in. Re-issues the
+    /// prompt to everyone still owed one, so extend before anybody draws a dive.
+    /// </summary>
+    public static bool ExtendDodgeWindow(float extraSeconds = 30f)
+    {
+        if (GameLoop.Instance == null)
+        {
+            Debug.LogWarning("[DevInput] No GameLoop; is a match running?");
+            return false;
+        }
+
+        return GameLoop.Instance.DevExtendDodgeWindow(extraSeconds);
+    }
+
     // ---- Observation ----------------------------------------------------------------------
 
     /// <summary>Grid cell (col,row) of a unit, or (-1,-1) if unavailable.</summary>
@@ -407,6 +456,25 @@ public static class DevInput
         sb.AppendLine(
             $"network: listening={nm?.IsListening} server={nm?.IsServer} clients={nm?.ConnectedClients?.Count}"
         );
+        sb.AppendLine(
+            "reconnect: "
+                + (
+                    GameLoop.Instance != null
+                        ? GameLoop.Instance.DevDescribeRejoinState()
+                        : $"seats: {ReconnectGrace.Server.Describe(ReconnectGrace.Now)}"
+                )
+                + $"; localRoute={ReconnectSession.TransportMode}"
+        );
+
+        // Server set versus this peer's mirror: a seat that rejoined mid-round without being resent
+        // the smoke footprint reads client=0 while the server still holds cells.
+        if (GameLoop.Instance != null)
+            sb.AppendLine(GameLoop.Instance.DevDescribeSmokeModel());
+
+        // Server-side window versus what this peer was actually handed. A seat that came back
+        // without the re-derivation reads localTelegraphs=0 prompt=no while the window is open.
+        if (GameLoop.Instance != null)
+            sb.AppendLine(GameLoop.Instance.DevDescribeDodgeWindow());
 
         if (GameLoop.Instance != null && GameLoop.Instance.Options.IsKingOfTheHill)
         {

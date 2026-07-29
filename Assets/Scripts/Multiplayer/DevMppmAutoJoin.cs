@@ -571,6 +571,8 @@ public sealed class DevMppmAutoJoinRunner : MonoBehaviour
             }
 
             DevMppmAutoJoin.ConfigureLoopbackTransport(networkManager);
+            ReconnectSession.RememberDirectClient();
+            ReconnectSession.ApplyConnectionPayload(networkManager);
             Debug.Log("[DevMppmAutoJoin] Player 2 starting direct client.");
             if (!networkManager.StartClient())
             {
@@ -673,6 +675,8 @@ public sealed class DevMppmAutoJoinRunner : MonoBehaviour
             yield break;
         }
 
+        ReconnectSession.RememberRelayClient(directive.relayJoinCode);
+        ReconnectSession.ApplyConnectionPayload(networkManager);
         Debug.Log("[DevMppmAutoJoin] Player 2 starting Relay client.");
         if (!networkManager.StartClient())
         {

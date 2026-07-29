@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -12,7 +11,7 @@ public class TitleScreenUIController : MonoBehaviour
     private VisualElement controlsModal;
     private VisualElement creditsModal;
     private VisualElement activeModal;
-    private DropdownField qualityDropdown;
+    private SettingsPanelBinder settings;
     private Button playButton;
     private Button settingsButton;
     private Button controlsButton;
@@ -22,6 +21,7 @@ public class TitleScreenUIController : MonoBehaviour
     private Button controlsCloseButton;
     private Button creditsCloseButton;
     private Button modalReturnButton;
+    private Button[] clickSoundButtons;
     private bool callbacksRegistered;
 
     private void OnEnable()
@@ -39,7 +39,7 @@ public class TitleScreenUIController : MonoBehaviour
         CacheElements();
         ConsoleUiNavigation.ConfigureButtons(root);
         RegisterCallbacks();
-        ConfigureQualityDropdown();
+        settings.ShowStoredSettings();
         CloseModal(false);
         root.schedule.Execute(() => playButton?.Focus());
     }
@@ -47,6 +47,7 @@ public class TitleScreenUIController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterCallbacks();
+        GameSettings.Flush();
         activeModal = null;
         modalReturnButton = null;
     }
@@ -56,7 +57,7 @@ public class TitleScreenUIController : MonoBehaviour
         settingsModal = RequireElement<VisualElement>("settings-modal");
         controlsModal = RequireElement<VisualElement>("controls-modal");
         creditsModal = RequireElement<VisualElement>("credits-modal");
-        qualityDropdown = RequireElement<DropdownField>("quality-dropdown");
+        settings = new SettingsPanelBinder(settingsModal, nameof(TitleScreenUIController));
         playButton = RequireElement<Button>("play-button");
         settingsButton = RequireElement<Button>("settings-button");
         controlsButton = RequireElement<Button>("controls-button");
@@ -65,6 +66,17 @@ public class TitleScreenUIController : MonoBehaviour
         settingsCloseButton = RequireElement<Button>("settings-close-button");
         controlsCloseButton = RequireElement<Button>("controls-close-button");
         creditsCloseButton = RequireElement<Button>("credits-close-button");
+        clickSoundButtons = new[]
+        {
+            playButton,
+            settingsButton,
+            controlsButton,
+            creditsButton,
+            quitButton,
+            settingsCloseButton,
+            controlsCloseButton,
+            creditsCloseButton,
+        };
     }
 
     private T RequireElement<T>(string elementName)
@@ -84,6 +96,14 @@ public class TitleScreenUIController : MonoBehaviour
     {
         if (callbacksRegistered)
             return;
+
+        foreach (Button button in clickSoundButtons)
+        {
+            if (button != null)
+                button.clicked += PlayClick;
+        }
+
+        settings.Bind();
 
         if (playButton != null)
             playButton.clicked += StartGame;
@@ -112,6 +132,14 @@ public class TitleScreenUIController : MonoBehaviour
         if (!callbacksRegistered)
             return;
 
+        foreach (Button button in clickSoundButtons)
+        {
+            if (button != null)
+                button.clicked -= PlayClick;
+        }
+
+        settings.Unbind();
+
         if (playButton != null)
             playButton.clicked -= StartGame;
         if (settingsButton != null)
@@ -128,41 +156,15 @@ public class TitleScreenUIController : MonoBehaviour
             controlsCloseButton.clicked -= CloseModalFromButton;
         if (creditsCloseButton != null)
             creditsCloseButton.clicked -= CloseModalFromButton;
-        if (qualityDropdown != null)
-            qualityDropdown.UnregisterValueChangedCallback(OnQualityChanged);
 
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         root.UnregisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
         callbacksRegistered = false;
     }
 
-    private void ConfigureQualityDropdown()
+    private void PlayClick()
     {
-        if (qualityDropdown == null)
-            return;
-
-        qualityDropdown.UnregisterValueChangedCallback(OnQualityChanged);
-        qualityDropdown.choices = new List<string>(QualitySettings.names);
-        if (qualityDropdown.choices.Count == 0)
-        {
-            qualityDropdown.SetEnabled(false);
-            return;
-        }
-
-        int qualityIndex = Mathf.Clamp(
-            QualitySettings.GetQualityLevel(),
-            0,
-            qualityDropdown.choices.Count - 1
-        );
-        qualityDropdown.SetValueWithoutNotify(qualityDropdown.choices[qualityIndex]);
-        qualityDropdown.RegisterValueChangedCallback(OnQualityChanged);
-    }
-
-    private void OnQualityChanged(ChangeEvent<string> evt)
-    {
-        int qualityIndex = qualityDropdown?.choices?.IndexOf(evt.newValue) ?? -1;
-        if (qualityIndex >= 0)
-            QualitySettings.SetQualityLevel(qualityIndex, true);
+        AudioManager.Instance?.PlayButtonClick();
     }
 
     private void StartGame()
@@ -172,7 +174,8 @@ public class TitleScreenUIController : MonoBehaviour
 
     private void OpenSettings()
     {
-        ShowModal(settingsModal, qualityDropdown, settingsButton);
+        settings.ShowStoredSettings();
+        ShowModal(settingsModal, settings.FirstControl, settingsButton);
     }
 
     private void OpenControls()
@@ -205,6 +208,10 @@ public class TitleScreenUIController : MonoBehaviour
 
     private void CloseModal(bool restoreFocus)
     {
+        // Volume writes stream in while a slider is dragged, so the disk write waits for the exit.
+        if (settingsModal != null && activeModal == settingsModal)
+            GameSettings.Flush();
+
         settingsModal?.AddToClassList("hidden");
         controlsModal?.AddToClassList("hidden");
         creditsModal?.AddToClassList("hidden");

@@ -1,6 +1,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
     <ui:Style src="../Shared/BattlePlan.uss" />
     <ui:Style src="../Shared/TacticalToybox.uss" />
+    <ui:Style src="../Shared/Settings.uss" />
     <ui:Style src="TitleScreen.uss" />
     <ui:VisualElement name="screen" class="screen toybox-screen toybox-ui title-screen">
         <ui:VisualElement class="screen-frame title-layout">
@@ -40,11 +41,32 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="settings-modal" class="modal-shade hidden">
-            <ui:VisualElement name="settings-modal-panel" class="modal" focusable="true" tabindex="-1">
+            <ui:VisualElement name="settings-modal-panel" class="modal settings-panel" focusable="true" tabindex="-1">
                 <ui:Label text="Settings" class="title-lg" picking-mode="Ignore" />
                 <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:Label text="Graphics quality" class="section-label" picking-mode="Ignore" />
-                <ui:DropdownField name="quality-dropdown" class="quality-dropdown" />
+                <ui:ScrollView name="settings-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="settings-scroll">
+                    <ui:Label text="Volume" class="section-label settings-section-label settings-section-label--first" picking-mode="Ignore" />
+                    <ui:VisualElement class="setting-row">
+                        <ui:Label text="Master" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:Slider name="master-volume-slider" low-value="0" high-value="1" value="1" class="toy-slider setting-row__control" />
+                        <ui:Label name="master-volume-value" text="100%" class="setting-row__value mono" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="setting-row">
+                        <ui:Label text="Music" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:Slider name="music-volume-slider" low-value="0" high-value="1" value="1" class="toy-slider setting-row__control" />
+                        <ui:Label name="music-volume-value" text="100%" class="setting-row__value mono" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="setting-row">
+                        <ui:Label text="Effects" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:Slider name="sfx-volume-slider" low-value="0" high-value="1" value="1" class="toy-slider setting-row__control" />
+                        <ui:Label name="sfx-volume-value" text="100%" class="setting-row__value mono" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Label text="Display" class="section-label settings-section-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="setting-row setting-row--single">
+                        <ui:Label text="Quality" class="setting-row__label" picking-mode="Ignore" />
+                        <ui:DropdownField name="quality-dropdown" class="quality-dropdown setting-row__control" />
+                    </ui:VisualElement>
+                </ui:ScrollView>
                 <ui:Button name="settings-close-button" text="Close" class="button button--primary modal-close" />
             </ui:VisualElement>
         </ui:VisualElement>

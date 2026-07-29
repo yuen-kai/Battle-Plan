@@ -108,9 +108,17 @@ public class NetworkHelper : NetworkBehaviour
                 netObj.CheckObjectVisibility = visibility;
 
             if (ownerClientId.HasValue)
+            {
+                // NGO despawns a disconnected client's owned objects by default, which would delete
+                // a dropped player's whole crew before the reconnect window could give it back.
+                // Ownership reverts to the server instead and is handed back on rejoin.
+                netObj.DontDestroyWithOwner = true;
                 netObj.SpawnWithOwnership(ownerClientId.Value);
+            }
             else
+            {
                 netObj.Spawn();
+            }
 
             // Set parent after network spawn to ensure proper parenting across network
             if (parent != null)

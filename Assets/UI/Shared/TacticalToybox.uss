@@ -408,6 +408,95 @@
     border-color: var(--toy-focus);
 }
 
+/* Volume-style slider. The built-in template is a hairline track with a small round pill, and it
+   positions both of those absolutely, so each one is given its own geometry here rather than
+   nudged: an inset channel and a handle wide enough to grab or to see from across a room. */
+.toybox-ui .toy-slider {
+    min-height: var(--toy-target-compact);
+    margin: 0;
+}
+
+.toybox-ui .toy-slider .unity-base-slider__input {
+    min-height: var(--toy-target-compact);
+    flex-grow: 1;
+    align-items: center;
+}
+
+/* The channel and the handle hang off this box, so it carries the height they centre on and the
+   full width they travel across. */
+.toybox-ui .toy-slider .unity-base-slider__drag-container {
+    width: 100%;
+    height: 28px;
+    min-height: 28px;
+    flex-grow: 1;
+}
+
+.toybox-ui .toy-slider .unity-base-slider__tracker {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 8px;
+    margin-top: -4px;
+    background-color: var(--toy-inset);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-sm);
+}
+
+/* The handle draws its own outline, so the template's separate border box is redundant. */
+.toybox-ui .toy-slider .unity-base-slider__dragger-border {
+    display: none;
+}
+
+.toybox-ui .toy-slider .unity-base-slider__dragger {
+    position: absolute;
+    top: 50%;
+    width: 18px;
+    height: 28px;
+    margin-top: -14px;
+    background-color: var(--toy-text-muted);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-sm);
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, border-color;
+}
+
+.toybox-ui .toy-slider:hover .unity-base-slider__tracker {
+    border-color: var(--toy-edge-strong);
+}
+
+.toybox-ui .toy-slider:hover .unity-base-slider__dragger {
+    background-color: var(--toy-text);
+}
+
+/* Focus brightens the handle and the channel edge together: a ring alone on an 18px box is not a
+   cue you can find, and a light ring on a light handle would not be one at all. */
+.toybox-ui .toy-slider:focus .unity-base-slider__tracker,
+.toybox-ui .toy-slider .unity-base-slider__input:focus .unity-base-slider__tracker {
+    border-color: var(--toy-focus);
+}
+
+.toybox-ui .toy-slider:focus .unity-base-slider__dragger,
+.toybox-ui .toy-slider .unity-base-slider__input:focus .unity-base-slider__dragger {
+    background-color: var(--toy-focus);
+}
+
+.toybox-ui .toy-slider:disabled {
+    opacity: 1;
+}
+
+.toybox-ui .toy-slider:disabled .unity-base-slider__tracker {
+    background-color: var(--toy-disabled-surface);
+    border-color: var(--toy-disabled-border);
+}
+
+.toybox-ui .toy-slider:disabled .unity-base-slider__dragger {
+    background-color: var(--toy-disabled-border);
+    border-color: var(--toy-disabled-border);
+}
+
 .toybox-ui.modal-shade,
 .toybox-ui .modal-shade {
     position: absolute;
