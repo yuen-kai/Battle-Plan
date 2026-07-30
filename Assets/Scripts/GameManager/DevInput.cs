@@ -107,9 +107,19 @@ public static class DevInput
             Debug.Log("[DevInput] Host/client already running.");
             return;
         }
+        // Mirror the shipped solo path so dev bot matches exercise the same transport
+        // players get; a bot match already disabled Player 2 auto-join above.
+        if (MatchOptions.Current.IsBotMatch)
+        {
+            OfflineTransport.Configure(nm);
+        }
+        else
+        {
+            OfflineTransport.Restore(nm);
 #if UNITY_EDITOR
-        DevMppmAutoJoin.ConfigureLoopbackTransport(nm);
+            DevMppmAutoJoin.ConfigureLoopbackTransport(nm);
 #endif
+        }
         ReconnectSession.Clear();
         ReconnectSession.ApplyConnectionPayload(nm);
         if (!nm.StartHost())
@@ -506,8 +516,13 @@ public static class DevInput
                         unit == null
                             ? new Vector2Int(-1, -1)
                             : GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+                    bool recovering =
+                        unit != null
+                        && unit.TryGetComponent(out Movement movement)
+                        && movement.IsRecoveringFromDive;
                     sb.AppendLine(
                         $"  [{i}] {(unit == null ? "<null>" : unit.name)} cell=({c.x},{c.y}) alive={alive}"
+                            + (recovering ? " recoveringFromDive=yes" : string.Empty)
                     );
                 }
             );
@@ -594,10 +609,16 @@ public class DevAutoHostRunner : MonoBehaviour
                     yield break;
 
                 if (MatchOptions.Current.IsBotMatch)
+                {
                     DevMppmAutoJoin.DisableAutoJoin();
+                    OfflineTransport.Configure(nm);
+                }
                 else
+                {
                     DevMppmAutoJoin.EnableLocalAutoJoin();
-                DevMppmAutoJoin.ConfigureLoopbackTransport(nm);
+                    OfflineTransport.Restore(nm);
+                    DevMppmAutoJoin.ConfigureLoopbackTransport(nm);
+                }
                 Debug.Log("[DevAutoHost] Starting host...");
                 if (!nm.StartHost())
                 {

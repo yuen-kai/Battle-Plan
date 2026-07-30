@@ -283,6 +283,9 @@ public sealed class RelayManager : MonoBehaviour
         UnityTransport transport = networkManager.GetComponent<UnityTransport>();
         if (transport == null)
             throw new InvalidOperationException("UnityTransport is not available.");
+
+        // A previous solo match may have swapped the socketless transport in.
+        OfflineTransport.Restore(networkManager);
         return transport;
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -48,6 +49,9 @@ public class JoinGameUIController : MonoBehaviour
     private Button aiOpponentButton;
     private Toggle fogToggle;
     private Toggle localMultiplayerToggle;
+    private VisualElement mapRow;
+    private Label mapCaption;
+    private readonly List<(Button button, MapId mapId)> mapOptions = new();
     private TextField joinCodeInput;
     private Label relayCodeLabel;
     private Label relayStatusLabel;
@@ -190,6 +194,9 @@ public class JoinGameUIController : MonoBehaviour
         aiOpponentButton = RequireElement<Button>("ai-opponent-button");
         fogToggle = RequireElement<Toggle>("fog-toggle");
         localMultiplayerToggle = RequireElement<Toggle>("local-multiplayer-toggle");
+        mapRow = RequireElement<VisualElement>("map-row");
+        mapCaption = RequireElement<Label>("map-caption");
+        BuildMapOptions();
         joinCodeInput = RequireElement<TextField>("join-code-input");
         relayCodeLabel = RequireElement<Label>("relay-code-label");
         relayStatusLabel = RequireElement<Label>("relay-status-label");
@@ -366,6 +373,7 @@ public class JoinGameUIController : MonoBehaviour
         joinCodeInput?.SetValueWithoutNotify(string.Empty);
         localMultiplayerToggle?.SetValueWithoutNotify(false);
         SetGameMode(pendingOptions.gameMode);
+        SetMap(pendingOptions.mapId);
         SetOpponent(pendingOptions.opponentType);
         SetCreateStatus(string.Empty, false);
         SetJoinStatus(string.Empty, false);
@@ -409,6 +417,41 @@ public class JoinGameUIController : MonoBehaviour
     private void SelectPlayerOpponent()
     {
         SetOpponent(OpponentType.Player);
+    }
+
+    /// <summary>
+    /// Built from <see cref="MapCatalog.All"/> rather than authored in UXML, so adding a board to
+    /// the catalog is the only step needed to make it playable.
+    /// </summary>
+    private void BuildMapOptions()
+    {
+        if (mapRow == null)
+            return;
+
+        mapRow.Clear();
+        mapOptions.Clear();
+        foreach (MapDefinition map in MapCatalog.All)
+        {
+            MapId mapId = map.Id;
+            Button option = new(() => SetMap(mapId)) { text = map.DisplayName };
+            option.AddToClassList("button");
+            option.AddToClassList("map-option");
+            mapRow.Add(option);
+            mapOptions.Add((option, mapId));
+        }
+    }
+
+    private void SetMap(MapId mapId)
+    {
+        pendingOptions.mapId = mapId;
+        pendingOptions = pendingOptions.Sanitized();
+
+        foreach ((Button button, MapId id) in mapOptions)
+            button.EnableInClassList("button--selected", id == pendingOptions.mapId);
+
+        if (mapCaption != null)
+            mapCaption.text = pendingOptions.Map.Caption;
+        SetCreateStatus(string.Empty, false);
     }
 
     private void SelectEliminationMode()
@@ -607,8 +650,9 @@ public class JoinGameUIController : MonoBehaviour
 
             if (options.IsBotMatch)
             {
-                RestoreDirectTransport();
-                ConfigureLoopbackTransport(networkManager);
+                // No second player can join a bot match, so it needs the server role
+                // without a socket - the one form of hosting a browser permits.
+                OfflineTransport.Configure(networkManager);
                 SetCreateStatus("Starting local match...", false);
                 EnsureCurrentOperation(operationVersion);
                 bool botHostStarted = networkManager.StartHost();
@@ -975,6 +1019,10 @@ public class JoinGameUIController : MonoBehaviour
 
     private void RestoreDirectTransport()
     {
+        // Every path back to networked play routes through here, including the cancel and
+        // reset paths, so this is where a previous solo match gives the socket back.
+        OfflineTransport.Restore(NetworkManager.Singleton);
+
         CacheTransportDefaults();
         if (NetworkManager.Singleton == null)
             return;

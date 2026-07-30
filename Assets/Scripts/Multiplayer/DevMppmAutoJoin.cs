@@ -119,6 +119,8 @@ public static class DevMppmAutoJoin
         if (transport == null)
             throw new InvalidOperationException("UnityTransport is not available.");
 
+        // A previous solo match may have swapped the socketless transport in.
+        OfflineTransport.Restore(networkManager);
         transport.SetConnectionData(LoopbackAddress, LoopbackPort, LoopbackAddress);
         transport.UseWebSockets = false;
     }

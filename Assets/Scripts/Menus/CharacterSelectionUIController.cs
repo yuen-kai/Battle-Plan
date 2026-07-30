@@ -40,6 +40,10 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private Label modeSummary;
     private Label opponentSummary;
     private Label fogSummary;
+    private VisualElement mapPreview;
+    private Label mapCaption;
+    private Texture2D previewTexture;
+    private MapDefinition shownMap;
     private bool localSelectionSubmitted;
     private bool sceneLoadRequested;
     private bool uiCallbacksRegistered;
@@ -78,6 +82,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
     {
         UnregisterUiCallbacks();
         DisposeGeneratedViews();
+        ReleasePreviewTexture();
+        shownMap = null;
     }
 
     public override void OnNetworkSpawn()
@@ -131,6 +137,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
         modeSummary = RequireElement<Label>("mode-summary");
         opponentSummary = RequireElement<Label>("opponent-summary");
         fogSummary = RequireElement<Label>("fog-summary");
+        mapPreview = RequireElement<VisualElement>("map-preview");
+        mapCaption = RequireElement<Label>("map-caption");
         if (rosterInstruction != null)
         {
             rosterInstruction.text =
@@ -733,6 +741,35 @@ public class CharacterSelectionUIController : NetworkBehaviour
             opponentSummary.text = options.IsBotMatch ? "AI" : "Player";
         if (fogSummary != null)
             fogSummary.text = options.fogOfWar ? "Fog on" : "Fog off";
+        UpdateMapPanel(options.Map);
+    }
+
+    /// <summary>
+    /// Draws the board the lobby actually chose. The UXML carries a baked thumbnail so the screen
+    /// is never blank while this runs, but leaving it in place would show Concourse's cover on
+    /// every map.
+    /// </summary>
+    private void UpdateMapPanel(MapDefinition map)
+    {
+        if (mapCaption != null)
+            mapCaption.text = $"{map.DisplayName} · {GridSystem.ColumnCount} × {GridSystem.RowCount}";
+
+        if (mapPreview == null || map == shownMap)
+            return;
+
+        Texture2D next = MapPreviewImage.CreateTexture(map);
+        mapPreview.style.backgroundImage = new StyleBackground(next);
+        ReleasePreviewTexture();
+        previewTexture = next;
+        shownMap = map;
+    }
+
+    private void ReleasePreviewTexture()
+    {
+        if (previewTexture == null)
+            return;
+        Destroy(previewTexture);
+        previewTexture = null;
     }
 
     private void UpdateStatusText()

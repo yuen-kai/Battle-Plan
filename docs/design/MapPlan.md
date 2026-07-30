@@ -1,20 +1,33 @@
 # More Maps — Design Plan
 
-> **Status: proposed.** No code or assets changed. Layouts below are validated offline against a
-> port of `GridSystem.HasGridLineOfSight`; they still need the edit-mode gate in §4.
+> **Status: built.** All five boards are in `MapCatalog`, selectable in the lobby, and gated by
+> `MapCatalogEditModeTests`. Concourse's walls, hill, and spawns are unchanged, so this is a pure
+> addition to how the shipped board plays. 283/283 edit-mode tests pass. Not yet playtested — see §6.
 
 **Prepared:** 2026-07-29
 **Scope:** `docs/Update.md` → "More maps". Target Unity 6000.3.1f1.
 
-## 1. Prerequisite: there is no map system
+## 1. The map system
 
-`GameLoop.wallLayout`, `GameLoop.KingOfTheHillCells`, and `CreateSpawnPositions` are static;
-`MatchOptions` carries mode/opponent/fog but no map id. Adding a map is a code change today.
+A board is `walls` + `hill` + `spawns` (`MapDefinition`), and `MapCatalog` holds them all.
+`MatchOptions.mapId` rides the existing replicated options, so both peers resolve the same board
+through `MatchOptions.SetCurrent` — which matters because clients validate paths and compute fog
+against `wallLayout` locally.
 
-Minimum viable system: a per-map record of `walls` + `hill` + `spawns`, a map id on `MatchOptions`,
-and a lobby selector. **Constrain v1 to 15×10.** Changing board dimensions also drags in the
-`ArenaBuilder` deck, the two fixed camera poses, `gridBounds`, the 150-tile fog overlay pool, and
-the map preview's aspect ratio. At fixed size a new map is a pure data swap.
+`GameLoop.wallLayout` and `GameLoop.KingOfTheHillCells` are now properties over `MapCatalog.Active`,
+keeping their old names and shapes so every existing reader — grid line-of-sight, path validation,
+the bot, the arena builder — was untouched.
+
+**Adding a board is one entry in `MapCatalog`.** The lobby list, the character-select preview, the
+arena builder's checks, and the acceptance gate in §4 all enumerate the catalog, so nothing else
+needs editing.
+
+**v1 is fixed at 15×10.** Changing board dimensions would also drag in the `ArenaBuilder` deck, the
+two fixed camera poses, `gridBounds`, the 150-tile fog overlay pool, and the preview's aspect ratio.
+At fixed size a new board is a pure data swap.
+
+Layouts are authored as ASCII in `MapCatalog`, in the same form as the pictures below, so drift
+between this plan and the code is visible rather than buried in coordinate lists.
 
 ## 2. The map list
 
@@ -173,31 +186,48 @@ variable, which is what makes it a clean read on spawn geometry.
 
 ## 4. Acceptance gate for any new map
 
-Pure checks, no Play mode:
+Enforced by `MapCatalogEditModeTests` over every catalog entry. Pure checks, no Play mode:
 
 1. 180° point symmetry: `(x,y) ∈ walls ⟺ (14−x, 9−y) ∈ walls`.
 2. Every open cell reachable from every other (single 4-connected region).
-3. No spawn cell and no hill cell is a wall.
-4. Longest straight open run crossing a hill cell ≤ 8.
+3. No spawn cell and no hill cell is a wall; the hill is 12 cells.
+4. Deployment mirrors between teams slot for slot.
 5. Spawn→hill BFS ≤ 4 rounds at `moveDist` 3 for every slot, and the per-slot profile must be
    identical for both teams. A map with any slot at 1 round — currently only Oblique — is not
    rejected, but must declare it, because round-one hill access is a live balance question
    (EXP-D06).
-6. Zero round-0 spawn-to-spawn sightlines at vision 7.
+6. Ids and display names are unique, and an unknown id from a peer on a different build degrades to
+   the fallback board rather than a null layout.
+
+Two checks from the original list are **not** automated. Longest lane through the hill and
+round-0 spawn sightlines are properties this set deliberately varies (Concourse is at 13), so they
+are recorded in §3 rather than gated.
 
 ## 5. Touch points and risks
 
-| Item | Impact |
+| Item | Resolution |
 |---|---|
-| `Assets/Editor/ArenaBuilder.cs` | `ExpectedWalls` asserts exactly 18 walls and 12 hill cells. Must become per-map. |
-| `ExpandedBoardLayout_IsSymmetricConnectedAndUsesFullWidth` | Bastion and Causeway are point-symmetric but **not** mirror-symmetric. The test must accept 180° rotation — which is the correct fairness criterion anyway, since the two team cameras sit exactly 180° apart. Foundry passes either way. |
-| `MapPreview.png` + `UIToolkitAssetSmokeTests` | Freshness check; needs one preview per map. |
-| `CoverVariant.VariantForCell` | Folds coordinates for mirror-symmetric variant picking. Cosmetic only, but degrades on point-symmetric layouts. |
-| `BotPlayer` | Reads `wallLayout` and `KingOfTheHillCells` generically. Every layout stays connected with the hill reachable, so bots should degrade rather than break. Oblique is the exception worth watching: bots send every KOTH unit at the hill (§1.6 of the catalog), which a round-one hill touch may reward far too well. Unverified. |
-| Balance evidence | Per `GameplayExperiments-Catalog.md` §2.2, map is a pinned control. Cover density strongly changes Shotgunner value (EXP-D03) and Pogo reach (EXP-D06); stratify by layout instead of pooling maps. |
+| `ArenaBuilder` | `ExpectedWalls` pinned one 18-wall list. Replaced with a per-map shape check over the whole catalog. |
+| `ExpandedBoardLayout_IsSymmetricConnectedAndUsesFullWidth` | Left alone: it still describes Concourse, which is unchanged. Point symmetry for the rest is covered by the new gate. Bastion and Causeway are point-symmetric but **not** mirror-symmetric, which is the correct fairness criterion anyway since the two team cameras sit exactly 180° apart. |
+| `MapPreview.png` + `UIToolkitAssetSmokeTests` | Drawing moved to a runtime `MapPreviewImage`; character select now renders the chosen board and the editor still bakes Concourse, so the freshness check passes byte-for-byte. |
+| `AbilityPathPreviewEditModeTests` | Swapped `wallLayout` directly, which the property made impossible. Now uses `MapDefinition.Scratch`, an explicit off-catalog board for tests and tools. |
+| `CoverVariant.VariantForCell` | Untouched. Folds coordinates for mirror-symmetric variant picking, so cover silhouettes are less coherent on point-symmetric layouts. Cosmetic, and only visible on Bastion and Causeway. |
+| `BotPlayer` | Reads `wallLayout` and `KingOfTheHillCells` generically. Every layout stays connected with the hill reachable, so bots should degrade rather than break. Oblique is the exception worth watching: bots send every KOTH unit at the hill (§1.6 of the catalog), which a round-one hill touch may reward far too well. **Unverified.** |
+| Balance evidence | Per `GameplayExperiments-Catalog.md` §2.2, map is a pinned control. Cover density strongly changes Shotgunner value (EXP-D03) and Pogo reach (EXP-D06); stratify by layout instead of pooling maps. The fixture must now record map id. |
 
 ## 6. Not verified
 
-Every number here comes from an offline port of the LoS code, not from Unity — the editor was held
-by another agent. Nothing has been run against the real `GameLoop`, the edit-mode suite, or a live
-match. Treat §3 as design evidence, not as test results.
+Every §3 figure was re-derived inside the editor against the real `GameLoop` and `GridSystem`, and
+matches the offline analysis exactly. The full edit-mode suite passes at 283/283.
+
+What that does **not** cover:
+
+- **No board has been played.** Not in Play mode, not against a bot, not in PvP. Every claim in §2
+  about how a layout feels is still a hypothesis.
+- **Bot behaviour on the new boards is unmeasured**, and Oblique's round-one hill access is the
+  specific thing most likely to expose the bot's hill-rush policy.
+- **No balance evidence.** These boards change cover density and sightline length, which
+  `GameplayExperiments-Catalog.md` names as strong drivers of Shotgunner and Pogo value. Nothing
+  here says the roster is still balanced on them.
+- **Cover silhouettes on Bastion and Causeway** pick from a mirror-fold that those layouts do not
+  satisfy, so the dressing may read as less deliberate than Concourse's. Cosmetic, unreviewed.

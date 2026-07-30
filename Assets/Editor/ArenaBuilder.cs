@@ -280,17 +280,6 @@ public static class ArenaBuilder
     // "Directional Light", which is the shipped sun the whole direction rests on.
     private static readonly string[] LegacyRoots = { "ArenaDressing" };
 
-    // mirrored about column 7 and row 4.5. Read from GameLoop at build time; this copy
-    // exists only so the builder can fail loudly if the two ever drift apart.
-    private static readonly Vector2Int[] ExpectedWalls =
-    {
-        new(4, 1), new(10, 1), new(7, 2),
-        new(2, 3), new(5, 3), new(9, 3), new(12, 3),
-        new(0, 4), new(14, 4), new(0, 5), new(14, 5),
-        new(2, 6), new(5, 6), new(9, 6), new(12, 6),
-        new(7, 7), new(4, 8), new(10, 8),
-    };
-
     // ================================================================= menu entry points
 
     [MenuItem("Battle Plan/Art/Build Arena", false, 10)]
@@ -399,15 +388,21 @@ public static class ArenaBuilder
         int rows = GridSystem.RowCount;
         if (columns != Columns || rows != Rows)
             problems.Add($"Board is {columns}x{rows}, this builder is written for {Columns}x{Rows}.");
-        if (GameLoop.wallLayout.Count != 18)
-            problems.Add($"wallLayout has {GameLoop.wallLayout.Count} cells, expected 18.");
-        foreach (Vector2Int cell in ExpectedWalls)
+        // The deck and cover kit are shared by every board, so this validates the shape of
+        // whichever map is live rather than pinning one wall list. Per-map layout correctness is
+        // covered by the acceptance gate in MapCatalogEditModeTests.
+        foreach (MapDefinition map in MapCatalog.All)
         {
-            if (!GameLoop.wallLayout.Contains(cell))
-                problems.Add($"wallLayout no longer contains {cell}; the cover distribution needs re-reading.");
+            if (map.Walls.Count == 0)
+                problems.Add($"{map.DisplayName} has no walls; the cover kit would have nothing to place.");
+            foreach (Vector2Int cell in map.Walls)
+            {
+                if (!GridSystem.IsCellInBounds(cell))
+                    problems.Add($"{map.DisplayName} wall {cell} is off the board.");
+            }
+            if (map.HillCells.Count != 12)
+                problems.Add($"{map.DisplayName} hill has {map.HillCells.Count} cells, expected 12.");
         }
-        if (GameLoop.KingOfTheHillCells.Count != 12)
-            problems.Add($"KingOfTheHillCells has {GameLoop.KingOfTheHillCells.Count} cells, expected 12.");
 
         if (problems.Count == 0)
             return true;

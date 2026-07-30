@@ -1084,6 +1084,119 @@ public class GameplayNetworkEditModeTests
         }
     }
 
+    // === DODGE RECOVERY ===
+
+    [Test]
+    public void DodgeRecovery_CostsTheDodgerTwoSecondsOnTheFloor()
+    {
+        Assert.That(
+            GameLoop.DodgeRecoverySeconds,
+            Is.EqualTo(2f).Within(0.0001f),
+            "A dive that costs nothing is a free answer to every telegraphed ability."
+        );
+    }
+
+    [Test]
+    public void DiveRecoveryState_ReportsProgressFromTheServerClock()
+    {
+        Assert.That(
+            default(DiveRecoveryState).Active,
+            Is.False,
+            "A unit on its feet is not recovering."
+        );
+
+        const double landedAt = 120.5d;
+        DiveRecoveryState recovery = new(landedAt, GameLoop.DodgeRecoverySeconds);
+
+        Assert.That(recovery.Active, Is.True);
+        Assert.That(recovery.ProgressAt(landedAt), Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(recovery.ProgressAt(landedAt + 1d), Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(recovery.ProgressAt(landedAt + 2d), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(
+            recovery.ProgressAt(landedAt + 30d),
+            Is.EqualTo(1f).Within(0.0001f),
+            "A peer that arrives late must draw a finished recovery, not an overrun one."
+        );
+        Assert.That(
+            recovery.ProgressAt(landedAt - 5d),
+            Is.EqualTo(0f).Within(0.0001f),
+            "Clock skew must not run the gauge backwards past the landing."
+        );
+        Assert.That(
+            recovery,
+            Is.Not.EqualTo(new DiveRecoveryState(landedAt + 1d, GameLoop.DodgeRecoverySeconds)),
+            "Each dive is its own replicated value, so a second one must not compare equal."
+        );
+    }
+
+    [Test]
+    public void DodgeRecoveryIndicator_BuildsLocalGroundGaugeWithoutColliders()
+    {
+        GameObject unit = new("Dodge recovery indicator test unit");
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+        MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
+        hiddenUnitRenderer.forceRenderingOff = true;
+        try
+        {
+            DiveRecoveryIndicatorVisual visual = DiveRecoveryIndicatorVisual.Create(unit.transform);
+
+            Assert.That(visual, Is.Not.Null);
+            Assert.That(visual.name, Is.EqualTo(DiveRecoveryIndicatorVisual.GameObjectName));
+            Assert.That(visual.IsVisible, Is.False, "The indicator starts dormant.");
+            Collider unitCollider = unit.GetComponent<Collider>();
+            Assert.That(
+                visual.transform.position.y,
+                Is.EqualTo(unitCollider.bounds.min.y + 0.08f).Within(0.001f),
+                "The gauge stays just above the unit's floor contact rather than obscuring it."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Renderer>(includeInactive: true).Length,
+                Is.EqualTo(2),
+                "A recovered-at outline and the ring growing to meet it make up the indicator."
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.forceRenderingOff),
+                Is.All.True,
+                "A lazily-created indicator must inherit host fog suppression before activation."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Collider>(includeInactive: true),
+                Is.Empty,
+                "The local presentation must never affect gameplay physics."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Light>(includeInactive: true),
+                Is.Empty,
+                "The indicator must not add gameplay-scene lighting cost."
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.sharedMaterial.shader.name),
+                Is.All.EqualTo("BattlePlan/GroundGlow")
+            );
+
+            visual.SetForceRenderingOff(false);
+            visual.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
+            Assert.That(visual.IsVisible, Is.True, "A landed dodger shows its recovery.");
+            visual.SetRecovery(default);
+            Assert.That(visual.IsVisible, Is.False, "Standing back up clears the gauge.");
+
+            Assert.That(
+                DiveRecoveryIndicatorVisual.Create(unit.transform),
+                Is.SameAs(visual),
+                "Repeated state application must reuse the runtime-local visual."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
     [Test]
     public void GridBfs_IsDeterministicAdjacentAndAvoidsBlockedCells()
     {

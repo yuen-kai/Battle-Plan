@@ -250,6 +250,13 @@ public class GameLoop : NetworkBehaviour
     private readonly HashSet<int> dodgeResponsesReceived = new();
     private int maxDiveRangeThisRound;
 
+    // A dive buys distance by throwing the unit off its feet, and it cannot shoot until it is back
+    // on them. Without that cost the dodge is free: the dive is quick enough (diveSpeed 4 over at
+    // most diveRange cells) that a dodger used to land and open fire while the units who kept their
+    // orders were still walking. Two seconds is most of the window a 3-cell walk would have spent
+    // in the open, so answering an ability now trades this round's shooting for not being hit.
+    public const float DodgeRecoverySeconds = 2f;
+
     // Server time the open dodge window closes on, and the telegraphs standing behind it. Both
     // exist so a seat reclaimed inside the window can be handed the same window back rather than
     // a fresh one; outside a window the deadline is 0.
@@ -347,47 +354,17 @@ public class GameLoop : NetworkBehaviour
         new Vector2(GridSystem.ColumnCount - 1, GridSystem.RowCount - 1) * cellSize
             + new Vector2(0.1f, 0.1f)
     );
-    public static readonly HashSet<Vector2Int> KingOfTheHillCells = new()
-    {
-        new Vector2Int(6, 3),
-        new Vector2Int(7, 3),
-        new Vector2Int(8, 3),
-        new Vector2Int(6, 4),
-        new Vector2Int(7, 4),
-        new Vector2Int(8, 4),
-        new Vector2Int(6, 5),
-        new Vector2Int(7, 5),
-        new Vector2Int(8, 5),
-        new Vector2Int(6, 6),
-        new Vector2Int(7, 6),
-        new Vector2Int(8, 6),
-    };
+
+    // Objective and blockout both come from the live board (MapCatalog.Active), which follows the
+    // replicated match options. Kept as statics named exactly as before so every existing reader —
+    // GridSystem line-of-sight, path validation, the bot, the arena builder — is unaffected.
+    public static HashSet<Vector2Int> KingOfTheHillCells => MapCatalog.Active.HillCells;
 
     [SerializeField]
     private GameObject wallPrefab;
-    public static HashSet<Vector2Int> wallLayout = new()
-    {
-        new Vector2Int(4, 1),
-        new Vector2Int(10, 1),
-        new Vector2Int(7, 2),
-        new Vector2Int(2, 3),
-        new Vector2Int(5, 3),
-        new Vector2Int(9, 3),
-        new Vector2Int(12, 3),
-        new Vector2Int(0, 4),
-        new Vector2Int(14, 4),
-        new Vector2Int(0, 5),
-        new Vector2Int(14, 5),
-        new Vector2Int(2, 6),
-        new Vector2Int(5, 6),
-        new Vector2Int(9, 6),
-        new Vector2Int(12, 6),
-        new Vector2Int(7, 7),
-        new Vector2Int(4, 8),
-        new Vector2Int(10, 8),
-    };
+    public static HashSet<Vector2Int> wallLayout => MapCatalog.Active.Walls;
 
-    private readonly List<Vector2Int[]> spawns = CreateSpawnLayout(devMode);
+    private List<Vector2Int[]> spawns = CreateSpawnLayout(devMode);
 
     /// <summary>
     /// Units actually fielded per team this match. Rosters are always the configured crew length
@@ -434,8 +411,12 @@ public class GameLoop : NetworkBehaviour
 
     private static Vector2Int[] CreateProductionSpawnPositions(int teamIndex, int unitCount)
     {
-        int minimumColumn = unitCount <= GridSystem.ColumnCount - 4 ? 2 : 0;
-        int maximumColumn = GridSystem.ColumnCount - 1 - minimumColumn;
+        // Most boards spread the crew across the widest inset band the unit count allows. A board
+        // may instead declare a narrower band to weight deployment to one side (Concourse Oblique),
+        // which is what turns roster order into a lane commitment.
+        Vector2Int? band = MapCatalog.Active.HostDeploymentColumns;
+        int minimumColumn = band?.x ?? (unitCount <= GridSystem.ColumnCount - 4 ? 2 : 0);
+        int maximumColumn = band?.y ?? (GridSystem.ColumnCount - 1 - minimumColumn);
         int availableColumns = maximumColumn - minimumColumn + 1;
         if (unitCount > availableColumns)
         {
@@ -740,6 +721,11 @@ public class GameLoop : NetworkBehaviour
         {
             MatchOptions.SetCurrent(replicatedMatchOptions.Value);
         }
+
+        // The field initializer ran before the replicated options arrived, so a client would have
+        // built its deployment from whatever board it last had selected locally. Rebuild now that
+        // the server's map is known.
+        spawns = CreateSpawnLayout(devMode);
 
         if (
             IsServer
@@ -1978,7 +1964,8 @@ public class GameLoop : NetworkBehaviour
     /// clients, alerts enemies inside each ability's responseRange (radius, or line for
     /// responseDistLine abilities), and gives each threatened client timeDivePerUnit × alerted
     /// units to draw dive paths (max diveRange cells, executed at diveSpeed). A submitted dive
-    /// replaces that unit's planned move and cancels its own ability plan. In dev mode the window
+    /// replaces that unit's planned move, cancels its own ability plan, and costs the dodger
+    /// <see cref="DodgeRecoverySeconds"/> on the floor before it can shoot. In dev mode the window
     /// waits indefinitely for DevInput.SubmitDodge() instead of a wall-clock timer.
     /// </summary>
     IEnumerator RunDodgePhase(
@@ -2244,7 +2231,8 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
-    // Units whose movement this round is a dodge dive (executed at diveSpeed).
+    // Units whose movement this round is a dodge dive (executed at diveSpeed, then held down for
+    // DodgeRecoverySeconds before the dodger can shoot).
     private readonly HashSet<GameObject> diveUnitsThisRound = new();
 
     /// <summary>

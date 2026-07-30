@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Unity.Netcode;
-using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -533,18 +532,16 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         GameObject[] humanUnits = GameLoop.GetTeamUnits(GameLoop.HostTeamIndex);
         GameObject[] botUnits = GameLoop.GetTeamUnits(GameLoop.OpponentTeamIndex);
         int soldierIndex = FindUnitIndex(humanUnits, "Soldier");
-        UnityTransport transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
 
         Check(
             NetworkManager.Singleton.NetworkConfig.ConnectionApproval,
             "AI host requires connection approval"
         );
+        // Stronger than the loopback endpoint this used to assert: a solo host now opens
+        // no endpoint at all, which is what lets the same path run in a browser.
         Check(
-            transport != null
-                && transport.Protocol == UnityTransport.ProtocolType.UnityTransport
-                && transport.ConnectionData.Address == DevMppmAutoJoin.LoopbackAddress
-                && transport.ConnectionData.ServerListenAddress == DevMppmAutoJoin.LoopbackAddress,
-            "AI host listens only on the loopback direct endpoint"
+            NetworkManager.Singleton.NetworkConfig.NetworkTransport is OfflineTransport,
+            "AI host runs socketless and opens no endpoint"
         );
         Check(loop.Options.IsBotMatch, "authoritative options identify an AI match");
         Check(loop.FogOfWarEnabled, "selected fog option seeded the match");

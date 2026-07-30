@@ -38,7 +38,7 @@
                 <ui:VisualElement class="map-column toy-panel">
                     <ui:Label text="The board" class="section-label map-label" picking-mode="Ignore" />
                     <ui:VisualElement name="map-preview" class="map-preview" picking-mode="Ignore" />
-                    <ui:Label text="Industrial sector · 15 × 10" class="map-caption" picking-mode="Ignore" />
+                    <ui:Label name="map-caption" text="Concourse · 15 × 10" class="map-caption" picking-mode="Ignore" />
                 </ui:VisualElement>
             </ui:VisualElement>
 

@@ -74,15 +74,15 @@ public class AbilityPathPreviewEditModeTests
     /// <summary>Runs a case against a chosen wall layout, restoring the board afterwards.</summary>
     private static void WithWalls(IEnumerable<Vector2Int> walls, System.Action body)
     {
-        HashSet<Vector2Int> original = GameLoop.wallLayout;
-        GameLoop.wallLayout = new HashSet<Vector2Int>(walls);
+        MapDefinition original = MapCatalog.Active;
+        MapCatalog.SetActive(MapDefinition.Scratch(walls));
         try
         {
             body();
         }
         finally
         {
-            GameLoop.wallLayout = original;
+            MapCatalog.SetActive(original);
         }
     }
 

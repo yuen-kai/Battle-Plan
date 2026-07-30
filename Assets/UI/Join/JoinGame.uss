@@ -166,6 +166,36 @@
     opacity: 0.48;
 }
 
+/* Boards are chips rather than the two-up mode cards: the catalog grows, and a name plus one
+   shared caption line stays readable where five description cards would not. */
+.map-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-bottom: 2px;
+}
+
+.toybox-ui.join-screen .map-option {
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    margin-top: 0;
+    margin-right: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-sm);
+    margin-left: 0;
+    padding-top: 6px;
+    padding-right: var(--toy-space-md);
+    padding-bottom: 6px;
+    padding-left: var(--toy-space-md);
+    font-size: var(--toy-type-caption);
+    white-space: nowrap;
+}
+
+.map-caption-line {
+    margin-top: 0;
+    margin-bottom: var(--toy-space-sm);
+    font-size: var(--toy-type-caption);
+}
+
 .opponent-row {
     flex-direction: row;
     margin-bottom: 2px;

@@ -19,6 +19,7 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     public GameMode gameMode;
     public OpponentType opponentType;
     public bool fogOfWar;
+    public MapId mapId;
 
     private static MatchOptions current = Default;
 
@@ -28,6 +29,7 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
             gameMode = GameMode.Elimination,
             opponentType = OpponentType.Player,
             fogOfWar = true,
+            mapId = MapId.Concourse,
         };
 
     public static MatchOptions Current => current;
@@ -35,15 +37,20 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     public bool IsKingOfTheHill => gameMode == GameMode.KingOfTheHill;
     public string GameModeDisplayName =>
         IsKingOfTheHill ? "King of the Hill" : "Elimination";
+    public MapDefinition Map => MapCatalog.ById(mapId);
 
+    // The single point where the live board is chosen. Both peers reach this through the
+    // replicated options, so the walls a client validates paths against are always the server's.
     public static void SetCurrent(MatchOptions options)
     {
         current = options.Sanitized();
+        MapCatalog.SetActive(current.mapId);
     }
 
     public static void Reset()
     {
         current = Default;
+        MapCatalog.SetActive(current.mapId);
     }
 
     public MatchOptions Sanitized()
@@ -65,6 +72,9 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
             sanitized.opponentType = OpponentType.Player;
         }
 
+        if (!MapCatalog.IsKnown(sanitized.mapId))
+            sanitized.mapId = MapCatalog.Fallback.Id;
+
         return sanitized;
     }
 
@@ -73,16 +83,19 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     {
         byte serializedGameMode = (byte)gameMode;
         byte serializedOpponentType = (byte)opponentType;
+        byte serializedMapId = (byte)mapId;
 
         serializer.SerializeValue(ref serializedGameMode);
         serializer.SerializeValue(ref serializedOpponentType);
         serializer.SerializeValue(ref fogOfWar);
+        serializer.SerializeValue(ref serializedMapId);
 
         if (!serializer.IsReader)
             return;
 
         gameMode = (GameMode)serializedGameMode;
         opponentType = (OpponentType)serializedOpponentType;
+        mapId = (MapId)serializedMapId;
         this = Sanitized();
     }
 
@@ -90,7 +103,8 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     {
         return gameMode == other.gameMode
             && opponentType == other.opponentType
-            && fogOfWar == other.fogOfWar;
+            && fogOfWar == other.fogOfWar
+            && mapId == other.mapId;
     }
 
     public override bool Equals(object obj)
@@ -100,7 +114,7 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(gameMode, opponentType, fogOfWar);
+        return HashCode.Combine(gameMode, opponentType, fogOfWar, mapId);
     }
 
     public static bool operator ==(MatchOptions left, MatchOptions right)

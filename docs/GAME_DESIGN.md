@@ -84,6 +84,12 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
    - A submitted dive (server-sanitized, `diveRange` cap) **replaces that unit's planned move**
      (executed at `diveSpeed` via `Movement.StartMovement(path, dive: true)`) and **cancels its
      own ability plan** if it had one. Declining to dodge keeps the original plan.
+   - A dive costs the dodger `GameLoop.DodgeRecoverySeconds` (2s) face-down where it lands before
+     `Movement` hands it to `Shooting` — a dive covers at most `diveRange` cells at `diveSpeed`, so
+     without that the dodger used to land and open fire while everyone who kept their orders was
+     still walking. It stops counting as `moving` first, so the recovery does not hold the round's
+     weapons free for both crews; it is the dodger's to pay. Replicated as `DiveRecoveryState` and
+     drawn as an amber ground gauge that fills as the dodger gets back up.
    - Dev mode: the window waits indefinitely for `DevInput.SubmitDodge()` (queue dives with
      `DevInput.SetDodgePath(team, unit, col,row, ...)`); `DevInput.Dump()` shows
      `phase=dodging` plus who may dive.
@@ -94,7 +100,8 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
    - Ability coroutines (`Ability.ExecuteAbility`) start right after movement begins; the round
      waits for `CheckStillShooting()` **and** all abilities to finish (`runningAbilities`).
      Dodge telegraphs are cleared before movement and abilities begin.
-   - When a unit finishes its path, `Movement.transitionToShooting()` flips it into
+   - When a unit finishes its path (plus the 2s dive recovery, if it dodged),
+     `Movement.transitionToShooting()` flips it into
      `Shooting.InitiateShooting()`: auto-acquire the **nearest observable enemy with line of sight**
      (projectile-radius `Physics.SphereCast` against `Walls` + enemy-team layers, within
      `targetRange`), rotate to face it, then fire bullets with spread on a `timeBetweenShots`
@@ -267,7 +274,7 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 | `UnitData.cs` | ScriptableObject holding *all* per-unit tunables (combat, movement, ability params). One asset per unit in `Assets/UnitStats/`. |
 | `UnitDatabase.cs` | ScriptableObject list of `UnitData` (`AllUnits.asset`) — roster indices come from here. |
 | `Unit.cs` | Per-unit team presentation plus the server-written ability cooldown counter. A valid post-dodge activation starts the configured cooldown; round-end ticks are authoritative and death/respawn does not reset it. |
-| `Movement.cs` | Server-side coroutine movement along cell paths (+dive variant), rotation, hands off to `Shooting` when done. |
+| `Movement.cs` | Server-side coroutine movement along cell paths (+dive variant), rotation, hands off to `Shooting` when done — after the 2s dive recovery if the path was a dodge. |
 | `Shooting.cs` | Server-side auto-combat: nearest-enemy acquisition requires authoritative team visibility, then uses a projectile-radius `SphereCast` (Walls + enemy layer, `targetRange`) so a lock is only possible where the real bullet fits; target-lock laser (NetworkVariables replicate laser to clients; a lock **force-reveals the shooter to the victim's team** through fog), firing with spread, reload cycle, `stillShooting` handshake with GameLoop. All setup is in `OnNetworkSpawn` so laser state re-applies after a fog `NetworkShow`. |
 | `Bullet.cs` | Server-side projectile: applies damage + backstab check on enemy collision, despawns on any hit / max range / 8s lifetime. Bullets are always network-visible (a tracer out of fog is an intended "you're being shot from over there" cue). |
 | `Health.cs` | HP + alive tracking as server-written **NetworkVariables** (resync on fog `NetworkShow`) + world-space health bar (billboarded to team camera); health changes also ask `GameLoop` to refresh the opponent's public status card. On death the server deactivates the root one frame after the state flush (keeps tag-based `teamSize` correct), clients deactivate via the `isAlive` callback, and the friendly unit card is disabled. |

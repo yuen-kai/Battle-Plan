@@ -47,6 +47,10 @@
                             </ui:Button>
                         </ui:VisualElement>
 
+                        <ui:Label text="Board" class="section-label join-section-label" picking-mode="Ignore" />
+                        <ui:VisualElement name="map-row" class="map-row" />
+                        <ui:Label name="map-caption" class="label label--muted map-caption-line" picking-mode="Ignore" />
+
                         <ui:Label text="Opponent" class="section-label join-section-label" picking-mode="Ignore" />
                         <ui:VisualElement class="opponent-row">
                             <ui:Button name="player-opponent-button" class="button button--selected opponent-option">
