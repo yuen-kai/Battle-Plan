@@ -12,6 +12,10 @@ using UnityEngine.UIElements;
 [Category("GameplayNetwork")]
 public class GameplayNetworkEditModeTests
 {
+    // Id 2 was Capture the Flag before it was dropped. A peer on an older build can still put it
+    // on the wire, so sanitization must keep folding unknown ids back to Elimination.
+    private const GameMode RetiredGameModeId = (GameMode)2;
+
     [SetUp]
     public void SetUp()
     {
@@ -42,7 +46,7 @@ public class GameplayNetworkEditModeTests
         Assert.That(sanitizedKingOfTheHill.GameModeDisplayName, Is.EqualTo("King of the Hill"));
 
         MatchOptions unsupported = defaults;
-        unsupported.gameMode = GameMode.CaptureTheFlag;
+        unsupported.gameMode = RetiredGameModeId;
         Assert.That(unsupported.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
 
         MatchOptions invalid = new()
@@ -160,29 +164,271 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void AbilityCharges_ClampAndCannotBeConsumedPastZero()
+    public void AbilityCooldowns_StartTickAndSaturateDeterministically()
     {
         UnitData data = ScriptableObject.CreateInstance<UnitData>();
         try
         {
-            data.uses = -3;
-            Assert.That(Unit.GetInitialAbilityUses(data, true), Is.Zero);
-            data.uses = 2;
-            Assert.That(Unit.GetInitialAbilityUses(data, false), Is.Zero);
+            data.abilityCooldownRounds = -3;
+            Assert.That(Unit.GetConfiguredAbilityCooldownRounds(data, true), Is.EqualTo(1));
+            data.abilityCooldownRounds = 2;
+            Assert.That(Unit.GetConfiguredAbilityCooldownRounds(data, false), Is.Zero);
 
-            int remaining = Unit.GetInitialAbilityUses(data, true);
+            int remaining = 0;
+            Assert.That(
+                Unit.TryStartAbilityCooldown(
+                    ref remaining,
+                    Unit.GetConfiguredAbilityCooldownRounds(data, true),
+                    true
+                ),
+                Is.True
+            );
             Assert.That(remaining, Is.EqualTo(2));
-            Assert.That(Unit.TryConsumeAbilityCharge(ref remaining), Is.True);
+            Assert.That(Unit.TryStartAbilityCooldown(ref remaining, 2, true), Is.False);
+            Assert.That(remaining, Is.EqualTo(2));
+            Assert.That(Unit.TickAbilityCooldownRound(ref remaining), Is.True);
             Assert.That(remaining, Is.EqualTo(1));
-            Assert.That(Unit.TryConsumeAbilityCharge(ref remaining), Is.True);
+            Assert.That(Unit.TickAbilityCooldownRound(ref remaining), Is.True);
             Assert.That(remaining, Is.Zero);
-            Assert.That(Unit.TryConsumeAbilityCharge(ref remaining), Is.False);
+            Assert.That(Unit.TickAbilityCooldownRound(ref remaining), Is.False);
             Assert.That(remaining, Is.Zero);
+            Assert.That(Unit.TryStartAbilityCooldown(ref remaining, 2, false), Is.False);
         }
         finally
         {
             Object.DestroyImmediate(data);
         }
+    }
+
+    [TestCase(5, 30f)]
+    [TestCase(4, 24f)]
+    [TestCase(3, 18f)]
+    [TestCase(2, 12f)]
+    [TestCase(1, 12f)]
+    [TestCase(0, 12f)]
+    public void PlanningDuration_ScalesDownWithLivingCrew(int livingUnits, float expectedSeconds)
+    {
+        Assert.That(GameLoop.GetPlanningDurationSeconds(livingUnits), Is.EqualTo(expectedSeconds));
+    }
+
+    [Test]
+    public void PlanningSession_RejectsSupersededSubmissionAndRosterRefresh()
+    {
+        GameObject gameObject = new("PlanningSessionVersionTest");
+        try
+        {
+            PlanMovement planning = gameObject.AddComponent<PlanMovement>();
+            GameObject marker = new("CurrentDodgeRosterMarker");
+            marker.transform.SetParent(gameObject.transform);
+            FieldInfo versionField = typeof(PlanMovement).GetField(
+                "planningSessionVersion",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            FieldInfo activeField = typeof(PlanMovement).GetField(
+                "planningActive",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            FieldInfo submittedField = typeof(PlanMovement).GetField(
+                "planningSubmitted",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            FieldInfo teamCharactersField = typeof(PlanMovement).GetField(
+                "teamCharacters",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo submitMethod = typeof(PlanMovement).GetMethod(
+                "SubmitCurrentPlan",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo refreshMethod = typeof(PlanMovement).GetMethod(
+                "TryRefreshTeamCharactersForSession",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            Assert.That(versionField, Is.Not.Null);
+            Assert.That(activeField, Is.Not.Null);
+            Assert.That(submittedField, Is.Not.Null);
+            Assert.That(teamCharactersField, Is.Not.Null);
+            Assert.That(submitMethod, Is.Not.Null);
+            Assert.That(refreshMethod, Is.Not.Null);
+
+            versionField.SetValue(planning, 7);
+            activeField.SetValue(planning, true);
+            submittedField.SetValue(planning, false);
+            List<GameObject> currentDodgeRoster = new() { marker };
+            teamCharactersField.SetValue(planning, currentDodgeRoster);
+
+            Assert.That(refreshMethod.Invoke(planning, new object[] { 6 }), Is.False);
+            Assert.That(teamCharactersField.GetValue(planning), Is.SameAs(currentDodgeRoster));
+            submitMethod.Invoke(planning, new object[] { 6 });
+
+            Assert.That(activeField.GetValue(planning), Is.True);
+            Assert.That(submittedField.GetValue(planning), Is.False);
+
+            planning.EndPlanningSession();
+            Assert.That(versionField.GetValue(planning), Is.EqualTo(8));
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    [Test]
+    public void PlanningCommitRpcs_DeriveTeamFromSenderAndCarryRoundAndRevisionTokens()
+    {
+        MethodInfo submitRpc = typeof(GameLoop).GetMethod(
+            "SendPathsToServerRpc",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        MethodInfo retractRpc = typeof(GameLoop).GetMethod(
+            "RetractPathsServerRpc",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+
+        Assert.That(submitRpc, Is.Not.Null);
+        Assert.That(retractRpc, Is.Not.Null);
+
+        ParameterInfo[] submitParameters = submitRpc.GetParameters();
+        Assert.That(submitParameters, Has.Length.EqualTo(4));
+        Assert.That(submitParameters[0].ParameterType, Is.EqualTo(typeof(PathsDict)));
+        Assert.That(submitParameters[1].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(submitParameters[2].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(submitParameters[3].ParameterType, Is.EqualTo(typeof(ServerRpcParams)));
+        Assert.That(
+            submitParameters.Any(parameter => parameter.Name.Contains("team")),
+            Is.False,
+            "The client must never provide its logical team index."
+        );
+
+        ParameterInfo[] retractParameters = retractRpc.GetParameters();
+        Assert.That(retractParameters, Has.Length.EqualTo(3));
+        Assert.That(retractParameters[0].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(retractParameters[1].ParameterType, Is.EqualTo(typeof(int)));
+        Assert.That(retractParameters[2].ParameterType, Is.EqualTo(typeof(ServerRpcParams)));
+        Assert.That(
+            retractParameters.Any(parameter => parameter.Name.Contains("team")),
+            Is.False,
+            "An unlock request must derive its logical team from the authenticated sender."
+        );
+    }
+
+    [Test]
+    public void PlanningUnlock_AcceptsOnlyCurrentRoundAndCommitRevision()
+    {
+        GameObject gameObject = new("PlanningUnlockStateTest");
+        try
+        {
+            PlanMovement planning = gameObject.AddComponent<PlanMovement>();
+            SetPrivateField(planning, "planningActive", true);
+            SetPrivateField(planning, "planningInitialized", true);
+            SetPrivateField(planning, "planningSubmitted", true);
+            SetPrivateField(planning, "planningLockPending", false);
+            SetPrivateField(planning, "planningUnlockPending", false);
+            SetPrivateField(planning, "lockInAvailable", true);
+            SetPrivateField(planning, "planningRoundToken", 12);
+            SetPrivateField(planning, "planningCommitVersion", 3);
+
+            int requestedRevision = -1;
+            SetPrivateField(
+                planning,
+                "planningUnlockCallback",
+                (System.Action<int>)(revision => requestedRevision = revision)
+            );
+
+            Assert.That(planning.CanUnlockPlan, Is.True);
+            Assert.That(planning.TryUnlock(), Is.True);
+            Assert.That(requestedRevision, Is.EqualTo(3));
+            Assert.That(planning.CanUnlockPlan, Is.False);
+            Assert.That(planning.CanEditPlan, Is.False);
+
+            planning.NotifyPlanningCommitRetracted(11, 3);
+            planning.NotifyPlanningCommitRetracted(12, 2);
+            Assert.That(planning.CanEditPlan, Is.False, "Stale acknowledgements must be ignored.");
+
+            planning.NotifyPlanningCommitRetracted(12, 3);
+            Assert.That(planning.CanEditPlan, Is.True);
+            Assert.That(planning.CanUnlockPlan, Is.False);
+
+            planning.NotifyPlanningCommitFinalized(12);
+            Assert.That(planning.CanEditPlan, Is.False);
+            Assert.That(planning.CanUnlockPlan, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    [Test]
+    public void PlanningUnlock_StaleRevisionCannotRemoveRelockedOrders()
+    {
+        GameObject gameObject = new("PlanningUnlockRevisionTest");
+        try
+        {
+            GameLoop gameLoop = gameObject.AddComponent<GameLoop>();
+            var paths = (Dictionary<int, PathsDict>)
+                GetPrivateField(gameLoop, "submittedTeamPaths");
+            var versions = (Dictionary<int, int>)
+                GetPrivateField(gameLoop, "latestTeamPlanVersions");
+            var fallbacks = (Dictionary<int, PathsDict>)
+                GetPrivateField(gameLoop, "retractedTeamPathFallbacks");
+            MethodInfo retractMethod = typeof(GameLoop).GetMethod(
+                "TryRetractPlanningSubmission",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo newerVersionMethod = typeof(GameLoop).GetMethod(
+                "IsNewerPlanningCommitVersion",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            MethodInfo restoreFallbacksMethod = typeof(GameLoop).GetMethod(
+                "RestoreRetractedPlanningFallbacks",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            Assert.That(retractMethod, Is.Not.Null);
+            Assert.That(newerVersionMethod, Is.Not.Null);
+            Assert.That(restoreFallbacksMethod, Is.Not.Null);
+            paths[0] = new PathsDict();
+            versions[0] = 4;
+            paths[1] = new PathsDict();
+            versions[1] = 7;
+
+            Assert.That(retractMethod.Invoke(gameLoop, new object[] { 0, 3 }), Is.False);
+            Assert.That(paths.ContainsKey(0), Is.True);
+            Assert.That(versions[0], Is.EqualTo(4));
+
+            Assert.That(retractMethod.Invoke(gameLoop, new object[] { 0, 4 }), Is.True);
+            Assert.That(paths.ContainsKey(0), Is.False);
+            Assert.That(versions[0], Is.EqualTo(4), "Revision high-water mark must survive unlock.");
+            Assert.That(fallbacks.ContainsKey(0), Is.True);
+            Assert.That(newerVersionMethod.Invoke(gameLoop, new object[] { 0, 4 }), Is.False);
+            Assert.That(newerVersionMethod.Invoke(gameLoop, new object[] { 0, 5 }), Is.True);
+            Assert.That(paths.ContainsKey(1), Is.True, "Unlock must not remove another team.");
+
+            restoreFallbacksMethod.Invoke(gameLoop, null);
+            Assert.That(paths.ContainsKey(0), Is.True, "Finalization must retain last locked orders.");
+            Assert.That(fallbacks, Is.Empty);
+        }
+        finally
+        {
+            Object.DestroyImmediate(gameObject);
+        }
+    }
+
+    [TestCase(9.99d, 10d, false)]
+    [TestCase(10d, 10d, true)]
+    [TestCase(10.01d, 10d, true)]
+    public void PlanningUnlock_DeadlineComparisonIsDeterministic(
+        double serverTime,
+        double deadline,
+        bool expectedElapsed
+    )
+    {
+        Assert.That(
+            PlanMovement.HasPlanningDeadlineElapsed(serverTime, deadline),
+            Is.EqualTo(expectedElapsed)
+        );
     }
 
     [Test]
@@ -246,7 +492,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void ConfigureTeam_AcceptsRosterWithRepeatedUnitIndices()
     {
-        // A fireteam may field the same unit in more than one slot; ConfigureTeam only rejects
+        // A crew may field the same unit in more than one slot; ConfigureTeam only rejects
         // wrong-length rosters and negative indices, not repeats.
         const ulong hostClientId = 23;
         int[] repeatedRoster = Enumerable.Repeat(0, RosterRules.UnitsPerPlayer).ToArray();
@@ -551,6 +797,73 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void BulletColour_IsCarriedByBothPrefabsSoEitherSideCanReadItAsItsOwnFire()
+    {
+        GameObject blue = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Prefabs/Projectiles/BulletBlue.prefab"
+        );
+        GameObject red = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            "Assets/Prefabs/Projectiles/BulletRed.prefab"
+        );
+        Assert.That(blue, Is.Not.Null);
+        Assert.That(red, Is.Not.Null);
+        Bullet blueBullet = blue.GetComponent<Bullet>();
+        Bullet redBullet = red.GetComponent<Bullet>();
+        Assert.That(blueBullet, Is.Not.Null);
+        Assert.That(redBullet, Is.Not.Null);
+
+        // Which prefab a shot spawns from stays absolute — it carries the shield layers the round
+        // passes through — so each prefab is also what says who fired it, on every peer.
+        Assert.That(
+            Bullet.GetShooterTeamIndex(blueBullet.enemyTeam),
+            Is.EqualTo(GameLoop.HostTeamIndex),
+            "A shot that can damage red was fired by blue."
+        );
+        Assert.That(
+            Bullet.GetShooterTeamIndex(redBullet.enemyTeam),
+            Is.EqualTo(GameLoop.OpponentTeamIndex)
+        );
+
+        foreach (Bullet bullet in new[] { blueBullet, redBullet })
+        {
+            Assert.That(
+                bullet.teamMaterials,
+                Has.Count.EqualTo(2),
+                "Either team's shot has to be drawable as own fire or as enemy fire."
+            );
+            Assert.That(bullet.teamMaterials[0], Is.Not.Null);
+            Assert.That(bullet.teamMaterials[1], Is.Not.Null);
+            Assert.That(
+                bullet.teamMaterials[0],
+                Is.Not.EqualTo(bullet.teamMaterials[1]),
+                "Own fire and incoming fire must not look the same."
+            );
+        }
+        Assert.That(
+            redBullet.teamMaterials[0],
+            Is.EqualTo(blueBullet.teamMaterials[0]),
+            "Both prefabs answer to the same pair, so the variant inherits rather than diverges."
+        );
+
+        // The look each prefab is authored in is the host's view of it; the client resolves the
+        // other way round at spawn.
+        Assert.That(
+            blue.GetComponentInChildren<Renderer>(true).sharedMaterial,
+            Is.EqualTo(blueBullet.teamMaterials[0])
+        );
+        Assert.That(
+            red.GetComponentInChildren<Renderer>(true).sharedMaterial,
+            Is.EqualTo(redBullet.teamMaterials[1])
+        );
+
+        Assert.That(
+            GameLoop.IsTeamFriendlyToLocalPlayer(-1),
+            Is.False,
+            "A shot with no readable shooter falls back to enemy fire rather than to own fire."
+        );
+    }
+
+    [Test]
     public void ShieldRushBoost_OnlySelectsNearbyLivingAllies()
     {
         Vector2Int casterCell = new(4, 4);
@@ -764,6 +1077,119 @@ public class GameplayNetworkEditModeTests
             Assert.That(visual.IsVisible, Is.True);
             visual.SetVisible(false);
             Assert.That(visual.IsVisible, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    // === DODGE RECOVERY ===
+
+    [Test]
+    public void DodgeRecovery_CostsTheDodgerTwoSecondsOnTheFloor()
+    {
+        Assert.That(
+            GameLoop.DodgeRecoverySeconds,
+            Is.EqualTo(2f).Within(0.0001f),
+            "A dive that costs nothing is a free answer to every telegraphed ability."
+        );
+    }
+
+    [Test]
+    public void DiveRecoveryState_ReportsProgressFromTheServerClock()
+    {
+        Assert.That(
+            default(DiveRecoveryState).Active,
+            Is.False,
+            "A unit on its feet is not recovering."
+        );
+
+        const double landedAt = 120.5d;
+        DiveRecoveryState recovery = new(landedAt, GameLoop.DodgeRecoverySeconds);
+
+        Assert.That(recovery.Active, Is.True);
+        Assert.That(recovery.ProgressAt(landedAt), Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(recovery.ProgressAt(landedAt + 1d), Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(recovery.ProgressAt(landedAt + 2d), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(
+            recovery.ProgressAt(landedAt + 30d),
+            Is.EqualTo(1f).Within(0.0001f),
+            "A peer that arrives late must draw a finished recovery, not an overrun one."
+        );
+        Assert.That(
+            recovery.ProgressAt(landedAt - 5d),
+            Is.EqualTo(0f).Within(0.0001f),
+            "Clock skew must not run the gauge backwards past the landing."
+        );
+        Assert.That(
+            recovery,
+            Is.Not.EqualTo(new DiveRecoveryState(landedAt + 1d, GameLoop.DodgeRecoverySeconds)),
+            "Each dive is its own replicated value, so a second one must not compare equal."
+        );
+    }
+
+    [Test]
+    public void DodgeRecoveryIndicator_BuildsLocalGroundGaugeWithoutColliders()
+    {
+        GameObject unit = new("Dodge recovery indicator test unit");
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+        MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
+        hiddenUnitRenderer.forceRenderingOff = true;
+        try
+        {
+            DiveRecoveryIndicatorVisual visual = DiveRecoveryIndicatorVisual.Create(unit.transform);
+
+            Assert.That(visual, Is.Not.Null);
+            Assert.That(visual.name, Is.EqualTo(DiveRecoveryIndicatorVisual.GameObjectName));
+            Assert.That(visual.IsVisible, Is.False, "The indicator starts dormant.");
+            Collider unitCollider = unit.GetComponent<Collider>();
+            Assert.That(
+                visual.transform.position.y,
+                Is.EqualTo(unitCollider.bounds.min.y + 0.08f).Within(0.001f),
+                "The gauge stays just above the unit's floor contact rather than obscuring it."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Renderer>(includeInactive: true).Length,
+                Is.EqualTo(2),
+                "A recovered-at outline and the ring growing to meet it make up the indicator."
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.forceRenderingOff),
+                Is.All.True,
+                "A lazily-created indicator must inherit host fog suppression before activation."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Collider>(includeInactive: true),
+                Is.Empty,
+                "The local presentation must never affect gameplay physics."
+            );
+            Assert.That(
+                visual.GetComponentsInChildren<Light>(includeInactive: true),
+                Is.Empty,
+                "The indicator must not add gameplay-scene lighting cost."
+            );
+            Assert.That(
+                visual
+                    .GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.sharedMaterial.shader.name),
+                Is.All.EqualTo("BattlePlan/GroundGlow")
+            );
+
+            visual.SetForceRenderingOff(false);
+            visual.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
+            Assert.That(visual.IsVisible, Is.True, "A landed dodger shows its recovery.");
+            visual.SetRecovery(default);
+            Assert.That(visual.IsVisible, Is.False, "Standing back up clears the gauge.");
+
+            Assert.That(
+                DiveRecoveryIndicatorVisual.Create(unit.transform),
+                Is.SameAs(visual),
+                "Repeated state application must reuse the runtime-local visual."
+            );
         }
         finally
         {
@@ -1205,7 +1631,7 @@ public class GameplayNetworkEditModeTests
                 RosterRules.Validate(validRoster.Take(validRoster.Length - 1).ToArray(), catalog)
                     .Reason,
                 Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
-                "A short fireteam is rejected before any per-unit inspection."
+                "A short crew is rejected before any per-unit inspection."
             );
             Assert.That(
                 RosterRules.Validate(
@@ -1214,7 +1640,7 @@ public class GameplayNetworkEditModeTests
                     )
                     .Reason,
                 Is.EqualTo(RosterValidationReason.IncorrectUnitCount),
-                "An oversized fireteam is rejected on shape."
+                "An oversized crew is rejected on shape."
             );
             Assert.That(
                 RosterRules.Validate(validRoster, null).Reason,
@@ -1252,7 +1678,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void Roster_Validate_AcceptsRosterWithRepeatedUnits()
     {
-        // Repeats are an intentional feature: a fireteam may field the same unit in more than
+        // Repeats are an intentional feature: a crew may field the same unit in more than
         // one slot, up to and including every slot.
         int[] earlyRepeat = CreateValidRoster();
         earlyRepeat[1] = earlyRepeat[0];
@@ -1267,7 +1693,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 RosterRules.Validate(allSameUnit, catalog).IsValid,
                 Is.True,
-                "A fireteam of five copies of the same unit is a valid repeat pick."
+                "A crew of five copies of the same unit is a valid repeat pick."
             );
         }
         finally
@@ -1604,6 +2030,135 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
+    public void FriendlyUnitCardForwardsActivationAndShowsCooldownInFlipIndicator()
+    {
+        const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
+        VisualTreeAsset cardAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            cardPath
+        );
+        Assert.That(cardAsset, Is.Not.Null, $"Could not import {cardPath}.");
+
+        TemplateContainer host = cardAsset.Instantiate();
+        UnityEditor.EditorWindow window =
+            ScriptableObject.CreateInstance<UnityEditor.EditorWindow>();
+        window.Show();
+        window.rootVisualElement.Add(host);
+        UnitCardElement card = new(host, 0);
+        UnitData data = ScriptableObject.CreateInstance<UnitData>();
+        data.unitName = "Commander";
+        data.abilityName = "Smoke Screen";
+        int activationRequests = 0;
+        Button selectButton = host.Q<Button>("unit-card-select-0");
+        System.Action submitCard = () =>
+        {
+            using NavigationSubmitEvent submitEvent = new() { target = selectButton };
+            selectButton.SendEvent(submitEvent);
+        };
+
+        try
+        {
+            Assert.That(selectButton, Is.Not.Null);
+            Assert.That(selectButton.panel, Is.Not.Null);
+            card.Configure(
+                data,
+                true,
+                0,
+                () => activationRequests++
+            );
+            card.SetInteractable(true);
+
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(1),
+                "The card forwards its first activation to the planner."
+            );
+
+            card.SetPlanningState(true, false);
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(2),
+                "The selected movement face forwards reactivation to the planner."
+            );
+
+            card.SetPlanningState(true, true);
+            VisualElement root = host.Q<VisualElement>("unit-card-0-root");
+            Assert.That(root.ClassListContains("unit-card--ability"), Is.True);
+            Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Smoke Screen"));
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("hidden"),
+                Is.False
+            );
+
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(3),
+                "The selected ability face forwards reactivation to the planner."
+            );
+
+            card.SetPlanningState(true, false);
+            card.SetAbilityCooldown(2);
+
+            Label cooldown = host.Q<Label>("unit-card-cooldown");
+            Assert.That(cooldown.text, Is.EqualTo("2"));
+            Assert.That(cooldown.ClassListContains("hidden"), Is.False);
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("unit-card__flip-indicator--cooldown"),
+                Is.True
+            );
+
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(4),
+                "A cooling card still reaches the planner so it can explain why it is unavailable."
+            );
+
+            card.SetPlanningState(true, true);
+            Assert.That(
+                root.ClassListContains("unit-card--ability"),
+                Is.False,
+                "Cooldown prevents the ability face from becoming active."
+            );
+
+            card.SetAbilityCooldown(0);
+            card.SetPlanningState(true, true);
+            card.SetDisabled(true);
+            Assert.That(root.ClassListContains("unit-card--selected"), Is.False);
+            Assert.That(root.ClassListContains("unit-card--ability"), Is.False);
+            Assert.That(selectButton.enabledInHierarchy, Is.False);
+            int requestsBeforeDisabledSubmit = activationRequests;
+            submitCard();
+            Assert.That(
+                activationRequests,
+                Is.EqualTo(requestsBeforeDisabledSubmit),
+                "Disabled cards must ignore keyboard submit."
+            );
+
+            card.Configure(data, false, 0, () => activationRequests++);
+            card.SetPlanningState(true, true);
+            Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Move only"));
+            Assert.That(root.ClassListContains("unit-card--ability"), Is.False);
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("hidden"),
+                Is.True,
+                "Move-only units must not advertise a card flip."
+            );
+        }
+        finally
+        {
+            card.Dispose();
+            window.Close();
+            Object.DestroyImmediate(data);
+        }
+    }
+
+    [Test]
     public void EnemyUnitCardShowsLiveHealthAbilityAndEliminationState()
     {
         const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
@@ -1619,7 +2174,7 @@ public class GameplayNetworkEditModeTests
         data.abilityName = "Area Lock";
         try
         {
-            card.ConfigureEnemy(data, true, 1, 75f, 120f, true);
+            card.ConfigureEnemy(data, true, 0, 75f, 120f, true);
 
             Assert.That(
                 host.Q<Label>("unit-card-health-value").text,
@@ -1627,7 +2182,7 @@ public class GameplayNetworkEditModeTests
             );
             Assert.That(
                 host.Q<Label>("unit-card-ability").text,
-                Is.EqualTo("Area Lock · 1 use this match")
+                Is.EqualTo("Area Lock · ready")
             );
             Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ACTIVE"));
             Assert.That(
@@ -1640,13 +2195,19 @@ public class GameplayNetworkEditModeTests
                 host.Q<Button>("enemy-unit-card-select-0").enabledInHierarchy,
                 Is.False
             );
+            Assert.That(
+                host.Q<VisualElement>("unit-card-flip-indicator")
+                    .ClassListContains("hidden"),
+                Is.True,
+                "Enemy status cards must not expose the friendly mode indicator."
+            );
 
-            card.ConfigureEnemy(data, true, 0, 0f, 120f, false);
+            card.ConfigureEnemy(data, true, 2, 0f, 120f, false);
 
             Assert.That(host.Q<Label>("unit-card-health-value").text, Is.EqualTo("0 / 120 HP"));
             Assert.That(
                 host.Q<Label>("unit-card-ability").text,
-                Is.EqualTo("Area Lock · spent this match")
+                Is.EqualTo("Area Lock · ready in 2 rounds")
             );
             Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ELIMINATED"));
             Assert.That(
@@ -1680,12 +2241,12 @@ public class GameplayNetworkEditModeTests
         );
         Assert.That(
             result.GetStatusForTeam(GameLoop.HostTeamIndex),
-            Is.EqualTo("Draw — both fireteams eliminated.")
+            Is.EqualTo("Draw — both crews eliminated.")
         );
         Assert.That(
             result.GetStatusForTeam(GameLoop.OpponentTeamIndex),
-            Is.EqualTo("Draw — both fireteams eliminated."),
-            "A draw reads identically from either fireteam's perspective."
+            Is.EqualTo("Draw — both crews eliminated."),
+            "A draw reads identically from either crew's perspective."
         );
     }
 
@@ -1718,7 +2279,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void MatchResult_BothAliveIsNotTerminalAndDefaultIsNotAResult()
     {
-        // The pure seam refuses to resolve a terminal result while both fireteams still live.
+        // The pure seam refuses to resolve a terminal result while both crews still live.
         Assert.That(
             () => GameLoop.ResolveEliminationResult(true, true),
             Throws.InstanceOf<System.InvalidOperationException>()
@@ -1804,6 +2365,421 @@ public class GameplayNetworkEditModeTests
                 roundTripped.GetStatusForTeam(GameLoop.HostTeamIndex),
                 Is.EqualTo(written.GetStatusForTeam(GameLoop.HostTeamIndex))
             );
+        }
+    }
+
+    [Test]
+    public void BattleReport_NetworkRoundTripPreservesEveryCommittedOrder()
+    {
+        BattleReport written = new() { gameMode = GameMode.KingOfTheHill };
+        written.crew.Add(
+            new BattleReportCrewMember
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                catalogIndex = 3,
+                maxHealth = 80,
+            }
+        );
+        written.crew.Add(
+            new BattleReportCrewMember
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 4,
+                catalogIndex = 1,
+                maxHealth = 120,
+            }
+        );
+
+        BattleReportRound round = new()
+        {
+            roundNumber = 7,
+            hillControllerTeamIndex = GameLoop.OpponentTeamIndex,
+            hillStreak = 2,
+            hillContested = false,
+        };
+        round.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Ability,
+                startCell = new Vector2Int(3, 2),
+                endCell = new Vector2Int(3, 2),
+                hasAbilityTarget = true,
+                abilityTarget = new Vector2Int(9, 6),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 55,
+                path = new List<Vector2Int>(),
+            }
+        );
+        round.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 4,
+                order = BattleReportOrder.Dodge,
+                startCell = new Vector2Int(9, 6),
+                endCell = new Vector2Int(9, 8),
+                aliveAtRoundEnd = false,
+                diedThisRound = true,
+                healthAtRoundEnd = 0,
+                path = new List<Vector2Int>
+                {
+                    new(9, 6),
+                    new(9, 7),
+                    new(9, 8),
+                },
+            }
+        );
+        written.rounds.Add(round);
+
+        using FastBufferWriter writer = new(1024, Allocator.Temp);
+        writer.WriteNetworkSerializable(written);
+        using FastBufferReader reader = new(writer, Allocator.Temp);
+        reader.ReadNetworkSerializable(out BattleReport read);
+
+        Assert.That(read.gameMode, Is.EqualTo(GameMode.KingOfTheHill));
+        Assert.That(read.crew.Count, Is.EqualTo(2));
+        Assert.That(
+            read.TryGetCrewMember(GameLoop.OpponentTeamIndex, 4, out BattleReportCrewMember member),
+            Is.True
+        );
+        Assert.That(member.catalogIndex, Is.EqualTo(1));
+        Assert.That(member.maxHealth, Is.EqualTo(120));
+
+        Assert.That(read.rounds.Count, Is.EqualTo(1));
+        BattleReportRound readRound = read.rounds[0];
+        Assert.That(readRound.roundNumber, Is.EqualTo(7));
+        Assert.That(readRound.hillControllerTeamIndex, Is.EqualTo(GameLoop.OpponentTeamIndex));
+        Assert.That(readRound.hillStreak, Is.EqualTo(2));
+        Assert.That(readRound.hillContested, Is.False);
+        Assert.That(readRound.entries.Count, Is.EqualTo(2));
+
+        BattleReportEntry ability = readRound.entries[0];
+        Assert.That(ability.order, Is.EqualTo(BattleReportOrder.Ability));
+        Assert.That(ability.hasAbilityTarget, Is.True);
+        Assert.That(ability.abilityTarget, Is.EqualTo(new Vector2Int(9, 6)));
+        Assert.That(ability.startCell, Is.EqualTo(new Vector2Int(3, 2)));
+        Assert.That(ability.healthAtRoundEnd, Is.EqualTo(55));
+        Assert.That(ability.path, Is.Empty);
+
+        BattleReportEntry dodge = readRound.entries[1];
+        Assert.That(dodge.order, Is.EqualTo(BattleReportOrder.Dodge));
+        Assert.That(dodge.diedThisRound, Is.True);
+        Assert.That(dodge.aliveAtRoundEnd, Is.False);
+        Assert.That(
+            dodge.path,
+            Is.EqualTo(
+                new List<Vector2Int>
+                {
+                    new(9, 6),
+                    new(9, 7),
+                    new(9, 8),
+                }
+            )
+        );
+    }
+
+    [Test]
+    public void BattleReport_NegativeHillControllerSurvivesRoundTrip()
+    {
+        BattleReport written = new() { gameMode = GameMode.KingOfTheHill };
+        written.rounds.Add(
+            new BattleReportRound
+            {
+                roundNumber = 1,
+                hillControllerTeamIndex = GameLoop.NoHillController,
+                hillContested = true,
+            }
+        );
+
+        using FastBufferWriter writer = new(128, Allocator.Temp);
+        writer.WriteNetworkSerializable(written);
+        using FastBufferReader reader = new(writer, Allocator.Temp);
+        reader.ReadNetworkSerializable(out BattleReport read);
+
+        Assert.That(
+            read.rounds[0].hillControllerTeamIndex,
+            Is.EqualTo(GameLoop.NoHillController),
+            "An uncontrolled hill is -1, so the controller field cannot be an unsigned byte."
+        );
+        Assert.That(read.rounds[0].hillContested, Is.True);
+    }
+
+    [Test]
+    public void BattleReport_RecordingIsBoundedAndRevealedOnlyAtMatchEnd()
+    {
+        string source = File.ReadAllText("Assets/Scripts/GameManager/GameLoop.cs");
+
+        Assert.That(
+            source,
+            Does.Contain("RecordBattleReportPlans(paths)"),
+            "Orders must be captured after the dodge window folds dives into the plan."
+        );
+        Assert.That(
+            source.IndexOf("RecordBattleReportPlans(paths)", System.StringComparison.Ordinal),
+            Is.LessThan(source.IndexOf("ExecuteMoves(paths);", System.StringComparison.Ordinal)),
+            "diveUnitsThisRound is cleared by ExecuteMoves, so dodges must be read before it runs."
+        );
+        Assert.That(
+            BattleReport.MaxRecordedRounds,
+            Is.GreaterThan(GameLoop.HillControlRoundsToWin),
+            "The cap must never truncate the shortest possible King of the Hill win."
+        );
+
+        MethodInfo send = typeof(GameLoop).GetMethod(
+            "SendBattleReportClientRpc",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        Assert.That(send, Is.Not.Null);
+        Assert.That(
+            send.GetCustomAttribute<ClientRpcAttribute>(),
+            Is.Not.Null,
+            "The reveal is server-authored and pushed to clients, never requested by them."
+        );
+    }
+
+    /// <summary>
+    /// Wires the HUD's report elements without running OnEnable, matching the inactive-GameObject
+    /// pattern the other HUD tests use.
+    /// </summary>
+    private static void BindReportElements(GameHUDController controller, VisualElement root)
+    {
+        void Bind(string field, VisualElement element)
+        {
+            typeof(GameHUDController)
+                .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(controller, element);
+        }
+
+        VisualElement board = root.Q<VisualElement>("report-board");
+        Bind("reportReveal", root.Q<VisualElement>("report-reveal"));
+        Bind("reportBoardElement", board);
+        Bind("reportOrders", root.Q<VisualElement>("report-orders"));
+        Bind("reportEmpty", root.Q<Label>("report-empty"));
+        Bind("reportRoundLabel", root.Q<Label>("report-round-label"));
+        Bind("reportSummary", root.Q<Label>("report-summary"));
+        Bind("reportPrevButton", root.Q<Button>("report-prev-button"));
+        Bind("reportNextButton", root.Q<Button>("report-next-button"));
+
+        typeof(GameHUDController)
+            .GetField("reportBoard", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(controller, new BattleReportBoard(board));
+    }
+
+    private static BattleReport BuildTwoRoundReport()
+    {
+        BattleReport report = new() { gameMode = GameMode.KingOfTheHill };
+        for (int team = 0; team < GameLoop.TeamCount; team++)
+        {
+            report.crew.Add(
+                new BattleReportCrewMember
+                {
+                    teamIndex = team,
+                    rosterSlot = 0,
+                    catalogIndex = 0,
+                    maxHealth = 120,
+                }
+            );
+        }
+
+        BattleReportRound first = new() { roundNumber = 1, hillContested = true };
+        first.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Move,
+                startCell = new Vector2Int(1, 1),
+                endCell = new Vector2Int(1, 3),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 120,
+                path = new List<Vector2Int>
+                {
+                    new(1, 1),
+                    new(1, 2),
+                    new(1, 3),
+                },
+            }
+        );
+        first.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Ability,
+                startCell = new Vector2Int(10, 8),
+                endCell = new Vector2Int(10, 8),
+                hasAbilityTarget = true,
+                abilityTarget = new Vector2Int(7, 5),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 96,
+                path = new List<Vector2Int>(),
+            }
+        );
+
+        BattleReportRound second = new()
+        {
+            roundNumber = 2,
+            hillControllerTeamIndex = GameLoop.OpponentTeamIndex,
+            hillStreak = 1,
+        };
+        second.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.HostTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Dodge,
+                startCell = new Vector2Int(1, 3),
+                endCell = new Vector2Int(2, 3),
+                aliveAtRoundEnd = false,
+                diedThisRound = true,
+                healthAtRoundEnd = 0,
+                path = new List<Vector2Int> { new(1, 3), new(2, 3) },
+            }
+        );
+        second.entries.Add(
+            new BattleReportEntry
+            {
+                teamIndex = GameLoop.OpponentTeamIndex,
+                rosterSlot = 0,
+                order = BattleReportOrder.Held,
+                startCell = new Vector2Int(10, 8),
+                endCell = new Vector2Int(10, 8),
+                aliveAtRoundEnd = true,
+                healthAtRoundEnd = 96,
+                path = new List<Vector2Int>(),
+            }
+        );
+
+        report.rounds.Add(first);
+        report.rounds.Add(second);
+        return report;
+    }
+
+    [Test]
+    public void BattleReportReveal_OpensOnFinalRoundAndNamesEveryCommittedOrder()
+    {
+        VisualTreeAsset hudAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            "Assets/UI/Game/GameHUD.uxml"
+        );
+        Assert.That(hudAsset, Is.Not.Null);
+
+        GameObject hudObject = new("Battle report reveal test");
+        hudObject.SetActive(false);
+        try
+        {
+            UIDocument document = hudObject.AddComponent<UIDocument>();
+            document.visualTreeAsset = hudAsset;
+            GameHUDController controller = hudObject.AddComponent<GameHUDController>();
+            VisualElement root = document.rootVisualElement;
+            BindReportElements(controller, root);
+
+            controller.SetBattleReport(BuildTwoRoundReport(), GameLoop.HostTeamIndex);
+
+            Label roundLabel = root.Q<Label>("report-round-label");
+            Assert.That(
+                roundLabel.text,
+                Is.EqualTo("Round 2 of 2"),
+                "The reveal opens on the round the player just lived through."
+            );
+            Assert.That(root.Q<VisualElement>("report-reveal").ClassListContains("hidden"), Is.False);
+            Assert.That(root.Q<Label>("report-empty").ClassListContains("hidden"), Is.True);
+            Assert.That(root.Q<Button>("report-next-button").enabledSelf, Is.False);
+            Assert.That(root.Q<Button>("report-prev-button").enabledSelf, Is.True);
+
+            VisualElement orders = root.Q<VisualElement>("report-orders");
+            List<VisualElement> rows = orders
+                .Query<VisualElement>(className: "report-order-row")
+                .ToList();
+            Assert.That(rows.Count, Is.EqualTo(2), "One row per unit in the round.");
+            Assert.That(
+                orders.Query<Label>(className: "report-team-heading").ToList().Count,
+                Is.EqualTo(2),
+                "Rows are grouped into the viewer's crew and the opponent's."
+            );
+
+            string friendlyOrder = rows[0].Q<Label>(className: "report-order-row__order").text;
+            Assert.That(friendlyOrder, Does.Contain("Dodged"));
+            Assert.That(rows[0].ClassListContains("report-order-row--dead"), Is.True);
+            Assert.That(rows[0].ClassListContains("report-order-row--enemy"), Is.False);
+            Assert.That(
+                rows[0].Q<Label>(className: "report-order-row__state").text,
+                Is.EqualTo("Eliminated")
+            );
+
+            Assert.That(rows[1].ClassListContains("report-order-row--enemy"), Is.True);
+            Assert.That(
+                rows[1].Q<Label>(className: "report-order-row__state").text,
+                Is.EqualTo("96/120 HP")
+            );
+
+            Label summary = root.Q<Label>("report-summary");
+            Assert.That(summary.text, Does.Contain("You lost 1 unit"));
+            Assert.That(
+                summary.text,
+                Does.Contain($"They held the hill (1/{GameLoop.HillControlRoundsToWin})")
+            );
+
+            // Stepping back must reach the round whose ability target the loser wants explained.
+            typeof(GameHUDController)
+                .GetMethod("StepReportRound", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(controller, new object[] { -1 });
+
+            Assert.That(roundLabel.text, Is.EqualTo("Round 1 of 2"));
+            Assert.That(root.Q<Button>("report-prev-button").enabledSelf, Is.False);
+            Assert.That(root.Q<Button>("report-next-button").enabledSelf, Is.True);
+            Assert.That(summary.text, Does.Contain("No one was eliminated."));
+            Assert.That(summary.text, Does.Contain("The hill was contested."));
+
+            List<VisualElement> firstRoundRows = orders
+                .Query<VisualElement>(className: "report-order-row")
+                .ToList();
+            Assert.That(
+                firstRoundRows[1].Q<Label>(className: "report-order-row__order").text,
+                Does.Contain("Ability on (7, 5)"),
+                "The reveal must name where an enemy ability was actually aimed."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(hudObject);
+        }
+    }
+
+    [Test]
+    public void BattleReportReveal_FallsBackToANoticeWhenNothingWasRecorded()
+    {
+        VisualTreeAsset hudAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            "Assets/UI/Game/GameHUD.uxml"
+        );
+        GameObject hudObject = new("Empty battle report test");
+        hudObject.SetActive(false);
+        try
+        {
+            UIDocument document = hudObject.AddComponent<UIDocument>();
+            document.visualTreeAsset = hudAsset;
+            GameHUDController controller = hudObject.AddComponent<GameHUDController>();
+            VisualElement root = document.rootVisualElement;
+            BindReportElements(controller, root);
+
+            // A match that ends before any round resolves still has to close cleanly.
+            controller.SetBattleReport(null, GameLoop.HostTeamIndex);
+            Assert.That(root.Q<VisualElement>("report-reveal").ClassListContains("hidden"), Is.True);
+            Assert.That(root.Q<Label>("report-empty").ClassListContains("hidden"), Is.False);
+            Assert.That(root.Q<Label>("report-round-label").text, Is.Empty);
+
+            controller.SetBattleReport(new BattleReport(), GameLoop.HostTeamIndex);
+            Assert.That(
+                root.Q<VisualElement>("report-reveal").ClassListContains("hidden"),
+                Is.True,
+                "A report with no rounds is as empty as no report at all."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(hudObject);
         }
     }
 
@@ -1917,9 +2893,9 @@ public class GameplayNetworkEditModeTests
             "Only Elimination and King of the Hill may survive sanitization."
         );
 
-        MatchOptions ctf = MatchOptions.Default;
-        ctf.gameMode = GameMode.CaptureTheFlag;
-        Assert.That(ctf.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
+        MatchOptions retired = MatchOptions.Default;
+        retired.gameMode = RetiredGameModeId;
+        Assert.That(retired.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
     }
 
     [Test]
@@ -1951,6 +2927,24 @@ public class GameplayNetworkEditModeTests
     private static List<UnitData> CreateEligibleCatalog(int count)
     {
         return CreateCatalog(Enumerable.Repeat(true, count).ToArray());
+    }
+
+    private static void SetPrivateField(object target, string fieldName, object value)
+    {
+        FieldInfo field = target
+            .GetType()
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field {fieldName}.");
+        field.SetValue(target, value);
+    }
+
+    private static object GetPrivateField(object target, string fieldName)
+    {
+        FieldInfo field = target
+            .GetType()
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field {fieldName}.");
+        return field.GetValue(target);
     }
 
     private static List<UnitData> CreateCatalog(params bool[] eligibility)

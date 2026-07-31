@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -12,6 +13,8 @@ public class JoinGameUIController : MonoBehaviour
 {
     private const string LocalMultiplayerAddress = "127.0.0.1";
     private const ushort LocalMultiplayerPort = 7777;
+    private const long CaretBlinkIntervalMilliseconds = 500;
+    private const string CaretHiddenClass = "text-field--caret-hidden";
 
     private enum PanelState
     {
@@ -32,14 +35,12 @@ public class JoinGameUIController : MonoBehaviour
     private VisualElement joinPanel;
     private VisualElement relayCodePanel;
     private VisualElement localMultiplayerRow;
-    private Label routeLabel;
     private Label connectionCodeHeading;
     private Button showCreateButton;
     private Button showJoinButton;
     private Button titleButton;
     private Button eliminationButton;
     private Button kingButton;
-    private Button flagButton;
     private Button createMatchButton;
     private Button joinMatchButton;
     private Button cancelHostButton;
@@ -48,11 +49,15 @@ public class JoinGameUIController : MonoBehaviour
     private Button aiOpponentButton;
     private Toggle fogToggle;
     private Toggle localMultiplayerToggle;
+    private VisualElement mapRow;
+    private Label mapCaption;
+    private readonly List<(Button button, MapId mapId)> mapOptions = new();
     private TextField joinCodeInput;
     private Label relayCodeLabel;
     private Label relayStatusLabel;
     private Label createErrorLabel;
     private Label joinStatusLabel;
+    private IVisualElementScheduledItem joinCaretBlink;
 
     private MatchOptions pendingOptions;
     private PanelState panelState;
@@ -94,10 +99,54 @@ public class JoinGameUIController : MonoBehaviour
         }
 
         CacheElements();
+        ConsoleUiNavigation.ConfigureButtons(root);
         CacheTransportDefaults();
         RegisterCallbacks();
         ConfigureInitialState();
-        ShowPanel(PanelState.Create, true);
+        if (!TryStartTutorialMatch())
+            ShowPanel(PanelState.Create, true);
+    }
+
+    /// <summary>
+    /// The tutorial is launched from the title screen but still needs this scene's NetworkManager,
+    /// so it passes through here and creates its loopback host without the player touching the
+    /// lobby. The setup chrome is hidden for the second that takes, leaving the screen's own
+    /// backdrop, so the match-setup screen never flashes up on the way to the board.
+    /// <see cref="NetworkHandler"/> then skips character selection.
+    /// </summary>
+    private bool TryStartTutorialMatch()
+    {
+        if (!TutorialSession.IsActive)
+            return false;
+
+        // Arriving here with a host already requested means the tutorial did not survive its boot,
+        // so the session is dropped and the lobby shown rather than stranding the player on an
+        // empty screen.
+        if (TutorialSession.HostStartRequested)
+        {
+            TutorialSession.End();
+            return false;
+        }
+
+        VisualElement screen = root.Q<VisualElement>("screen");
+        if (screen != null)
+        {
+            foreach (VisualElement child in screen.Children())
+                child.AddToClassList("hidden");
+        }
+
+        TutorialSession.HostStartRequested = true;
+        pendingOptions = TutorialSession.BuildMatchOptions();
+        fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
+
+        // Deferred a frame: this runs from OnEnable, which is not ordered against the scene's
+        // NetworkManager waking up, and CreateMatch needs the singleton.
+        root.schedule.Execute(() =>
+        {
+            if (isActiveAndEnabled && TutorialSession.IsActive)
+                CreateMatch();
+        });
+        return true;
     }
 
     private void OnDisable()
@@ -131,14 +180,12 @@ public class JoinGameUIController : MonoBehaviour
         joinPanel = RequireElement<VisualElement>("join-panel");
         relayCodePanel = RequireElement<VisualElement>("relay-code-panel");
         localMultiplayerRow = RequireElement<VisualElement>("local-multiplayer-row");
-        routeLabel = RequireElement<Label>("route-label");
         connectionCodeHeading = RequireElement<Label>("connection-code-heading");
         showCreateButton = RequireElement<Button>("show-create-button");
         showJoinButton = RequireElement<Button>("show-join-button");
         titleButton = RequireElement<Button>("title-button");
         eliminationButton = RequireElement<Button>("elimination-button");
         kingButton = RequireElement<Button>("king-button");
-        flagButton = RequireElement<Button>("flag-button");
         createMatchButton = RequireElement<Button>("create-match-button");
         joinMatchButton = RequireElement<Button>("join-match-button");
         cancelHostButton = RequireElement<Button>("cancel-host-button");
@@ -147,6 +194,9 @@ public class JoinGameUIController : MonoBehaviour
         aiOpponentButton = RequireElement<Button>("ai-opponent-button");
         fogToggle = RequireElement<Toggle>("fog-toggle");
         localMultiplayerToggle = RequireElement<Toggle>("local-multiplayer-toggle");
+        mapRow = RequireElement<VisualElement>("map-row");
+        mapCaption = RequireElement<Label>("map-caption");
+        BuildMapOptions();
         joinCodeInput = RequireElement<TextField>("join-code-input");
         relayCodeLabel = RequireElement<Label>("relay-code-label");
         relayStatusLabel = RequireElement<Label>("relay-status-label");
@@ -201,7 +251,20 @@ public class JoinGameUIController : MonoBehaviour
             localMultiplayerToggle.RegisterValueChangedCallback(OnLocalMultiplayerChanged);
         }
         if (joinCodeInput != null)
+        {
             joinCodeInput.RegisterValueChangedCallback(OnJoinCodeChanged);
+            joinCodeInput.RegisterCallback<FocusInEvent>(OnJoinCodeFocusIn);
+            joinCodeInput.RegisterCallback<FocusOutEvent>(OnJoinCodeFocusOut);
+            joinCodeInput.RegisterCallback<KeyDownEvent>(
+                OnJoinCodeKeyDown,
+                TrickleDown.TrickleDown
+            );
+            joinCodeInput.RegisterCallback<PointerDownEvent>(
+                OnJoinCodePointerDown,
+                TrickleDown.TrickleDown
+            );
+            ConfigureJoinCaretBlink();
+        }
 
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         root.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
@@ -210,6 +273,7 @@ public class JoinGameUIController : MonoBehaviour
 
     private void UnregisterCallbacks()
     {
+        PauseJoinCaretBlink();
         if (!callbacksRegistered)
             return;
 
@@ -242,7 +306,19 @@ public class JoinGameUIController : MonoBehaviour
             localMultiplayerToggle.UnregisterValueChangedCallback(OnLocalMultiplayerChanged);
         }
         if (joinCodeInput != null)
+        {
             joinCodeInput.UnregisterValueChangedCallback(OnJoinCodeChanged);
+            joinCodeInput.UnregisterCallback<FocusInEvent>(OnJoinCodeFocusIn);
+            joinCodeInput.UnregisterCallback<FocusOutEvent>(OnJoinCodeFocusOut);
+            joinCodeInput.UnregisterCallback<KeyDownEvent>(
+                OnJoinCodeKeyDown,
+                TrickleDown.TrickleDown
+            );
+            joinCodeInput.UnregisterCallback<PointerDownEvent>(
+                OnJoinCodePointerDown,
+                TrickleDown.TrickleDown
+            );
+        }
 
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         root.UnregisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
@@ -293,11 +369,11 @@ public class JoinGameUIController : MonoBehaviour
 
         eliminationButton?.SetEnabled(true);
         kingButton?.SetEnabled(true);
-        flagButton?.SetEnabled(false);
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
         joinCodeInput?.SetValueWithoutNotify(string.Empty);
         localMultiplayerToggle?.SetValueWithoutNotify(false);
         SetGameMode(pendingOptions.gameMode);
+        SetMap(pendingOptions.mapId);
         SetOpponent(pendingOptions.opponentType);
         SetCreateStatus(string.Empty, false);
         SetJoinStatus(string.Empty, false);
@@ -326,9 +402,6 @@ public class JoinGameUIController : MonoBehaviour
         showCreateButton?.EnableInClassList("button--selected", nextState == PanelState.Create);
         showJoinButton?.EnableInClassList("button--selected", nextState == PanelState.Join);
 
-        if (routeLabel != null)
-            routeLabel.text = nextState == PanelState.Create ? "LINK / CREATE" : "LINK / JOIN";
-
         if (!moveFocus)
             return;
 
@@ -344,6 +417,41 @@ public class JoinGameUIController : MonoBehaviour
     private void SelectPlayerOpponent()
     {
         SetOpponent(OpponentType.Player);
+    }
+
+    /// <summary>
+    /// Built from <see cref="MapCatalog.All"/> rather than authored in UXML, so adding a board to
+    /// the catalog is the only step needed to make it playable.
+    /// </summary>
+    private void BuildMapOptions()
+    {
+        if (mapRow == null)
+            return;
+
+        mapRow.Clear();
+        mapOptions.Clear();
+        foreach (MapDefinition map in MapCatalog.All)
+        {
+            MapId mapId = map.Id;
+            Button option = new(() => SetMap(mapId)) { text = map.DisplayName };
+            option.AddToClassList("button");
+            option.AddToClassList("map-option");
+            mapRow.Add(option);
+            mapOptions.Add((option, mapId));
+        }
+    }
+
+    private void SetMap(MapId mapId)
+    {
+        pendingOptions.mapId = mapId;
+        pendingOptions = pendingOptions.Sanitized();
+
+        foreach ((Button button, MapId id) in mapOptions)
+            button.EnableInClassList("button--selected", id == pendingOptions.mapId);
+
+        if (mapCaption != null)
+            mapCaption.text = pendingOptions.Map.Caption;
+        SetCreateStatus(string.Empty, false);
     }
 
     private void SelectEliminationMode()
@@ -432,6 +540,84 @@ public class JoinGameUIController : MonoBehaviour
         SetJoinStatus(string.Empty, false);
     }
 
+    private void ConfigureJoinCaretBlink()
+    {
+        if (joinCodeInput == null)
+            return;
+
+        if (joinCaretBlink != null && joinCaretBlink.element != joinCodeInput)
+        {
+            joinCaretBlink.Pause();
+            joinCaretBlink = null;
+        }
+
+        if (joinCaretBlink == null)
+        {
+            joinCaretBlink = joinCodeInput
+                .schedule.Execute(ToggleJoinCaretVisibility)
+                .Every(CaretBlinkIntervalMilliseconds);
+            joinCaretBlink.Pause();
+        }
+
+        SetJoinCaretVisible();
+    }
+
+    private void OnJoinCodeFocusIn(FocusInEvent evt)
+    {
+        RestartJoinCaretBlink();
+    }
+
+    private void OnJoinCodeFocusOut(FocusOutEvent evt)
+    {
+        PauseJoinCaretBlink();
+    }
+
+    private void OnJoinCodeKeyDown(KeyDownEvent evt)
+    {
+        RestartJoinCaretBlink();
+    }
+
+    private void OnJoinCodePointerDown(PointerDownEvent evt)
+    {
+        RestartJoinCaretBlink();
+    }
+
+    private void RestartJoinCaretBlink()
+    {
+        SetJoinCaretVisible();
+        if (joinCaretBlink == null)
+            return;
+
+        joinCaretBlink.Resume();
+        joinCaretBlink.ExecuteLater(CaretBlinkIntervalMilliseconds);
+    }
+
+    private void PauseJoinCaretBlink()
+    {
+        joinCaretBlink?.Pause();
+        SetJoinCaretVisible();
+    }
+
+    private void ToggleJoinCaretVisibility()
+    {
+        if (
+            joinCodeInput == null
+            || root?.focusController?.focusedElement != joinCodeInput
+        )
+        {
+            PauseJoinCaretBlink();
+            return;
+        }
+
+        bool hidden = joinCodeInput.ClassListContains(CaretHiddenClass);
+        joinCodeInput.EnableInClassList(CaretHiddenClass, !hidden);
+    }
+
+    private void SetJoinCaretVisible()
+    {
+        joinCodeInput?.RemoveFromClassList(CaretHiddenClass);
+    }
+
     private async void CreateMatch()
     {
         if (networkStartInProgress)
@@ -458,10 +644,15 @@ public class JoinGameUIController : MonoBehaviour
             RegisterNetworkCallbacks(networkManager, operationVersion);
             CacheTransportDefaults();
 
+            // The host is the server: if it goes, so does the match it would reconnect to.
+            ReconnectSession.Clear();
+            ReconnectSession.ApplyConnectionPayload(networkManager);
+
             if (options.IsBotMatch)
             {
-                RestoreDirectTransport();
-                ConfigureLoopbackTransport(networkManager);
+                // No second player can join a bot match, so it needs the server role
+                // without a socket - the one form of hosting a browser permits.
+                OfflineTransport.Configure(networkManager);
                 SetCreateStatus("Starting local match...", false);
                 EnsureCurrentOperation(operationVersion);
                 bool botHostStarted = networkManager.StartHost();
@@ -556,6 +747,8 @@ public class JoinGameUIController : MonoBehaviour
             EnsureCurrentOperation(operationVersion);
 
             SetJoinStatus("Connecting...", false);
+            ReconnectSession.RememberRelayClient(joinCode);
+            ReconnectSession.ApplyConnectionPayload(networkManager);
             bool clientStarted = networkManager.StartClient();
             EnsureCurrentOperation(operationVersion);
             if (!clientStarted)
@@ -644,6 +837,8 @@ public class JoinGameUIController : MonoBehaviour
         bool isError
     )
     {
+        // Backing out of the lobby is deliberate; there is no match left worth rejoining.
+        ReconnectSession.Clear();
         NetworkManager networkManager = NetworkManager.Singleton;
         if (
             networkManager != null
@@ -824,6 +1019,10 @@ public class JoinGameUIController : MonoBehaviour
 
     private void RestoreDirectTransport()
     {
+        // Every path back to networked play routes through here, including the cancel and
+        // reset paths, so this is where a previous solo match gives the socket back.
+        OfflineTransport.Restore(NetworkManager.Singleton);
+
         CacheTransportDefaults();
         if (NetworkManager.Singleton == null)
             return;
@@ -874,7 +1073,6 @@ public class JoinGameUIController : MonoBehaviour
         titleButton?.SetEnabled(enabled);
         eliminationButton?.SetEnabled(enabled);
         kingButton?.SetEnabled(enabled);
-        flagButton?.SetEnabled(false);
         createMatchButton?.SetEnabled(enabled);
         joinMatchButton?.SetEnabled(enabled);
         playerOpponentButton?.SetEnabled(enabled);
@@ -922,8 +1120,8 @@ public class JoinGameUIController : MonoBehaviour
             createMatchButton.text = "Start vs AI";
         else
             createMatchButton.text = ShouldUseLocalMultiplayer()
-                ? "Create local PvP match"
-                : "Create PvP match";
+                ? "Start local match"
+                : "Create online match";
     }
 
     private void ShowHostStatusPanel(string heading, string code, string status)
@@ -975,7 +1173,7 @@ public class JoinGameUIController : MonoBehaviour
         if (createErrorLabel == null)
             return;
         createErrorLabel.text = message;
-        createErrorLabel.EnableInClassList("label--danger", isError);
+        createErrorLabel.EnableInClassList("status-line--danger", isError);
     }
 
     private void SetJoinStatus(string message, bool isError)
@@ -983,7 +1181,7 @@ public class JoinGameUIController : MonoBehaviour
         if (joinStatusLabel == null)
             return;
         joinStatusLabel.text = message;
-        joinStatusLabel.EnableInClassList("label--danger", isError);
+        joinStatusLabel.EnableInClassList("status-line--danger", isError);
     }
 
     private void ClearMppmDirective()

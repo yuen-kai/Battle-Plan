@@ -81,6 +81,20 @@ public class NetworkHandler : NetworkBehaviour
     {
         NetworkManager manager = approvalManager;
         bool isServerClient = request.ClientNetworkId == NetworkManager.ServerClientId;
+        string reconnectToken = ReconnectSession.DecodeToken(request.Payload);
+
+        response.CreatePlayerObject = false;
+        response.Pending = false;
+
+        // A held seat is the one way past the lobby gate: the claimant has to present the identity
+        // the seat was issued to, inside the window, while nobody else is sitting in it.
+        if (!isServerClient && TryApproveRejoin(reconnectToken, request.ClientNetworkId))
+        {
+            response.Approved = true;
+            response.Reason = string.Empty;
+            return;
+        }
+
         MatchOptions options = MatchOptions.Current.Sanitized();
         int clientLimit = RequiredClientCount(options);
         int admittedOrPending =
@@ -100,10 +114,39 @@ public class NetworkHandler : NetworkBehaviour
             clientLimit
         );
 
+        if (approved)
+            ReconnectGrace.Server.RegisterConnection(request.ClientNetworkId, reconnectToken);
+
         response.Approved = approved;
-        response.CreatePlayerObject = false;
-        response.Pending = false;
         response.Reason = approved ? string.Empty : "This match is full or has already started.";
+    }
+
+    /// <summary>
+    /// Reattaches a returning player to the seat their identity still owns. The seat is pointed at
+    /// the new client ID here, before NGO synchronises it, because per-object visibility is
+    /// resolved during synchronisation and a client the match cannot place observes nothing.
+    /// </summary>
+    private static bool TryApproveRejoin(string reconnectToken, ulong clientId)
+    {
+        GameLoop gameLoop = GameLoop.Instance;
+        if (gameLoop == null || !gameLoop.IsServer)
+            return false;
+
+        if (
+            !ReconnectGrace.Server.TryClaimSeat(
+                reconnectToken,
+                clientId,
+                ReconnectGrace.Now,
+                out int teamIndex
+            )
+        )
+        {
+            return false;
+        }
+
+        gameLoop.ServerReattachParticipant(teamIndex, clientId);
+        Debug.Log($"[NetworkHandler] Client {clientId} reclaimed team {teamIndex} after a drop.");
+        return true;
     }
 
     public static int RequiredClientCount(MatchOptions options)
@@ -136,6 +179,27 @@ public class NetworkHandler : NetworkBehaviour
             return;
 
         acceptingConnections = false;
+        if (TutorialSession.IsActive)
+        {
+            // The tutorial picks its own crew, so it goes straight to the board rather than through
+            // character selection.
+            GameLoop.ResetMatchState();
+            GameLoop.ConfigureTeam(
+                GameLoop.HostTeamIndex,
+                NetworkManager.ServerClientId,
+                TutorialSession.BuildRoster()
+            );
+            GameLoop.ConfigureTeam(
+                GameLoop.OpponentTeamIndex,
+                GameLoop.BotParticipantId,
+                TutorialSession.BuildRoster()
+            );
+
+            sceneLoadRequested = true;
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
         if (GameLoop.devMode)
         {
             GameLoop.ResetMatchState();

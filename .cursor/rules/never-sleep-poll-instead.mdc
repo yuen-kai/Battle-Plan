@@ -1,0 +1,6 @@
+---
+description: 
+alwaysApply: true
+---
+
+Wait <1 second for tests. If the test is not finished wait for another second. keep doing this loop

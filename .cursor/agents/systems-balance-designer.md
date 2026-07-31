@@ -6,7 +6,7 @@ description: >-
   playtest measurement to this agent. Use it when asymmetric kits need
   quantitative fairness, a balance complaint needs evidence, or a proposed
   numeric change requires modeled tradeoffs and a falsifiable test plan.
-model: gpt-5.6-sol-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 ## Mission

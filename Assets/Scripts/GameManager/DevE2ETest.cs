@@ -21,7 +21,7 @@ using UnityEngine.SceneManagement;
 ///       the planned move (unit asserted on the dive cell), no grenade damage taken
 ///   R4  Shield Rush rounds a one-wall diagonal corner, widens its live shield by one cell per
 ///       side, boosts and marks a nearby moving ally, and leaves a distant ally unboosted/unmarked
-///   R5  exhausted Area Lock is rejected server-side; its charge stays spent and it deals no damage
+///   R5  cooling Area Lock is rejected server-side; its cooldown advances and it deals no damage
 ///   R6+ drives chase rounds (BFS toward nearest enemy) until elimination ends the match
 ///       (win or simultaneous-wipe draw, phase idle, timeScale restored to 1)
 ///
@@ -586,7 +586,7 @@ public class DevE2ETestRunner : MonoBehaviour
         Vector2Int rushDirectionTarget = rushStart + new Vector2Int(-1, -1);
         Vector2Int expectedRushDestination = new(6, 5);
         Unit rushIdentity = rShot.GetComponent<Unit>();
-        int rushUsesBefore = rushIdentity.RemainingAbilityUses;
+        int rushCooldownBefore = rushIdentity.AbilityCooldownRoundsRemaining;
         Check(
             rushStart == new Vector2Int(9, 8),
             "R4 precondition: red Shotgunner starts at (9,8)",
@@ -749,9 +749,9 @@ public class DevE2ETestRunner : MonoBehaviour
             $"actual {Cell(sniper)}"
         );
         Check(
-            rushUsesBefore == 1 && rushIdentity.RemainingAbilityUses == 0,
-            "R4 Shield Rush consumed its single ability charge",
-            $"uses {rushUsesBefore} -> {rushIdentity.RemainingAbilityUses}"
+            rushCooldownBefore == 0 && rushIdentity.AbilityCooldownRoundsRemaining == 2,
+            "R4 Shield Rush started its two-round cooldown",
+            $"cooldown {rushCooldownBefore} -> {rushIdentity.AbilityCooldownRoundsRemaining}"
         );
         Check(
             Cell(bSoldier) == new Vector2Int(3, 0),
@@ -760,7 +760,7 @@ public class DevE2ETestRunner : MonoBehaviour
         );
         Snap("r4-shield-rush");
 
-        // ================= R5: exhausted ability is rejected server-side =========================
+        // ================= R5: cooling ability is rejected server-side ===========================
         if (!Alive(bSoldier) || !Alive(sniper))
         {
             Check(
@@ -773,11 +773,16 @@ public class DevE2ETestRunner : MonoBehaviour
         {
             float bSoldierHpBeforeR5 = HP(bSoldier);
             Vector2Int bSoldierCell = Cell(bSoldier);
+            Unit sniperIdentity = sniper.GetComponent<Unit>();
+            int sniperCooldownBeforeR5 = sniperIdentity.AbilityCooldownRoundsRemaining;
             DevInput.SetAbility(1, 1, bSoldierCell.x, bSoldierCell.y);
             yield return RunRoundToCompletion("R5", false, null);
             Check(
-                sniper.GetComponent<Unit>().RemainingAbilityUses == 0,
-                "R5 Sniper Area Lock charge remained exhausted after a rejected second use"
+                sniperCooldownBeforeR5 > 0
+                    && sniperIdentity.AbilityCooldownRoundsRemaining
+                        == Mathf.Max(0, sniperCooldownBeforeR5 - 1),
+                "R5 cooling Area Lock was rejected while its cooldown advanced normally",
+                $"cooldown {sniperCooldownBeforeR5} -> {sniperIdentity.AbilityCooldownRoundsRemaining}"
             );
             Check(
                 Alive(bSoldier) && HP(bSoldier) >= bSoldierHpBeforeR5 - 0.01f,
@@ -787,7 +792,7 @@ public class DevE2ETestRunner : MonoBehaviour
                     + " -> "
                     + (Alive(bSoldier) ? HP(bSoldier).ToString() : "dead")
             );
-            Snap("r5-ability-exhausted");
+            Snap("r5-ability-cooling");
         }
 
         // ================= R6+: chase rounds until the win condition ends the match =============

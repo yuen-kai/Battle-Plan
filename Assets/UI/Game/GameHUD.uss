@@ -18,156 +18,195 @@
     opacity: 1;
 }
 
-.phase-cluster {
+.hud-top {
     position: absolute;
-    top: 28px;
-    left: 35%;
-    right: 35%;
-    min-height: 66px;
-    align-items: center;
+    left: 16px;
+    right: 16px;
+    top: 16px;
+    height: 78px;
+}
+
+/* Centred tab hanging off the bottom edge of the top bar. GameHUDController reserves camera space
+   for the opaque bars only, so this tab is one of the few pieces that still crosses onto the board;
+   deepening it covers more of the grid. */
+.phase-notch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -31px;
+    height: 39px;
+    flex-direction: row;
     justify-content: center;
-    padding: 8px 28px;
-    background-color: rgba(7, 12, 19, 0.94);
-    border-bottom-width: 2px;
-    border-bottom-color: rgb(226, 157, 46);
-    border-radius: 2px;
 }
 
-.phase-cluster__mark {
-    position: absolute;
-    top: 9px;
-    left: 10px;
-    width: 7px;
-    height: 7px;
-    background-color: rgb(226, 157, 46);
+.phase-notch .phase-cluster {
+    height: 39px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 20px;
+    background-color: var(--toy-panel);
+    border-color: var(--toy-edge);
+    border-bottom-width: var(--toy-stroke-thin);
+    border-left-width: var(--toy-stroke-thin);
+    border-right-width: var(--toy-stroke-thin);
+    border-bottom-left-radius: var(--toy-radius-lg);
+    border-bottom-right-radius: var(--toy-radius-lg);
 }
 
-.phase-label {
-    font-size: 20px;
+.phase-notch .phase-cluster__mark {
+    width: 9px;
+    height: 9px;
+    margin-right: 11px;
+    background-color: var(--toy-primary);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-sm);
+}
+
+.phase-notch .phase-label {
+    font-size: 17px;
     -unity-font-style: bold;
-    color: rgb(239, 243, 246);
-    letter-spacing: 1px;
-    -unity-text-align: middle-center;
+    color: var(--toy-text);
+    letter-spacing: 0;
 }
 
-.phase-label--friendly {
-    color: rgb(238, 180, 80);
+/* These were amber and red, a pair that sits 1.25:1 apart in luminance and
+   collapses to a CIE76 distance of 7 under tritanopia — the phase label was the
+   one place the player learns whose turn it is. The team pair is 96 apart at
+   worst across all three simulations, and it says the same thing the units on
+   the board are already saying. */
+.phase-notch .phase-label--friendly {
+    color: var(--toy-team-friendly-copy);
 }
 
-.phase-label--enemy {
-    color: rgb(255, 108, 103);
+.phase-notch .phase-label--enemy {
+    color: var(--toy-team-enemy-copy);
 }
 
-.phase-label--neutral {
-    color: rgb(229, 235, 240);
+.phase-notch .phase-label--neutral {
+    color: var(--toy-text);
 }
 
-.timer-label {
-    min-height: 20px;
-    font-size: 16px;
-    color: rgb(235, 178, 76);
+.phase-notch .timer-label {
+    margin-left: 16px;
+    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
+    font-size: 19px;
+    -unity-font-style: bold;
+    color: var(--toy-primary-copy);
 }
 
-.timer-label--urgent {
-    color: rgb(255, 113, 104);
+/* Urgency was signalled by hue alone, on a pair that merges under tritanopia and
+   is 1.25:1 in luminance — for a five-second warning that is the whole message
+   riding on one channel. Size and weight carry it too now, so the timer changes
+   even in greyscale. */
+.phase-notch .timer-label--urgent {
+    font-size: 24px;
+    color: var(--toy-danger-copy);
 }
 
-.match-readout {
+.hud-top .hill-status-readout {
     position: absolute;
-    top: 30px;
-    right: 34px;
-    align-items: flex-end;
+    top: 0;
+    right: 0;
+    width: 260px;
+    min-height: 72px;
+    align-items: stretch;
+    padding: 10px 14px 12px 14px;
 }
 
-.match-readout__key {
+.hud-top .hill-status-readout__key {
     margin-bottom: 5px;
-    font-size: 11px;
-    color: rgb(100, 119, 136);
-    letter-spacing: 1px;
+    letter-spacing: 0;
 }
 
-.match-readout__primary {
-    font-size: 12px;
+.hud-top .hill-status-readout__value {
+    align-self: flex-start;
+    font-size: var(--toy-type-caption);
     -unity-font-style: bold;
-    color: rgb(210, 220, 228);
-    letter-spacing: 1px;
+    color: var(--toy-primary-copy);
+    letter-spacing: 0;
 }
 
-.match-readout__secondary {
-    margin-top: 4px;
-    font-size: 11px;
-    color: rgb(112, 187, 236);
-    letter-spacing: 1px;
+/* The pad is the one thing both seats must name identically, so this readout
+   takes the absolute team colours GameLoop paints the hill with rather than the
+   interaction tokens it used to borrow.
+
+   The -copy variants rather than the cores: these are hairlines on dark chrome,
+   and the core ultramarine is dark enough that a one-pixel line of it only
+   reaches 2.2:1 there. Cores paint fills and unit bodies; line work on the dark
+   HUD takes the lifted pair. Both read as unmistakably the team colour. */
+.hud-top .hill-status--blue {
+    color: var(--toy-text);
+    border-color: var(--toy-team-friendly-copy);
 }
 
-.match-readout__objective {
-    margin-top: 6px;
-    font-size: 12px;
+.hud-top .hill-status--red {
+    color: var(--toy-text);
+    border-color: var(--toy-team-enemy-copy);
+}
+
+.hud-top .hill-status--contested {
+    color: var(--toy-text);
+    border-color: var(--toy-primary);
+}
+
+/* Mirrors the hill readout across the top bar. It has to sit outside the phase notch: the notch
+   keeps reporting the round's own phase, and "someone left" is a different question from "what am
+   I doing", so overwriting one with the other would cost the player both answers. */
+.hud-top .rejoin-notice {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 260px;
+    min-height: 72px;
+    align-items: stretch;
+    padding: 10px 14px 12px 14px;
+    border-color: var(--toy-danger);
+}
+
+.hud-top .rejoin-notice__key {
+    margin-bottom: 5px;
+    letter-spacing: 0;
+}
+
+.hud-top .rejoin-notice__value {
+    align-self: flex-start;
+    font-size: var(--toy-type-caption);
     -unity-font-style: bold;
-    color: rgb(226, 157, 46);
-    letter-spacing: 1px;
-}
-
-.hill-status--blue {
-    color: rgb(100, 193, 249);
-}
-
-.hill-status--red {
-    color: rgb(255, 108, 103);
-}
-
-.hill-status--contested {
-    color: rgb(235, 178, 76);
+    color: var(--toy-danger-copy);
+    border-color: var(--toy-danger);
+    letter-spacing: 0;
 }
 
 .hud-dock {
     position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: 8px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     min-height: 0;
     padding: 8px 16px;
-    background-color: rgba(7, 12, 19, 0.94);
-    border-width: 1px;
-    border-color: rgb(48, 65, 80);
-    border-radius: 3px;
+    background-color: var(--toy-surface);
+    border-top-width: 1px;
+    border-color: var(--toy-edge);
 }
 
-.hud-dock__header {
+.hud-dock__row {
     flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
+    align-items: center;
 }
 
-.planning-copy {
-    flex-grow: 1;
-    min-width: 0;
-    padding-right: 16px;
-}
-
-.planning-message-slot {
-    position: relative;
-    height: 24px;
-    min-height: 24px;
-}
-
-.planning-help {
-    font-size: 11px;
-    color: rgb(157, 172, 185);
-    white-space: normal;
-}
-
+/* Shares the notch's band above the dock, kept left so the two never meet. */
 .target-feedback {
     position: absolute;
     left: 0;
-    right: 0;
-    top: 0;
-    min-height: 24px;
-    padding: 3px 8px;
-    background-color: rgb(13, 21, 29);
-    color: rgb(225, 231, 235);
+    top: -31px;
+    max-width: 640px;
+    min-height: 30px;
+    padding: 5px 10px;
+    background-color: var(--toy-surface-quiet);
+    color: var(--toy-text);
     border-left-width: 3px;
-    border-left-color: rgb(123, 141, 156);
+    border-left-color: var(--toy-text-muted);
     font-size: 11px;
     -unity-font-style: bold;
     -unity-text-align: middle-left;
@@ -179,91 +218,195 @@
 }
 
 .target-feedback--error {
-    background-color: rgb(42, 20, 23);
-    color: rgb(255, 211, 207);
-    border-left-color: rgb(255, 126, 118);
+    background-color: var(--toy-danger-tint);
+    color: var(--toy-danger-copy);
+    border-left-color: var(--toy-danger);
 }
 
 .target-feedback--success {
-    background-color: rgb(41, 32, 17);
-    color: rgb(255, 231, 188);
-    border-left-color: rgb(235, 174, 69);
+    background-color: var(--toy-primary-wash);
+    color: var(--toy-primary-copy);
+    border-left-color: var(--toy-primary);
+}
+
+/* Tutorial coaching line. Rides the band above the target-feedback bar and stays centred, so it
+   reads as guidance about the board rather than feedback about the last click. */
+.coach-prompt {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -80px;
+    align-items: center;
+    opacity: 0;
+    transition-duration: 0.14s;
+    transition-property: opacity;
+}
+
+.coach-prompt--visible {
+    opacity: 1;
+}
+
+/* Tutorial lesson. The beats worth stopping to read get a card instead of a strip, sat well above
+   the instruction line. Anchored to the dock rather than the screen centre so a lesson never lands
+   on top of the fight it is describing. */
+.lesson-popup {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -210px;
+    align-items: center;
+    opacity: 0;
+    transition-duration: 0.16s;
+    transition-property: opacity;
+}
+
+.lesson-popup--visible {
+    opacity: 1;
+}
+
+.toybox-ui.lesson-popup .lesson-popup__card {
+    max-width: 700px;
+    padding: 20px 30px 16px 30px;
+    align-items: center;
+    border-left-width: 4px;
+    border-left-color: var(--toy-primary);
+}
+
+.lesson-popup__copy {
+    font-size: 20px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--toy-text);
+    white-space: normal;
+}
+
+/* The card waits for the player rather than a clock, so the dismiss is the only timing control. */
+.toybox-ui.lesson-popup .lesson-popup__button {
+    margin-top: 16px;
+    min-width: 140px;
+}
+
+.coach-prompt__copy {
+    max-width: 560px;
+    padding: 9px 16px;
+    background-color: var(--toy-panel);
+    color: var(--toy-text);
+    border-width: var(--toy-stroke-thin);
+    border-bottom-width: var(--toy-depth-panel);
+    border-left-width: 3px;
+    border-color: var(--toy-edge);
+    border-left-color: var(--toy-primary);
+    border-radius: var(--toy-radius-md);
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .hud-header-actions {
     flex-direction: row;
+    flex-shrink: 0;
     align-items: center;
+    margin-left: 16px;
 }
 
-.hud-key {
+.planning-commit {
+    min-height: 44px;
     flex-direction: row;
+    flex-shrink: 0;
     align-items: center;
-    margin-right: 12px;
+    margin-right: 8px;
+    padding-left: 10px;
+    background-color: var(--toy-surface-quiet);
+    border-left-width: 2px;
+    border-left-color: var(--toy-primary);
 }
 
-.hud-key__swatch {
-    width: 9px;
-    height: 9px;
-    margin-right: 7px;
-}
-
-.hud-key__swatch--amber {
-    background-color: rgb(229, 158, 45);
-}
-
-.hud-key__label {
-    font-size: 11px;
-    color: rgb(147, 162, 175);
+.planning-commit__status {
+    min-width: 72px;
+    flex-shrink: 0;
+    margin-right: 8px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: var(--toy-primary-copy);
     letter-spacing: 1px;
+    white-space: nowrap;
 }
 
-.hud-controls-button {
-    min-height: 32px;
+.planning-commit__button {
+    min-width: 112px;
+    min-height: 44px;
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 12px;
+}
+
+.planning-commit--ready .planning-commit__status {
+    color: var(--toy-primary-copy);
+}
+
+/* Committed states read as select-indigo so they stay distinct from the amber
+   "ready to act" state; focus orange would collapse the two. */
+.planning-commit--sending .planning-commit__status,
+.planning-commit--waiting .planning-commit__status,
+.planning-commit--unlocking .planning-commit__status {
+    color: var(--toy-select-copy);
+}
+
+.planning-commit--locked {
+    border-left-color: var(--toy-select);
+}
+
+.planning-commit--locked .planning-commit__status {
+    color: var(--toy-select-copy);
+}
+
+.hud-controls-button,
+.hud-settings-button {
+    min-height: 44px;
+    flex-shrink: 0;
     padding: 6px 11px;
     font-size: 11px;
 }
 
+/* Each dock chip is spaced by the one on its left, the way the commit cluster spaces itself, so the
+   rightmost chip stays flush with the dock's edge. */
+.hud-controls-button {
+    margin-right: 8px;
+}
+
 .enemy-status-strip {
-    margin-top: 6px;
-}
-
-.enemy-status-strip__header {
-    min-height: 15px;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.enemy-status-strip__label,
-.enemy-status-strip__summary {
-    font-size: 10px;
-    -unity-font-style: bold;
-    letter-spacing: 1px;
-}
-
-.enemy-status-strip__label {
-    color: rgb(255, 139, 132);
-}
-
-.enemy-status-strip__summary {
-    color: rgb(146, 162, 176);
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    padding: 16px 16px 8px 16px;
+    background-color: var(--toy-surface);
+    border-bottom-width: 1px;
+    border-color: var(--toy-edge);
 }
 
 .enemy-unit-cards {
     flex-grow: 0;
     height: 78px;
-    margin-top: 3px;
 }
 
 .enemy-unit-cards .unity-scroll-view__content-container {
     flex-grow: 1;
     flex-direction: row;
+    justify-content: center;
+}
+
+/* The hill readout floats over the right end of this same band, so King of the
+   Hill keeps the row packed left where it clears the readout at full card width. */
+.koth .enemy-unit-cards .unity-scroll-view__content-container {
+    justify-content: flex-start;
 }
 
 .unit-cards {
-    flex-grow: 0;
+    flex-grow: 1;
+    min-width: 0;
     height: 104px;
-    margin-top: 8px;
 }
 
 .unit-cards .unity-scroll-view__content-container {
@@ -275,7 +418,7 @@
     flex-grow: 1;
     flex-shrink: 0;
     width: 0;
-    min-width: 248px;
+    min-width: 264px;
     max-width: 360px;
     min-height: 96px;
     margin-right: 8px;
@@ -307,76 +450,112 @@
     min-height: 96px;
     flex-direction: row;
     overflow: hidden;
-    background-color: rgb(13, 22, 31);
-    border-width: 1px;
-    border-color: rgb(48, 65, 80);
-    border-radius: 2px;
-}
-
-.unit-card__state-mark {
-    display: none;
-    position: absolute;
-    left: 8px;
-    top: 8px;
-    width: 7px;
-    height: 7px;
-    background-color: rgb(232, 167, 58);
+    background-color: var(--toy-surface-raised);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-md);
 }
 
 .unit-card--selected {
-    background-color: rgb(25, 37, 47);
-    border-color: rgb(231, 167, 58);
+    background-color: var(--toy-primary-wash);
+    border-color: var(--toy-primary-pressed);
 }
 
-.unit-card--selected .unit-card__state-mark {
-    display: flex;
+.unit-card--ability {
+    background-color: var(--toy-primary-tint);
+    border-color: var(--toy-primary-pressed);
+}
+
+.unit-card--ability.unit-card--selected {
+    border-color: var(--toy-primary);
 }
 
 .unit-card--disabled {
     opacity: 0.55;
-    border-color: rgb(92, 56, 60);
+    border-color: var(--toy-danger-pressed);
 }
 
 .unit-card__select {
+    position: relative;
     flex-grow: 1;
-    width: auto;
-    min-width: 160px;
+    width: 100%;
+    min-width: 0;
     padding: 0;
     flex-direction: row;
     align-items: stretch;
+    overflow: hidden;
     background-color: rgba(0, 0, 0, 0);
     border-width: 1px;
     border-color: rgba(0, 0, 0, 0);
     border-radius: 0;
+    transition-duration: 0.14s;
+    transition-property: background-color, border-color;
 }
 
 .unit-card__select:hover {
-    background-color: rgb(23, 36, 48);
+    background-color: var(--toy-surface-hover);
 }
 
 .unit-card__select:focus {
-    background-color: rgb(27, 41, 54);
-    border-color: rgb(237, 174, 65);
+    background-color: var(--toy-surface-hover);
+    border-color: var(--toy-focus);
+}
+
+.unit-card--ability .unit-card__select {
+    background-color: var(--toy-primary-tint);
+}
+
+.unit-card--ability .unit-card__select:hover {
+    background-color: var(--toy-primary-wash);
+}
+
+.unit-card--ability .unit-card__select:focus {
+    background-color: var(--toy-primary-wash);
+    border-color: var(--toy-focus);
+}
+
+.unit-card__ability-vignette {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0;
+    background-image: url("project://database/Assets/UI/Shared/Icons/ability-flare.svg");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: var(--toy-primary);
+    transition-duration: 0.14s;
+    transition-property: opacity;
+}
+
+/* A warm cast behind the card, not a graphic on top of it. At the old 0.42 the flare
+   painted opaque brown shapes across the label; even at 0.13 its peak was still a
+   solid brown. The amber border and label carry the state, so this only needs to
+   warm the surface. */
+.unit-card--ability .unit-card__ability-vignette {
+    opacity: 0.06;
 }
 
 .unit-card__portrait {
+    position: relative;
     width: 80px;
     min-width: 80px;
     -unity-background-scale-mode: scale-to-fit;
-    background-color: rgb(7, 13, 20);
+    background-color: var(--toy-warm);
 }
 
 .unit-card__copy {
+    position: relative;
     flex-grow: 1;
     min-width: 0;
     justify-content: center;
-    padding: 8px;
+    padding: 8px 40px 8px 8px;
 }
 
 .unit-card__name {
     font-size: 15px;
     -unity-font-style: bold;
-    color: rgb(239, 243, 246);
+    color: var(--toy-text);
     white-space: normal;
 }
 
@@ -392,134 +571,158 @@
     height: 5px;
     margin-right: 7px;
     overflow: hidden;
-    background-color: rgb(48, 31, 36);
-    border-radius: 1px;
+    background-color: var(--toy-surface-pressed);
+    border-radius: 3px;
 }
 
+/* The fill was danger red at every level on both teams, so its colour repeated
+   what its width already said. UnitCardElement drives these three from the
+   thresholds in TeamPalette, which the world-space bar over the unit reads too
+   — the two bars show one number and used to disagree about its colour. */
 .unit-card__health-fill {
     width: 0%;
     height: 100%;
-    background-color: rgb(226, 82, 82);
+    background-color: var(--toy-health-high);
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color;
+}
+
+.unit-card__health-fill--high {
+    background-color: var(--toy-health-high);
+}
+
+.unit-card__health-fill--warning {
+    background-color: var(--toy-health-warning);
+}
+
+.unit-card__health-fill--critical {
+    background-color: var(--toy-health-critical);
 }
 
 .unit-card__health-value {
     min-width: 68px;
     font-size: 10px;
     -unity-font-style: bold;
-    color: rgb(229, 235, 240);
+    color: var(--toy-text);
     -unity-text-align: middle-right;
 }
 
 .unit-card__ability {
     margin-top: 4px;
     font-size: 11px;
-    color: rgb(159, 174, 187);
+    color: var(--toy-text-muted);
     white-space: normal;
+}
+
+.unit-card--ability .unit-card__ability {
+    color: var(--toy-primary-copy);
+    -unity-font-style: bold;
+}
+
+/* Muted clears AA on the card at rest but not on the two lightest fills it can
+   land on — the hovered card and the ability tint, both of which moved up when
+   the surface ladder gained a real step. Copy is still a step below the name and
+   reads at 4.9:1 on each. De-emphasised has to stay readable. */
+.unit-card--ability-cooldown .unit-card__ability,
+.unit-card__select:hover .unit-card__ability {
+    color: var(--toy-text-copy);
 }
 
 .unit-card__state {
     min-height: 0;
     margin-top: 4px;
     font-size: 11px;
-    color: rgb(255, 126, 118);
+    color: var(--toy-danger-copy);
     letter-spacing: 1px;
 }
 
-.unit-card__modes {
-    flex-grow: 0;
-    width: 96px;
-    min-width: 96px;
-    border-left-width: 1px;
-    border-left-color: rgb(45, 61, 75);
-}
-
-.unit-card__mode {
-    flex-grow: 1;
-    min-height: 48px;
-    padding: 4px 6px;
+.unit-card__flip-indicator {
+    position: absolute;
+    right: 8px;
+    bottom: 6px;
+    width: 28px;
+    height: 28px;
     align-items: center;
     justify-content: center;
-    background-color: rgb(10, 17, 25);
-    color: rgb(157, 171, 183);
-    border-width: 1px;
-    border-color: rgba(0, 0, 0, 0);
-    border-radius: 0;
+    opacity: 0.68;
+    transition-duration: 0.14s;
+    transition-property: opacity;
+}
+
+.unit-card__flip-icon {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background-image: url("project://database/Assets/UI/Shared/Icons/flip-card.svg");
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--toy-text-muted);
+}
+
+.unit-card__cooldown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
     font-size: 12px;
     -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--toy-text);
 }
 
-.unit-card__mode:hover {
-    background-color: rgb(22, 34, 46);
-    color: rgb(231, 236, 240);
-}
-
-.unit-card__mode:focus {
-    border-width: 2px;
-    border-color: rgb(237, 174, 65);
-}
-
-.unit-card__mode:disabled {
+.unit-card--selected .unit-card__flip-indicator {
     opacity: 1;
-    background-color: rgb(8, 14, 21);
-    color: rgb(111, 125, 137);
 }
 
-.unit-card__mode-label {
-    font-size: 12px;
-    -unity-font-style: bold;
-    color: rgb(214, 221, 227);
-    -unity-text-align: middle-center;
+.unit-card__select:hover .unit-card__flip-indicator {
+    opacity: 0.9;
 }
 
-.unit-card__mode-charge {
-    margin-top: 2px;
-    font-size: 9px;
-    color: rgb(171, 185, 196);
-    -unity-text-align: middle-center;
-    white-space: normal;
+.unit-card--selected .unit-card__flip-icon {
+    -unity-background-image-tint-color: var(--toy-primary-pressed);
 }
 
-.unit-card__mode:disabled .unit-card__mode-label {
-    color: rgb(124, 137, 148);
+.unit-card--ability .unit-card__flip-icon {
+    -unity-background-image-tint-color: var(--toy-primary-copy);
 }
 
-.unit-card__mode:disabled .unit-card__mode-charge {
-    color: rgb(153, 163, 172);
+.unit-card__flip-indicator--cooldown,
+.unit-card--selected .unit-card__flip-indicator--cooldown {
+    opacity: 0.72;
 }
 
-.unit-card__mode--move {
-    border-bottom-width: 1px;
-    border-bottom-color: rgb(45, 61, 75);
+.unit-card__flip-indicator--cooldown .unit-card__flip-icon,
+.unit-card--selected .unit-card__flip-indicator--cooldown .unit-card__flip-icon {
+    opacity: 0.22;
+    -unity-background-image-tint-color: var(--toy-text-muted);
 }
 
-.unit-card__mode--chosen {
-    background-color: rgb(24, 34, 44);
-    color: rgb(232, 234, 231);
+.unit-card__flip-indicator--cooldown .unit-card__cooldown {
+    color: var(--toy-text-muted);
 }
 
-.unit-card__mode--armed {
-    background-color: rgb(84, 61, 21);
-    color: rgb(255, 229, 177);
+.unit-card--disabled .unit-card__flip-indicator {
+    opacity: 0.45;
 }
 
-.unit-card__mode--armed .unit-card__mode-label,
-.unit-card__mode--armed .unit-card__mode-charge {
-    color: rgb(255, 229, 177);
-}
-
+/* The enemy strip's whole identity is this border, so it carries the team red
+   the enemy units on the board are painted with, not the destructive-action red. */
 .unit-card--enemy {
     min-height: 72px;
-    background-color: rgb(24, 16, 22);
-    border-color: rgb(107, 55, 62);
+    background-color: var(--toy-surface-quiet);
+    border-color: var(--toy-team-enemy);
 }
 
+/* On a dark card "stronger" means brighter, so the active enemy ring steps up to
+   the light copy red rather than down to the deep one. */
 .unit-card--enemy-active {
-    border-color: rgb(168, 70, 75);
+    border-color: var(--toy-team-enemy-copy);
 }
 
 .unit-card--enemy-eliminated {
-    background-color: rgb(16, 15, 19);
-    border-color: rgb(74, 62, 68);
+    background-color: var(--toy-disabled-surface);
+    border-color: var(--toy-disabled-border);
 }
 
 .unit-card--enemy .unit-card__select {
@@ -537,7 +740,7 @@
 .unit-card--enemy .unit-card__portrait {
     width: 52px;
     min-width: 52px;
-    background-color: rgb(12, 10, 14);
+    background-color: var(--toy-warm);
 }
 
 .unit-card--enemy .unit-card__copy {
@@ -566,25 +769,26 @@
     margin-top: 0;
     font-size: 10px;
     -unity-font-style: bold;
-    color: rgb(255, 139, 132);
+    color: var(--toy-danger-copy);
     letter-spacing: 0;
 }
 
 .unit-card--enemy-eliminated .unit-card__name,
 .unit-card--enemy-eliminated .unit-card__ability,
 .unit-card--enemy-eliminated .unit-card__health-value {
-    color: rgb(136, 144, 151);
+    color: var(--toy-text-muted);
 }
 
 .unit-card--enemy-eliminated .unit-card__health-fill {
-    background-color: rgb(91, 66, 70);
+    background-color: var(--toy-edge);
 }
 
 .unit-card--enemy-eliminated .unit-card__state {
-    color: rgb(196, 139, 139);
+    color: var(--toy-text-muted);
 }
 
-.unit-card--enemy .unit-card__modes {
+.unit-card--enemy .unit-card__flip-indicator,
+.unit-card--enemy .unit-card__ability-vignette {
     display: none;
 }
 
@@ -596,87 +800,374 @@
     bottom: 0;
     align-items: center;
     justify-content: center;
-    padding: 32px;
-    background-color: rgb(5, 9, 15);
+    padding: var(--toy-space-xl);
+    background-color: var(--toy-surface);
 }
 
-.deployment-overlay__content {
+.toybox-ui.deployment-overlay .deployment-overlay__content {
     width: 620px;
     max-width: 92%;
     align-items: center;
+    padding: var(--toy-space-xl);
 }
 
 .deployment-overlay__mark {
-    width: 78px;
-    height: 3px;
-    margin-bottom: 18px;
-    background-color: rgb(229, 160, 55);
+    width: 82px;
+    height: 6px;
+    margin-bottom: var(--toy-space-lg);
+    background-color: var(--toy-primary);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-sm);
 }
 
 .deployment-overlay__title {
-    font-size: 30px;
+    font-size: var(--toy-type-title-lg);
     -unity-font-style: bold;
     -unity-text-align: middle-center;
-    color: rgb(242, 245, 247);
+    color: var(--toy-text);
 }
 
 .deployment-overlay__status {
-    margin-top: 12px;
-    font-size: 14px;
+    margin-top: var(--toy-space-md);
+    font-size: var(--toy-type-body);
     -unity-text-align: middle-center;
     white-space: normal;
-    color: rgb(157, 172, 185);
+    color: var(--toy-text-muted);
 }
 
 .results-overlay {
-    background-color: rgba(2, 5, 9, 0.82);
+    background-color: var(--toy-scrim);
 }
 
 .controls-overlay {
-    background-color: rgba(2, 5, 9, 0.88);
+    background-color: var(--toy-scrim);
 }
 
-.results-panel {
+.settings-overlay {
+    background-color: var(--toy-scrim);
+}
+
+/* Shorter than the controls sheet, so the phase banner above and the dock below stay readable
+   behind it. The round does not stop for this panel and the player may be watching the timer while
+   they reach for a level. */
+.toybox-ui.settings-overlay .settings-panel {
+    max-height: 62%;
+    align-items: stretch;
+}
+
+.settings-live-note {
+    margin-top: var(--toy-space-md);
+    font-size: var(--toy-type-caption);
+    white-space: normal;
+}
+
+.toybox-ui.results-overlay .results-panel {
     width: 620px;
     align-items: stretch;
 }
 
+.results-scroll {
+    min-height: 0;
+    max-height: 320px;
+}
+
+.results-scroll .unity-scroll-view__content-container {
+    padding-right: var(--toy-space-md);
+}
+
 .results-mark {
     width: 92px;
-    height: 3px;
-    margin-top: 8px;
-    margin-bottom: 14px;
-    background-color: rgb(229, 160, 55);
+    height: 6px;
+    margin-top: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-md);
+    background-color: var(--toy-primary);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-sm);
 }
 
 .results-status {
-    margin-bottom: 8px;
-    font-size: 38px;
+    margin-bottom: var(--toy-space-sm);
+    font-size: var(--toy-type-display);
     -unity-font-style: bold;
-    color: rgb(242, 245, 247);
+    color: var(--toy-text);
     white-space: normal;
 }
 
 .results-actions {
+    flex-shrink: 0;
     flex-direction: row;
     justify-content: flex-end;
 }
 
 .results-button {
     min-width: 170px;
-    margin-left: 10px;
+    margin-left: var(--toy-space-sm);
 }
 
+/* === BATTLE REPORT REVEAL === */
+
+.report-empty {
+    margin-top: var(--toy-space-sm);
+    font-size: var(--toy-type-body);
+    color: var(--toy-text-muted);
+    white-space: normal;
+}
+
+.report-reveal {
+    margin-top: var(--toy-space-sm);
+}
+
+.report-stepper {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-sm);
+}
+
+.report-step-button {
+    min-width: 118px;
+}
+
+.report-round-label {
+    flex-grow: 1;
+    font-size: var(--toy-type-body-lg);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--toy-text);
+}
+
+/* Board and order list sit side by side so the panel spends its width instead of its height; the
+   whole reveal has to fit without the board being cut in half by the scroll view. */
+.report-body {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.report-board-column {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: var(--toy-space-md);
+}
+
+/* The painter letterboxes a 15:10 board inside whatever box it is given, so the height here only
+   has to be close; it decides how much of the panel the picture is allowed to claim. */
+.report-board {
+    height: 306px;
+    background-color: var(--toy-ground);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-md);
+}
+
+.report-board__badge {
+    position: absolute;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    color: var(--toy-text-on-deep);
+    background-color: var(--toy-team-friendly-deep);
+    border-radius: 50%;
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-ground);
+}
+
+.report-board__badge--enemy {
+    background-color: var(--toy-team-enemy-deep);
+}
+
+/* Above the board rather than below it: this is the sentence that answers "what just happened",
+   and under a 300px board it lands past the fold of the scroll view. */
+.report-summary {
+    min-height: 20px;
+    margin-bottom: var(--toy-space-sm);
+    font-size: var(--toy-type-body);
+    color: var(--toy-text-copy);
+    white-space: normal;
+}
+
+.report-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-sm);
+}
+
+.report-legend__item {
+    flex-direction: row;
+    align-items: center;
+    margin-right: var(--toy-space-md);
+}
+
+.report-legend__glyph {
+    width: 14px;
+    height: 14px;
+    margin-right: var(--toy-space-xs);
+    background-color: var(--toy-text-muted);
+}
+
+.report-legend__glyph--start {
+    border-radius: 50%;
+}
+
+.report-legend__glyph--end {
+    border-radius: 2px;
+}
+
+/* Dashed strokes are the board's mark for "this was not the plan"; the swatch has to say the same
+   thing, and a two-pixel dashed rule is the closest USS gets to the painted line. */
+.report-legend__glyph--dodge {
+    height: 0;
+    background-color: rgba(0, 0, 0, 0);
+    border-top-width: 2px;
+    border-top-color: var(--toy-text-muted);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    opacity: 0.7;
+}
+
+.report-legend__glyph--ability {
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 2px;
+    border-color: var(--toy-primary);
+    border-radius: 50%;
+}
+
+.report-legend__glyph--dead {
+    background-color: rgba(0, 0, 0, 0);
+    font-size: var(--toy-type-body);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--toy-danger-copy);
+}
+
+.report-legend__label {
+    font-size: var(--toy-type-caption);
+    color: var(--toy-text-muted);
+}
+
+/* Wide enough that "Moved 3 cells to (12, 4)" and an HP readout both fit on one row; below this the
+   order text clips mid-coordinate, which reads as a rendering bug rather than a truncation. */
+.report-orders {
+    width: 368px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.report-order-row {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.report-order-row__badge {
+    width: 20px;
+    height: 20px;
+    margin-right: var(--toy-space-sm);
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    font-size: var(--toy-type-caption);
+    color: var(--toy-text-on-deep);
+    background-color: var(--toy-team-friendly-deep);
+    border-radius: 50%;
+}
+
+.report-order-row--enemy .report-order-row__badge {
+    background-color: var(--toy-team-enemy-deep);
+}
+
+.report-order-row__name {
+    width: 92px;
+    flex-shrink: 0;
+    font-size: var(--toy-type-label);
+    -unity-font-style: bold;
+    color: var(--toy-team-friendly-copy);
+    overflow: hidden;
+}
+
+.report-order-row--enemy .report-order-row__name {
+    color: var(--toy-team-enemy-copy);
+}
+
+/* The order text is the only part allowed to give up room; letting it grow unbounded pushed the
+   whole column past the panel and produced a horizontal scrollbar. */
+.report-order-row__order {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: var(--toy-type-label);
+    color: var(--toy-text-copy);
+    overflow: hidden;
+}
+
+.report-order-row__state {
+    flex-shrink: 0;
+    margin-left: var(--toy-space-xs);
+    font-size: var(--toy-type-caption);
+    color: var(--toy-text-muted);
+}
+
+.report-order-row--dead .report-order-row__order,
+.report-order-row--dead .report-order-row__state {
+    color: var(--toy-danger-copy);
+}
+
+.report-order-row--gone .report-order-row__name,
+.report-order-row--gone .report-order-row__order,
+.report-order-row--gone .report-order-row__state {
+    color: var(--toy-text-muted);
+}
+
+.report-team-heading {
+    margin-top: var(--toy-space-sm);
+    font-size: var(--toy-type-caption);
+    -unity-font-style: bold;
+    color: var(--toy-text-muted);
+}
+
+/* Below this the board and the order list would each be too narrow to read, so the reveal becomes
+   one column and the panel scrolls instead. */
+.narrow .report-body,
+.phone .report-body {
+    flex-direction: column;
+}
+
+.narrow .report-board-column,
+.phone .report-board-column {
+    width: 100%;
+    margin-right: 0;
+}
+
+.narrow .report-orders,
+.phone .report-orders {
+    width: 100%;
+}
+
+.phone .report-board,
+.short .report-board {
+    height: 220px;
+}
+
+.phone .report-order-row__name {
+    width: 100px;
+}
+
+/* The dock reserves camera space rather than floating over the board, so it stays flush to the
+   screen edges at every breakpoint; the camera does not paint the band behind it, and insetting it
+   would leave that margin unpainted. */
 .compact .hud-dock {
-    left: 16px;
-    right: 16px;
-    bottom: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
 }
 
 .compact .unit-card-host {
     width: 0;
-    min-width: 176px;
-    max-width: 280px;
+    min-width: 240px;
+    max-width: 300px;
 }
 
 .compact .enemy-unit-card-host {
@@ -686,8 +1177,8 @@
 
 .compact .unit-card__select {
     flex-grow: 1;
-    width: auto;
-    min-width: 118px;
+    width: 100%;
+    min-width: 0;
 }
 
 .compact .unit-card__portrait {
@@ -696,7 +1187,7 @@
 }
 
 .compact .unit-card__copy {
-    padding: 6px;
+    padding: 6px 36px 6px 6px;
 }
 
 .compact .unit-card__name {
@@ -720,44 +1211,26 @@
     font-size: 10px;
 }
 
-.compact .unit-card__modes {
-    width: 58px;
-    min-width: 58px;
+.compact .unit-card__flip-indicator {
+    right: 7px;
+    bottom: 5px;
+    width: 26px;
+    height: 26px;
 }
 
-.compact .unit-card__mode,
-.compact .unit-card__mode-label {
-    font-size: 11px;
+.compact .unit-card__flip-icon {
+    width: 19px;
+    height: 19px;
 }
 
-.compact .unit-card__mode {
-    padding: 4px;
-}
-
-.compact .unit-card__mode-charge {
-    font-size: 8px;
-}
-
-.compact .hud-dock__header .section-label,
-.compact .planning-help,
-.compact .hud-key {
-    display: none;
-}
-
-.compact .phase-cluster {
-    left: 30%;
-    right: 30%;
-}
-
-.narrow .hud-dock {
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
+.compact .unit-card__cooldown {
+    font-size: 12px;
 }
 
 .narrow .unit-card-host {
-    width: 190px;
-    min-width: 190px;
+    width: 220px;
+    min-width: 220px;
+    max-width: 220px;
 }
 
 .narrow .enemy-unit-card-host {
@@ -770,12 +1243,15 @@
 }
 
 .narrow .unit-card__select {
-    min-width: 100px;
+    min-width: 0;
 }
 
-.narrow .phase-cluster {
-    left: 24%;
-    right: 24%;
+.narrow .hill-status-readout {
+    width: 244px;
+}
+
+.narrow .rejoin-notice {
+    width: 244px;
 }
 
 .phone .hud-dock {
@@ -783,27 +1259,66 @@
     padding-right: 10px;
 }
 
+.phone .enemy-status-strip {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.phone .hud-top {
+    left: 10px;
+    right: 10px;
+}
+
+.phone .hud-dock__row {
+    flex-direction: column;
+    align-items: stretch;
+}
+
 .phone .unit-cards {
     flex-grow: 1;
     height: auto;
 }
 
-.phone .hud-key {
-    display: none;
+.phone .hud-header-actions {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 6px;
+    justify-content: flex-end;
 }
 
-.phone .planning-copy {
-    padding-right: 8px;
+.phone .planning-commit {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: 6px;
+    padding-left: 8px;
 }
 
-.phone .hud-controls-button {
+.phone .planning-commit__status {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: 6px;
+    font-size: 9px;
+}
+
+.phone .planning-commit__button {
+    min-width: 88px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.phone .hud-controls-button,
+.phone .hud-settings-button {
+    min-height: 44px;
     padding-left: 8px;
     padding-right: 8px;
 }
 
 .phone .unit-card-host {
-    width: 158px;
-    min-width: 158px;
+    width: 184px;
+    min-width: 184px;
+    max-width: 184px;
     margin-right: 6px;
 }
 
@@ -812,18 +1327,17 @@
 }
 
 .phone .unit-card {
-    min-height: 136px;
-    flex-direction: column;
+    min-height: 112px;
 }
 
 .phone .unit-card__select {
     width: 100%;
     min-width: 0;
-    min-height: 70px;
+    min-height: 104px;
 }
 
 .phone .unit-card__copy {
-    padding: 8px;
+    padding: 8px 36px 8px 8px;
 }
 
 .phone .unit-card__name {
@@ -832,37 +1346,6 @@
 
 .phone .unit-card__ability {
     font-size: 11px;
-}
-
-.phone .unit-card__modes {
-    min-width: 0;
-    min-height: 40px;
-    flex-direction: row;
-    border-left-width: 0;
-    border-top-width: 1px;
-    border-top-color: rgb(45, 61, 75);
-}
-
-.phone .unit-card__mode {
-    min-height: 40px;
-    padding-left: 4px;
-    padding-right: 4px;
-    font-size: 14px;
-}
-
-.phone .unit-card__mode-label {
-    font-size: 11px;
-}
-
-.phone .unit-card__mode-charge {
-    margin-top: 2px;
-    font-size: 8px;
-}
-
-.phone .unit-card__mode--move {
-    border-bottom-width: 0;
-    border-right-width: 1px;
-    border-right-color: rgb(45, 61, 75);
 }
 
 .phone .enemy-unit-cards {
@@ -900,21 +1383,57 @@
     font-size: 10px;
 }
 
-.phone .unit-card--enemy .unit-card__modes {
+.phone .phase-notch .phase-label {
+    font-size: 14px;
+}
+
+.phone .phase-notch .timer-label {
+    margin-left: 12px;
+    font-size: 16px;
+}
+
+.phone .hill-status-readout {
+    top: 0;
+    left: auto;
+    right: 0;
+    width: 210px;
+    min-height: 62px;
+    padding: 7px 10px 9px 10px;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.phone .hill-status-readout__key {
     display: none;
 }
 
-.phone .phase-cluster {
-    left: 18%;
-    right: 18%;
+.phone .hill-status-readout__value {
+    align-self: stretch;
 }
 
-.phone .match-readout {
+/* Kept opposite the hill readout at every breakpoint: on a phone both can be up at once, and the
+   one that says the match is paused must not be the one that gets covered. */
+.phone .rejoin-notice {
+    top: 0;
+    left: 0;
+    right: auto;
+    width: 210px;
+    min-height: 62px;
+    padding: 7px 10px 9px 10px;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.phone .rejoin-notice__key {
     display: none;
+}
+
+.phone .rejoin-notice__value {
+    align-self: stretch;
 }
 
 .phone .deployment-overlay {
-    padding: 18px;
+    padding: var(--toy-space-panel-compact);
 }
 
 .phone .deployment-overlay__title {
@@ -928,7 +1447,7 @@
 .phone .results-button {
     width: 100%;
     margin-left: 0;
-    margin-top: 7px;
+    margin-top: var(--toy-space-sm);
 }
 
 .short .hud-dock {
@@ -937,41 +1456,22 @@
     padding-bottom: 8px;
 }
 
-.short .hud-dock__header {
-    min-height: 24px;
-    align-items: center;
-}
-
-.short .hud-dock__header .section-label,
-.short .planning-help,
-.short .hud-key {
-    display: none;
-}
-
-.short .planning-message-slot {
-    height: 24px;
-    min-height: 24px;
-}
-
 .short .target-feedback {
-    min-height: 22px;
+    min-height: 26px;
     padding-top: 3px;
     padding-bottom: 3px;
 }
 
-.short .hud-controls-button {
-    min-height: 26px;
+.short .hud-controls-button,
+.short .hud-settings-button {
+    min-height: 44px;
     padding-top: 4px;
     padding-bottom: 4px;
 }
 
-.short .unit-cards {
-    margin-top: 0;
-}
-
 .short .unit-card-host,
 .short .unit-card {
-    min-height: 88px;
+    min-height: 96px;
 }
 
 .short .enemy-unit-card-host,
@@ -979,11 +1479,35 @@
     min-height: 72px;
 }
 
-.short .phase-cluster {
-    top: 16px;
-    min-height: 54px;
+.short .phase-notch .phase-label {
+    font-size: 15px;
 }
 
-.short .phase-label {
+.short .phase-notch .timer-label {
     font-size: 17px;
+}
+
+.phone.short .hud-controls-button,
+.phone.short .hud-settings-button {
+    min-height: 44px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+
+.phone.short .hill-status-readout {
+    left: auto;
+    right: 0;
+    top: 0;
+    width: 56%;
+    min-height: 54px;
+    padding: 6px 10px 8px 10px;
+}
+
+.phone.short .rejoin-notice {
+    left: 0;
+    right: auto;
+    top: 0;
+    width: 42%;
+    min-height: 54px;
+    padding: 6px 10px 8px 10px;
 }

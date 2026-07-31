@@ -1,7 +1,7 @@
 ---
 name: qa-playtest-engineer
 description: Proactively plans and executes risk-based Unity verification, deterministic playtests, multiplayer and balance coverage, and evidence-backed defect reporting.
-model: claude-opus-4-8-thinking-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

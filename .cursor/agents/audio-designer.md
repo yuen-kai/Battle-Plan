@@ -1,7 +1,7 @@
 ---
 name: audio-designer
 description: Proactively designs Battle Plan’s futuristic tactical music, SFX, feedback hierarchy, mix, and accessibility around the existing AudioManager and Music/SFX prefabs, with production-ready generation and mastering handoffs.
-model: claude-opus-4-8-thinking-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

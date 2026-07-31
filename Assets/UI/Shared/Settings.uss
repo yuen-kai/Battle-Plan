@@ -1,0 +1,131 @@
+/* Settings rows, shared by the title screen panel and the in-match overlay so one set of columns
+   serves both. Loaded after TacticalToybox.uss and before each screen sheet: the panel width relies
+   on that order to outrank the shared modal width, and a screen keeps the last word on its own
+   composition. */
+
+.toybox-ui .settings-panel {
+    width: 600px;
+}
+
+.settings-scroll {
+    min-height: 0;
+}
+
+.settings-scroll .unity-scroll-view__content-container {
+    padding-right: var(--toy-space-sm);
+}
+
+.settings-scroll .unity-scroller--vertical {
+    width: var(--toy-scroll-size);
+    background-color: var(--toy-inset);
+}
+
+.settings-section-label {
+    margin-top: var(--toy-space-lg);
+}
+
+/* The divider above already spaces the first group. */
+.settings-section-label--first {
+    margin-top: 0;
+}
+
+.setting-row {
+    min-height: var(--toy-target-compact);
+    flex-direction: row;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.setting-row__label {
+    width: 148px;
+    min-width: 148px;
+    padding-right: var(--toy-space-md);
+    color: var(--toy-text);
+    -unity-font-style: bold;
+}
+
+.setting-row__control {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.setting-row__value {
+    width: 58px;
+    min-width: 58px;
+    margin-left: var(--toy-space-md);
+    color: var(--toy-text-copy);
+    font-size: var(--toy-type-body);
+    -unity-text-align: middle-right;
+}
+
+/* Rows with no readout hold that column open so every control shares one right edge. */
+.setting-row--single .setting-row__control {
+    margin-right: 70px;
+}
+
+.quality-dropdown {
+    min-height: var(--toy-target);
+    margin: 0;
+    color: var(--toy-text);
+    font-size: var(--toy-type-body-lg);
+}
+
+.quality-dropdown > .unity-base-field__input {
+    min-height: var(--toy-target);
+    padding-left: 14px;
+    background-color: var(--toy-inset);
+    color: var(--toy-text);
+    border-width: var(--toy-focus-width);
+    border-color: var(--toy-edge);
+    border-radius: var(--toy-radius-md);
+}
+
+.quality-dropdown > .unity-base-field__input:hover {
+    border-color: var(--toy-edge-strong);
+}
+
+.quality-dropdown:focus > .unity-base-field__input,
+.quality-dropdown > .unity-base-field__input:focus {
+    border-color: var(--toy-focus);
+}
+
+.quality-dropdown:disabled {
+    color: var(--toy-text-muted);
+    opacity: 1;
+}
+
+.quality-dropdown:disabled > .unity-base-field__input,
+.quality-dropdown:disabled > .unity-base-field__input:hover {
+    background-color: var(--toy-disabled-surface);
+    color: var(--toy-text-muted);
+    border-color: var(--toy-disabled-border);
+}
+
+.phone .setting-row {
+    min-height: var(--toy-target-phone);
+}
+
+/* The label, the slider, and the readout stay on one line; the two text columns give up their
+   width so the control the player is aiming at keeps most of it. */
+.phone .setting-row__label {
+    width: 96px;
+    min-width: 96px;
+    padding-right: var(--toy-space-sm);
+    font-size: var(--toy-type-label);
+}
+
+.phone .setting-row__value {
+    width: 48px;
+    min-width: 48px;
+    margin-left: var(--toy-space-sm);
+    font-size: var(--toy-type-label);
+}
+
+.phone .setting-row--single .setting-row__control {
+    margin-right: 56px;
+}
+
+.phone .settings-panel .modal-close {
+    width: 100%;
+}

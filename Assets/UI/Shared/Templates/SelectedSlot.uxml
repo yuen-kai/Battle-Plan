@@ -1,5 +1,5 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
-    <ui:Button name="selected-slot-button" class="selected-slot" tooltip="Remove this unit from the fireteam">
+    <ui:Button name="selected-slot-button" class="selected-slot" tooltip="Remove this unit from the crew">
         <ui:Label name="selected-slot-index" text="1" class="selected-slot__index" picking-mode="Ignore" />
         <ui:VisualElement name="selected-slot-portrait" class="selected-slot__portrait" picking-mode="Ignore" />
         <ui:VisualElement class="selected-slot__copy" picking-mode="Ignore">

@@ -6,7 +6,7 @@ description: >-
   or multi-agent handoffs to this agent. Use it before parallel work, risky Unity
   changes, releases, or any task whose success depends on coordinated owners and
   verifiable completion rather than creative direction.
-model: claude-opus-4-8-thinking-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 ## Mission

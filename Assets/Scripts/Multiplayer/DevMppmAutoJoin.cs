@@ -119,6 +119,8 @@ public static class DevMppmAutoJoin
         if (transport == null)
             throw new InvalidOperationException("UnityTransport is not available.");
 
+        // A previous solo match may have swapped the socketless transport in.
+        OfflineTransport.Restore(networkManager);
         transport.SetConnectionData(LoopbackAddress, LoopbackPort, LoopbackAddress);
         transport.UseWebSockets = false;
     }
@@ -571,6 +573,8 @@ public sealed class DevMppmAutoJoinRunner : MonoBehaviour
             }
 
             DevMppmAutoJoin.ConfigureLoopbackTransport(networkManager);
+            ReconnectSession.RememberDirectClient();
+            ReconnectSession.ApplyConnectionPayload(networkManager);
             Debug.Log("[DevMppmAutoJoin] Player 2 starting direct client.");
             if (!networkManager.StartClient())
             {
@@ -673,6 +677,8 @@ public sealed class DevMppmAutoJoinRunner : MonoBehaviour
             yield break;
         }
 
+        ReconnectSession.RememberRelayClient(directive.relayJoinCode);
+        ReconnectSession.ApplyConnectionPayload(networkManager);
         Debug.Log("[DevMppmAutoJoin] Player 2 starting Relay client.");
         if (!networkManager.StartClient())
         {

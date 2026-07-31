@@ -1,12 +1,16 @@
 # Fog of War + Damage Rebalance — Implementation Plan
 
+> **Status: executed.** Fog of war shipped from this plan, including the deviations it called for
+> (`Renderer.forceRenderingOff` for host fog, `Health`/`Shield` NetworkVariables). The damage half
+> was **not** executed as specified — the project adopted the miss-allowance profile in
+> `docs/GAME_DESIGN.md` §4/§9 instead of the one-magazine numbers. The Phase 2 fog list is still open
+> work: last-known-position ghosts, reveal linger, reveal-on-fire, and bullet visibility filtering.
+
 **Prepared:** 2026-07-17  
-**Phase:** Phase 1 only (read/reconcile/plan). No Unity-loaded file was changed while preparing this document.  
 **Target:** Unity 6000.3.1f1, Netcode for GameObjects 2.7.0, host-based 1v1.
 
-This is the mechanical source for Phase 2. It reconciles
-`FogOfWar-and-DamageRebalance.md` with the current ability/dodge pipeline and dev harness. The
-approved gameplay choices remain the same unless a deviation is explicitly called out under
+This reconciles `FogOfWar-and-DamageRebalance.md` with the ability/dodge pipeline and dev harness as
+they stood at implementation time. Deviations from the approved design are called out under
 “Risks and recommendations.”
 
 ## 1. Current-code reconciliation
@@ -1555,3 +1559,23 @@ pollute its state.
 
 No recommendation above silently changes approved damage, vision, no-linger, always-visible
 telegraph, or bullet-visibility behavior.
+
+## 7. The client smoke model on a mid-round rejoin
+
+`clientSmokeCells` is only ever populated by `ShowSmokeScreenClientRpc` at the instant a canister
+lands, and `OnNetworkSpawn` clears it. A seat reclaimed mid-round through reconnect grace therefore
+comes back with an empty smoke set while smoke is still live on the board, and computes
+`GridSystem.ComputeVisibleCells(viewers, {})` — strictly wider than the server's view, so its own fog
+overlay under-reports the cells the server considers obscured.
+
+`RestoreRejoinedParticipant` resends the live footprint to that one client with a targeted
+`ShowSmokeScreenClientRpc`. The RPC already opens with `ClearSmokeScreenVisualsLocal()`, so the
+resend replaces the empty state rather than appending to it, and rebuilds the telegraph visual.
+Walls need no equivalent: `wallLayout` is a static compiled into both peers and never crosses the
+wire, so a rejoining client's wall model cannot go stale. Smoke is the only term that diverges.
+
+Worth knowing for anything else restored on rejoin: with `EnableSceneManagement` on, NGO defers the
+server's `OnClientConnectedCallback` to `SynchronizeComplete`, which is why a targeted RPC sent from
+the restore path reaches the client at all. If that setting is ever turned off the callback fires
+inline during approval and the whole restore would silently no-op.
+

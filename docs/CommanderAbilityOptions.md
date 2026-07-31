@@ -1,18 +1,24 @@
 # Commander Ability Options
 
-Status: selected for implementation. The Commander uses a radial **Smoke Screen**: a 3×3, nine-cell area centered on its committed target. It is public, symmetric, movement-permeable, and clears before the next planning phase.
+> **Status: shipped — this is the option-comparison record, not current rules.** Radial **Smoke
+> Screen** was chosen and is live: a 3×3, nine-cell area centered on the committed target, public,
+> symmetric, movement-permeable, clearing before the next planning phase. For how it actually
+> behaves today, read `docs/CommanderReworkSpec.md`. Two premises below were true when this was
+> written and are not true now: the Commander is a **normal roster pick**, and the ability economy
+> is **round cooldowns (2 rounds for Smoke)**, not one use per match.
 
 ## Baseline and decision rules
 
-The Commander has no live `Ability` component and is currently roster-ineligible. The old **Reroute** concept is not a viable baseline: it paused execution and reopened planning, which conflicts with Battle Plan's plan → dodge → execute cadence.
+At the time of this comparison the Commander had no live `Ability` component and was roster-ineligible. The old **Reroute** concept was not a viable baseline: it paused execution and reopened planning, which conflicts with Battle Plan's plan → dodge → execute cadence.
 
-The Commander should earn a roster slot by making one committed, high-information support play. Every candidate below is evaluated against these non-negotiables:
+The Commander should earn a roster slot by making one committed, high-information support play. Every candidate below was evaluated against these non-negotiables:
 
 - Resolve from the committed plan; never pause combat or reopen planning.
 - Be public at execution start and server-authoritative.
 - Preserve meaningful spatial counterplay and avoid an invisible math-only advantage.
 - Respect fog-bounded bot knowledge and deterministic tie-breaking.
-- Fit a one-use-per-match baseline without requiring an economy rework.
+- Fit the ability economy without requiring an economy rework. (Then: one use per match. Now: a
+  per-kit round cooldown.)
 
 Scores are directional (1 poor, 5 strong), not proof that an option is fun:
 
@@ -184,16 +190,15 @@ The earlier recommendation was to prototype Directional Smoke Wall first, with R
 
 Radial Smoke Screen is now preferred because it is easier to place and gives a predictable nine-cell footprint. It must still make its exact footprint visible in the planning preview and public execution telegraph.
 
-Do not implement either until these specific risks are answered:
+These were the pre-implementation risks, all since answered:
 
-1. A temporary LoS blocker can affect shots without mutating pathfinding or persisting into the next round.
-2. The exact interaction with grenade and Area Lock LoS is defined and consistent.
-3. A fog-bounded bot evaluator finds positive-value defensive placements and avoids blocking its own winning shot.
-4. A single smoke use is impactful without making Commander mandatory; tune only size, range, or duration before adding damage, asymmetry, or a second use.
+1. A temporary LoS blocker can affect shots without mutating pathfinding or persisting into the next round. **Answered:** `Smoke` registers a transient footprint honored by the shared Walls-mask LoS test and clears at end of round; `wallLayout` and `GridSystem.FindPath` are untouched.
+2. The exact interaction with grenade and Area Lock LoS is defined and consistent. **Answered:** all three use the same shared LoS test, so smoke blocks them identically.
+3. A fog-bounded bot evaluator finds positive-value defensive placements and avoids blocking its own winning shot. **Answered:** `BotPlayer.ScoreSmokeCenter` subtracts the bot's own lost shot lines from the enemy lanes denied.
+4. Smoke is impactful without making Commander mandatory; tune only size, range, or duration before adding damage, asymmetry, or extra uses. **Open:** still a tuning question, now measured against the §14 parity band in the rework spec.
 
 ## Rejected shortcuts
 
 - Do not revive Reroute or any mid-execution replan.
 - Do not hide a smoke placement or make it one-way.
-- Do not combine this rework with a new ability economy or a Commander stat overhaul.
-- Do not unlock Commander in the roster until the ability, bot behavior, telegraph, and deterministic checks pass together.
+- Do not bundle Commander tuning with an ability-economy change or a stat overhaul.

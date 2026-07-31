@@ -5,7 +5,7 @@ description: >-
   player fantasy, tone, priorities, or cross-discipline design conflicts to this
   agent. Use it when a proposal needs a clear creative ruling before production,
   gameplay specification, balance work, art, audio, or implementation proceeds.
-model: claude-opus-4-8-thinking-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 ## Mission

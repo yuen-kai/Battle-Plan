@@ -1,7 +1,7 @@
 ---
 name: multiplayer-engineer
 description: Proactively delegate when implementing, debugging, testing, or reviewing NGO 2.7 networking, Relay and UGS flows, MPPM sessions, connection approval, ownership, RPC validation, network spawning, fog visibility, or bot-versus-PvP capacity.
-model: gpt-5.6-sol-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

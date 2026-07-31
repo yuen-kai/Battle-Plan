@@ -15,6 +15,9 @@ EditorBuildSettings:
     path: Assets/Scenes/HomeScreen.unity
     guid: 8c9c34f6d2456fa4e8b7e99f47571e9b
   - enabled: 1
+    path: Assets/Scenes/Characters.unity
+    guid: 5a1aa27a5ec544d848bacf1d88251f38
+  - enabled: 1
     path: Assets/Scenes/Game.unity
     guid: 9fc0d4010bbf28b4594072e72b8655ab
   m_configObjects: {}

@@ -1,29 +1,32 @@
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 public class PathSelection : MonoBehaviour
 {
     public static PathSelection Instance { get; private set; }
 
-    [SerializeField]
-    private GameObject pathNodePrefab;
-
-    [SerializeField]
-    private GameObject pathEdgePrefab;
-
-    private GameObject currentPathNodes;
-    private GameObject currentPathEdges;
     private bool pathDragActive;
+
+    // Set once a drag has been told its route is resting somewhere it cannot stop, so the notice is
+    // stated instead of rewritten on every frame the pointer sits there.
+    private bool reportedHeldCell;
+
+    // Whose route this drag is editing. Held separately from the selection because a drag can be
+    // ended by switching units, which has already moved the selection on by the time we settle.
+    private GameObject draggedUnit;
+
+    // The unit a press landed on while it was already selected with nothing drawn. Letting go on it
+    // without having drawn anything turns it to its ability, so a unit that is staying where it is
+    // can be pointed at a target on the board rather than through its card.
+    private GameObject abilityTapUnit;
+
     private List<Vector3> CurrentPlan =>
         PlanMovement.Instance != null ? PlanMovement.Instance.currentPlan : null;
-    private GameObject CurrentVisuals =>
-        PlanMovement.Instance != null ? PlanMovement.Instance.currentVisuals : null;
+    private PathRibbon CurrentRibbon =>
+        PlanMovement.Instance != null ? PlanMovement.Instance.currentRibbon : null;
     private GameObject SelectedUnit =>
         PlanMovement.Instance != null ? PlanMovement.Instance.selectedUnit : null;
     private float CellSize => GameLoop.cellSize;
-    private Vector3 VisualPlanHeightOffset => PlanMovement.visualPlanHeightOffset;
 
     void Awake()
     {
@@ -32,6 +35,12 @@ public class PathSelection : MonoBehaviour
 
     public void MovementSelection(int moveDist)
     {
+        if (PlanMovement.Instance?.CanEditPlan != true)
+        {
+            pathDragActive = false;
+            return;
+        }
+
         moveDist =
             moveDist == -1 ? SelectedUnit.GetComponent<Movement>().unitData.moveDist : moveDist;
         if (Input.GetMouseButtonDown(0))
@@ -44,63 +53,127 @@ public class PathSelection : MonoBehaviour
         }
         else if (Input.GetMouseButtonUp(0))
         {
+            SettleRouteEnd();
             pathDragActive = false;
+            ResolveAbilityTap();
         }
+    }
+
+    /// <summary>
+    /// Drops a route back to the last cell it may actually stop on. A drag is free to run through a
+    /// square a team-mate finishes on — routing around one would be a worse restriction than the
+    /// rule is worth — but letting go there would commit orders the server only has to cut short,
+    /// so the trailing cells are given up the moment the player stops asking for them.
+    /// </summary>
+    void SettleRouteEnd()
+    {
+        ClearHeldCellNotice();
+        GameObject unit = draggedUnit;
+        draggedUnit = null;
+        if (!pathDragActive || unit == null)
+            return;
+
+        PlanMovement.Instance?.TrimRouteToLastFreeCell(unit);
     }
 
     public bool TryStartPath()
     {
+        if (PlanMovement.Instance?.CanEditPlan != true)
+        {
+            pathDragActive = false;
+            return false;
+        }
+
         pathDragActive = StartPath();
+        draggedUnit = pathDragActive ? SelectedUnit : null;
         return pathDragActive;
+    }
+
+    public void CancelCurrentDrag()
+    {
+        abilityTapUnit = null;
+        SettleRouteEnd();
+        pathDragActive = false;
+    }
+
+    /// <summary>
+    /// Turns the selected unit to its ability when a press and release both land on it without a
+    /// route being drawn in between. A unit already going somewhere is left alone: pressing it
+    /// gives up its route, and only the click after that — with nothing left to abandon — reads as
+    /// asking for the ability instead.
+    /// </summary>
+    void ResolveAbilityTap()
+    {
+        GameObject unit = abilityTapUnit;
+        abilityTapUnit = null;
+        if (unit == null)
+            return;
+
+        Vector3? released = Mouse.GetGridCellUnderMouse();
+        if (released == null || released.Value != GridSystem.GetNearestGridCell(unit))
+            return;
+
+        PlanMovement.Instance?.TrySwitchToAbilityPlan(unit);
     }
 
     bool StartPath()
     {
-        Vector3 characterCell = GridSystem.GetNearestGridCell(SelectedUnit);
-        Vector3? clickedCell = Mouse.GetGridCellUnderMouse();
-        if (clickedCell == characterCell)
-        {
-            InitializePath();
-            return HasCurrentPathVisuals();
-        }
+        abilityTapUnit = null;
+        Vector3? pointer = Mouse.GetGridPointUnderMouse();
+        if (pointer == null || SelectedUnit == null)
+            return false;
 
-        GameObject node = Mouse.GetObjectUnderMouse("PathNode");
-        if (node != null)
-        {
-            if (!PlanMovement.Instance.TrySelectUnitForPathNode(node))
-                return false;
+        // A press on the selected unit while it has drawn nothing may turn out to be the click that
+        // turns it to its ability. Only the release can say, since this is also the press a route
+        // is drawn out from.
+        bool pressedIdleSelection =
+            CurrentPlan?.Count == 1
+            && GridSystem.GetNearestGridCell(pointer.Value)
+                == GridSystem.GetNearestGridCell(SelectedUnit);
+        if (pressedIdleSelection)
+            abilityTapUnit = SelectedUnit;
 
-            BindCurrentPathVisuals();
-            node = FindCurrentPathNodeRoot(node);
-            if (!HasCurrentPathVisuals() || node == null)
-                return false;
-
-            ResetPath(node);
-            return true;
-        }
-
-        // Pressing another friendly unit starts a fresh movement path for it. Preparing movement
-        // also makes this gesture work when the previously selected unit was targeting an ability.
+        // Pressing on a drawn route grabs that route and trims it back to the pressed cell. The
+        // pick uses the exact pointer position, so where routes share a cell you grab the one you
+        // are actually pointing at rather than whichever happens to be checked first.
         if (
-            clickedCell != null
-            && PlanMovement.Instance.TrySelectUnitForMovementAtCell(clickedCell.Value)
+            PlanMovement.Instance.TryFindPlannedRouteAtPoint(
+                pointer.Value,
+                out GameObject owner,
+                out int planIndex
+            )
         )
         {
-            InitializePath();
-            return HasCurrentPathVisuals();
+            if (!PlanMovement.Instance.TrySelectUnitForRoute(owner))
+                return false;
+
+            TruncatePlan(planIndex);
+            return CurrentRibbon != null;
+        }
+
+        // Pressing another friendly unit starts a fresh route for it. Preparing movement also makes
+        // this gesture work when the previously selected unit was targeting an ability.
+        if (
+            PlanMovement.Instance.TrySelectUnitForMovementAtCell(
+                GridSystem.GetNearestGridCell(pointer.Value)
+            )
+        )
+        {
+            TruncatePlan(0);
+            return CurrentRibbon != null;
         }
         return false;
     }
 
     void ExtendPath(int moveDist)
     {
-        // A drag is only valid after StartPath has created containers for the selected unit.
-        // Ignore malformed/off-unit drags instead of mutating the plan and throwing every frame.
+        // A drag is only valid once a route exists for the selected unit. Ignore malformed or
+        // off-unit drags instead of mutating the plan and throwing every frame.
         if (
             !pathDragActive
             || CurrentPlan == null
             || CurrentPlan.Count == 0
-            || !HasCurrentPathVisuals()
+            || CurrentRibbon == null
         )
         {
             pathDragActive = false;
@@ -115,89 +188,76 @@ public class PathSelection : MonoBehaviour
         //Undo movementPath
         if (CurrentPlan.Count >= 2 && CurrentPlan[^2] == currentTile)
         {
-            ResetPath(currentPathNodes.transform.childCount - 2);
+            TruncatePlan(CurrentPlan.Count - 2);
+            ReportRouteEnd();
             return;
         }
 
         Vector3 last = CurrentPlan[^1];
-        if (ValidMove(last, currentTile, moveDist))
-        {
-            CurrentPlan.Add(currentTile);
-            AddPathSectionVisual(currentTile, last, CurrentPlan.Count - 1, moveDist);
-        }
+        if (!ValidMove(last, currentTile, moveDist))
+            return;
+
+        CurrentPlan.Add(currentTile);
+        // The press has drawn somewhere, so it is a route being laid out rather than a click.
+        abilityTapUnit = null;
+        PlanMovement.Instance.NotifyCurrentRouteChanged();
+        ReportRouteEnd();
     }
 
-    void InitializePath()
+    /// <summary>
+    /// Says once, while the route is resting on a square a team-mate finishes on, that letting go
+    /// here will not hold. The route itself is already drawn as unusable at that end; this only
+    /// puts the reason into words.
+    /// </summary>
+    void ReportRouteEnd()
     {
-        if (!CurrentVisuals)
+        bool blocked = PlanMovement.Instance?.IsRouteEndBlocked(SelectedUnit) == true;
+        if (!blocked)
         {
-            currentPathNodes = null;
-            currentPathEdges = null;
+            ClearHeldCellNotice();
             return;
         }
 
-        BindCurrentPathVisuals();
-        if (!currentPathNodes || !currentPathEdges)
-        {
-            currentPathNodes = Helper.CreateGameObject("PathNodes", CurrentVisuals);
-            currentPathEdges = Helper.CreateGameObject("PathEdges", CurrentVisuals);
-        }
-        else
-        {
-            ResetPath(-1);
-        }
-    }
-
-    void BindCurrentPathVisuals()
-    {
-        if (!CurrentVisuals)
-        {
-            currentPathNodes = null;
-            currentPathEdges = null;
+        if (reportedHeldCell)
             return;
-        }
 
-        currentPathNodes = CurrentVisuals.transform.Find("PathNodes")?.gameObject;
-        currentPathEdges = CurrentVisuals.transform.Find("PathEdges")?.gameObject;
+        reportedHeldCell = true;
+        GameHUDController.Instance?.SetTargetFeedback(
+            "Another unit ends its move there — your route will stop short.",
+            true
+        );
     }
 
-    GameObject FindCurrentPathNodeRoot(GameObject hitObject)
+    /// <summary>Drops the notice once the route ends somewhere it can hold.</summary>
+    void ClearHeldCellNotice()
     {
-        if (!currentPathNodes || hitObject == null)
-            return null;
+        if (!reportedHeldCell)
+            return;
 
-        Transform node = hitObject.transform;
-        while (node != null && node.parent != currentPathNodes.transform)
-            node = node.parent;
-
-        return node?.parent == currentPathNodes.transform ? node.gameObject : null;
+        reportedHeldCell = false;
+        GameHUDController.Instance?.ClearTargetFeedback();
     }
 
-    bool HasCurrentPathVisuals()
+    /// <summary>Drops every step after the given plan index, keeping the start cell at index 0.</summary>
+    void TruncatePlan(int keepThroughIndex)
     {
-        return CurrentVisuals
-            && currentPathNodes
-            && currentPathEdges
-            && currentPathNodes.transform.parent == CurrentVisuals.transform
-            && currentPathEdges.transform.parent == CurrentVisuals.transform;
+        List<Vector3> plan = CurrentPlan;
+        if (plan == null || plan.Count == 0)
+            return;
+
+        int keep = Mathf.Clamp(keepThroughIndex, 0, plan.Count - 1);
+        if (plan.Count > keep + 1)
+            plan.RemoveRange(keep + 1, plan.Count - (keep + 1));
+
+        PlanMovement.Instance.NotifyCurrentRouteChanged();
     }
 
-    void ResetPath(int index)
-    {
-        for (int i = currentPathNodes.transform.childCount - 1; i > index; i--)
-        {
-            Destroy(currentPathNodes.transform.GetChild(i)?.gameObject);
-            Destroy(currentPathEdges.transform.GetChild(i)?.gameObject);
-        }
-
-        CurrentPlan.RemoveRange(index + 2, CurrentPlan.Count - (index + 2)); //current plan includes start but visual does not
-    }
-
-    void ResetPath(GameObject node)
-    {
-        ResetPath(node.transform.GetSiblingIndex());
-    }
-
+    /// <summary>
+    /// Whether the route may be extended onto a cell. A square a team-mate finishes on is not
+    /// excluded here: marching through one another is already how units behave, and refusing the
+    /// step would make the player route around a body to reach open ground behind it. Stopping
+    /// there is what is disallowed, and that is settled when the drag ends.
+    /// </summary>
     bool ValidMove(Vector3 last, Vector3 currentTile, int moveDist)
     {
         bool withinMoveDistance = CurrentPlan.Count - 1 < moveDist;
@@ -206,21 +266,5 @@ public class PathSelection : MonoBehaviour
         bool notAlreadyInPath = !CurrentPlan.Contains(currentTile);
 
         return withinMoveDistance && exactlyOneTileAway && notInWall && notAlreadyInPath;
-    }
-
-    void AddPathSectionVisual(Vector3 cell, Vector3 last, int length, int moveDist)
-    {
-        GameObject node = Instantiate(pathNodePrefab, cell, Quaternion.identity);
-        node.transform.parent = currentPathNodes.transform;
-        node.transform.position += VisualPlanHeightOffset;
-
-        GameObject edge = Instantiate(pathEdgePrefab, (cell + last) / 2, Quaternion.identity);
-        edge.transform.parent = currentPathEdges.transform;
-        edge.transform.position += VisualPlanHeightOffset;
-
-        if (length == moveDist)
-        {
-            node.transform.GetComponent<Renderer>().material.color = Color.green;
-        }
     }
 }

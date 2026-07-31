@@ -6,7 +6,7 @@ description: >-
   feedback, or player-facing rules to this agent. Use it when an idea must become
   a clear, testable experience specification before numeric balancing, UI
   production, playtesting, or C# implementation.
-model: claude-opus-4-8-thinking-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 ## Mission

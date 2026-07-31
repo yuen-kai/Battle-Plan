@@ -1,4 +1,19 @@
 using UnityEngine;
+using UnityEngine.Serialization;
+
+/// <summary>
+/// Role bucket a unit belongs to. Presentation only — nothing in combat reads it. The names and
+/// the order both come from the roster table in Overview.md, which is the source of truth for
+/// roles; a class grouping that disagreed with the design doc would just be a second one.
+/// </summary>
+public enum UnitClass
+{
+    Assault = 0,
+    Initiator = 1,
+    Controller = 2,
+    Mobility = 3,
+    Support = 4,
+}
 
 [CreateAssetMenu(fileName = "NewUnitData", menuName = "Units/Unit Data")]
 public class UnitData : ScriptableObject
@@ -9,16 +24,32 @@ public class UnitData : ScriptableObject
     [Tooltip("Name of the unit")]
     public string unitName = "New Unit";
 
+    [Tooltip("Role bucket used to group the roster in menus")]
+    public UnitClass unitClass = UnitClass.Assault;
+
     [TextArea(3, 5)]
     [Tooltip("Description of the unit")]
     public string unitDescription = "New Unit Description";
+
+    [TextArea(2, 3)]
+    [Tooltip("How this unit is played, in one sentence")]
+    public string playStyle = "";
+
+    [Tooltip("Weapon in plain words, e.g. \"Mid-range rifle\"")]
+    public string weaponName = "";
+
+    [Tooltip("What this unit is good at, in one line")]
+    public string strengths = "";
+
+    [Tooltip("What this unit struggles against, in one line")]
+    public string weaknesses = "";
 
     [Tooltip("Sprite representing the unit")]
     public Sprite unitSprite;
 
     [Header("=== ROSTER PARAMETERS ===")]
     [SerializeField]
-    [Tooltip("Opt out of player-selectable and externally configured fireteams")]
+    [Tooltip("Opt out of player-selectable and externally configured crews")]
     private bool unavailableForRoster = false;
 
     public bool IsRosterEligible => !unavailableForRoster;
@@ -26,6 +57,10 @@ public class UnitData : ScriptableObject
     [Header("=== ABILITY CARD PARAMETERS ===")]
     [Tooltip("Name of the ability")]
     public string abilityName = "New Ability";
+
+    [TextArea(2, 3)]
+    [Tooltip("What the ability does, in one plain sentence")]
+    public string abilityDescription = "";
 
     [Tooltip("Sprite representing the ability")]
     public Sprite abilitySprite;
@@ -125,12 +160,22 @@ public class UnitData : ScriptableObject
 
     public bool responseDistLine = false;
 
+    /// <summary>
+    /// Whether the ability may be aimed at the cell its caster is standing on. A line ability fires
+    /// from the caster through the chosen square, so its own cell names no direction to fire in.
+    /// Everything else lands on its square, and landing on its own is a fair play — smoke dropped
+    /// underfoot is one of the Commander's better ones.
+    /// </summary>
+    public bool CanTargetOwnCell => !responseDistLine;
+
     [Tooltip("Time per unit for dive movement planning in seconds")]
     public float timeDivePerUnit = 3f;
 
     [Tooltip("Range in cells for dive movement")]
     public int diveRange = 2;
 
-    [Tooltip("Number of times the ability can be used")]
-    public int uses = 1;
+    [FormerlySerializedAs("uses")]
+    [Min(1)]
+    [Tooltip("Full rounds the ability remains unavailable after activation")]
+    public int abilityCooldownRounds = 1;
 }

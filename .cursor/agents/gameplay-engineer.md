@@ -1,7 +1,7 @@
 ---
 name: gameplay-engineer
 description: Proactively delegate when implementing, debugging, testing, or reviewing Battle Plan combat flow, abilities, units, stats, phase transitions, server-authoritative outcomes, DevInput controls, or gameplay test hooks.
-model: gpt-5.6-sol-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

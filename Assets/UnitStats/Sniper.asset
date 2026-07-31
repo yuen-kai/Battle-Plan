@@ -14,10 +14,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   unitModel: {fileID: 4136433947033533029, guid: ec80aa1b1ead1554e81103453b6830e3, type: 3}
   unitName: Sniper
+  unitClass: 2
   unitDescription: Nothing escapes his view. High damage, high accuracy, great for
     area control
+  playStyle: Sets up long sightlines from the back and punishes anyone who steps
+    into them.
+  weaponName: Sniper rifle
+  strengths: Controls space and punishes poor positioning.
+  weaknesses: Weak to flanks and dives.
   unitSprite: {fileID: 21300000, guid: c9330df5d4ee1469e859196ba17851c7, type: 3}
+  unavailableForRoster: 0
   abilityName: Area Lock
+  abilityDescription: Lock a line across the board. Anything that crosses it is obliterated.
   abilitySprite: {fileID: 21300000, guid: c9330df5d4ee1469e859196ba17851c7, type: 3}
   moveDist: 3
   moveSpeed: 1
@@ -43,10 +51,12 @@ MonoBehaviour:
   abilityCardSprite: {fileID: 0}
   selectAbilitySquare: 1
   abilitySquareRange: 99
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
   abilityRadius: 0
   selectTime: 4
   responseRange: 0.9
   responseDistLine: 1
   timeDivePerUnit: 3
   diveRange: 2
-  uses: 1
+  abilityCooldownRounds: 4

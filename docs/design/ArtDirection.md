@@ -26,10 +26,10 @@ The three references map cleanly onto the three layers of the game:
 | **Characters** | Tactical Breach Wizards | Matte flat-shaded low-poly, 2–3 value color blocks, identity from one big accessory per unit, zero gloss, soft rim/outline separation |
 | **Ability FX** | Clash Mini | Oversized white-core beams and bursts, anticipation → impact frame → aftermath, hit-flash, shockwave rings, camera shake (already have it) |
 
-Why this fits Battle Plan specifically: fog of war is designed and incoming
-(`docs/design/FogOfWar-and-DamageRebalance.md`). A Bullet Echo-style dark arena makes fog feel
-*native* instead of bolted on — hidden isn't "a gray overlay on a sunny board", hidden is simply
-**dark**, and visible is **lit**.
+Why this fits Battle Plan specifically: fog of war is shipped
+(`docs/design/FogOfWar-and-DamageRebalance.md`, Deliverable 1). A Bullet Echo-style dark arena makes
+fog feel *native* instead of bolted on — hidden isn't "a gray overlay on a sunny board", hidden is
+simply **dark**, and visible is **lit**.
 
 ---
 

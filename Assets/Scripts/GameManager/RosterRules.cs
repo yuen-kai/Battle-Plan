@@ -114,9 +114,9 @@ public static class RosterRules
     }
 
     /// <summary>
-    /// Validates an externally supplied fireteam. Failure priority is stable: shape, catalog,
+    /// Validates an externally supplied crew. Failure priority is stable: shape, catalog,
     /// index range, then per-unit availability. Repeated picks of the same unit are allowed —
-    /// a fireteam may field the same unit in more than one slot.
+    /// a crew may field the same unit in more than one slot.
     /// </summary>
     public static RosterValidationResult Validate(
         IReadOnlyList<int> roster,
@@ -185,7 +185,7 @@ public static class RosterRules
                 "One selected unit is no longer available. Choose another unit.",
             RosterValidationReason.UnitUnavailable =>
                 "That unit is unavailable for deployment. Choose another unit.",
-            _ => $"That fireteam is not valid. Choose {UnitsPerPlayer} units again.",
+            _ => $"That crew is not valid. Choose {UnitsPerPlayer} units again.",
         };
     }
 }

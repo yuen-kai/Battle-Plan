@@ -38,6 +38,17 @@ public class VisionConeVisual : MonoBehaviour
     Vector2[] uvs;
     int[] triangles;
 
+    // Pose and envelope the current mesh was cast for. Walls are the only thing that clips the fan
+    // and they are spawned once during map setup, so a unit that has not moved or turned produces
+    // an identical mesh every frame. Skipping those rebuilds keeps a still board free of raycasts,
+    // which matters most on WebGL where rendering and the transport share one thread.
+    Vector3 builtPosition;
+    Quaternion builtRotation;
+    float builtAngle;
+    float builtDistance;
+    bool hasBuilt;
+    bool trianglesUploaded;
+
     void Awake()
     {
         meshRenderer = GetComponent<MeshRenderer>();
@@ -83,7 +94,24 @@ public class VisionConeVisual : MonoBehaviour
 
     void LateUpdate()
     {
+        if (
+            hasBuilt
+            && transform.position == builtPosition
+            && transform.rotation == builtRotation
+            && viewAngle == builtAngle
+            && viewDistance == builtDistance
+        )
+        {
+            return;
+        }
+
         RebuildMesh();
+
+        builtPosition = transform.position;
+        builtRotation = transform.rotation;
+        builtAngle = viewAngle;
+        builtDistance = viewDistance;
+        hasBuilt = true;
     }
 
     void RebuildMesh()
@@ -114,10 +142,17 @@ public class VisionConeVisual : MonoBehaviour
             uvs[i + 1] = new Vector2(t, distance / viewDistance);
         }
 
-        coneMesh.Clear();
         coneMesh.vertices = vertices;
         coneMesh.uv = uvs;
-        coneMesh.triangles = triangles;
+
+        // Topology is fixed once AllocateBuffers has run, and the vertex count never changes with
+        // it, so the index buffer needs a single upload rather than one per rebuild.
+        if (!trianglesUploaded)
+        {
+            coneMesh.triangles = triangles;
+            trianglesUploaded = true;
+        }
+
         coneMesh.RecalculateBounds();
     }
 

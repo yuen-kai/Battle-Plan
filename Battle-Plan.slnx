@@ -1,8 +1,8 @@
 ﻿<Solution>
-  <Project Path="LineworkLite.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="LineworkLite.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Unity.Cursor.Editor.csproj" />
   <Project Path="BattlePlan.UI.Editor.Tests.csproj" />
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="LineworkLite.Editor.csproj" />
 </Solution>

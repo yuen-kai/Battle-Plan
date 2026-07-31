@@ -1,7 +1,7 @@
 ---
 name: bot-ai-engineer
 description: Proactively delegate when implementing, debugging, testing, or reviewing BotPlayer decisions, deterministic server-side planning, fog-bounded perception, KOTH or Elimination tactics, target scoring, movement choice, and bot fairness.
-model: gpt-5.6-sol-max-fast
+model: claude-opus-5-thinking-max-fast
 ---
 
 # Mission

@@ -26,6 +26,10 @@ public enum MatchResultReason : byte
     SimultaneousElimination,
     KingOfTheHill,
     DisconnectForfeit,
+
+    // The tutorial sandbox closes when its last lesson lands rather than when a crew dies, so it
+    // reports an outcome that is neither a victory nor a defeat.
+    TutorialComplete,
 }
 
 public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
@@ -78,10 +82,12 @@ public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
     {
         if (!IsValid)
             return "Match complete.";
+        if (Reason == MatchResultReason.TutorialComplete)
+            return "Tutorial complete.";
         if (Outcome == MatchOutcome.Draw)
         {
             return Reason == MatchResultReason.SimultaneousElimination
-                ? "Draw — both fireteams eliminated."
+                ? "Draw — both crews eliminated."
                 : "Draw.";
         }
 
@@ -232,10 +238,64 @@ public class GameLoop : NetworkBehaviour
     // dodge window to submit short dive paths that REPLACE their planned move (and cancel their
     // own ability plan, if any).
     public Dictionary<int, HashSet<GameObject>> dodgeAlerted; // logical team -> alerted units
+
+    // Teams handed a dodge window during the current round. `dodgeAlerted` only exists while the
+    // window is open, and a window every alerted team answers immediately never survives a frame,
+    // so round-scoped observers read this instead. Cleared as each round opens.
+    private readonly HashSet<int> dodgeAlertedTeamsThisRound = new();
+    public bool WasTeamAlertedToDodgeThisRound(int teamIndex) =>
+        dodgeAlertedTeamsThisRound.Contains(teamIndex);
+
     private PathsDict dodgeDivePaths;
     private readonly HashSet<int> dodgeResponsesReceived = new();
     private int maxDiveRangeThisRound;
+
+    // A dive buys distance by throwing the unit off its feet, and it cannot shoot until it is back
+    // on them. Without that cost the dodge is free: the dive is quick enough (diveSpeed 4 over at
+    // most diveRange cells) that a dodger used to land and open fire while the units who kept their
+    // orders were still walking. Two seconds is most of the window a 3-cell walk would have spent
+    // in the open, so answering an ability now trades this round's shooting for not being hit.
+    public const float DodgeRecoverySeconds = 2f;
+
+    // Server time the open dodge window closes on, and the telegraphs standing behind it. Both
+    // exist so a seat reclaimed inside the window can be handed the same window back rather than
+    // a fresh one; outside a window the deadline is 0.
+    private double dodgeWindowEndTime;
+    private readonly HashSet<int> dodgeCasterTeams = new();
+    private readonly List<(
+        Vector3 origin,
+        Vector3 square,
+        float radiusCells,
+        bool line,
+        bool smokeScreen
+    )> activeTelegraphs = new();
     private int runningAbilities;
+
+    // A unit that walks into a rifle is shot at the whole way in, because movement is what holds
+    // the round's weapons free. A unit an ability sets down arrives all at once, and can do so
+    // after the last walker has stopped — so weapons stay free this long past a landing too. Long
+    // enough for the unit beside it to turn all the way round and fire back, short enough that the
+    // round is not left visibly waiting on it.
+    public const float AbilityLandingReturnFireSeconds = 1.5f;
+
+    private float returnFireWindowUntil;
+
+    private bool IsReturnFireWindowOpen => Time.time < returnFireWindowUntil;
+
+    // === UNIT OVERLAP (server-only round state) ===
+    // No two units share a cell. Allied orders are pulled apart before execution, but the two
+    // commanders plan blind to each other, so the round can still end with an enemy standing where
+    // one of your units stopped; whoever walked in is shoved aside once everything has settled.
+
+    // How far a unit may be shoved. Two or three cells still reads as being knocked aside; further
+    // than that and the shove would move a unit more than its own orders did.
+    public const int MaxDisplacementSteps = 3;
+
+    // Long enough to read as being shoved rather than teleporting, short enough that the round
+    // does not visibly stall on it.
+    private const float DisplacementSlideSeconds = 0.3f;
+
+    private bool resolvingOverlaps;
 
     // Server-authored round state. Smoke never enters wallLayout, physics, or pathing.
     private readonly HashSet<Vector2Int> activeSmokeCells = new();
@@ -245,11 +305,8 @@ public class GameLoop : NetworkBehaviour
     private readonly HashSet<Vector2Int> clientSmokeCells = new();
     private readonly List<GameObject> clientTelegraphs = new();
     private GameObject clientSmokeVisualRoot;
-    private Material clientSmokeVisualMaterial;
 
     public UnitDatabase allUnits;
-
-    public List<Color> teamColors;
 
     public Color executingMoves;
     public List<Material> teamMaterials;
@@ -297,50 +354,31 @@ public class GameLoop : NetworkBehaviour
         new Vector2(GridSystem.ColumnCount - 1, GridSystem.RowCount - 1) * cellSize
             + new Vector2(0.1f, 0.1f)
     );
-    public static readonly HashSet<Vector2Int> KingOfTheHillCells = new()
-    {
-        new Vector2Int(6, 3),
-        new Vector2Int(7, 3),
-        new Vector2Int(8, 3),
-        new Vector2Int(6, 4),
-        new Vector2Int(7, 4),
-        new Vector2Int(8, 4),
-        new Vector2Int(6, 5),
-        new Vector2Int(7, 5),
-        new Vector2Int(8, 5),
-        new Vector2Int(6, 6),
-        new Vector2Int(7, 6),
-        new Vector2Int(8, 6),
-    };
+
+    // Objective and blockout both come from the live board (MapCatalog.Active), which follows the
+    // replicated match options. Kept as statics named exactly as before so every existing reader —
+    // GridSystem line-of-sight, path validation, the bot, the arena builder — is unaffected.
+    public static HashSet<Vector2Int> KingOfTheHillCells => MapCatalog.Active.HillCells;
 
     [SerializeField]
     private GameObject wallPrefab;
-    public static HashSet<Vector2Int> wallLayout = new()
-    {
-        new Vector2Int(4, 1),
-        new Vector2Int(10, 1),
-        new Vector2Int(7, 2),
-        new Vector2Int(2, 3),
-        new Vector2Int(5, 3),
-        new Vector2Int(9, 3),
-        new Vector2Int(12, 3),
-        new Vector2Int(0, 4),
-        new Vector2Int(14, 4),
-        new Vector2Int(0, 5),
-        new Vector2Int(14, 5),
-        new Vector2Int(2, 6),
-        new Vector2Int(5, 6),
-        new Vector2Int(9, 6),
-        new Vector2Int(12, 6),
-        new Vector2Int(7, 7),
-        new Vector2Int(4, 8),
-        new Vector2Int(10, 8),
-    };
+    public static HashSet<Vector2Int> wallLayout => MapCatalog.Active.Walls;
 
-    private readonly List<Vector2Int[]> spawns = CreateSpawnLayout(devMode);
+    private List<Vector2Int[]> spawns = CreateSpawnLayout(devMode);
+
+    /// <summary>
+    /// Units actually fielded per team this match. Rosters are always the configured crew length
+    /// so validation and <see cref="ConfigureTeam"/> stay untouched; the tutorial sandbox simply
+    /// spawns fewer of them.
+    /// </summary>
+    public static int UnitsPerTeamThisMatch =>
+        TutorialSession.IsActive ? TutorialSession.UnitsPerTeam : RosterRules.UnitsPerPlayer;
 
     private static List<Vector2Int[]> CreateSpawnLayout(bool useDevLayout)
     {
+        if (TutorialSession.IsActive)
+            return TutorialSession.CreateSpawnLayout();
+
         List<Vector2Int[]> layout = new(TeamCount);
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
@@ -373,8 +411,12 @@ public class GameLoop : NetworkBehaviour
 
     private static Vector2Int[] CreateProductionSpawnPositions(int teamIndex, int unitCount)
     {
-        int minimumColumn = unitCount <= GridSystem.ColumnCount - 4 ? 2 : 0;
-        int maximumColumn = GridSystem.ColumnCount - 1 - minimumColumn;
+        // Most boards spread the crew across the widest inset band the unit count allows. A board
+        // may instead declare a narrower band to weight deployment to one side (Concourse Oblique),
+        // which is what turns roster order into a lane commitment.
+        Vector2Int? band = MapCatalog.Active.HostDeploymentColumns;
+        int minimumColumn = band?.x ?? (unitCount <= GridSystem.ColumnCount - 4 ? 2 : 0);
+        int maximumColumn = band?.y ?? (GridSystem.ColumnCount - 1 - minimumColumn);
         int availableColumns = maximumColumn - minimumColumn + 1;
         if (unitCount > availableColumns)
         {
@@ -474,7 +516,12 @@ public class GameLoop : NetworkBehaviour
     };
 
     // Game Settings
-    const float planningTimePerUnit = 8f;
+    const float planningTimePerUnit = 6f;
+    const float minimumPlanningTime = 12f;
+    // How long both crews stay locked in before the round resolves, leaving a last window to
+    // unlock. The tutorial keeps the same beat so the pause a student learns here is the one they
+    // will meet in a real match.
+    const float planningUndoGraceSeconds = 1f;
 
     // Actions
     public static System.Action<bool> OrderAllowShooting;
@@ -482,12 +529,17 @@ public class GameLoop : NetworkBehaviour
     public static System.Action OrderContinueShooting;
 
     private readonly Dictionary<int, PathsDict> submittedTeamPaths = new();
+    private readonly Dictionary<int, int> latestTeamPlanVersions = new();
+    private readonly Dictionary<int, PathsDict> retractedTeamPathFallbacks = new();
     private readonly Dictionary<
         GameObject,
         (Vector3 position, Quaternion rotation)
     > unitSpawnTransforms = new();
     private BotPlayer botPlayer;
+    private TutorialDirector tutorialDirector;
     private int roundNumber;
+    private bool planningChangesOpen;
+    private double planningDeadline;
 
     // === KING OF THE HILL ===
     // Atomic, server-authored objective state on the always-visible GameLoop object. Keeping this
@@ -499,12 +551,14 @@ public class GameLoop : NetworkBehaviour
     private GameObject hillOverlayRoot;
     private Material hillOverlayMaterial;
     private MaterialPropertyBlock hillOverlayProperties;
-    private static readonly int HillGlowColorId = Shader.PropertyToID("_GlowColor");
-    private static readonly int HillRingWidthId = Shader.PropertyToID("_RingWidth");
-    private static readonly int HillEdgeSoftnessId = Shader.PropertyToID("_EdgeSoftness");
-    private static readonly int HillIntensityId = Shader.PropertyToID("_Intensity");
-    private static readonly int HillPulseSpeedId = Shader.PropertyToID("_PulseSpeed");
-    private static readonly int HillPulseAmountId = Shader.PropertyToID("_PulseAmount");
+    private static readonly int HillBaseColorId = Shader.PropertyToID("_BaseColor");
+
+    // The boundary is drawn as four flat strips around the pad rather than a glow under it: a
+    // line reads as a border you are inside or outside of, which is the only thing the player
+    // needs from it. Width and height are world units on the deck plane.
+    private const float HillBoundaryWidth = 0.12f;
+    private const float HillBoundaryHeight = 0.05f;
+    private static Color HillUncontestedColour => TeamPalette.HillUnclaimed;
 #if UNITY_EDITOR
     private readonly Dictionary<ulong, string> devHillPresentationReports = new();
 #endif
@@ -516,12 +570,52 @@ public class GameLoop : NetworkBehaviour
     private bool matchEnded;
     private bool disconnectRecoveryStarted;
 
+    // === RECONNECT GRACE ===
+    // A dropped seat holds the round loop instead of ending the match. Execution and dodge windows
+    // are never suspended (physics and in-flight abilities cannot be frozen safely and both are
+    // already bounded); the hold is taken at the round boundary, and a drop during planning unwinds
+    // the round so the returning player is not handed a board they never planned for.
+    private int rejoinHoldTeamIndex = -1;
+    private double rejoinHoldDeadline;
+    private readonly HashSet<ulong> pendingRejoinRestores = new();
+
+    // A claimant that is approved but never finishes NGO synchronisation leaves the seat reading as
+    // filled, so the hold needs its own bound on top of the seat's window.
+    private const float RejoinSyncSeconds = 15f;
+
+    // Client-side: stop retrying early enough that the fallback to the lobby still lands inside the
+    // server's window rather than racing the forfeit.
+    private const float ClientRejoinSafetyMarginSeconds = 5f;
+
+    // PlanMovement submits the moment its deadline passes, so a dodge prompt handed back with
+    // almost nothing left on it would spend the team's one response on an empty dive. Below this
+    // much remaining server time the returning player is given no prompt at all instead.
+    public const float RejoinDodgeMinimumSeconds = 1.5f;
+    private const float ClientRejoinRetrySeconds = 1.5f;
+
+    private bool IsHoldingForRejoin => rejoinHoldTeamIndex >= 0;
+
+    // === BATTLE REPORT ===
+    // Built server-side across the match and withheld until FinishGame. Replicating it earlier
+    // would hand a client the enemy's committed orders mid-match.
+    private BattleReport battleReport;
+    private BattleReportRound openReportRound;
+
+    /// <summary>The reveal for the match that just ended, available on every client.</summary>
+    public BattleReport LastBattleReport { get; private set; }
+
     // === FOG OF WAR ===
     [Header("Fog of War")]
     [SerializeField]
     private GameObject fogOverlayCellPrefab;
 
     private const float FogUpdateIntervalSeconds = 0.15f;
+
+    // Unit transforms replicate as one batched, fog-filtered snapshot per client rather than a
+    // NetworkTransform per unit. Ten independent 30Hz streams collapse into one 15Hz message, which
+    // matters most on WebGL: every NGO message is a reliable-ordered WebSocket frame, so message
+    // count costs more than message size once a frame stalls and holds up everything behind it.
+    private const float UnitPositionSyncIntervalSeconds = 1f / 15f;
     private static int FogEdgeMaskId => Shader.PropertyToID("_EdgeMask");
 
     // Match-wide and server-authored so enemy NetworkHide state and every client's overlay
@@ -540,6 +634,7 @@ public class GameLoop : NetworkBehaviour
     private readonly Dictionary<GameObject, Vector2Int> lastFogCells = new();
     private bool serverFogDirty = true;
     private Coroutine serverFogCoroutine;
+    private Coroutine unitPositionSyncCoroutine;
 
     // Client: pooled 150-tile dark overlay from local-owned units plus the public smoke mirror.
     private readonly Dictionary<Vector2Int, Renderer> fogOverlayTiles = new();
@@ -564,6 +659,7 @@ public class GameLoop : NetworkBehaviour
     /// <summary>Deterministically ordered snapshot; callers cannot mutate the authoritative set.</summary>
     public IReadOnlyList<Vector2Int> ActiveSmokeCells =>
         activeSmokeCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x).ToArray();
+
     public HillControlState HillControl => replicatedHillControl.Value;
     public MatchResult? LastMatchResult { get; private set; }
 #if UNITY_EDITOR
@@ -591,10 +687,20 @@ public class GameLoop : NetworkBehaviour
         fogOfWarEnabled.OnValueChanged += OnFogOfWarEnabledChanged;
         replicatedHillControl.OnValueChanged += OnHillControlChanged;
         if (NetworkManager != null)
+        {
             NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
+            NetworkManager.OnClientConnectedCallback += OnClientConnected;
+        }
         matchEnded = false;
         LastMatchResult = null;
+        LastBattleReport = null;
+        battleReport = null;
+        openReportRound = null;
         disconnectRecoveryStarted = false;
+        rejoinHoldTeamIndex = -1;
+        rejoinHoldDeadline = 0d;
+        pendingRejoinRestores.Clear();
+        GameHUDController.Instance?.HideRejoinNotice();
         activeSmokeCells.Clear();
         ClearSmokeScreenVisualsLocal();
 
@@ -616,6 +722,11 @@ public class GameLoop : NetworkBehaviour
             MatchOptions.SetCurrent(replicatedMatchOptions.Value);
         }
 
+        // The field initializer ran before the replicated options arrived, so a client would have
+        // built its deployment from whatever board it last had selected locally. Rebuild now that
+        // the server's map is known.
+        spawns = CreateSpawnLayout(devMode);
+
         if (
             IsServer
             && GetHumanClientIds()
@@ -628,15 +739,24 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        // The tutorial only ever runs on a loopback host, so one director both scripts the
+        // opponent server-side and drives the coaching prompts on the same client.
+        if (TutorialSession.IsActive && tutorialDirector == null)
+            tutorialDirector = gameObject.AddComponent<TutorialDirector>();
+
         GameHUDController.Instance?.SetMatchSummary(replicatedMatchOptions.Value);
         RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
         Unit.RefreshAllTeamPresentation();
+
+        if (IsServer)
+            StartServerUnitPositionSync();
 
         if (IsClient && FogOfWarEnabled)
             StartClientFog();
 
         if (IsServer)
         {
+            BeginReconnectGraceForMatch();
             StartGame();
             StartCoroutine(StartGameLoopAfterFogSetup());
             InitializeCameraPosition();
@@ -660,7 +780,16 @@ public class GameLoop : NetworkBehaviour
         fogOfWarEnabled.OnValueChanged -= OnFogOfWarEnabledChanged;
         replicatedHillControl.OnValueChanged -= OnHillControlChanged;
         if (NetworkManager != null)
+        {
             NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
+            NetworkManager.OnClientConnectedCallback -= OnClientConnected;
+        }
+        if (IsServer)
+            ReconnectGrace.Server.EndMatch();
+        rejoinHoldTeamIndex = -1;
+        rejoinHoldDeadline = 0d;
+        pendingRejoinRestores.Clear();
+        GameHUDController.Instance?.HideRejoinNotice();
         StopServerFog(false);
         forceRevealUntil.Clear();
         forceRevealToTeamUntil.Clear();
@@ -721,6 +850,29 @@ public class GameLoop : NetworkBehaviour
 
         teamParticipants[teamIndex] = participantId;
         teamRosters[teamIndex] = (int[])roster.Clone();
+    }
+
+    /// <summary>
+    /// Repoints an already configured team at a new participant ID, keeping its roster. Reconnects
+    /// arrive with a fresh NGO client ID, and the crew that is already on the board belongs to the
+    /// seat rather than to the connection that used to hold it.
+    /// </summary>
+    public static void ReassignTeamParticipant(int teamIndex, ulong participantId)
+    {
+        if (teamIndex < 0 || teamIndex >= TeamCount)
+            throw new System.ArgumentOutOfRangeException(nameof(teamIndex));
+        if (!teamParticipants.ContainsKey(teamIndex))
+            throw new System.InvalidOperationException("That logical team is not configured.");
+        if (participantId == BotParticipantId)
+            throw new System.ArgumentException("A seat cannot be reassigned to the bot.");
+        if (teamParticipants.Any(entry => entry.Key != teamIndex && entry.Value == participantId))
+        {
+            throw new System.ArgumentException(
+                "A participant cannot be assigned to more than one logical team."
+            );
+        }
+
+        teamParticipants[teamIndex] = participantId;
     }
 
     private void EnsureTeamConfiguration()
@@ -889,6 +1041,8 @@ public class GameLoop : NetworkBehaviour
             }
         }
 
+        SetFieldedCardCountClientRpc(UnitsPerTeamThisMatch);
+
         // Setup teams by explicit logical index.
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
@@ -922,15 +1076,16 @@ public class GameLoop : NetworkBehaviour
                 $"Team {teamIndex} has an invalid roster ({rosterValidation.Reason})."
             );
         }
-        if (spawnPositions == null || spawnPositions.Count != RosterRules.UnitsPerPlayer)
+        int fieldedCount = Mathf.Min(teamUnits.Length, UnitsPerTeamThisMatch);
+        if (spawnPositions == null || spawnPositions.Count < fieldedCount)
         {
             throw new System.InvalidOperationException(
-                $"Team {teamIndex} requires exactly {RosterRules.UnitsPerPlayer} spawn positions."
+                $"Team {teamIndex} requires at least {fieldedCount} spawn positions."
             );
         }
 
-        allTeamUnitObjects[teamIndex] = new GameObject[teamUnits.Length];
-        for (int i = 0; i < teamUnits.Length; i++)
+        allTeamUnitObjects[teamIndex] = new GameObject[fieldedCount];
+        for (int i = 0; i < fieldedCount; i++)
         {
             NetworkObject.VisibilityDelegate visibility = IsAuthorizedGameplayObserver;
             GameObject unit = IsBotParticipant(participantId)
@@ -972,18 +1127,28 @@ public class GameLoop : NetworkBehaviour
                 SetUnitCardClientRpc(
                     i,
                     teamUnits[i],
-                    unitIdentity.RemainingAbilityUses,
+                    unitIdentity.AbilityCooldownRoundsRemaining,
                     NetworkHelper.ToClient(participantId)
                 );
             }
         }
     }
 
+    /// <summary>
+    /// Trims both card strips to the crew size this match actually fields, so the tutorial's lone
+    /// unit does not sit beside four empty slots.
+    /// </summary>
+    [ClientRpc]
+    void SetFieldedCardCountClientRpc(int fieldedCount)
+    {
+        GameHUDController.Instance?.SetFieldedCardCount(fieldedCount);
+    }
+
     [ClientRpc]
     void SetUnitCardClientRpc(
         int cardIndex,
         int unitIndex,
-        int remainingAbilityUses,
+        int cooldownRoundsRemaining,
         ClientRpcParams clientRpcParams = default
     )
     {
@@ -995,7 +1160,7 @@ public class GameLoop : NetworkBehaviour
             cardIndex,
             unitData,
             hasAbility,
-            remainingAbilityUses
+            cooldownRoundsRemaining
         );
     }
 
@@ -1075,7 +1240,7 @@ public class GameLoop : NetworkBehaviour
             health.MaxHealth,
             health.IsAlive,
             unit.GetComponent<Ability>() != null,
-            identity.RemainingAbilityUses,
+            identity.AbilityCooldownRoundsRemaining,
             NetworkHelper.ToClient(viewerClientId)
         );
     }
@@ -1088,7 +1253,7 @@ public class GameLoop : NetworkBehaviour
         float maxHealth,
         bool alive,
         bool hasAbility,
-        int remainingAbilityUses,
+        int cooldownRoundsRemaining,
         ClientRpcParams clientRpcParams = default
     )
     {
@@ -1099,7 +1264,7 @@ public class GameLoop : NetworkBehaviour
             cardIndex,
             allUnits.units[unitIndex],
             hasAbility,
-            remainingAbilityUses,
+            cooldownRoundsRemaining,
             currentHealth,
             maxHealth,
             alive
@@ -1107,7 +1272,10 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void SetCardsInteractableClientRpc(bool interactable)
+    private void SetCardsInteractableClientRpc(
+        bool interactable,
+        ClientRpcParams clientRpcParams = default
+    )
     {
         GameHUDController.Instance?.SetCardsInteractable(interactable);
     }
@@ -1149,6 +1317,14 @@ public class GameLoop : NetworkBehaviour
         GameHUDController.Instance?.SetCardDisabled(unitIndex, disabled);
     }
 
+    public static float GetPlanningDurationSeconds(int largestLivingTeamSize)
+    {
+        return Mathf.Max(
+            minimumPlanningTime,
+            planningTimePerUnit * Mathf.Max(0, largestLivingTeamSize)
+        );
+    }
+
     IEnumerator GameLoopTemp()
     {
         if (!IsServer)
@@ -1157,10 +1333,24 @@ public class GameLoop : NetworkBehaviour
 
         while (!matchEnded && Enumerable.Range(0, TeamCount).All(HasLivingTeamUnits))
         {
+            if (IsHoldingForRejoin)
+            {
+                yield return StartCoroutine(WaitForRejoinOrForfeit());
+                if (matchEnded || !IsSpawned || IsHoldingForRejoin)
+                    yield break;
+            }
+
             ClearActiveSmokeCells();
             roundNumber++;
+            dodgeAlertedTeamsThisRound.Clear();
             submittedTeamPaths.Clear();
+            latestTeamPlanVersions.Clear();
+            retractedTeamPathFallbacks.Clear();
+            planningChangesOpen = false;
+            planningDeadline = 0d;
             devEndPlanningNow = false;
+            resolvingOverlaps = false;
+            returnFireWindowUntil = 0f;
             currentPhase = "planning";
 
             // Fast-forward the whole simulation (movement/shooting/physics) in dev mode.
@@ -1169,9 +1359,17 @@ public class GameLoop : NetworkBehaviour
             SetCardsInteractableClientRpc(true);
             OrderStillShooting?.Invoke(true);
 
-            float timerLength = planningTimePerUnit * teamNames.Max(teamSize);
+            int largestLivingTeamSize = Enumerable
+                .Range(0, TeamCount)
+                .Max(teamIndex => GetTeamUnits(teamIndex).Count(IsLivingUnit));
+            // The tutorial is paced by the student, not a clock: the window is long enough to read
+            // a prompt in and the HUD hides the countdown, so the round ends when they lock in.
+            float timerLength = TutorialSession.IsActive
+                ? TutorialSession.PlanningSeconds
+                : GetPlanningDurationSeconds(largestLivingTeamSize);
             double startTime = NetworkManager.Singleton.ServerTime.Time;
             double endTime = startTime + timerLength;
+            planningDeadline = endTime;
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Friendly);
             setOverlayUITextClientRpc("Planning", MessagePerspective.Friendly);
@@ -1183,6 +1381,18 @@ public class GameLoop : NetworkBehaviour
                     botPlans,
                     botPlayer.TeamIndex
                 );
+                latestTeamPlanVersions[botPlayer.TeamIndex] = 0;
+            }
+
+            // The tutorial opponent is scripted, so its orders replace whatever the bot decided.
+            // The bot is left in place to answer dodge windows, which need no scripting.
+            if (tutorialDirector != null)
+            {
+                submittedTeamPaths[OpponentTeamIndex] = SanitizePaths(
+                    tutorialDirector.CreateEnemyPlan(),
+                    OpponentTeamIndex
+                );
+                latestTeamPlanVersions[OpponentTeamIndex] = 0;
             }
 
             if (devMode)
@@ -1195,31 +1405,69 @@ public class GameLoop : NetworkBehaviour
                 if (devSubmittedPaths != null)
                     devEndPlanningNow = true;
 
-                while (!devEndPlanningNow && devMode && !matchEnded)
+                while (!devEndPlanningNow && devMode && !matchEnded && !IsHoldingForRejoin)
                     yield return null;
             }
             else
             {
-                StartPlanningClientRpc(endTime);
+                planningChangesOpen = true;
+                StartPlanningClientRpc(endTime, roundNumber);
 
+                double allTeamsCommittedAt = -1d;
                 while (
-                    submittedTeamPaths.Count < TeamCount
-                    && !matchEnded
+                    !matchEnded
+                    && !IsHoldingForRejoin
+                    && NetworkManager.Singleton != null
                     && NetworkManager.Singleton.ServerTime.Time < endTime + 1
                 )
                 {
+                    double now = NetworkManager.Singleton.ServerTime.Time;
+                    if (submittedTeamPaths.Count >= TeamCount)
+                    {
+                        if (allTeamsCommittedAt < 0d)
+                            allTeamsCommittedAt = now;
+                        else if (now - allTeamsCommittedAt >= planningUndoGraceSeconds)
+                            break;
+                    }
+                    else
+                    {
+                        allTeamsCommittedAt = -1d;
+                    }
                     yield return null;
                 }
             }
+            planningChangesOpen = false;
 
-            if (matchEnded)
+            // A drop mid-planning unwinds the round rather than resolving it: half the board would
+            // otherwise stand still through an execution its commander never saw. The same round
+            // number is planned again from scratch once the seat is filled.
+            if (IsHoldingForRejoin && !matchEnded && IsSpawned)
+            {
+                FinishPlanningClientRpc();
+                SetCardsInteractableClientRpc(false);
+                roundNumber--;
+                continue;
+            }
+
+            if (
+                matchEnded
+                || !IsSpawned
+                || NetworkManager.Singleton == null
+                || !NetworkManager.Singleton.IsListening
+            )
+            {
                 yield break;
+            }
 
+            if (!devMode)
+                SetPlanningCommitLockedForHumanTeams();
+            FinishPlanningClientRpc();
             lastPlanningSeconds = (float)(NetworkManager.Singleton.ServerTime.Time - startTime);
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Neutral);
             SetCardsInteractableClientRpc(false);
 
+            RestoreRetractedPlanningFallbacks();
             PathsDict paths = new();
             foreach (
                 PathsDict teamPaths in submittedTeamPaths
@@ -1252,14 +1500,26 @@ public class GameLoop : NetworkBehaviour
             }
             if (matchEnded)
                 yield break;
-            activations = ConsumeAbilityUses(activations);
+            HashSet<Unit> cooldownsStartedThisRound = new();
+            activations = StartAbilityCooldowns(activations, cooldownsStartedThisRound);
 
             // Dodge telegraphs are planning aids, not execution VFX. Clear them on every client
             // before movement and abilities start so lines/discs cannot linger into resolution.
             HideAbilityTelegraphsClientRpc();
             currentPhase = "executing";
-            ActivateSmokeScreens(activations);
+            // Smoke is thrown now rather than placed, so each screen registers when its own
+            // canister lands instead of all of them up front. The window has to stay open for as
+            // long as abilities are still resolving.
+            acceptingSmokeRegistrations = true;
             setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
+
+            // Last word on allied destinations before anyone marches: dodge dives and bot orders
+            // reach this point without ever having passed through the planning-phase rule.
+            ApplyFriendlyEndCellSeparation(paths);
+            Dictionary<GameObject, Vector2Int> cellsBeforeExecution = CaptureUnitCells();
+
+            // Both crews' final orders, captured while dives are still distinguishable from moves.
+            RecordBattleReportPlans(paths);
 
             ExecuteMoves(paths);
 
@@ -1269,14 +1529,24 @@ public class GameLoop : NetworkBehaviour
                 StartCoroutine(RunAbility(activation.unit, activation.square, activation.data));
             }
 
-            while (!matchEnded && (CheckStillShooting() || runningAbilities > 0))
+            StartCoroutine(ResolveUnitOverlaps(cellsBeforeExecution));
+
+            while (
+                !matchEnded
+                && (
+                    CheckStillShooting()
+                    || runningAbilities > 0
+                    || resolvingOverlaps
+                    || IsReturnFireWindowOpen
+                )
+            )
             {
                 //THINKING: ability activates such that theres movement/gameplay extension
                 //If moving continues during this time restart checkStillMoving
-                if (CheckStillMoving())
+                if (CheckStillMoving() || IsReturnFireWindowOpen)
                 {
                     OrderContinueShooting();
-                    while (CheckStillMoving())
+                    while (CheckStillMoving() || IsReturnFireWindowOpen)
                     {
                         yield return null;
                     }
@@ -1298,7 +1568,10 @@ public class GameLoop : NetworkBehaviour
             if (matchEnded)
                 yield break;
 
+            acceptingSmokeRegistrations = false;
             HideAbilityTelegraphsClientRpc();
+            TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
+            RecordBattleReportOutcomes();
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
             // path resolves a survivor or simultaneous-wipe draw.
@@ -1320,41 +1593,15 @@ public class GameLoop : NetworkBehaviour
         EndGame();
     }
 
-    private void ActivateSmokeScreens(
-        IEnumerable<(GameObject unit, Vector3 square, UnitData data)> activations
-    )
-    {
-        bool registeredAny = false;
-        acceptingSmokeRegistrations = true;
-        try
-        {
-            foreach (var activation in activations)
-            {
-                Smoke smoke =
-                    activation.unit != null ? activation.unit.GetComponent<Smoke>() : null;
-                registeredAny |= smoke != null && smoke.RegisterTargetFootprint(activation.square);
-            }
-        }
-        finally
-        {
-            acceptingSmokeRegistrations = false;
-        }
-
-        if (registeredAny)
-        {
-            RefreshServerFogForSmokeChange();
-            ShowSmokeScreenClientRpc(
-                activeSmokeCells
-                    .OrderBy(cell => cell.y)
-                    .ThenBy(cell => cell.x)
-                    .Select(gridCoordToWorld)
-                    .ToArray()
-            );
-        }
-    }
-
     /// <summary>
-    /// Server-only mutation seam used by Smoke during the post-dodge, pre-movement activation window.
+    /// Server-only mutation seam used by Smoke when its thrown canister lands. Deployment follows
+    /// the throw rather than the round, so the cloud a player can see and the occluder that stops a
+    /// shot begin together; the window stays open for as long as abilities are resolving.
+    /// <para>
+    /// Clients are handed the whole active set rather than the newly added cells, because both
+    /// commanders can land a canister in the same round and the visual is rebuilt from scratch each
+    /// time it is sent.
+    /// </para>
     /// </summary>
     public bool TryRegisterSmokeFootprint(Vector2Int center)
     {
@@ -1373,7 +1620,36 @@ public class GameLoop : NetworkBehaviour
         {
             activeSmokeCells.Add(cell);
         }
+
+        RefreshServerFogForSmokeChange();
+        if (IsSpawned && NetworkManager != null && NetworkManager.IsListening)
+        {
+            ShowSmokeScreenClientRpc(
+                activeSmokeCells
+                    .OrderBy(cell => cell.y)
+                    .ThenBy(cell => cell.x)
+                    .Select(gridCoordToWorld)
+                    .ToArray()
+            );
+        }
         return true;
+    }
+
+    /// <summary>
+    /// Server-only seam for an ability that sets its caster down somewhere new. The caster starts
+    /// shooting the moment it lands, so without this the round would let a jump come down among
+    /// units that have already been ordered to cease fire and empty a magazine into them unanswered.
+    /// Holding the window open gives whoever it landed next to the same chance to shoot back.
+    /// </summary>
+    public void HoldReturnFireWindow()
+    {
+        if (!IsServer || matchEnded || currentPhase != "executing")
+            return;
+
+        returnFireWindowUntil = Mathf.Max(
+            returnFireWindowUntil,
+            Time.time + AbilityLandingReturnFireSeconds
+        );
     }
 
     public bool IsSmokeCellActive(Vector2Int cell)
@@ -1437,7 +1713,10 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void ShowSmokeScreenClientRpc(Vector3[] cellWorldPositions)
+    private void ShowSmokeScreenClientRpc(
+        Vector3[] cellWorldPositions,
+        ClientRpcParams clientRpcParams = default
+    )
     {
         ClearSmokeScreenVisualsLocal();
         if (!IsClient)
@@ -1448,38 +1727,12 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
-        clientSmokeVisualRoot = new GameObject("SmokeScreenVisuals");
-        clientSmokeVisualRoot.transform.SetParent(transform, true);
-        clientSmokeVisualMaterial = new Material(Shader.Find("Sprites/Default"))
-        {
-            name = "Smoke Screen Visual (Runtime)",
-            color = new Color(0.55f, 0.65f, 0.68f, 0.46f),
-        };
-
         foreach (Vector3 cellWorldPosition in cellWorldPositions)
-        {
-            Vector2Int cell = GridSystem.ConvertToGridCoords(cellWorldPosition);
-            clientSmokeCells.Add(cell);
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            marker.name = $"SmokeCell_{cell.x}_{cell.y}";
-            marker.layer = 0;
-            marker.transform.SetParent(clientSmokeVisualRoot.transform, true);
-            marker.transform.position = cellWorldPosition + Vector3.up * 0.22f;
-            marker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            marker.transform.localScale = Vector3.one * (cellSize * 0.92f);
+            clientSmokeCells.Add(GridSystem.ConvertToGridCoords(cellWorldPosition));
 
-            Collider markerCollider = marker.GetComponent<Collider>();
-            if (markerCollider != null)
-            {
-                markerCollider.enabled = false;
-                Destroy(markerCollider);
-            }
-
-            Renderer markerRenderer = marker.GetComponent<Renderer>();
-            markerRenderer.sharedMaterial = clientSmokeVisualMaterial;
-            markerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            markerRenderer.receiveShadows = false;
-        }
+        clientSmokeVisualRoot = SmokeScreenVisual
+            .Create(transform, cellWorldPositions, cellSize)
+            .gameObject;
 
         RefreshClientFogForSmokeChange();
     }
@@ -1497,15 +1750,10 @@ public class GameLoop : NetworkBehaviour
 
         if (clientSmokeVisualRoot != null)
         {
+            // The visual owns its runtime materials and releases them with the object.
             clientSmokeVisualRoot.SetActive(false);
             Destroy(clientSmokeVisualRoot);
             clientSmokeVisualRoot = null;
-        }
-
-        if (clientSmokeVisualMaterial != null)
-        {
-            Destroy(clientSmokeVisualMaterial);
-            clientSmokeVisualMaterial = null;
         }
     }
 
@@ -1551,24 +1799,53 @@ public class GameLoop : NetworkBehaviour
         return activations;
     }
 
-    private List<(GameObject unit, Vector3 square, UnitData data)> ConsumeAbilityUses(
-        IEnumerable<(GameObject unit, Vector3 square, UnitData data)> activations
+    private List<(GameObject unit, Vector3 square, UnitData data)> StartAbilityCooldowns(
+        IEnumerable<(GameObject unit, Vector3 square, UnitData data)> activations,
+        ISet<Unit> startedThisRound
     )
     {
-        List<(GameObject unit, Vector3 square, UnitData data)> consumed = new();
+        List<(GameObject unit, Vector3 square, UnitData data)> started = new();
         foreach (var activation in activations)
         {
             Unit identity = activation.unit != null ? activation.unit.GetComponent<Unit>() : null;
-            if (identity == null || !identity.TryConsumeAbilityUse())
+            if (identity == null || !identity.TryStartAbilityCooldown())
                 continue;
 
-            consumed.Add(activation);
-            NotifyAbilityUsesChanged(activation.unit, identity.RemainingAbilityUses);
+            started.Add(activation);
+            startedThisRound?.Add(identity);
+            NotifyAbilityCooldownChanged(
+                activation.unit,
+                identity.AbilityCooldownRoundsRemaining
+            );
         }
-        return consumed;
+        return started;
     }
 
-    private void NotifyAbilityUsesChanged(GameObject unit, int remainingUses)
+    private void TickAbilityCooldownsAfterRound(ISet<Unit> startedThisRound)
+    {
+        if (!IsServer)
+            return;
+
+        foreach (var teamEntry in allTeamUnitObjects.OrderBy(entry => entry.Key))
+        {
+            foreach (GameObject unit in teamEntry.Value ?? System.Array.Empty<GameObject>())
+            {
+                Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+                if (
+                    identity == null
+                    || (startedThisRound != null && startedThisRound.Contains(identity))
+                    || !identity.TickAbilityCooldownRound()
+                )
+                {
+                    continue;
+                }
+
+                NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
+            }
+        }
+    }
+
+    private void NotifyAbilityCooldownChanged(GameObject unit, int remainingRounds)
     {
         if (!IsServer || unit == null || NetworkManager == null)
             return;
@@ -1585,7 +1862,11 @@ public class GameLoop : NetworkBehaviour
                 continue;
             }
 
-            SetCardAbilityUsesClientRpc(cardIndex, remainingUses, NetworkHelper.ToClient(clientId));
+            SetCardAbilityCooldownClientRpc(
+                cardIndex,
+                remainingRounds,
+                NetworkHelper.ToClient(clientId)
+            );
             break;
         }
 
@@ -1593,13 +1874,13 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void SetCardAbilityUsesClientRpc(
+    private void SetCardAbilityCooldownClientRpc(
         int cardIndex,
-        int remainingUses,
+        int remainingRounds,
         ClientRpcParams clientRpcParams = default
     )
     {
-        GameHUDController.Instance?.SetCardAbilityUses(cardIndex, remainingUses);
+        GameHUDController.Instance?.SetCardAbilityCooldown(cardIndex, remainingRounds);
     }
 
     IEnumerator RunAbility(GameObject unit, Vector3 square, UnitData data)
@@ -1632,8 +1913,7 @@ public class GameLoop : NetworkBehaviour
         int teamIndex
     )
     {
-        Color teamColor =
-            teamIndex == HostTeamIndex ? new Color(0.22f, 0.78f, 1f) : new Color(1f, 0.23f, 0.33f);
+        Color teamColor = GetTeamColorForViewer(teamIndex);
         StartCoroutine(FlashAbilityCasterWhenVisible(unitReference));
         ImpactShockwave.Spawn(activationPosition, teamColor, 1.8f, 0.45f);
     }
@@ -1684,7 +1964,8 @@ public class GameLoop : NetworkBehaviour
     /// clients, alerts enemies inside each ability's responseRange (radius, or line for
     /// responseDistLine abilities), and gives each threatened client timeDivePerUnit × alerted
     /// units to draw dive paths (max diveRange cells, executed at diveSpeed). A submitted dive
-    /// replaces that unit's planned move and cancels its own ability plan. In dev mode the window
+    /// replaces that unit's planned move, cancels its own ability plan, and costs the dodger
+    /// <see cref="DodgeRecoverySeconds"/> on the floor before it can shoot. In dev mode the window
     /// waits indefinitely for DevInput.SubmitDodge() instead of a wall-clock timer.
     /// </summary>
     IEnumerator RunDodgePhase(
@@ -1693,9 +1974,12 @@ public class GameLoop : NetworkBehaviour
     )
     {
         currentPhase = "dodging";
+        HidePlanningCommitClientRpc();
 
         // Telegraph every activation to all clients (both players see what's coming — the
         // counterplay window is the point; the Sniper's lock laser is the model).
+        dodgeWindowEndTime = 0d;
+        activeTelegraphs.Clear();
         foreach (var (unit, square, data) in activations)
         {
             Vector3 effectSquare = ResolveAbilityEffectSquare(unit, square, data);
@@ -1705,12 +1989,24 @@ public class GameLoop : NetworkBehaviour
             Vector3 telegraphOrigin = data.responseDistLine
                 ? unit.transform.position
                 : effectSquare;
+            bool isSmokeScreen = unit.GetComponent<Smoke>() != null;
+            // Kept so a rejoining seat can be shown the same already-sanitized payload rather
+            // than having the caster's position re-derived for it.
+            activeTelegraphs.Add(
+                (
+                    telegraphOrigin,
+                    effectSquare,
+                    data.abilityRadius,
+                    data.responseDistLine,
+                    isSmokeScreen
+                )
+            );
             ShowAbilityTelegraphClientRpc(
                 telegraphOrigin,
                 effectSquare,
                 data.abilityRadius,
                 data.responseDistLine,
-                unit.GetComponent<Smoke>() != null
+                isSmokeScreen
             );
         }
 
@@ -1757,6 +2053,7 @@ public class GameLoop : NetworkBehaviour
         dodgeAlerted = dodgeAlerted
             .Where(kvp => kvp.Value.Count > 0)
             .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        dodgeAlertedTeamsThisRound.UnionWith(dodgeAlerted.Keys);
 
         if (dodgeAlerted.Count == 0)
         {
@@ -1779,6 +2076,10 @@ public class GameLoop : NetworkBehaviour
             .Select(identity => identity.TeamIndex)
             .ToHashSet();
         SetDodgeGuidanceForHumanTeams(casterTeamsAwaitingDodge);
+        // Kept for the length of the window so a seat that comes back inside it can be told the
+        // same thing it was told when the window opened.
+        dodgeCasterTeams.Clear();
+        dodgeCasterTeams.UnionWith(casterTeamsAwaitingDodge);
 
         if (
             botPlayer != null
@@ -1798,6 +2099,26 @@ public class GameLoop : NetworkBehaviour
             dodgeResponsesReceived.Add(botPlayer.TeamIndex);
         }
 
+        // The tutorial's opponent dives toward the student rather than simply clear of the blast,
+        // so the round it throws its own ability opens from a range that actually threatens them.
+        if (
+            tutorialDirector != null
+            && dodgeAlerted.TryGetValue(OpponentTeamIndex, out HashSet<GameObject> taughtAlerted)
+        )
+        {
+            PathsDict scriptedDives = SanitizePaths(
+                tutorialDirector.CreateEnemyDodge(taughtAlerted, activations, maxDiveRangeThisRound),
+                OpponentTeamIndex,
+                maxDiveRangeThisRound
+            );
+            foreach (var kvp in scriptedDives)
+            {
+                if (taughtAlerted.Contains(kvp.Key))
+                    dodgeDivePaths[kvp.Key] = kvp.Value;
+            }
+            dodgeResponsesReceived.Add(OpponentTeamIndex);
+        }
+
         if (devMode)
         {
             bool humanResponseNeeded = dodgeAlerted.Keys.Any(teamIndex =>
@@ -1813,8 +2134,13 @@ public class GameLoop : NetworkBehaviour
         else
         {
             int mostAlerted = dodgeAlerted.Values.Max(set => set.Count);
-            float window = activations.Max(entry => entry.data.timeDivePerUnit) * mostAlerted;
+            // Three seconds is no time at all to read a first prompt and answer it, so the tutorial
+            // window is effectively open-ended; the client closes it the moment a dive is drawn.
+            float window = TutorialSession.IsActive
+                ? TutorialSession.PlanningSeconds
+                : activations.Max(entry => entry.data.timeDivePerUnit) * mostAlerted;
             double endTime = NetworkManager.Singleton.ServerTime.Time + window;
+            dodgeWindowEndTime = endTime;
 
             foreach (var kvp in dodgeAlerted)
             {
@@ -1840,10 +2166,12 @@ public class GameLoop : NetworkBehaviour
                 );
             }
 
+            // Reads the field rather than the local so a window extended after it opened (a
+            // returning seat, or the dev hook) is waited out rather than closed on the old value.
             while (
                 dodgeResponsesReceived.Count < dodgeAlerted.Count
                 && !matchEnded
-                && NetworkManager.Singleton.ServerTime.Time < endTime + 1
+                && NetworkManager.Singleton.ServerTime.Time < dodgeWindowEndTime + 1
             )
             {
                 yield return null;
@@ -1862,6 +2190,8 @@ public class GameLoop : NetworkBehaviour
         SetDodgeAlerts(false);
         dodgeAlerted = null;
         dodgeDivePaths = null;
+        dodgeWindowEndTime = 0d;
+        dodgeCasterTeams.Clear();
     }
 
     public static string GetDodgeGuidance(bool isThreatened, bool isCaster)
@@ -1901,7 +2231,8 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
-    // Units whose movement this round is a dodge dive (executed at diveSpeed).
+    // Units whose movement this round is a dodge dive (executed at diveSpeed, then held down for
+    // DodgeRecoverySeconds before the dodger can shoot).
     private readonly HashSet<GameObject> diveUnitsThisRound = new();
 
     /// <summary>
@@ -1916,7 +2247,7 @@ public class GameLoop : NetworkBehaviour
         return !isAbilityPlan && path != null && path.Count > 1;
     }
 
-    void SetDodgeAlerts(bool active)
+    void SetDodgeAlerts(bool active, ulong? onlyClientId = null)
     {
         if (dodgeAlerted == null)
             return;
@@ -1926,6 +2257,7 @@ public class GameLoop : NetworkBehaviour
                 !TryGetHumanClientId(teamEntry.Key, out ulong clientId)
                 || NetworkManager.Singleton == null
                 || !NetworkManager.Singleton.ConnectedClients.ContainsKey(clientId)
+                || (onlyClientId.HasValue && clientId != onlyClientId.Value)
             )
             {
                 continue;
@@ -1965,10 +2297,18 @@ public class GameLoop : NetworkBehaviour
         if (units.Count == 0)
             return;
 
+        // A settings or controls sheet left open would cost this player the window.
+        GameHUDController.Instance?.DismissOpenSheets();
+
         StartCoroutine(
             transform
                 .GetComponent<PlanMovement>()
-                .StartPlanning(paths => SendDodgePathsToServerRpc(paths), endTime, units, diveRange)
+                .StartPlanning(
+                    (paths, _) => SendDodgePathsToServerRpc(paths),
+                    endTime,
+                    units,
+                    diveRange
+                )
         );
     }
 
@@ -2106,7 +2446,8 @@ public class GameLoop : NetworkBehaviour
         Vector3 square,
         float radiusCells,
         bool line,
-        bool isSmokeScreen
+        bool isSmokeScreen,
+        ClientRpcParams clientRpcParams = default
     )
     {
         if (line)
@@ -2131,7 +2472,7 @@ public class GameLoop : NetworkBehaviour
             GameObject laserObject = new("AbilityTelegraphLine");
             LineRenderer lr = laserObject.AddComponent<LineRenderer>();
             lr.material = new Material(Shader.Find("Sprites/Default"));
-            lr.startColor = lr.endColor = new Color(1f, 0.5f, 0f, 0.8f);
+            lr.startColor = lr.endColor = TeamPalette.AbilityTelegraph.WithAlpha(0.8f);
             lr.startWidth = lr.endWidth = 0.15f;
             lr.positionCount = 2;
             lr.SetPosition(0, casterPos);
@@ -2160,7 +2501,7 @@ public class GameLoop : NetworkBehaviour
             marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
             var rend = marker.GetComponent<Renderer>();
             rend.material = new Material(Shader.Find("Sprites/Default"));
-            rend.material.color = new Color(1f, 0.5f, 0f, 0.5f);
+            rend.material.color = TeamPalette.AbilityTelegraph.WithAlpha(0.5f);
             clientTelegraphs.Add(marker);
         }
         else
@@ -2179,7 +2520,9 @@ public class GameLoop : NetworkBehaviour
         GameObject marker = new($"AbilityTelegraphCell_{cell.x}_{cell.y}");
         LineRenderer lineRenderer = marker.AddComponent<LineRenderer>();
         lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
-        lineRenderer.startColor = lineRenderer.endColor = new Color(1f, 0.5f, 0f, 0.85f);
+        lineRenderer.startColor = lineRenderer.endColor = TeamPalette.AbilityTelegraph.WithAlpha(
+            0.85f
+        );
         lineRenderer.startWidth = lineRenderer.endWidth = 0.08f;
         lineRenderer.loop = true;
         lineRenderer.positionCount = 4;
@@ -2299,6 +2642,7 @@ public class GameLoop : NetworkBehaviour
             controllingTeamIndex
         );
         replicatedHillControl.Value = next;
+        RecordBattleReportHill(next);
 
         if (next.Status != HillControlStatus.Controlled || next.Streak < HillControlRoundsToWin)
         {
@@ -2387,7 +2731,7 @@ public class GameLoop : NetworkBehaviour
         }
 
         Debug.Log(
-            $"[GameLoop] Respawned {respawned.Count} unit(s) without restoring ability charges."
+            $"[GameLoop] Respawned {respawned.Count} unit(s) without resetting ability cooldowns."
         );
     }
 
@@ -2464,38 +2808,76 @@ public class GameLoop : NetworkBehaviour
         if (hillOverlayRoot != null)
             return;
 
-        Shader glowShader = Shader.Find("BattlePlan/GroundGlow");
-        if (glowShader == null)
+        Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
+        if (unlit == null)
         {
             Debug.LogError(
-                "[GameLoop] BattlePlan/GroundGlow shader is required for the hill overlay."
+                "[GameLoop] URP Unlit shader is required for the hill boundary."
             );
             return;
         }
 
         hillOverlayRoot = new GameObject("KingOfTheHillOverlay");
         hillOverlayRoot.transform.SetParent(transform, true);
-        hillOverlayMaterial = new Material(glowShader) { name = "KingOfTheHillOverlay (Runtime)" };
+        hillOverlayMaterial = new Material(unlit) { name = "KingOfTheHillBoundary (Runtime)" };
         hillOverlayProperties = new MaterialPropertyBlock();
 
-        foreach (
-            Vector2Int cell in KingOfTheHillCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x)
-        )
-        {
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            marker.name = $"HillCell_{cell.x}_{cell.y}";
-            marker.transform.SetParent(hillOverlayRoot.transform, true);
-            marker.transform.position = gridCoordToWorld(cell) + Vector3.up * 0.075f;
-            marker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            marker.transform.localScale = Vector3.one * (cellSize * 0.92f);
-            Destroy(marker.GetComponent<Collider>());
+        GetHillPadBounds(out Vector3 min, out Vector3 max);
+        float y = HillBoundaryHeight;
+        float w = HillBoundaryWidth;
+        float spanX = max.x - min.x;
+        float spanZ = max.z - min.z;
+        float midX = (min.x + max.x) * 0.5f;
+        float midZ = (min.z + max.z) * 0.5f;
 
-            Renderer markerRenderer = marker.GetComponent<Renderer>();
-            markerRenderer.sharedMaterial = hillOverlayMaterial;
-            markerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            markerRenderer.receiveShadows = false;
-            hillOverlayRenderers.Add(markerRenderer);
+        // Corners are covered by the two full-length side strips, so the end strips stop short
+        // of them and no two strips overlap and double their alpha.
+        AddHillBoundaryStrip("South", new Vector3(midX, y, min.z), new Vector2(spanX, w));
+        AddHillBoundaryStrip("North", new Vector3(midX, y, max.z), new Vector2(spanX, w));
+        AddHillBoundaryStrip("West", new Vector3(min.x, y, midZ), new Vector2(w, spanZ - w * 2f));
+        AddHillBoundaryStrip("East", new Vector3(max.x, y, midZ), new Vector2(w, spanZ - w * 2f));
+    }
+
+    /// <summary>
+    /// Outer edge of the hill pad in world space, half a cell out from the outermost hill cells.
+    /// </summary>
+    private void GetHillPadBounds(out Vector3 min, out Vector3 max)
+    {
+        var first = true;
+        min = max = Vector3.zero;
+        foreach (Vector2Int cell in KingOfTheHillCells)
+        {
+            Vector3 centre = gridCoordToWorld(cell);
+            if (first)
+            {
+                min = max = centre;
+                first = false;
+                continue;
+            }
+            min = Vector3.Min(min, centre);
+            max = Vector3.Max(max, centre);
         }
+
+        float half = cellSize * 0.5f;
+        min -= new Vector3(half, 0f, half);
+        max += new Vector3(half, 0f, half);
+    }
+
+    private void AddHillBoundaryStrip(string edge, Vector3 centre, Vector2 size)
+    {
+        GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        strip.name = $"HillBoundary_{edge}";
+        strip.transform.SetParent(hillOverlayRoot.transform, true);
+        strip.transform.position = centre;
+        strip.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+        strip.transform.localScale = new Vector3(size.x, size.y, 1f);
+        Destroy(strip.GetComponent<Collider>());
+
+        Renderer stripRenderer = strip.GetComponent<Renderer>();
+        stripRenderer.sharedMaterial = hillOverlayMaterial;
+        stripRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        stripRenderer.receiveShadows = false;
+        hillOverlayRenderers.Add(stripRenderer);
     }
 
     private void UpdateKingOfTheHillOverlay(HillControlState state)
@@ -2503,27 +2885,22 @@ public class GameLoop : NetworkBehaviour
         if (hillOverlayProperties == null || hillOverlayRenderers.Count == 0)
             return;
 
+        // The pad is the one thing both seats must name the same way, so it takes the absolute
+        // team colour rather than the viewer-relative one every other team-tinted visual uses.
         bool controlled =
-            state.Status == HillControlStatus.Controlled
-            && state.ControllingTeamIndex >= 0
-            && state.ControllingTeamIndex < teamColors.Count;
+            state.Status == HillControlStatus.Controlled && state.ControllingTeamIndex >= 0;
         Color color = controlled
-            ? teamColors[state.ControllingTeamIndex]
-            : new Color(0.95f, 0.64f, 0.2f, 1f);
-        color.a = controlled ? 0.58f : 0.36f;
+            ? TeamPalette.ForTeamIndex(state.ControllingTeamIndex)
+            : HillUncontestedColour;
+        color.a = 1f;
 
         hillOverlayProperties.Clear();
-        hillOverlayProperties.SetColor(HillGlowColorId, color);
-        hillOverlayProperties.SetFloat(HillRingWidthId, 1f);
-        hillOverlayProperties.SetFloat(HillEdgeSoftnessId, controlled ? 0.32f : 0.45f);
-        hillOverlayProperties.SetFloat(HillIntensityId, controlled ? 1.25f : 0.72f);
-        hillOverlayProperties.SetFloat(HillPulseSpeedId, controlled ? 0.7f : 0f);
-        hillOverlayProperties.SetFloat(HillPulseAmountId, controlled ? 0.16f : 0f);
+        hillOverlayProperties.SetColor(HillBaseColorId, color);
 
-        foreach (Renderer markerRenderer in hillOverlayRenderers)
+        foreach (Renderer stripRenderer in hillOverlayRenderers)
         {
-            if (markerRenderer != null)
-                markerRenderer.SetPropertyBlock(hillOverlayProperties);
+            if (stripRenderer != null)
+                stripRenderer.SetPropertyBlock(hillOverlayProperties);
         }
     }
 
@@ -2559,7 +2936,7 @@ public class GameLoop : NetworkBehaviour
                     Vector2Int cell = GridSystem.ConvertToGridCoords(unit.transform.position);
                     return $"{unit.name}@{cell} active={unit.gameObject.activeSelf} "
                         + $"alive={health != null && health.IsAlive} "
-                        + $"uses={unit.RemainingAbilityUses} "
+                        + $"cooldown={unit.AbilityCooldownRoundsRemaining} "
                         + $"collider={unitCollider == null || unitCollider.enabled}";
                 })
         );
@@ -2650,6 +3027,129 @@ public class GameLoop : NetworkBehaviour
                 StartClientFog();
             else
                 StopClientFog();
+        }
+    }
+
+    /// <summary>
+    /// Starts the batched transform broadcast that replaces per-unit NetworkTransform. Runs for the
+    /// whole match regardless of the fog setting, because with fog off every unit is simply visible
+    /// to everyone rather than the broadcast being unnecessary.
+    /// </summary>
+    private void StartServerUnitPositionSync()
+    {
+        if (!IsServer || unitPositionSyncCoroutine != null)
+            return;
+
+        unitPositionSyncCoroutine = StartCoroutine(ServerUnitPositionLoop());
+    }
+
+    private void StopServerUnitPositionSync()
+    {
+        if (unitPositionSyncCoroutine == null)
+            return;
+
+        StopCoroutine(unitPositionSyncCoroutine);
+        unitPositionSyncCoroutine = null;
+    }
+
+    private IEnumerator ServerUnitPositionLoop()
+    {
+        List<ulong> ids = new();
+        List<Vector3> positions = new();
+        List<float> yaws = new();
+
+        while (IsServer && IsSpawned)
+        {
+            yield return new WaitForSeconds(UnitPositionSyncIntervalSeconds);
+
+            if (NetworkManager == null || !NetworkManager.IsListening)
+                continue;
+
+            foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+            {
+                // The host reads the authoritative transforms directly; only remote clients need a
+                // copy, and each gets only what its own team is allowed to see.
+                if (clientId == NetworkManager.ServerClientId)
+                    continue;
+
+                int viewerTeamIndex = GetTeamIndexForClient(clientId);
+                if (viewerTeamIndex < 0)
+                    continue;
+
+                ids.Clear();
+                positions.Clear();
+                yaws.Clear();
+
+                foreach (var team in allTeamUnitObjects)
+                {
+                    if (team.Value == null)
+                        continue;
+
+                    foreach (GameObject unit in team.Value)
+                    {
+                        if (unit == null || !unit.activeInHierarchy)
+                            continue;
+
+                        bool ownTeam = team.Key == viewerTeamIndex;
+                        if (
+                            !ownTeam
+                            && FogOfWarEnabled
+                            && !CanTeamObserveUnit(viewerTeamIndex, unit)
+                        )
+                        {
+                            continue;
+                        }
+
+                        NetworkObject netObj = unit.GetComponent<NetworkObject>();
+                        if (netObj == null || !netObj.IsSpawned)
+                            continue;
+
+                        ids.Add(netObj.NetworkObjectId);
+                        positions.Add(unit.transform.position);
+                        yaws.Add(unit.transform.eulerAngles.y);
+                    }
+                }
+
+                if (ids.Count > 0)
+                {
+                    SyncUnitPositionsClientRpc(
+                        ids.ToArray(),
+                        positions.ToArray(),
+                        yaws.ToArray(),
+                        NetworkHelper.ToClient(clientId)
+                    );
+                }
+            }
+        }
+    }
+
+    [ClientRpc]
+    private void SyncUnitPositionsClientRpc(
+        ulong[] unitIds,
+        Vector3[] positions,
+        float[] yaws,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        if (IsServer || NetworkManager == null || NetworkManager.SpawnManager == null)
+            return;
+
+        for (int i = 0; i < unitIds.Length; i++)
+        {
+            if (
+                !NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(
+                    unitIds[i],
+                    out NetworkObject netObj
+                )
+                || netObj == null
+            )
+            {
+                continue;
+            }
+
+            UnitTransformInterpolator
+                .For(netObj.gameObject)
+                .SetTarget(positions[i], yaws[i], UnitPositionSyncIntervalSeconds);
         }
     }
 
@@ -3248,6 +3748,7 @@ public class GameLoop : NetworkBehaviour
             viewers,
             clientSmokeCells
         );
+
         foreach (var tile in fogOverlayTiles)
         {
             Renderer tileRenderer = tile.Value;
@@ -3306,6 +3807,20 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
+    /// <summary>
+    /// Closes the tutorial sandbox once its last lesson has landed, instead of waiting for a crew
+    /// to be wiped out. The open planning session is ended first so the board stops taking orders
+    /// behind the results overlay. Server-only.
+    /// </summary>
+    public void FinishTutorial()
+    {
+        if (!IsServer || matchEnded)
+            return;
+
+        FinishPlanningClientRpc();
+        FinishGame(MatchResult.ForWinner(HostTeamIndex, MatchResultReason.TutorialComplete));
+    }
+
     private void FinishGame(MatchResult result)
     {
         if (matchEnded)
@@ -3317,12 +3832,31 @@ public class GameLoop : NetworkBehaviour
         LastMatchResult = result;
         currentPhase = "idle";
         Time.timeScale = 1f;
+
+        // Whatever the player does from the results overlay is an ordinary match, so the sandbox
+        // closes here rather than leaking its crew size into the next one.
+        if (TutorialSession.IsActive)
+        {
+            GameHUDController.Instance?.SetCoachPrompt(string.Empty);
+            GameHUDController.Instance?.SetLessonPopup(string.Empty);
+            GameHUDController.Instance?.SuppressTimer(false);
+            TutorialSession.MarkCompleted();
+            TutorialSession.End();
+        }
+
         ClearActiveSmokeCells();
         SetFogOfWarEnabled(false);
         forceRevealUntil.Clear();
         forceRevealToTeamUntil.Clear();
         SetCardsInteractableClientRpc(false);
         HideAbilityTelegraphsClientRpc();
+
+        // A match can end mid-execution, so close the open round before the reveal ships. The
+        // report goes first: EndGameClientRpc opens the results overlay that renders it.
+        RecordBattleReportOutcomes();
+        if (battleReport != null)
+            SendBattleReportClientRpc(battleReport);
+
         EndGameClientRpc(result);
     }
 
@@ -3370,14 +3904,29 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        bool replayTutorial = tutorialDirector != null;
         ResetMatchState();
         NetworkHelper.CleanupAllNetworkObjects();
+
+        // "Play again" after the tutorial means the tutorial, not a crew-selection screen the
+        // student has never been shown. The host is still up, so the sandbox is simply rebuilt.
+        if (replayTutorial)
+        {
+            TutorialSession.Begin();
+            MatchOptions.SetCurrent(TutorialSession.BuildMatchOptions());
+            ConfigureTeam(HostTeamIndex, NetworkManager.ServerClientId, TutorialSession.BuildRoster());
+            ConfigureTeam(OpponentTeamIndex, BotParticipantId, TutorialSession.BuildRoster());
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
         NetworkManager.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
     }
 
     void ExitToMainMenu()
     {
         GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
+        ReconnectSession.Clear();
         NetworkManager networkManager = NetworkManager.Singleton;
         if (networkManager != null && networkManager.IsListening)
         {
@@ -3421,6 +3970,9 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        // Leaving on purpose closes the seat straight away rather than burning the rejoin window
+        // on somebody who has already walked away.
+        ReconnectGrace.Server.Forfeit(sender);
         DisablePlayAgainButtonClientRpc();
         NetworkManager.DisconnectClient(sender);
     }
@@ -3482,6 +4034,16 @@ public class GameLoop : NetworkBehaviour
         if (!IsServer)
         {
             disconnectRecoveryStarted = true;
+            if (!matchEnded && ReconnectSession.CanAttemptRejoin)
+            {
+                GameHUDController.Instance?.ShowRejoinNotice(
+                    "Connection lost",
+                    ReconnectGrace.GraceSeconds - ClientRejoinSafetyMarginSeconds
+                );
+                StartCoroutine(RejoinOrReturnToJoinGame());
+                return;
+            }
+
             GameHUDController.Instance?.SetPhase("Host disconnected", MessagePerspective.Enemy);
             StartCoroutine(ReturnClientToJoinGameAfterShutdown());
             return;
@@ -3497,8 +4059,421 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        if (
+            ReconnectGrace.Server.TryBeginGrace(clientId, ReconnectGrace.Now, out int heldTeamIndex)
+        )
+        {
+            BeginRejoinHold(heldTeamIndex);
+            return;
+        }
+
         int winnerTeam = GetEnemyTeamIndex(disconnectedTeam);
         FinishGame(MatchResult.ForWinner(winnerTeam, MatchResultReason.DisconnectForfeit));
+    }
+
+    private void OnClientConnected(ulong clientId)
+    {
+        if (!IsServer || !pendingRejoinRestores.Remove(clientId))
+            return;
+
+        int teamIndex = GetTeamIndexForClient(clientId);
+        if (teamIndex < 0)
+            return;
+
+        RestoreRejoinedParticipant(teamIndex, clientId);
+        if (rejoinHoldTeamIndex == teamIndex)
+            EndRejoinHold();
+    }
+
+    /// <summary>
+    /// Binds every remote human seat to the identity that connected with it. The host is skipped:
+    /// it is the server, so there is nothing left to rejoin once it goes.
+    /// </summary>
+    private void BeginReconnectGraceForMatch()
+    {
+        if (!IsServer || NetworkManager == null)
+            return;
+
+        List<(int teamIndex, ulong clientId)> seats = new();
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (
+                TryGetHumanClientId(teamIndex, out ulong clientId)
+                && clientId != NetworkManager.ServerClientId
+            )
+            {
+                seats.Add((teamIndex, clientId));
+            }
+        }
+
+        ReconnectGrace.Server.BeginMatch(seats);
+    }
+
+    private void BeginRejoinHold(int teamIndex)
+    {
+        if (rejoinHoldTeamIndex == teamIndex)
+            return;
+
+        rejoinHoldTeamIndex = teamIndex;
+        rejoinHoldDeadline = ReconnectGrace.Now + ReconnectGrace.GraceSeconds;
+        Debug.Log(
+            $"[GameLoop] Team {teamIndex} dropped; holding the match for "
+                + $"{ReconnectGrace.GraceSeconds:0}s."
+        );
+        ShowRejoinNoticeClientRpc(teamIndex, ReconnectGrace.GraceSeconds);
+    }
+
+    private void EndRejoinHold()
+    {
+        if (!IsHoldingForRejoin)
+            return;
+
+        rejoinHoldTeamIndex = -1;
+        rejoinHoldDeadline = 0d;
+        HideRejoinNoticeClientRpc();
+    }
+
+    private void ForfeitHeldSeat(int teamIndex)
+    {
+        if (ReconnectGrace.Server.TryGetSeatClientId(teamIndex, out ulong seatClientId))
+            ReconnectGrace.Server.Forfeit(seatClientId);
+        pendingRejoinRestores.Clear();
+        EndRejoinHold();
+        Debug.Log($"[GameLoop] Rejoin window closed for team {teamIndex}.");
+        FinishGame(
+            MatchResult.ForWinner(
+                GetEnemyTeamIndex(teamIndex),
+                MatchResultReason.DisconnectForfeit
+            )
+        );
+    }
+
+    /// <summary>
+    /// Holds the round loop while a seat is empty. The only two ways out are the seat being filled
+    /// again and the window closing, so the player still at the board is never waiting unbounded.
+    /// </summary>
+    private IEnumerator WaitForRejoinOrForfeit()
+    {
+        currentPhase = "waiting";
+        Time.timeScale = 1f;
+        SetCardsInteractableClientRpc(false);
+        setOverlayUITextClientRpc("Opponent disconnected", MessagePerspective.Enemy);
+
+        while (IsHoldingForRejoin && !matchEnded && !disconnectRecoveryStarted && IsSpawned)
+        {
+            double now = ReconnectGrace.Now;
+            if (ReconnectGrace.Server.TryConsumeExpiredSeat(now, out int expiredTeamIndex))
+            {
+                ForfeitHeldSeat(expiredTeamIndex);
+                yield break;
+            }
+
+            // Backstop for a claimant that was approved but never finished synchronising: the seat
+            // reads as filled, so nothing above would ever expire it.
+            if (now >= rejoinHoldDeadline)
+            {
+                ForfeitHeldSeat(rejoinHoldTeamIndex);
+                yield break;
+            }
+
+            yield return null;
+        }
+    }
+
+    /// <summary>
+    /// Server: points a logical team at the client ID that just proved it owns the seat. Called
+    /// from connection approval, before NGO synchronises the connection, so the visibility delegate
+    /// already recognises the returning player when its observer set is rebuilt.
+    /// </summary>
+    public void ServerReattachParticipant(int teamIndex, ulong clientId)
+    {
+        if (
+            !IsServer
+            || teamIndex < 0
+            || teamIndex >= TeamCount
+            || IsBotParticipant(clientId)
+            || IsBotTeam(teamIndex)
+        )
+        {
+            return;
+        }
+
+        // Called from the approval callback, so this reports rather than throws: a match that can
+        // no longer place the seat must not take the connection handshake down with it.
+        if (!TryGetConfiguredParticipantId(teamIndex, out ulong seatedParticipant))
+        {
+            Debug.LogError($"[GameLoop] Team {teamIndex} is not configured; cannot reattach.");
+            return;
+        }
+
+        int alreadyHeldTeam = GetTeamIndexForClient(clientId);
+        if (alreadyHeldTeam >= 0 && alreadyHeldTeam != teamIndex)
+        {
+            Debug.LogError($"[GameLoop] Client {clientId} already holds team {alreadyHeldTeam}.");
+            return;
+        }
+
+        if (seatedParticipant != clientId)
+            ReassignTeamParticipant(teamIndex, clientId);
+        if (IsSpawned)
+        {
+            if (teamIndex == HostTeamIndex)
+                teamZeroParticipant.Value = clientId;
+            else
+                teamOneParticipant.Value = clientId;
+        }
+
+        // Ownership and per-client cards can only be restored once NGO has finished synchronising
+        // the connection, because both need the client in each object's observer set.
+        pendingRejoinRestores.Add(clientId);
+        rejoinHoldDeadline = ReconnectGrace.Now + RejoinSyncSeconds;
+        serverFogDirty = true;
+    }
+
+    /// <summary>
+    /// Hands a synchronised returning player back everything that was keyed to its old connection:
+    /// ownership of its own crew, its unit cards, the enemy contact cards, and its board camera.
+    /// Enemy visibility is left to the fog pass, which is the only thing entitled to decide it.
+    /// </summary>
+    private void RestoreRejoinedParticipant(int teamIndex, ulong clientId)
+    {
+        int[] roster = GetConfiguredRoster(teamIndex);
+        GameObject[] units = GetTeamUnits(teamIndex);
+        for (int i = 0; i < units.Length; i++)
+        {
+            GameObject unit = units[i];
+            bool living = IsLivingUnit(unit);
+            NetworkObject netObj = unit != null ? unit.GetComponent<NetworkObject>() : null;
+            if (netObj != null && netObj.IsSpawned)
+            {
+                if (living && !netObj.IsNetworkVisibleTo(clientId))
+                    netObj.NetworkShow(clientId);
+                if (netObj.OwnerClientId != clientId)
+                    netObj.ChangeOwnership(clientId);
+            }
+
+            if (roster == null || i >= roster.Length)
+                continue;
+
+            Unit unitIdentity = unit != null ? unit.GetComponent<Unit>() : null;
+            SetUnitCardClientRpc(
+                i,
+                roster[i],
+                unitIdentity != null ? unitIdentity.AbilityCooldownRoundsRemaining : 0,
+                NetworkHelper.ToClient(clientId)
+            );
+
+            // A card is only ever greyed out by the one-shot RPC fired when the unit died, so a
+            // rebuilt HUD would otherwise offer a dead slot as if it were still orderable.
+            if (!living)
+                SetCardDisabledClientRpc(i, true, NetworkHelper.ToClient(clientId));
+        }
+
+        RefreshAllEnemyUnitCards();
+        InitializeCameraPositionClientRpc(teamIndex, NetworkHelper.ToClient(clientId));
+        SetCardsInteractableClientRpc(false, NetworkHelper.ToClient(clientId));
+        if (!RestoreRejoinedDodgeWindow(teamIndex, clientId))
+        {
+            setOverlayUITextClientRpc(
+                "Reconnected",
+                MessagePerspective.Friendly,
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+
+        // A client only ever learns where smoke is from the RPC fired when the canister landed, so a
+        // seat reclaimed mid-round comes back with an empty smoke set and computes a wider vision
+        // than the server's: its fog overlay under-reports and its fog memory is gated on cells it
+        // cannot see.
+        if (activeSmokeCells.Count > 0)
+        {
+            ShowSmokeScreenClientRpc(
+                ActiveSmokeCells.Select(gridCoordToWorld).ToArray(),
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+
+        serverFogDirty = true;
+        Debug.Log($"[GameLoop] Team {teamIndex} resumed the match as client {clientId}.");
+    }
+
+    /// <summary>
+    /// Whether a returning seat may be handed the open dodge window back. Mirrors what
+    /// SendDodgePathsToServerRpc will accept from it, so the prompt is never offered for a
+    /// submission the server would refuse. The deadline is NGO server time, the clock the client
+    /// measures the prompt against; it advances on unscaled delta, so these are real seconds and
+    /// dev fast-forward does not shorten the window.
+    /// </summary>
+    public static bool CanRestoreDodgePrompt(
+        double serverTime,
+        double windowEndTime,
+        bool teamIsAlerted,
+        bool teamAlreadyAnswered
+    )
+    {
+        return teamIsAlerted
+            && !teamAlreadyAnswered
+            && windowEndTime > 0d
+            && windowEndTime - serverTime >= RejoinDodgeMinimumSeconds;
+    }
+
+    /// <summary>
+    /// Re-derives an open dodge window for a seat that came back inside it. Telegraphs go back to
+    /// anyone returning while the window stands, because they are information both players already
+    /// have. The alert icons and the dive prompt only go back when the server would still accept a
+    /// dive from this team, so a returning player is never given a prompt whose submission is
+    /// already dead. The deadline is resent verbatim, so what comes back is the remainder of the
+    /// window the opponent is playing against and never a fresh one. Returns whether the window
+    /// claimed this client's guidance line; a seat returning outside one gets the plain notice.
+    /// </summary>
+    private bool RestoreRejoinedDodgeWindow(int teamIndex, ulong clientId)
+    {
+        if (dodgeAlerted == null || currentPhase != "dodging" || NetworkManager == null)
+            return false;
+
+        ClientRpcParams target = NetworkHelper.ToClient(clientId);
+        foreach (var telegraph in activeTelegraphs)
+        {
+            ShowAbilityTelegraphClientRpc(
+                telegraph.origin,
+                telegraph.square,
+                telegraph.radiusCells,
+                telegraph.line,
+                telegraph.smokeScreen,
+                target
+            );
+        }
+
+        // devMode drives dodges from DevInput on the server, so there is no client prompt to give
+        // back. A team already counted as answered must not be prompted again: the second
+        // submission would be refused and the player would believe a dive was queued.
+        bool teamIsAlerted = dodgeAlerted.TryGetValue(teamIndex, out HashSet<GameObject> alerted);
+        bool promptRestored = false;
+        if (
+            !devMode
+            && CanRestoreDodgePrompt(
+                NetworkManager.ServerTime.Time,
+                dodgeWindowEndTime,
+                teamIsAlerted,
+                dodgeResponsesReceived.Contains(teamIndex)
+            )
+        )
+        {
+            NetworkObjectReference[] refs = alerted
+                .Select(unit => unit != null ? unit.GetComponent<NetworkObject>() : null)
+                .Where(netObj => netObj != null && netObj.IsSpawned)
+                .Select(netObj => (NetworkObjectReference)netObj)
+                .ToArray();
+            if (refs.Length > 0)
+            {
+                SetDodgeAlerts(true, clientId);
+                StartDodgePlanningClientRpc(
+                    dodgeWindowEndTime,
+                    refs,
+                    maxDiveRangeThisRound,
+                    target
+                );
+                promptRestored = true;
+                Debug.Log(
+                    $"[GameLoop] Team {teamIndex} returned inside the dodge window with "
+                        + $"{dodgeWindowEndTime - NetworkManager.ServerTime.Time:0.#}s left on it."
+                );
+            }
+        }
+
+        // Guidance follows what this seat can actually do, not what it was: the threatened line is
+        // the only one that asks for an input, so a seat whose prompt was withheld reads as the
+        // caster it is, or as waiting, rather than being told to dodge with nothing to dodge with.
+        bool isCaster = dodgeCasterTeams.Contains(teamIndex);
+        setOverlayUITextClientRpc(
+            GetDodgeGuidance(promptRestored, isCaster),
+            GetDodgeGuidancePerspective(promptRestored, isCaster),
+            target
+        );
+        return true;
+    }
+
+    [ClientRpc]
+    private void ShowRejoinNoticeClientRpc(int droppedTeamIndex, float graceSeconds)
+    {
+        GameHUDController.Instance?.HideDeployment();
+        GameHUDController.Instance?.ShowRejoinNotice(
+            LocalTeamIndex == droppedTeamIndex ? "Reconnecting" : "Opponent dropped",
+            graceSeconds
+        );
+    }
+
+    [ClientRpc]
+    private void HideRejoinNoticeClientRpc()
+    {
+        GameHUDController.Instance?.HideRejoinNotice();
+    }
+
+    /// <summary>
+    /// Client: retries the connection that just dropped for as long as the server would still hold
+    /// the seat, then gives up to the lobby rather than sitting on a dead match.
+    /// </summary>
+    private IEnumerator RejoinOrReturnToJoinGame()
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager != null && manager.IsListening && !manager.ShutdownInProgress)
+            manager.Shutdown();
+        while (manager != null && (manager.IsListening || manager.ShutdownInProgress))
+            yield return null;
+
+        double deadline =
+            ReconnectGrace.Now + ReconnectGrace.GraceSeconds - ClientRejoinSafetyMarginSeconds;
+        int attempt = 0;
+        while (manager != null && ReconnectSession.CanAttemptRejoin && ReconnectGrace.Now < deadline)
+        {
+            attempt++;
+            System.Threading.Tasks.Task preparation = ReconnectSession.PrepareTransportAsync();
+            while (!preparation.IsCompleted)
+                yield return null;
+
+            if (preparation.IsFaulted || preparation.IsCanceled)
+            {
+                Debug.LogWarning(
+                    "[GameLoop] Rejoin transport preparation failed: "
+                        + preparation.Exception?.GetBaseException().Message
+                );
+            }
+            else
+            {
+                ReconnectSession.ApplyConnectionPayload(manager);
+                if (manager.StartClient())
+                {
+                    while (
+                        manager.IsListening
+                        && !manager.IsConnectedClient
+                        && ReconnectGrace.Now < deadline
+                    )
+                    {
+                        yield return null;
+                    }
+
+                    if (manager.IsConnectedClient)
+                    {
+                        Debug.Log($"[GameLoop] Rejoined the match on attempt {attempt}.");
+                        GameHUDController.Instance?.HideRejoinNotice();
+                        yield break;
+                    }
+                }
+            }
+
+            if (manager.IsListening || manager.ShutdownInProgress)
+                manager.Shutdown();
+            while (manager.IsListening || manager.ShutdownInProgress)
+                yield return null;
+
+            yield return new WaitForSecondsRealtime(ClientRejoinRetrySeconds);
+        }
+
+        Debug.Log($"[GameLoop] Rejoin abandoned after {attempt} attempt(s).");
+        GameHUDController.Instance?.HideRejoinNotice();
+        GameHUDController.Instance?.SetPhase("Disconnected", MessagePerspective.Enemy);
+        ReconnectSession.Clear();
+        yield return StartCoroutine(ReturnClientToJoinGameAfterShutdown());
     }
 
     private IEnumerator ReturnHostToJoinGameAfterShutdown()
@@ -3547,7 +4522,7 @@ public class GameLoop : NetworkBehaviour
         if (hostTeamHasLivingUnits && opponentTeamHasLivingUnits)
         {
             throw new System.InvalidOperationException(
-                "Elimination cannot resolve while both fireteams still have living units."
+                "Elimination cannot resolve while both crews still have living units."
             );
         }
         if (hostTeamHasLivingUnits)
@@ -3558,7 +4533,7 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    void StartPlanningClientRpc(double endTime)
+    void StartPlanningClientRpc(double endTime, int planningRound)
     {
         if (LocalTeamIndex < 0)
             return;
@@ -3566,12 +4541,81 @@ public class GameLoop : NetworkBehaviour
         StartCoroutine(
             transform
                 .GetComponent<PlanMovement>()
-                .StartPlanning(paths => SendPathsToServerRpc(paths), endTime)
+                .StartPlanning(
+                    (paths, commitVersion) =>
+                        SendPathsToServerRpc(paths, planningRound, commitVersion),
+                    endTime,
+                    allowLockIn: true,
+                    unlockCallback: commitVersion =>
+                        RetractPathsServerRpc(planningRound, commitVersion),
+                    planningRound: planningRound
+                )
         );
     }
 
+    [ClientRpc]
+    void FinishPlanningClientRpc()
+    {
+        // Clear editing immediately, but leave the acknowledged LOCKED state visible for one
+        // rendered frame. Dodge also hides it synchronously before dodge planning begins.
+        transform.GetComponent<PlanMovement>()?.EndPlanningSession(hideCommit: false);
+        StartCoroutine(HidePlanningCommitAfterFrame());
+    }
+
+    private IEnumerator HidePlanningCommitAfterFrame()
+    {
+        yield return null;
+        GameHUDController.Instance?.HidePlanningCommit();
+    }
+
+    [ClientRpc]
+    void HidePlanningCommitClientRpc()
+    {
+        GameHUDController.Instance?.HidePlanningCommit();
+    }
+
+    [ClientRpc]
+    void SetPlanningCommitWaitingClientRpc(
+        int planningRound,
+        int commitVersion,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        transform
+            .GetComponent<PlanMovement>()
+            ?.NotifyPlanningCommitAccepted(planningRound, commitVersion);
+    }
+
+    [ClientRpc]
+    void SetPlanningCommitRetractedClientRpc(
+        int planningRound,
+        int commitVersion,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        transform
+            .GetComponent<PlanMovement>()
+            ?.NotifyPlanningCommitRetracted(planningRound, commitVersion);
+    }
+
+    [ClientRpc]
+    void SetPlanningCommitLockedClientRpc(
+        int planningRound,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        transform
+            .GetComponent<PlanMovement>()
+            ?.NotifyPlanningCommitFinalized(planningRound);
+    }
+
     [ServerRpc(RequireOwnership = false)]
-    void SendPathsToServerRpc(PathsDict paths, ServerRpcParams rpcParams = default)
+    void SendPathsToServerRpc(
+        PathsDict paths,
+        int planningRound,
+        int commitVersion,
+        ServerRpcParams rpcParams = default
+    )
     {
         // In dev mode DevInput drives all input; ignore mouse-driven client submissions so they
         // can't overwrite dev plans (this leaves normal gameplay untouched when devMode is off).
@@ -3580,10 +4624,141 @@ public class GameLoop : NetworkBehaviour
 
         ulong senderClientId = rpcParams.Receive.SenderClientId;
         int senderTeamIndex = GetTeamIndexForClient(senderClientId);
-        if (senderTeamIndex < 0 || IsBotTeam(senderTeamIndex))
+        if (
+            currentPhase != "planning"
+            || planningRound != roundNumber
+            || commitVersion <= 0
+            || !planningChangesOpen
+            || NetworkManager == null
+            || !NetworkManager.ConnectedClients.ContainsKey(senderClientId)
+            || senderTeamIndex < 0
+            || IsBotTeam(senderTeamIndex)
+            || submittedTeamPaths.ContainsKey(senderTeamIndex)
+            || !IsNewerPlanningCommitVersion(senderTeamIndex, commitVersion)
+        )
+        {
+            return;
+        }
+
+        submittedTeamPaths[senderTeamIndex] = SanitizePaths(
+            paths ?? new PathsDict(),
+            senderTeamIndex
+        );
+        latestTeamPlanVersions[senderTeamIndex] = commitVersion;
+        retractedTeamPathFallbacks.Remove(senderTeamIndex);
+        NotifyPlanningCommitAccepted(senderTeamIndex, commitVersion);
+    }
+
+    private bool IsNewerPlanningCommitVersion(int teamIndex, int commitVersion)
+    {
+        return !latestTeamPlanVersions.TryGetValue(teamIndex, out int latestVersion)
+            || commitVersion > latestVersion;
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    void RetractPathsServerRpc(
+        int planningRound,
+        int commitVersion,
+        ServerRpcParams rpcParams = default
+    )
+    {
+        if (devMode)
             return;
 
-        submittedTeamPaths[senderTeamIndex] = SanitizePaths(paths, senderTeamIndex);
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+        int senderTeamIndex = GetTeamIndexForClient(senderClientId);
+        bool senderIsValid =
+            NetworkManager != null
+            && NetworkManager.ConnectedClients.ContainsKey(senderClientId)
+            && senderTeamIndex >= 0
+            && !IsBotTeam(senderTeamIndex);
+        if (
+            !senderIsValid
+            || currentPhase != "planning"
+            || planningRound != roundNumber
+            || commitVersion <= 0
+            || !planningChangesOpen
+            || NetworkManager.Singleton == null
+            || NetworkManager.Singleton.ServerTime.Time >= planningDeadline
+        )
+        {
+            if (senderIsValid)
+            {
+                SetPlanningCommitLockedClientRpc(
+                    planningRound,
+                    NetworkHelper.ToClient(senderClientId)
+                );
+            }
+            return;
+        }
+
+        if (!TryRetractPlanningSubmission(senderTeamIndex, commitVersion))
+            return;
+
+        SetPlanningCommitRetractedClientRpc(
+            planningRound,
+            commitVersion,
+            NetworkHelper.ToClient(senderClientId)
+        );
+    }
+
+    private bool TryRetractPlanningSubmission(int teamIndex, int commitVersion)
+    {
+        if (
+            !latestTeamPlanVersions.TryGetValue(teamIndex, out int submittedVersion)
+            || submittedVersion != commitVersion
+            || !submittedTeamPaths.TryGetValue(teamIndex, out PathsDict submittedPaths)
+        )
+        {
+            return false;
+        }
+
+        retractedTeamPathFallbacks[teamIndex] = submittedPaths;
+        return submittedTeamPaths.Remove(teamIndex);
+    }
+
+    private void RestoreRetractedPlanningFallbacks()
+    {
+        foreach (var entry in retractedTeamPathFallbacks)
+        {
+            if (!submittedTeamPaths.ContainsKey(entry.Key))
+                submittedTeamPaths[entry.Key] = entry.Value;
+        }
+        retractedTeamPathFallbacks.Clear();
+    }
+
+    private void NotifyPlanningCommitAccepted(int senderTeamIndex, int commitVersion)
+    {
+        if (
+            TryGetHumanClientId(senderTeamIndex, out ulong senderClientId)
+            && NetworkManager != null
+            && NetworkManager.ConnectedClients.ContainsKey(senderClientId)
+        )
+        {
+            SetPlanningCommitWaitingClientRpc(
+                roundNumber,
+                commitVersion,
+                NetworkHelper.ToClient(senderClientId)
+            );
+        }
+    }
+
+    private void SetPlanningCommitLockedForHumanTeams()
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (
+                TryGetHumanClientId(teamIndex, out ulong clientId)
+                && NetworkManager != null
+                && NetworkManager.ConnectedClients.ContainsKey(clientId)
+            )
+            {
+                SetPlanningCommitLockedClientRpc(
+                    roundNumber,
+                    NetworkHelper.ToClient(clientId)
+                );
+            }
+        }
     }
 
     /// <summary>
@@ -3724,11 +4899,131 @@ public class GameLoop : NetworkBehaviour
         // Line abilities (AreaLock) use the square only as a direction anchor; others land there.
         bool wallOk =
             data.responseDistLine || !wallLayout.Contains(GridSystem.ConvertToGridCoords(square));
+        bool aimOk = data.CanTargetOwnCell || targetCell != GridSystem.ConvertToGridCoords(start);
 
-        if (!inBounds || !footprintInBounds || !inRange || !wallOk)
+        if (!inBounds || !footprintInBounds || !inRange || !wallOk || !aimOk)
             return (false, new List<Vector3> { start });
 
         return (true, new List<Vector3> { start, square });
+    }
+
+    /// <summary>
+    /// How many cells of each route may be kept so that no two of them finish on the same cell.
+    /// Routes are resolved in the order given: an earlier one keeps its destination and a later
+    /// one gives up steps until it stops somewhere unclaimed, falling back to its own starting
+    /// cell when every step of it is already spoken for. <paramref name="claimedCells"/> arrives
+    /// holding the cells of units that are not moving at all and collects each destination as it
+    /// is handed out.
+    /// </summary>
+    public static List<int> ResolveUniqueEndCellLengths(
+        IReadOnlyList<IReadOnlyList<Vector2Int>> routes,
+        ISet<Vector2Int> claimedCells = null
+    )
+    {
+        List<int> lengths = new();
+        if (routes == null)
+            return lengths;
+
+        ISet<Vector2Int> claimed = claimedCells ?? new HashSet<Vector2Int>();
+        foreach (IReadOnlyList<Vector2Int> route in routes)
+        {
+            if (route == null || route.Count == 0)
+            {
+                lengths.Add(0);
+                continue;
+            }
+
+            int endIndex = route.Count - 1;
+            while (endIndex > 0 && claimed.Contains(route[endIndex]))
+                endIndex--;
+
+            claimed.Add(route[endIndex]);
+            lengths.Add(endIndex + 1);
+        }
+        return lengths;
+    }
+
+    /// <summary>
+    /// Cuts each team's routes short until no two of its own units finish the round on the same
+    /// cell. Planning settles its own routes the same way before submitting and the bot reserves
+    /// its own destinations, so this is the authoritative backstop: a tampered submission, or a
+    /// dodge dive drawn against only the alerted part of a team, still resolves to one unit per
+    /// cell. Shorter orders are honoured first, so a unit holding its ground keeps its cell and the
+    /// one walking into it is the one cut short.
+    /// </summary>
+    void ApplyFriendlyEndCellSeparation(PathsDict paths)
+    {
+        if (paths == null)
+            return;
+
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            HashSet<Vector2Int> claimed = new();
+            List<(GameObject unit, int rosterSlot, List<Vector3> route)> movers = new();
+            GameObject[] teamUnits = GetTeamUnits(teamIndex);
+
+            for (int rosterSlot = 0; rosterSlot < teamUnits.Length; rosterSlot++)
+            {
+                GameObject unit = teamUnits[rosterSlot];
+                if (unit == null || !unit.activeInHierarchy || !IsLivingUnit(unit))
+                    continue;
+
+                // A unit with no orders, or one spending the round on an ability, never marches
+                // anywhere: ExecuteMoves keeps casters on their own cell, and the repositioning a
+                // rush or a jump does is settled afterwards by the overlap pass. Either way the
+                // cell it is standing on is held against every route.
+                if (
+                    !paths.TryGetValue(unit, out (bool, List<Vector3>) plan)
+                    || plan.Item1
+                    || plan.Item2 == null
+                    || plan.Item2.Count < 2
+                )
+                {
+                    claimed.Add(
+                        GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit))
+                    );
+                    continue;
+                }
+
+                movers.Add((unit, rosterSlot, plan.Item2));
+            }
+
+            // A shorter route has fewer cells to retreat along, so it picks its destination first.
+            // Roster slot settles two equally long routes so the outcome never depends on
+            // dictionary order.
+            movers.Sort(
+                (left, right) =>
+                {
+                    int lengthComparison = left.route.Count.CompareTo(right.route.Count);
+                    return lengthComparison != 0
+                        ? lengthComparison
+                        : left.rosterSlot.CompareTo(right.rosterSlot);
+                }
+            );
+
+            List<int> lengths = ResolveUniqueEndCellLengths(
+                movers
+                    .Select(mover =>
+                        (IReadOnlyList<Vector2Int>)
+                            mover.route.Select(GridSystem.ConvertToGridCoords).ToList()
+                    )
+                    .ToList(),
+                claimed
+            );
+
+            for (int i = 0; i < movers.Count; i++)
+            {
+                List<Vector3> route = movers[i].route;
+                if (lengths[i] >= route.Count)
+                    continue;
+
+                Debug.Log(
+                    $"[GameLoop] {movers[i].unit.name} stops {route.Count - lengths[i]} cell(s) "
+                        + "short of its order: an allied unit already ends the round there."
+                );
+                route.RemoveRange(lengths[i], route.Count - lengths[i]);
+            }
+        }
     }
 
     /// <summary>
@@ -3761,6 +5056,178 @@ public class GameLoop : NetworkBehaviour
         devEndPlanningNow = true;
         Debug.Log(
             $"[GameLoop] Dev plans submitted for {devSubmittedPaths.Count} unit(s); ending planning immediately."
+        );
+    }
+
+    /// <summary>
+    /// DEV: drops a team's human seat for real. The host kicks the connection rather than faking a
+    /// hold, so the whole path runs: NGO teardown on that client, the server's grace hold, and the
+    /// client's own retry. Server-only.
+    /// </summary>
+    public bool DevDropParticipant(int teamIndex)
+    {
+        if (!IsServer || NetworkManager == null)
+        {
+            Debug.LogWarning("[GameLoop] DevDropParticipant must be called on the server/host.");
+            return false;
+        }
+        if (matchEnded)
+        {
+            Debug.LogWarning("[GameLoop] The match has already ended.");
+            return false;
+        }
+        if (!TryGetHumanClientId(teamIndex, out ulong clientId))
+        {
+            Debug.LogWarning($"[GameLoop] Team {teamIndex} has no human seat to drop.");
+            return false;
+        }
+        if (clientId == NetworkManager.ServerClientId)
+        {
+            Debug.LogWarning("[GameLoop] The host's own seat has nothing left to rejoin.");
+            return false;
+        }
+        if (!NetworkManager.ConnectedClients.ContainsKey(clientId))
+        {
+            Debug.LogWarning($"[GameLoop] Client {clientId} is already gone.");
+            return false;
+        }
+
+        Debug.Log($"[GameLoop] Dev-dropping team {teamIndex} (client {clientId}).");
+        NetworkManager.DisconnectClient(clientId);
+        return true;
+    }
+
+    /// <summary>DEV: closes an open rejoin window now so the forfeit path resolves immediately.</summary>
+    public bool DevExpireRejoinGrace()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("[GameLoop] DevExpireRejoinGrace must be called on the server/host.");
+            return false;
+        }
+
+        bool expired = ReconnectGrace.Server.ExpireNow(ReconnectGrace.Now);
+        Debug.Log(
+            expired
+                ? "[GameLoop] Rejoin window pulled to now."
+                : "[GameLoop] No rejoin window is open."
+        );
+        return expired;
+    }
+
+    /// <summary>DEV: one-line reconnect state for DevInput.Dump().</summary>
+    public string DevDescribeRejoinState()
+    {
+        double now = ReconnectGrace.Now;
+        string hold = IsHoldingForRejoin
+            ? $"holding team {rejoinHoldTeamIndex} "
+                + $"({ReconnectGrace.Server.RemainingSeconds(now):0.#}s left)"
+            : "not holding";
+        return $"{hold}; seats: {ReconnectGrace.Server.Describe(now)}";
+    }
+
+    /// <summary>
+    /// DEV: the server's smoke footprint next to the local client's mirror of it. A seat that came
+    /// back mid-round without the resend reads server=n client=0, which is the shape of a client
+    /// computing a wider vision than the server allows.
+    /// </summary>
+    public string DevDescribeSmokeModel()
+    {
+        return $"smoke server={activeSmokeCells.Count} [{DevDescribeCells(activeSmokeCells)}] "
+            + $"client={clientSmokeCells.Count} [{DevDescribeCells(clientSmokeCells)}]";
+    }
+
+    /// <summary>
+    /// DEV: the open dodge window as the server sees it, next to what this peer was actually
+    /// handed. A seat that came back without the re-derivation reads localTelegraphs=0 prompt=no
+    /// while the server still reports the window open and the team unanswered.
+    /// </summary>
+    public string DevDescribeDodgeWindow()
+    {
+        double remaining =
+            NetworkManager != null && dodgeWindowEndTime > 0d
+                ? dodgeWindowEndTime - NetworkManager.ServerTime.Time
+                : 0d;
+        string alerted =
+            dodgeAlerted == null
+                ? "none"
+                : string.Join(
+                    ",",
+                    dodgeAlerted
+                        .OrderBy(entry => entry.Key)
+                        .Select(entry => $"team{entry.Key}x{entry.Value.Count}")
+                );
+        string answered =
+            dodgeResponsesReceived.Count == 0
+                ? "none"
+                : string.Join(",", dodgeResponsesReceived.OrderBy(teamIndex => teamIndex));
+        bool prompt = PlanMovement.Instance != null && PlanMovement.Instance.CanEditPlan;
+        return $"dodge: alerted={alerted} answered={answered} remaining={remaining:0.#}s "
+            + $"serverTelegraphs={activeTelegraphs.Count} "
+            + $"localTelegraphs={clientTelegraphs.Count} prompt={(prompt ? "live" : "no")}";
+    }
+
+    /// <summary>
+    /// DEV: pushes the open dodge window's deadline out and re-issues the prompt, so a drop and
+    /// rejoin can be driven inside a window that is otherwise only a few seconds long. Re-issuing
+    /// restarts each prompted client's planning session, so extend before anybody draws a dive.
+    /// </summary>
+    public bool DevExtendDodgeWindow(float extraSeconds)
+    {
+        if (!IsServer || NetworkManager == null)
+        {
+            Debug.LogWarning("[GameLoop] DevExtendDodgeWindow must be called on the server/host.");
+            return false;
+        }
+        if (dodgeAlerted == null || dodgeWindowEndTime <= 0d)
+        {
+            Debug.LogWarning("[GameLoop] No dodge window is open.");
+            return false;
+        }
+
+        dodgeWindowEndTime += Mathf.Max(0f, extraSeconds);
+        foreach (var teamEntry in dodgeAlerted)
+        {
+            if (
+                dodgeResponsesReceived.Contains(teamEntry.Key)
+                || !TryGetHumanClientId(teamEntry.Key, out ulong clientId)
+                || !NetworkManager.ConnectedClients.ContainsKey(clientId)
+            )
+            {
+                continue;
+            }
+
+            NetworkObjectReference[] refs = teamEntry
+                .Value.Select(unit => unit != null ? unit.GetComponent<NetworkObject>() : null)
+                .Where(netObj => netObj != null && netObj.IsSpawned)
+                .Select(netObj => (NetworkObjectReference)netObj)
+                .ToArray();
+            if (refs.Length == 0)
+                continue;
+
+            StartDodgePlanningClientRpc(
+                dodgeWindowEndTime,
+                refs,
+                maxDiveRangeThisRound,
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+
+        Debug.Log(
+            "[GameLoop] Dodge window extended to "
+                + $"{dodgeWindowEndTime - NetworkManager.ServerTime.Time:0.#}s remaining."
+        );
+        return true;
+    }
+
+    private static string DevDescribeCells(IEnumerable<Vector2Int> cells)
+    {
+        return string.Join(
+            ",",
+            cells
+                .OrderBy(cell => cell.y)
+                .ThenBy(cell => cell.x)
+                .Select(cell => $"{cell.x}:{cell.y}")
         );
     }
 
@@ -3807,6 +5274,374 @@ public class GameLoop : NetworkBehaviour
             }
         }
         diveUnitsThisRound.Clear();
+    }
+
+    // === BATTLE REPORT RECORDING (server) ===
+
+    /// <summary>
+    /// Captures roster identity once. Called on the first recorded round rather than at spawn
+    /// because units and their <see cref="Health"/> components only exist after StartGame.
+    /// </summary>
+    private void EnsureBattleReportStarted()
+    {
+        if (battleReport != null)
+            return;
+
+        battleReport = new BattleReport { gameMode = Options.gameMode };
+
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            int[] roster = GetConfiguredRoster(teamIndex);
+            GameObject[] units = GetTeamUnits(teamIndex);
+
+            for (int slot = 0; slot < units.Length; slot++)
+            {
+                Health health = units[slot] != null ? units[slot].GetComponent<Health>() : null;
+                battleReport.crew.Add(
+                    new BattleReportCrewMember
+                    {
+                        teamIndex = teamIndex,
+                        rosterSlot = slot,
+                        catalogIndex =
+                            roster != null && slot < roster.Length ? roster[slot] : -1,
+                        maxHealth = health != null ? Mathf.CeilToInt(health.MaxHealth) : 0,
+                    }
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Snapshots what every unit committed to this round. Must run after the dodge window has
+    /// folded dives into <paramref name="paths"/> and before <c>ExecuteMoves</c> clears
+    /// <c>diveUnitsThisRound</c>, because that set is the only record of who dodged.
+    /// </summary>
+    private void RecordBattleReportPlans(PathsDict paths)
+    {
+        if (!IsServer)
+            return;
+
+        EnsureBattleReportStarted();
+        if (battleReport.rounds.Count >= BattleReport.MaxRecordedRounds)
+        {
+            openReportRound = null;
+            return;
+        }
+
+        BattleReportRound round = new() { roundNumber = roundNumber };
+
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            GameObject[] units = GetTeamUnits(teamIndex);
+            for (int slot = 0; slot < units.Length; slot++)
+            {
+                GameObject unit = units[slot];
+                BattleReportEntry entry = new()
+                {
+                    teamIndex = teamIndex,
+                    rosterSlot = slot,
+                    path = new List<Vector2Int>(),
+                };
+
+                if (!IsLivingUnit(unit))
+                {
+                    entry.order = BattleReportOrder.Eliminated;
+                    round.entries.Add(entry);
+                    continue;
+                }
+
+                entry.startCell = GridSystem.ConvertToGridCoords(unit.transform.position);
+                entry.endCell = entry.startCell;
+                entry.aliveAtRoundEnd = true;
+
+                bool hasPlan = paths != null && paths.TryGetValue(unit, out var plan);
+                (bool isAbility, List<Vector3> route) = hasPlan ? paths[unit] : (false, null);
+                List<Vector2Int> cells = ToGridPath(route);
+
+                if (diveUnitsThisRound.Contains(unit))
+                {
+                    entry.order = BattleReportOrder.Dodge;
+                    entry.path = cells;
+                }
+                else if (isAbility)
+                {
+                    entry.order = BattleReportOrder.Ability;
+                    if (cells.Count >= 2)
+                    {
+                        entry.hasAbilityTarget = true;
+                        entry.abilityTarget = cells[^1];
+                    }
+                }
+                else if (cells.Count >= 2)
+                {
+                    entry.order = BattleReportOrder.Move;
+                    entry.path = cells;
+                }
+                else
+                {
+                    entry.order = BattleReportOrder.Held;
+                }
+
+                round.entries.Add(entry);
+            }
+        }
+
+        battleReport.rounds.Add(round);
+        openReportRound = round;
+    }
+
+    private static List<Vector2Int> ToGridPath(List<Vector3> route)
+    {
+        List<Vector2Int> cells = new();
+        if (route == null)
+            return cells;
+
+        foreach (Vector3 position in route)
+        {
+            Vector2Int cell = GridSystem.ConvertToGridCoords(position);
+            if (cells.Count == 0 || cells[^1] != cell)
+                cells.Add(cell);
+        }
+
+        return cells;
+    }
+
+    /// <summary>
+    /// Closes the open round with where everyone actually ended up. Idempotent, because a match
+    /// can finish mid-execution (disconnect, KOTH) and both paths need the final round recorded.
+    /// </summary>
+    private void RecordBattleReportOutcomes()
+    {
+        if (!IsServer || openReportRound == null)
+            return;
+
+        BattleReportRound round = openReportRound;
+        openReportRound = null;
+
+        for (int i = 0; i < round.entries.Count; i++)
+        {
+            BattleReportEntry entry = round.entries[i];
+            if (entry.order == BattleReportOrder.Eliminated)
+                continue;
+
+            GameObject[] units = GetTeamUnits(entry.teamIndex);
+            GameObject unit =
+                entry.rosterSlot >= 0 && entry.rosterSlot < units.Length
+                    ? units[entry.rosterSlot]
+                    : null;
+            Health health = unit != null ? unit.GetComponent<Health>() : null;
+
+            entry.aliveAtRoundEnd = IsLivingUnit(unit);
+            entry.diedThisRound = !entry.aliveAtRoundEnd;
+            entry.healthAtRoundEnd =
+                health != null ? Mathf.Max(0, Mathf.CeilToInt(health.CurrentHealth)) : 0;
+            if (unit != null)
+                entry.endCell = GridSystem.ConvertToGridCoords(unit.transform.position);
+
+            round.entries[i] = entry;
+        }
+    }
+
+    /// <summary>
+    /// Stamps the objective state onto the round that produced it. Separate from
+    /// <see cref="RecordBattleReportOutcomes"/> because the hill is scored after outcomes settle.
+    /// </summary>
+    private void RecordBattleReportHill(HillControlState state)
+    {
+        if (!IsServer || battleReport == null || battleReport.rounds.Count == 0)
+            return;
+
+        BattleReportRound round = battleReport.rounds[^1];
+        round.hillControllerTeamIndex = state.ControllingTeamIndex;
+        round.hillStreak = state.Streak;
+        round.hillContested = state.Status == HillControlStatus.Contested;
+    }
+
+    [ClientRpc]
+    private void SendBattleReportClientRpc(BattleReport report)
+    {
+        LastBattleReport = report;
+    }
+
+    /// <summary>Living units of both teams, in team then roster order.</summary>
+    private static IEnumerable<GameObject> EnumerateLivingUnits()
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            foreach (GameObject unit in GetTeamUnits(teamIndex))
+            {
+                if (unit != null && unit.activeInHierarchy && IsLivingUnit(unit))
+                    yield return unit;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The cell every living unit is standing on. Taken before execution so the overlap pass can
+    /// tell who walked into a contested cell apart from whoever was already there.
+    /// </summary>
+    private static Dictionary<GameObject, Vector2Int> CaptureUnitCells()
+    {
+        Dictionary<GameObject, Vector2Int> cells = new();
+        foreach (GameObject unit in EnumerateLivingUnits())
+            cells[unit] = GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+        return cells;
+    }
+
+    /// <summary>
+    /// Two units may not finish the round on the same cell. Allied orders are pulled apart before
+    /// execution, but the two commanders plan blind to each other and a rush or a jump sets its
+    /// caster down wherever it lands, so a round can still end with units stacked. Once nothing is
+    /// moving any more, whoever arrived on a contested cell is slid off it.
+    /// </summary>
+    IEnumerator ResolveUnitOverlaps(Dictionary<GameObject, Vector2Int> cellsBeforeExecution)
+    {
+        resolvingOverlaps = true;
+
+        // Rushes and jumps reposition their caster from inside their own coroutine, so a unit's
+        // cell is only final once movement AND every ability have finished.
+        while (!matchEnded && (CheckStillMoving() || runningAbilities > 0))
+            yield return null;
+
+        if (!matchEnded)
+        {
+            yield return StartCoroutine(
+                SlideUnitsToCells(BuildOverlapDisplacements(cellsBeforeExecution))
+            );
+        }
+
+        resolvingOverlaps = false;
+    }
+
+    /// <summary>
+    /// Who has to give up the cell they are standing on, and where each of them goes. A unit that
+    /// never left the cell this round keeps it; anyone who walked, rushed or landed on top of it
+    /// is moved off. When nobody was standing there first, every contender is moved off and the
+    /// cell is left empty for the rest of the round, so racing an enemy to a cell is not something
+    /// either side can win by virtue of being sorted first. Cells are resolved bottom to top and
+    /// contenders in team then roster order, so the pass gives the same answer every time it runs.
+    /// </summary>
+    private List<(GameObject unit, Vector2Int cell)> BuildOverlapDisplacements(
+        IReadOnlyDictionary<GameObject, Vector2Int> cellsBeforeExecution
+    )
+    {
+        Dictionary<Vector2Int, List<GameObject>> occupants = new();
+        HashSet<Vector2Int> claimed = new();
+        foreach (GameObject unit in EnumerateLivingUnits())
+        {
+            Vector2Int cell = GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+            if (!occupants.TryGetValue(cell, out List<GameObject> sharing))
+                occupants[cell] = sharing = new List<GameObject>();
+
+            sharing.Add(unit);
+            claimed.Add(cell);
+        }
+
+        List<(GameObject unit, Vector2Int cell)> displacements = new();
+        foreach (
+            Vector2Int cell in occupants
+                .Where(entry => entry.Value.Count > 1)
+                .Select(entry => entry.Key)
+                .OrderBy(contested => contested.y)
+                .ThenBy(contested => contested.x)
+                .ToList()
+        )
+        {
+            List<GameObject> sharing = occupants[cell];
+            GameObject holder = sharing.FirstOrDefault(candidate =>
+                cellsBeforeExecution != null
+                && cellsBeforeExecution.TryGetValue(candidate, out Vector2Int cellBefore)
+                && cellBefore == cell
+            );
+
+            foreach (GameObject unit in sharing)
+            {
+                if (unit == holder)
+                    continue;
+
+                // Pulling the shove back toward where the unit set out from makes it read as
+                // giving ground rather than as being flung somewhere arbitrary.
+                Vector2Int anchor = cell;
+                if (
+                    cellsBeforeExecution != null
+                    && cellsBeforeExecution.TryGetValue(unit, out Vector2Int cellBeforeMove)
+                )
+                {
+                    anchor = cellBeforeMove;
+                }
+
+                if (
+                    !GridSystem.TryFindDisplacementCell(
+                        cell,
+                        anchor,
+                        claimed,
+                        MaxDisplacementSteps,
+                        out Vector2Int destination
+                    )
+                )
+                {
+                    Debug.LogWarning(
+                        $"[GameLoop] {unit.name} shares cell ({cell.x},{cell.y}) and has no free "
+                            + $"cell within {MaxDisplacementSteps} steps; it stays where it is."
+                    );
+                    continue;
+                }
+
+                claimed.Add(destination);
+                displacements.Add((unit, destination));
+            }
+        }
+        return displacements;
+    }
+
+    /// <summary>
+    /// Slides displaced units onto their new cells together. Snapping would read as a bug; the
+    /// slide stays server-side and reaches clients through each unit's NetworkTransform.
+    /// </summary>
+    IEnumerator SlideUnitsToCells(List<(GameObject unit, Vector2Int cell)> displacements)
+    {
+        List<(Transform unitTransform, Vector3 from, Vector3 to)> slides = new();
+        foreach (var (unit, cell) in displacements)
+        {
+            if (unit == null)
+                continue;
+
+            Transform unitTransform = unit.transform;
+            slides.Add(
+                (
+                    unitTransform,
+                    unitTransform.position,
+                    gridCoordToWorld(cell) + Helper.heightOffset(unitTransform)
+                )
+            );
+        }
+
+        if (slides.Count == 0)
+            yield break;
+
+        float elapsed = 0f;
+        while (elapsed < DisplacementSlideSeconds)
+        {
+            elapsed += Time.deltaTime;
+            float progress = Mathf.Clamp01(elapsed / DisplacementSlideSeconds);
+            foreach (var slide in slides)
+            {
+                if (slide.unitTransform != null)
+                    slide.unitTransform.position = Vector3.Lerp(slide.from, slide.to, progress);
+            }
+            yield return null;
+        }
+
+        foreach (var slide in slides)
+        {
+            if (slide.unitTransform != null)
+                slide.unitTransform.position = slide.to;
+        }
+
+        // Shooting acquires targets with casts against colliders. Units are moved by Transform, so
+        // without this the shots taken right after a shove would still be aimed at where the
+        // displaced unit used to stand.
+        Physics.SyncTransforms();
     }
 
     public void SetGroupLayerGlobal(GameObject obj, int layer)
@@ -3894,7 +5729,26 @@ public class GameLoop : NetworkBehaviour
             );
             return executingMoves;
         }
-        return teamColors[teamNames.IndexOf(team)];
+        return TeamPalette.ForTeamIndex(teamNames.IndexOf(team));
+    }
+
+    /// <summary>
+    /// Both players read their own crew as blue and the enemy as red, so a team-coloured visual is
+    /// chosen from the side of the board it is watched from rather than from the absolute team.
+    /// Unit materials and vision cones already work this way; anything else that colours by team
+    /// has to agree, or the same shot reads as friendly on one screen and hostile on the other.
+    /// </summary>
+    public static Color FriendlyTeamColor => TeamPalette.Friendly;
+    public static Color EnemyTeamColor => TeamPalette.Enemy;
+
+    public static bool IsTeamFriendlyToLocalPlayer(int teamIndex)
+    {
+        return Instance != null && teamIndex >= 0 && teamIndex == Instance.LocalTeamIndex;
+    }
+
+    public static Color GetTeamColorForViewer(int teamIndex)
+    {
+        return TeamPalette.ForViewer(IsTeamFriendlyToLocalPlayer(teamIndex));
     }
 
     public Material GetTeamMaterial(string team)

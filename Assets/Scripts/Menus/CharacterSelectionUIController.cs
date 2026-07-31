@@ -40,6 +40,10 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private Label modeSummary;
     private Label opponentSummary;
     private Label fogSummary;
+    private VisualElement mapPreview;
+    private Label mapCaption;
+    private Texture2D previewTexture;
+    private MapDefinition shownMap;
     private bool localSelectionSubmitted;
     private bool sceneLoadRequested;
     private bool uiCallbacksRegistered;
@@ -68,6 +72,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         RegisterUiCallbacks();
         BuildRosterOptions();
         BuildSelectedSlots();
+        ConsoleUiNavigation.ConfigureButtons(root);
         UpdateSummary(IsSpawned ? replicatedOptions.Value : MatchOptions.Current);
         UpdateSelectionState();
         root.schedule.Execute(FocusFirstEnabledRosterOption);
@@ -77,6 +82,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
     {
         UnregisterUiCallbacks();
         DisposeGeneratedViews();
+        ReleasePreviewTexture();
+        shownMap = null;
     }
 
     public override void OnNetworkSpawn()
@@ -130,13 +137,15 @@ public class CharacterSelectionUIController : NetworkBehaviour
         modeSummary = RequireElement<Label>("mode-summary");
         opponentSummary = RequireElement<Label>("opponent-summary");
         fogSummary = RequireElement<Label>("fog-summary");
+        mapPreview = RequireElement<VisualElement>("map-preview");
+        mapCaption = RequireElement<Label>("map-caption");
         if (rosterInstruction != null)
         {
             rosterInstruction.text =
-                $"Choose {UnitsPerPlayer} eligible units. Repeats are allowed. Select a filled slot to remove it.";
+                $"Pick {UnitsPerPlayer}. Repeats are allowed. Select a filled slot to remove it.";
         }
         if (rosterCountLabel != null)
-            rosterCountLabel.text = $"FIRETEAM / SELECT {UnitsPerPlayer}";
+            rosterCountLabel.text = $"Pick {UnitsPerPlayer} units";
     }
 
     private T RequireElement<T>(string elementName)
@@ -262,7 +271,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         }
 
         button.name = $"unit-option-{index}";
-        button.tooltip = data != null ? $"Add {data.unitName} to the fireteam" : "Add unit";
+        button.tooltip = data != null ? $"Add {data.unitName} to the crew" : "Add unit";
         if (unitName != null)
             unitName.text = data != null ? data.unitName : "Unknown unit";
         if (description != null)
@@ -429,7 +438,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         int emptySlot = Array.IndexOf(selectedUnits, -1);
         if (emptySlot < 0)
         {
-            localStatusOverride = "Fireteam full. Remove a unit before choosing another.";
+            localStatusOverride = "Crew full. Remove a unit before choosing another.";
             UpdateSelectionState();
             return;
         }
@@ -538,7 +547,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         {
             RejectSelection(
                 sender,
-                $"That fireteam is not valid. Choose {UnitsPerPlayer} units again."
+                $"That crew is not valid. Choose {UnitsPerPlayer} units again."
             );
             return;
         }
@@ -556,7 +565,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         MatchOptions options = replicatedOptions.Value.Sanitized();
         if (options.IsBotMatch && sender != NetworkManager.ServerClientId)
         {
-            RejectSelection(sender, "Only the host selects a fireteam in an AI match.");
+            RejectSelection(sender, "Only the host selects a crew in an AI match.");
             return;
         }
 
@@ -611,7 +620,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
             if (!botValidation.IsValid)
             {
                 DeploymentFailedClientRpc(
-                    $"The AI fireteam could not be created. {RosterRules.GetUserMessage(botValidation)}"
+                    $"The AI crew could not be created. {RosterRules.GetUserMessage(botValidation)}"
                 );
                 return;
             }
@@ -732,6 +741,35 @@ public class CharacterSelectionUIController : NetworkBehaviour
             opponentSummary.text = options.IsBotMatch ? "AI" : "Player";
         if (fogSummary != null)
             fogSummary.text = options.fogOfWar ? "Fog on" : "Fog off";
+        UpdateMapPanel(options.Map);
+    }
+
+    /// <summary>
+    /// Draws the board the lobby actually chose. The UXML carries a baked thumbnail so the screen
+    /// is never blank while this runs, but leaving it in place would show Concourse's cover on
+    /// every map.
+    /// </summary>
+    private void UpdateMapPanel(MapDefinition map)
+    {
+        if (mapCaption != null)
+            mapCaption.text = $"{map.DisplayName} · {GridSystem.ColumnCount} × {GridSystem.RowCount}";
+
+        if (mapPreview == null || map == shownMap)
+            return;
+
+        Texture2D next = MapPreviewImage.CreateTexture(map);
+        mapPreview.style.backgroundImage = new StyleBackground(next);
+        ReleasePreviewTexture();
+        previewTexture = next;
+        shownMap = map;
+    }
+
+    private void ReleasePreviewTexture()
+    {
+        if (previewTexture == null)
+            return;
+        Destroy(previewTexture);
+        previewTexture = null;
     }
 
     private void UpdateStatusText()
@@ -843,8 +881,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
                 ? $"{unitName} is unavailable for deployment"
                 : (
                     canChoose
-                        ? (selected ? $"Add another {unitName} to the fireteam" : $"Add {unitName} to the fireteam")
-                        : "Fireteam selection is locked"
+                        ? (selected ? $"Add another {unitName} to the crew" : $"Add {unitName} to the crew")
+                        : "Crew selection is locked"
                 );
         }
 
@@ -887,8 +925,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
             Button.SetEnabled(filled && canEdit);
             Button.tooltip =
                 filled && data != null
-                    ? $"Remove {data.unitName} from the fireteam"
-                    : "Open fireteam slot";
+                    ? $"Remove {data.unitName} from the crew"
+                    : "Open crew slot";
             if (unitName != null)
                 unitName.text = filled && data != null ? data.unitName : "Open slot";
             if (detail != null)

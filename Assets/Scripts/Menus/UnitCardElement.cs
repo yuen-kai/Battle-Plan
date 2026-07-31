@@ -15,22 +15,19 @@ public sealed class UnitCardElement : IDisposable
     private readonly Label healthValue;
     private readonly Label abilityName;
     private readonly Label stateLabel;
-    private readonly VisualElement modes;
-    private readonly Button moveButton;
-    private readonly Button abilityButton;
-    private readonly Label abilityActionLabel;
-    private readonly Label abilityChargeLabel;
+    private readonly VisualElement flipIndicator;
+    private readonly Label cooldownLabel;
 
-    private Action selectAction;
-    private Action moveAction;
-    private Action abilityAction;
+    private Action activateAction;
     private bool hasAbility;
-    private int remainingAbilityUses;
+    private int abilityCooldownRoundsRemaining;
     private string configuredAbilityName = "Ability";
     private bool isDisabled;
     private bool enemyConfigured;
     private bool enemyAlive = true;
     private bool interactionRequested;
+    private bool isSelected;
+    private bool isAbilityMode;
     private bool disposed;
 
     public VisualElement Root => container;
@@ -57,11 +54,10 @@ public sealed class UnitCardElement : IDisposable
         healthValue = cardRoot.Q<Label>("unit-card-health-value");
         abilityName = cardRoot.Q<Label>("unit-card-ability");
         stateLabel = cardRoot.Q<Label>("unit-card-state");
-        modes = cardRoot.Q<VisualElement>("unit-card-modes");
-        moveButton = cardRoot.Q<Button>("unit-card-move");
-        abilityButton = cardRoot.Q<Button>("unit-card-ability-button");
-        abilityActionLabel = abilityButton?.Q<Label>("unit-card-ability-action");
-        abilityChargeLabel = abilityButton?.Q<Label>("unit-card-ability-charge");
+        VisualElement abilityVignette = cardRoot.Q<VisualElement>("unit-card-ability-vignette");
+        flipIndicator = cardRoot.Q<VisualElement>("unit-card-flip-indicator");
+        VisualElement flipIcon = cardRoot.Q<VisualElement>("unit-card-flip-icon");
+        cooldownLabel = cardRoot.Q<Label>("unit-card-cooldown");
 
         if (
             selectButton == null
@@ -72,11 +68,10 @@ public sealed class UnitCardElement : IDisposable
             || healthValue == null
             || abilityName == null
             || stateLabel == null
-            || modes == null
-            || moveButton == null
-            || abilityButton == null
-            || abilityActionLabel == null
-            || abilityChargeLabel == null
+            || abilityVignette == null
+            || flipIndicator == null
+            || flipIcon == null
+            || cooldownLabel == null
         )
         {
             Debug.LogError(
@@ -97,24 +92,12 @@ public sealed class UnitCardElement : IDisposable
                 selectButton.clicked += OnSelectClicked;
             }
         }
-        if (moveButton != null)
-        {
-            moveButton.name = $"{namePrefix}-move-{index}";
-            if (!enemyCard)
-                moveButton.clicked += OnMoveClicked;
-        }
-        if (abilityButton != null)
-        {
-            abilityButton.name = $"{namePrefix}-ability-{index}";
-            if (!enemyCard)
-                abilityButton.clicked += OnAbilityClicked;
-        }
+        flipIndicator?.AddToClassList("hidden");
 
         if (enemyCard)
         {
             cardRoot.AddToClassList("unit-card--enemy");
             healthRow?.RemoveFromClassList("hidden");
-            modes?.SetEnabled(false);
             if (unitName != null)
                 unitName.text = "Enemy";
             if (healthValue != null)
@@ -131,20 +114,16 @@ public sealed class UnitCardElement : IDisposable
     public void Configure(
         UnitData data,
         bool abilityPresent,
-        int abilityUses,
-        Action onSelect,
-        Action onMove,
-        Action onAbility
+        int cooldownRoundsRemaining,
+        Action onActivate
     )
     {
         if (enemyCard)
             return;
 
-        selectAction = onSelect;
-        moveAction = onMove;
-        abilityAction = onAbility;
+        activateAction = onActivate;
         hasAbility = abilityPresent;
-        remainingAbilityUses = Mathf.Max(0, abilityUses);
+        abilityCooldownRoundsRemaining = Mathf.Max(0, cooldownRoundsRemaining);
         configuredAbilityName =
             data != null && !string.IsNullOrWhiteSpace(data.abilityName)
                 ? data.abilityName
@@ -171,7 +150,7 @@ public sealed class UnitCardElement : IDisposable
     public void ConfigureEnemy(
         UnitData data,
         bool abilityPresent,
-        int abilityUses,
+        int cooldownRoundsRemaining,
         float currentHealth,
         float maxHealth,
         bool alive
@@ -183,7 +162,7 @@ public sealed class UnitCardElement : IDisposable
         enemyConfigured = true;
         enemyAlive = alive;
         hasAbility = abilityPresent;
-        remainingAbilityUses = Mathf.Max(0, abilityUses);
+        abilityCooldownRoundsRemaining = Mathf.Max(0, cooldownRoundsRemaining);
         configuredAbilityName =
             data != null && !string.IsNullOrWhiteSpace(data.abilityName)
                 ? data.abilityName
@@ -207,24 +186,18 @@ public sealed class UnitCardElement : IDisposable
         {
             interactionRequested = false;
             selectButton?.SetEnabled(false);
-            moveButton?.SetEnabled(false);
-            abilityButton?.SetEnabled(false);
             return;
         }
 
         interactionRequested = interactable;
         bool enabled = interactionRequested && !isDisabled;
         selectButton?.SetEnabled(enabled);
-        moveButton?.SetEnabled(enabled);
-        abilityButton?.SetEnabled(enabled && AbilityAvailable);
     }
 
-    public void SetAbilityUses(int remainingUses)
+    public void SetAbilityCooldown(int remainingRounds)
     {
-        remainingAbilityUses = Mathf.Max(0, remainingUses);
+        abilityCooldownRoundsRemaining = Mathf.Max(0, remainingRounds);
         RefreshAbilityState();
-        if (!AbilityAvailable)
-            abilityButton?.RemoveFromClassList("unit-card__mode--armed");
     }
 
     public void SetDisabled(bool disabled)
@@ -250,17 +223,13 @@ public sealed class UnitCardElement : IDisposable
         if (enemyCard)
         {
             cardRoot.RemoveFromClassList("unit-card--selected");
+            cardRoot.RemoveFromClassList("unit-card--ability");
             return;
         }
 
-        selected &= !isDisabled;
-        abilityMode &= AbilityAvailable;
-
-        cardRoot.EnableInClassList("unit-card--selected", selected);
-        moveButton?.EnableInClassList("unit-card__mode--chosen", !abilityMode);
-        abilityButton?.EnableInClassList("unit-card__mode--chosen", abilityMode);
-        moveButton?.EnableInClassList("unit-card__mode--armed", selected && !abilityMode);
-        abilityButton?.EnableInClassList("unit-card__mode--armed", selected && abilityMode);
+        isSelected = selected && !isDisabled;
+        isAbilityMode = abilityMode && AbilityAvailable && !isDisabled;
+        ApplyPlanningVisualState();
     }
 
     public void Focus()
@@ -271,21 +240,10 @@ public sealed class UnitCardElement : IDisposable
 
     private void OnSelectClicked()
     {
-        selectAction?.Invoke();
+        activateAction?.Invoke();
     }
 
-    private void OnMoveClicked()
-    {
-        moveAction?.Invoke();
-    }
-
-    private void OnAbilityClicked()
-    {
-        if (AbilityAvailable)
-            abilityAction?.Invoke();
-    }
-
-    private bool AbilityAvailable => hasAbility && remainingAbilityUses > 0;
+    private bool AbilityAvailable => hasAbility && abilityCooldownRoundsRemaining == 0;
 
     private void SetHealth(float currentHealth, float maxHealth)
     {
@@ -297,7 +255,18 @@ public sealed class UnitCardElement : IDisposable
         float healthRatio = safeMaxHealth > 0f ? safeCurrentHealth / safeMaxHealth : 0f;
 
         if (healthFill != null)
+        {
             healthFill.style.width = Length.Percent(healthRatio * 100f);
+
+            // The bar used to be danger red at every level on both teams, so its colour said
+            // nothing the width had not already said. Stepping it means a glance reads condition
+            // rather than only quantity, and the thresholds live in TeamPalette so the world-space
+            // bar over the unit cannot disagree with the card.
+            string step = TeamPalette.HealthClassSuffix(healthRatio);
+            healthFill.EnableInClassList("unit-card__health-fill--high", step == "high");
+            healthFill.EnableInClassList("unit-card__health-fill--warning", step == "warning");
+            healthFill.EnableInClassList("unit-card__health-fill--critical", step == "critical");
+        }
         if (healthValue != null)
         {
             healthValue.text =
@@ -335,40 +304,88 @@ public sealed class UnitCardElement : IDisposable
 
     private void RefreshAbilityState()
     {
-        string remainingUseText =
-            remainingAbilityUses == 1 ? "1 use" : $"{remainingAbilityUses} uses";
+        string remainingRoundText =
+            abilityCooldownRoundsRemaining == 1
+                ? "1 round"
+                : $"{abilityCooldownRoundsRemaining} rounds";
 
         if (abilityName != null)
         {
             abilityName.text =
                 !hasAbility ? "Move only"
-                : remainingAbilityUses > 0
-                    ? $"{configuredAbilityName} · {remainingUseText} this match"
-                    : $"{configuredAbilityName} · spent this match";
+                : !enemyCard ? configuredAbilityName
+                : abilityCooldownRoundsRemaining == 0
+                    ? $"{configuredAbilityName} · ready"
+                    : $"{configuredAbilityName} · ready in {remainingRoundText}";
         }
 
-        if (abilityActionLabel != null)
-            abilityActionLabel.text = "ABILITY";
-
-        if (abilityChargeLabel != null)
+        bool coolingDown = hasAbility && abilityCooldownRoundsRemaining > 0;
+        if (flipIndicator != null)
         {
-            abilityChargeLabel.text =
-                !hasAbility ? "NOT AVAILABLE"
-                : remainingAbilityUses > 0
-                    ? $"{remainingUseText.ToUpperInvariant()} THIS MATCH"
-                    : "SPENT THIS MATCH";
+            flipIndicator.EnableInClassList("hidden", enemyCard || !hasAbility);
+            flipIndicator.EnableInClassList(
+                "unit-card__flip-indicator--cooldown",
+                coolingDown
+            );
         }
-
-        if (abilityButton != null)
+        if (cooldownLabel != null)
         {
-            abilityButton.tooltip =
-                !hasAbility ? "This unit can move only."
-                : remainingAbilityUses > 0
-                    ? $"{configuredAbilityName}: {remainingUseText} remaining this match"
-                    : $"{configuredAbilityName} is spent for this match";
+            cooldownLabel.text = coolingDown
+                ? abilityCooldownRoundsRemaining.ToString()
+                : string.Empty;
+            cooldownLabel.EnableInClassList("hidden", !coolingDown);
         }
 
+        cardRoot.EnableInClassList("unit-card--ability-cooldown", coolingDown);
+        if (!AbilityAvailable)
+            isAbilityMode = false;
+        ApplyPlanningVisualState();
         SetInteractable(interactionRequested);
+    }
+
+    private void ApplyPlanningVisualState()
+    {
+        if (enemyCard)
+            return;
+
+        cardRoot.EnableInClassList("unit-card--selected", isSelected);
+        cardRoot.EnableInClassList("unit-card--ability", isAbilityMode);
+        UpdateSelectTooltip();
+    }
+
+    private void UpdateSelectTooltip()
+    {
+        if (enemyCard || selectButton == null)
+            return;
+
+        if (!hasAbility)
+        {
+            selectButton.tooltip = "Select this unit. This unit can move only.";
+            return;
+        }
+
+        if (abilityCooldownRoundsRemaining > 0)
+        {
+            selectButton.tooltip =
+                abilityCooldownRoundsRemaining == 1
+                    ? $"{configuredAbilityName} recharges after 1 more completed round."
+                    : $"{configuredAbilityName} recharges after {abilityCooldownRoundsRemaining} more completed rounds.";
+            return;
+        }
+
+        if (isAbilityMode)
+        {
+            selectButton.tooltip =
+                isSelected
+                    ? $"{configuredAbilityName} selected. Select again to plan movement."
+                    : $"{configuredAbilityName} order set for this unit.";
+            return;
+        }
+
+        selectButton.tooltip =
+            isSelected
+                ? $"{configuredAbilityName} ready. Select again to use it instead of movement."
+                : $"{configuredAbilityName} ready.";
     }
 
     public void Dispose()
@@ -379,13 +396,7 @@ public sealed class UnitCardElement : IDisposable
 
         if (selectButton != null)
             selectButton.clicked -= OnSelectClicked;
-        if (moveButton != null)
-            moveButton.clicked -= OnMoveClicked;
-        if (abilityButton != null)
-            abilityButton.clicked -= OnAbilityClicked;
-        selectAction = null;
-        moveAction = null;
-        abilityAction = null;
+        activateAction = null;
     }
 
     private static void SetBackgroundImage(VisualElement element, Sprite sprite)
@@ -403,11 +414,10 @@ public sealed class UnitCardElement : IDisposable
         VisualElement root = new() { name = "unit-card-root" };
         root.AddToClassList("unit-card");
 
-        VisualElement stateMark = new() { name = "unit-card-state-mark" };
-        stateMark.AddToClassList("unit-card__state-mark");
-
         Button select = new() { name = "unit-card-select" };
         select.AddToClassList("unit-card__select");
+        VisualElement abilityVignette = new() { name = "unit-card-ability-vignette" };
+        abilityVignette.AddToClassList("unit-card__ability-vignette");
         VisualElement portrait = new() { name = "unit-card-portrait" };
         portrait.AddToClassList("unit-card__portrait");
         VisualElement copy = new();
@@ -434,28 +444,21 @@ public sealed class UnitCardElement : IDisposable
         copy.Add(health);
         copy.Add(ability);
         copy.Add(state);
+        VisualElement flipIndicator = new() { name = "unit-card-flip-indicator" };
+        flipIndicator.AddToClassList("unit-card__flip-indicator");
+        VisualElement flipIcon = new() { name = "unit-card-flip-icon" };
+        flipIcon.AddToClassList("unit-card__flip-icon");
+        Label cooldown = new() { name = "unit-card-cooldown" };
+        cooldown.AddToClassList("unit-card__cooldown");
+        cooldown.AddToClassList("hidden");
+        flipIndicator.Add(flipIcon);
+        flipIndicator.Add(cooldown);
+        select.Add(abilityVignette);
         select.Add(portrait);
         select.Add(copy);
+        select.Add(flipIndicator);
 
-        VisualElement modes = new() { name = "unit-card-modes" };
-        modes.AddToClassList("unit-card__modes");
-        Button move = new() { name = "unit-card-move", text = "MOVE" };
-        move.AddToClassList("unit-card__mode");
-        move.AddToClassList("unit-card__mode--move");
-        Button abilityButton = new() { name = "unit-card-ability-button" };
-        abilityButton.AddToClassList("unit-card__mode");
-        Label abilityAction = new("ABILITY") { name = "unit-card-ability-action" };
-        abilityAction.AddToClassList("unit-card__mode-label");
-        Label abilityCharge = new("1 USE THIS MATCH") { name = "unit-card-ability-charge" };
-        abilityCharge.AddToClassList("unit-card__mode-charge");
-        abilityButton.Add(abilityAction);
-        abilityButton.Add(abilityCharge);
-        modes.Add(move);
-        modes.Add(abilityButton);
-
-        root.Add(stateMark);
         root.Add(select);
-        root.Add(modes);
         return root;
     }
 }

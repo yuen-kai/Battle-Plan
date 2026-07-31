@@ -69,6 +69,9 @@ public class Movement : NetworkBehaviour
     public bool IsSpeedBoostIndicatorActive =>
         speedBoostIndicator != null && speedBoostIndicator.IsVisible;
 
+    /// <summary>True while a dodger is picking itself up and cannot shoot.</summary>
+    public bool IsRecoveringFromDive => diveRecovery.Value.Active;
+
     private Coroutine moveListRoutine;
     private Coroutine moveRoutine;
     private Coroutine rotateRoutine;
@@ -77,10 +80,17 @@ public class Movement : NetworkBehaviour
     private TimedMoveSpeedBoost temporaryMoveSpeedBoost;
     private SpeedBoostIndicatorVisual speedBoostIndicator;
     private bool speedBoostIndicatorCreationAttempted;
+    private DiveRecoveryIndicatorVisual diveRecoveryIndicator;
+    private bool diveRecoveryIndicatorCreationAttempted;
 
     // NetworkVariable (not ClientRpc) so a unit revealed by fog midway through the boost
     // reconstructs the current presentation state. Gameplay speed remains server-only above.
     private readonly NetworkVariable<bool> temporaryMoveSpeedBoostPresentationActive = new(false);
+
+    // One replicated write per dive rather than a per-frame countdown: the indicator's fill is a
+    // pure function of elapsed server time, so every peer can draw the correct point in the
+    // recovery from the moment it learns about it — including a peer fog reveals midway through.
+    private readonly NetworkVariable<DiveRecoveryState> diveRecovery = new();
 
     // CONTROLLER
     public override void OnNetworkSpawn()
@@ -93,6 +103,11 @@ public class Movement : NetworkBehaviour
         ApplyTemporaryMoveSpeedBoostPresentation(
             temporaryMoveSpeedBoostPresentationActive.Value
         );
+
+        diveRecovery.OnValueChanged += OnDiveRecoveryChanged;
+        if (IsServer)
+            diveRecovery.Value = default;
+        ApplyDiveRecoveryPresentation(diveRecovery.Value);
 
         if (!IsServer)
         {
@@ -109,6 +124,10 @@ public class Movement : NetworkBehaviour
             OnTemporaryMoveSpeedBoostPresentationChanged;
         temporaryMoveSpeedBoost.Clear();
         ApplyTemporaryMoveSpeedBoostPresentation(false);
+
+        diveRecovery.OnValueChanged -= OnDiveRecoveryChanged;
+        ApplyDiveRecoveryPresentation(default);
+
         base.OnNetworkDespawn();
     }
 
@@ -151,6 +170,10 @@ public class Movement : NetworkBehaviour
             StopCoroutine(moveRoutine);
         if (rotateRoutine != null)
             StopCoroutine(rotateRoutine);
+
+        // The recovery hold lives inside the stopped movement coroutine, so anything that cuts
+        // movement short — the next round, a respawn — has already ended it in fact.
+        ClearDiveRecovery();
     }
 
     public void StartMovement(List<Vector3> cells, bool dive = false)
@@ -181,7 +204,50 @@ public class Movement : NetworkBehaviour
             yield return moveRoutine = StartCoroutine(MoveToCell(cell, dive));
         }
 
+        // Nested rather than started as its own coroutine, so PauseMovement stopping this one
+        // stops the recovery with it.
+        if (dive)
+        {
+            yield return RecoverFromDive();
+        }
+
         transitionToShooting();
+    }
+
+    /// <summary>
+    /// The cost of the dive: the dodger is down where it landed and cannot shoot until it is back
+    /// up. It stops counting as moving first, so a dodge holds the round's weapons free no longer
+    /// than the dive itself did — the recovery is the dodger's to pay, not everyone else's.
+    /// </summary>
+    private IEnumerator RecoverFromDive()
+    {
+        float recovery = GameLoop.DodgeRecoverySeconds;
+        if (recovery <= 0f)
+            yield break;
+
+        moving = false;
+        if (animator != null)
+        {
+            animator.PlayAnimation("Idle");
+        }
+
+        BeginDiveRecovery(recovery);
+        yield return new WaitForSeconds(recovery);
+        ClearDiveRecovery();
+    }
+
+    private void BeginDiveRecovery(float duration)
+    {
+        if (!IsServer || duration <= 0f)
+            return;
+
+        diveRecovery.Value = new DiveRecoveryState(NetworkManager.ServerTime.Time, duration);
+    }
+
+    public void ClearDiveRecovery()
+    {
+        if (IsServer && diveRecovery.Value.Active)
+            diveRecovery.Value = default;
     }
 
     private IEnumerator MoveToCell(Vector3 cell, bool dive = false)
@@ -254,6 +320,33 @@ public class Movement : NetworkBehaviour
             speedBoostIndicator.SetVisible(active);
     }
 
+    private void OnDiveRecoveryChanged(
+        DiveRecoveryState previousValue,
+        DiveRecoveryState newValue
+    )
+    {
+        ApplyDiveRecoveryPresentation(newValue);
+    }
+
+    private void ApplyDiveRecoveryPresentation(DiveRecoveryState state)
+    {
+        if (state.Active && !IsClient)
+            return;
+
+        if (
+            state.Active
+            && diveRecoveryIndicator == null
+            && !diveRecoveryIndicatorCreationAttempted
+        )
+        {
+            diveRecoveryIndicatorCreationAttempted = true;
+            diveRecoveryIndicator = DiveRecoveryIndicatorVisual.Create(transform);
+        }
+
+        if (diveRecoveryIndicator != null)
+            diveRecoveryIndicator.SetRecovery(state);
+    }
+
     // HELPER
     //public Vector2Int ConvertToGridCoords(Vector3 position)
     //{
@@ -261,6 +354,57 @@ public class Movement : NetworkBehaviour
     //    int z = Mathf.RoundToInt(position.z / GameLoop.cellSize);
     //    return new Vector2Int(x, z);
     //}
+}
+
+/// <summary>
+/// A dive recovery as replicated: when the dodger went down on the server clock and how long it
+/// stays down. The indicator's fill is a pure function of elapsed time, so this is written once per
+/// dive instead of every frame, and a peer that fog reveals midway through still draws the right
+/// point in the recovery.
+/// </summary>
+public struct DiveRecoveryState : INetworkSerializable, System.IEquatable<DiveRecoveryState>
+{
+    public bool Active;
+    public double StartServerTime;
+    public float Duration;
+
+    public DiveRecoveryState(double startServerTime, float duration)
+    {
+        Active = true;
+        StartServerTime = startServerTime;
+        Duration = Mathf.Max(0.0001f, duration);
+    }
+
+    /// <summary>Recovery position, 0 as the dodger lands through 1 when it is back on its feet.</summary>
+    public float ProgressAt(double serverTime)
+    {
+        return Mathf.Clamp01((float)((serverTime - StartServerTime) / Duration));
+    }
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref Active);
+        serializer.SerializeValue(ref StartServerTime);
+        serializer.SerializeValue(ref Duration);
+    }
+
+    public bool Equals(DiveRecoveryState other)
+    {
+        return Active == other.Active
+            && StartServerTime.Equals(other.StartServerTime)
+            && Duration.Equals(other.Duration);
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is DiveRecoveryState other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return System.HashCode.Combine(Active, StartServerTime, Duration);
+    }
 }
 
 /// <summary>
@@ -556,5 +700,278 @@ public sealed class SpeedBoostIndicatorVisual : MonoBehaviour
             properties.SetFloat(IntensityId, Mathf.Lerp(0.12f, 0.92f, fade));
             streakRenderers[index].SetPropertyBlock(properties);
         }
+    }
+}
+
+/// <summary>
+/// Local-only dive-recovery presentation. A dim amber outline marks where the dodger will be back
+/// on its feet, and a brighter ring grows out from under it to meet that outline exactly as the
+/// recovery ends. The pair is deliberately a filling gauge rather than an alarm: nothing has been
+/// done to this unit, it is picking itself up off the floor, and both commanders need to be able
+/// to see how much of that is left. Amber keeps it apart from the teal Shield Rush ring, which is
+/// the only other thing drawn under a unit's feet.
+/// </summary>
+public sealed class DiveRecoveryIndicatorVisual : MonoBehaviour
+{
+    public const string GameObjectName = "DiveRecoveryIndicator";
+
+    private const float GroundOffset = 0.08f;
+    private const float RecoveredDiameter = 1.9f;
+    private const float StartingDiameter = 0.35f;
+
+    private static readonly Color RecoveryColor = new(1.3f, 0.66f, 0.16f, 0.75f);
+    private static readonly int GlowColorId = Shader.PropertyToID("_GlowColor");
+    private static readonly int RingWidthId = Shader.PropertyToID("_RingWidth");
+    private static readonly int EdgeSoftnessId = Shader.PropertyToID("_EdgeSoftness");
+    private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
+    private static readonly int PulseSpeedId = Shader.PropertyToID("_PulseSpeed");
+    private static readonly int PulseAmountId = Shader.PropertyToID("_PulseAmount");
+
+    private Material visualMaterial;
+    private Mesh groundQuadMesh;
+    private Renderer targetRenderer;
+    private Transform gauge;
+    private Renderer gaugeRenderer;
+    private MaterialPropertyBlock gaugeProperties;
+    private DiveRecoveryState recovery;
+
+    public bool IsVisible => gameObject.activeSelf;
+
+    public static DiveRecoveryIndicatorVisual Create(Transform unitTransform)
+    {
+        if (unitTransform == null)
+            return null;
+
+        Transform existing = unitTransform.Find(GameObjectName);
+        if (
+            existing != null
+            && existing.TryGetComponent(out DiveRecoveryIndicatorVisual existingVisual)
+        )
+        {
+            return existingVisual;
+        }
+
+        bool forceRenderingOff = false;
+        foreach (Renderer unitRenderer in unitTransform.GetComponentsInChildren<Renderer>(true))
+        {
+            if (unitRenderer.forceRenderingOff)
+            {
+                forceRenderingOff = true;
+                break;
+            }
+        }
+
+        Shader glowShader = Shader.Find("BattlePlan/GroundGlow");
+        if (glowShader == null)
+        {
+            Debug.LogWarning(
+                "[DiveRecoveryIndicatorVisual] BattlePlan/GroundGlow shader not found; "
+                    + "dodge recovery indicator disabled."
+            );
+            return null;
+        }
+
+        GameObject indicatorObject = new(GameObjectName);
+        indicatorObject.layer = unitTransform.gameObject.layer;
+        indicatorObject.SetActive(false);
+        indicatorObject.transform.SetParent(unitTransform, worldPositionStays: false);
+
+        DiveRecoveryIndicatorVisual visual =
+            indicatorObject.AddComponent<DiveRecoveryIndicatorVisual>();
+        visual.Build(unitTransform, glowShader);
+        // Host fog cannot NetworkHide server-owned objects, so GameLoop suppresses their existing
+        // renderers locally. Inherit that state before activation to avoid a one-frame information
+        // leak when this visual is created while an enemy is hidden.
+        visual.SetForceRenderingOff(forceRenderingOff);
+        return visual;
+    }
+
+    public void SetRecovery(DiveRecoveryState state)
+    {
+        recovery = state;
+        if (gameObject.activeSelf != state.Active)
+            gameObject.SetActive(state.Active);
+        if (state.Active)
+            DrawProgress();
+    }
+
+    public void SetForceRenderingOff(bool forceRenderingOff)
+    {
+        if (targetRenderer != null)
+            targetRenderer.forceRenderingOff = forceRenderingOff;
+        if (gaugeRenderer != null)
+            gaugeRenderer.forceRenderingOff = forceRenderingOff;
+    }
+
+    private void Update()
+    {
+        if (recovery.Active)
+            DrawProgress();
+    }
+
+    private void OnDestroy()
+    {
+        DestroyRuntimeObject(visualMaterial);
+        DestroyRuntimeObject(groundQuadMesh);
+    }
+
+    private void DrawProgress()
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+        float progress = manager != null ? recovery.ProgressAt(manager.ServerTime.Time) : 0f;
+
+        float diameter = Mathf.Lerp(StartingDiameter, RecoveredDiameter, progress);
+        gauge.localScale = new Vector3(diameter, diameter, 1f);
+
+        // The ring thins as it widens so the gauge keeps a constant amount of light on the floor
+        // instead of swelling into a second, brighter marker than the outline it is chasing.
+        gaugeProperties.SetFloat(RingWidthId, Mathf.Lerp(0.55f, 0.16f, progress));
+        gaugeProperties.SetFloat(IntensityId, Mathf.Lerp(0.75f, 1.6f, progress));
+        gaugeRenderer.SetPropertyBlock(gaugeProperties);
+    }
+
+    private void Build(Transform unitTransform, Shader glowShader)
+    {
+        PositionAtUnitFeet(unitTransform);
+        groundQuadMesh = CreateGroundQuadMesh();
+
+        visualMaterial = new Material(glowShader)
+        {
+            name = "Dodge Recovery (Runtime)",
+            hideFlags = HideFlags.DontSave,
+            enableInstancing = true,
+        };
+
+        targetRenderer = CreateGroundQuad(
+            "RecoveryTarget",
+            Vector3.zero,
+            new Vector3(RecoveredDiameter, RecoveredDiameter, 1f)
+        );
+        MaterialPropertyBlock targetProperties = new();
+        SetProperties(
+            targetProperties,
+            ringWidth: 0.1f,
+            edgeSoftness: 0.2f,
+            intensity: 0.45f,
+            pulseSpeed: 0f,
+            pulseAmount: 0f
+        );
+        targetRenderer.SetPropertyBlock(targetProperties);
+
+        gaugeRenderer = CreateGroundQuad(
+            "RecoveryGauge",
+            new Vector3(0f, 0.012f, 0f),
+            new Vector3(StartingDiameter, StartingDiameter, 1f)
+        );
+        gauge = gaugeRenderer.transform;
+        gaugeProperties = new MaterialPropertyBlock();
+        SetProperties(
+            gaugeProperties,
+            ringWidth: 0.55f,
+            edgeSoftness: 0.28f,
+            intensity: 0.75f,
+            pulseSpeed: 0f,
+            pulseAmount: 0f
+        );
+        gaugeRenderer.SetPropertyBlock(gaugeProperties);
+    }
+
+    private void PositionAtUnitFeet(Transform unitTransform)
+    {
+        Vector3 parentScale = unitTransform.lossyScale;
+        float parentScaleX = Mathf.Max(Mathf.Abs(parentScale.x), 0.001f);
+        float parentScaleY = Mathf.Max(Mathf.Abs(parentScale.y), 0.001f);
+        float parentScaleZ = Mathf.Max(Mathf.Abs(parentScale.z), 0.001f);
+
+        Collider unitCollider = unitTransform.GetComponent<Collider>();
+        float worldDownToGround =
+            unitCollider != null ? unitCollider.bounds.extents.y : GroundOffset;
+        transform.localPosition = new Vector3(
+            0f,
+            (-worldDownToGround + GroundOffset) / parentScaleY,
+            0f
+        );
+        transform.localRotation = Quaternion.identity;
+        transform.localScale = new Vector3(
+            1f / parentScaleX,
+            1f / parentScaleY,
+            1f / parentScaleZ
+        );
+    }
+
+    private Renderer CreateGroundQuad(string objectName, Vector3 position, Vector3 scale)
+    {
+        GameObject quad = new(objectName);
+        quad.layer = gameObject.layer;
+        quad.transform.SetParent(transform, worldPositionStays: false);
+        quad.transform.localPosition = position;
+        quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        quad.transform.localScale = scale;
+
+        MeshFilter meshFilter = quad.AddComponent<MeshFilter>();
+        meshFilter.sharedMesh = groundQuadMesh;
+        MeshRenderer quadRenderer = quad.AddComponent<MeshRenderer>();
+        quadRenderer.sharedMaterial = visualMaterial;
+        quadRenderer.shadowCastingMode =
+            UnityEngine.Rendering.ShadowCastingMode.Off;
+        quadRenderer.receiveShadows = false;
+        quadRenderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        quadRenderer.reflectionProbeUsage =
+            UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        return quadRenderer;
+    }
+
+    private static Mesh CreateGroundQuadMesh()
+    {
+        Mesh mesh = new()
+        {
+            name = "Dodge Recovery Quad (Runtime)",
+            hideFlags = HideFlags.DontSave,
+            vertices = new[]
+            {
+                new Vector3(-0.5f, -0.5f, 0f),
+                new Vector3(0.5f, -0.5f, 0f),
+                new Vector3(-0.5f, 0.5f, 0f),
+                new Vector3(0.5f, 0.5f, 0f),
+            },
+            uv = new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(1f, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f),
+            },
+            triangles = new[] { 0, 2, 1, 2, 3, 1 },
+        };
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private static void DestroyRuntimeObject(Object runtimeObject)
+    {
+        if (runtimeObject == null)
+            return;
+
+        if (Application.isPlaying)
+            Destroy(runtimeObject);
+        else
+            DestroyImmediate(runtimeObject);
+    }
+
+    private static void SetProperties(
+        MaterialPropertyBlock properties,
+        float ringWidth,
+        float edgeSoftness,
+        float intensity,
+        float pulseSpeed,
+        float pulseAmount
+    )
+    {
+        properties.SetColor(GlowColorId, RecoveryColor);
+        properties.SetFloat(RingWidthId, ringWidth);
+        properties.SetFloat(EdgeSoftnessId, edgeSoftness);
+        properties.SetFloat(IntensityId, intensity);
+        properties.SetFloat(PulseSpeedId, pulseSpeed);
+        properties.SetFloat(PulseAmountId, pulseAmount);
     }
 }

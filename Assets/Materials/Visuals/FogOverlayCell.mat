@@ -16,7 +16,7 @@ Material:
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 1
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: -1
+  m_CustomRenderQueue: 2980
   stringTagMap: {}
   disabledShaderPasses: []
   m_LockedProperties: 
@@ -25,10 +25,10 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BoundaryOpacity: 0.32
-    - _EdgeSoftness: 0.22
+    - _BoundaryOpacity: 0.52
+    - _EdgeSoftness: 0.12
     m_Colors:
     - _EdgeMask: {r: 0, g: 0, b: 0, a: 0}
-    - _FogColor: {r: 0.006, g: 0.009, b: 0.016, a: 0.76}
+    - _FogColor: {r: 0.009, g: 0.033, b: 0.047, a: 0.72}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

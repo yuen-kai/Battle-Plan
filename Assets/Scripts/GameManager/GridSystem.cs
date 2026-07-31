@@ -4,6 +4,10 @@ using UnityEngine;
 
 public class GridSystem : MonoBehaviour
 {
+    private const int TransparentQueue = 3000;
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int LegacyColorId = Shader.PropertyToID("_Color");
+
     [SerializeField]
     private GameObject cellPrefab; // Public variable for the GameObject prefab
     public static float CellSize => GameLoop.cellSize; // Size of each grid cell
@@ -38,10 +42,17 @@ public class GridSystem : MonoBehaviour
     //     }
     // }
 
+    /// <summary>
+    /// Draws the Manhattan diamond of cells within <paramref name="dist"/> of a position. Aiming an
+    /// ability that only uses its square as a direction has no use for the caster's own cell, so
+    /// <paramref name="includeOrigin"/> leaves that one out of the range it offers.
+    /// </summary>
     public static GameObject DisplayGridRange(
         Vector3 currentPos,
         int dist,
-        GameObject overlayPrefab
+        GameObject overlayPrefab,
+        Color tint,
+        bool includeOrigin = true
     )
     {
         GameObject overlay = new("MoveOverlay");
@@ -51,6 +62,9 @@ public class GridSystem : MonoBehaviour
             int horizontalDist = dist - Mathf.Abs(i);
             for (int j = -horizontalDist; j <= horizontalDist; j++)
             {
+                if (!includeOrigin && i == 0 && j == 0)
+                    continue;
+
                 float cellSize = GameLoop.cellSize;
                 Vector2 overlayCellPos = new(
                     currentPos.x + j * cellSize,
@@ -64,13 +78,18 @@ public class GridSystem : MonoBehaviour
                         Quaternion.identity
                     );
                     overlayCell.transform.parent = overlay.transform;
+                    TintOverlayCell(overlayCell, tint);
                 }
             }
         }
         return overlay;
     }
 
-    public static GameObject DisplayGridDirections(Vector3 currentPos, GameObject overlayPrefab)
+    public static GameObject DisplayGridDirections(
+        Vector3 currentPos,
+        GameObject overlayPrefab,
+        Color tint
+    )
     {
         GameObject overlay = new("AbilityDirectionOverlay");
         for (int columnOffset = -1; columnOffset <= 1; columnOffset++)
@@ -93,9 +112,37 @@ public class GridSystem : MonoBehaviour
                     Quaternion.identity
                 );
                 overlayCell.transform.parent = overlay.transform;
+                TintOverlayCell(overlayCell, tint);
             }
         }
         return overlay;
+    }
+
+    /// <summary>
+    /// Tints the translucent fill of an overlay cell and leaves its opaque outline alone.
+    /// <para>
+    /// Move range and ability range are drawn from the same prefab, so before this they were the
+    /// same colour down to the byte — the board gave no clue which mode you were aiming in. The
+    /// colour that separates them therefore has to be applied per instance rather than authored
+    /// into the material. Transparency is the test for which child is the fill: the outline quad
+    /// is opaque and renders in the geometry queue.
+    /// </para>
+    /// </summary>
+    private static void TintOverlayCell(GameObject overlayCell, Color tint)
+    {
+        MaterialPropertyBlock properties = null;
+        foreach (Renderer cellRenderer in overlayCell.GetComponentsInChildren<Renderer>(true))
+        {
+            Material material = cellRenderer.sharedMaterial;
+            if (material == null || material.renderQueue < TransparentQueue)
+                continue;
+
+            properties ??= new MaterialPropertyBlock();
+            cellRenderer.GetPropertyBlock(properties);
+            properties.SetColor(BaseColorId, tint);
+            properties.SetColor(LegacyColorId, tint);
+            cellRenderer.SetPropertyBlock(properties);
+        }
     }
 
     public static Vector3 GetNearestGridCell(GameObject character)
@@ -435,6 +482,84 @@ public class GridSystem : MonoBehaviour
         }
 
         return reachable;
+    }
+
+    /// <summary>Four-directional step count between two cells, ignoring walls and occupancy.</summary>
+    public static int GetGridDistance(Vector2Int from, Vector2Int to)
+    {
+        return Mathf.Abs(from.x - to.x) + Mathf.Abs(from.y - to.y);
+    }
+
+    /// <summary>
+    /// Row-major ordering (bottom row first, left to right within a row), matching the order
+    /// square footprints are enumerated in. Used wherever a tie between two cells has to resolve
+    /// the same way on every peer.
+    /// </summary>
+    public static int CompareCellsRowMajor(Vector2Int left, Vector2Int right)
+    {
+        int rowComparison = left.y.CompareTo(right.y);
+        return rowComparison != 0 ? rowComparison : left.x.CompareTo(right.x);
+    }
+
+    /// <summary>
+    /// Picks the cell a unit is set down on when it has to give up the one it is standing on.
+    /// Candidates are unclaimed cells within <paramref name="maxSteps"/> of walking around walls,
+    /// so a shove can squeeze past another body — the way units already pass through each other
+    /// mid-move — but never through a wall or off the board. The nearest candidate wins, pulled
+    /// toward <paramref name="anchor"/> (normally the cell the unit came from, so it gives ground
+    /// the way it arrived) and settled row-major when that is still a tie. False when everything
+    /// in range is spoken for and there is nowhere to put the unit.
+    /// </summary>
+    public static bool TryFindDisplacementCell(
+        Vector2Int origin,
+        Vector2Int anchor,
+        ISet<Vector2Int> occupiedCells,
+        int maxSteps,
+        out Vector2Int displacementCell
+    )
+    {
+        displacementCell = origin;
+        bool found = false;
+        int nearestDistance = int.MaxValue;
+        int nearestAnchorDistance = int.MaxValue;
+
+        foreach (Vector2Int candidate in GetReachableCells(origin, maxSteps))
+        {
+            if (
+                candidate == origin
+                || (occupiedCells != null && occupiedCells.Contains(candidate))
+            )
+            {
+                continue;
+            }
+
+            int distance = GetGridDistance(origin, candidate);
+            int anchorDistance = GetGridDistance(anchor, candidate);
+            bool nearer =
+                !found
+                || distance < nearestDistance
+                || (
+                    distance == nearestDistance
+                    && (
+                        anchorDistance < nearestAnchorDistance
+                        || (
+                            anchorDistance == nearestAnchorDistance
+                            && CompareCellsRowMajor(candidate, displacementCell) < 0
+                        )
+                    )
+                );
+            if (!nearer)
+                continue;
+
+            displacementCell = candidate;
+            nearestDistance = distance;
+            nearestAnchorDistance = anchorDistance;
+            found = true;
+        }
+
+        if (!found)
+            displacementCell = origin;
+        return found;
     }
 
     // === FOG OF WAR VISION MATH (pure/static, shared by server visibility + client overlay) ===

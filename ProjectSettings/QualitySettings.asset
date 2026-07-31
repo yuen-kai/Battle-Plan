@@ -75,7 +75,7 @@ QualitySettings:
     globalTextureMipmapLimit: 1
     textureMipmapLimitSettings: []
     anisotropicTextures: 1
-    antiAliasing: 0
+    antiAliasing: 2
     softParticles: 0
     softVegetation: 0
     realtimeReflectionProbes: 0
@@ -167,5 +167,6 @@ QualitySettings:
     excludedTargetPlatforms: []
   m_TextureMipmapLimitGroupNames: []
   m_PerPlatformDefaultQuality:
+    Nintendo Switch 2: 2
     Standalone: 1
     WebGL: 1
