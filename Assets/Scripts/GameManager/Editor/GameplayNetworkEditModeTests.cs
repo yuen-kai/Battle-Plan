@@ -1129,66 +1129,165 @@ public class GameplayNetworkEditModeTests
         );
     }
 
+    /// <summary>
+    /// Shield Rush's ring was being drawn inside the base plate the unit stands on, where depth
+    /// testing hid it and every one of its streaks. Every unit prefab carries such a plate, so a
+    /// ground effect that only clears the board plane is invisible in every real match.
+    /// </summary>
     [Test]
-    public void DodgeRecoveryIndicator_BuildsLocalGroundGaugeWithoutColliders()
+    public void GroundVisuals_ClearTheBasePlateTheUnitStandsOn()
     {
-        GameObject unit = new("Dodge recovery indicator test unit");
+        GameObject unit = new("Base plate clearance test unit");
         unit.transform.position = Vector3.up;
         unit.AddComponent<CapsuleCollider>();
-        MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
-        hiddenUnitRenderer.forceRenderingOff = true;
+
+        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plate.name = UnitBasePlate.NamePrefix + "Rim";
+        plate.transform.SetParent(unit.transform, worldPositionStays: false);
+        plate.transform.localScale = new Vector3(2f, 0.2f, 2f);
+        Collider unitCollider = unit.GetComponent<Collider>();
+        plate.transform.position = new Vector3(0f, unitCollider.bounds.min.y + 0.1f, 0f);
+        float plateTop = plate.GetComponent<Renderer>().bounds.max.y;
+        float boardPlane = unitCollider.bounds.min.y;
+
         try
         {
-            DiveRecoveryIndicatorVisual visual = DiveRecoveryIndicatorVisual.Create(unit.transform);
-
-            Assert.That(visual, Is.Not.Null);
-            Assert.That(visual.name, Is.EqualTo(DiveRecoveryIndicatorVisual.GameObjectName));
-            Assert.That(visual.IsVisible, Is.False, "The indicator starts dormant.");
-            Collider unitCollider = unit.GetComponent<Collider>();
             Assert.That(
-                visual.transform.position.y,
-                Is.EqualTo(unitCollider.bounds.min.y + 0.08f).Within(0.001f),
-                "The gauge stays just above the unit's floor contact rather than obscuring it."
-            );
-            Assert.That(
-                visual.GetComponentsInChildren<Renderer>(includeInactive: true).Length,
-                Is.EqualTo(2),
-                "A recovered-at outline and the ring growing to meet it make up the indicator."
-            );
-            Assert.That(
-                visual
-                    .GetComponentsInChildren<Renderer>(includeInactive: true)
-                    .Select(renderer => renderer.forceRenderingOff),
-                Is.All.True,
-                "A lazily-created indicator must inherit host fog suppression before activation."
-            );
-            Assert.That(
-                visual.GetComponentsInChildren<Collider>(includeInactive: true),
-                Is.Empty,
-                "The local presentation must never affect gameplay physics."
-            );
-            Assert.That(
-                visual.GetComponentsInChildren<Light>(includeInactive: true),
-                Is.Empty,
-                "The indicator must not add gameplay-scene lighting cost."
-            );
-            Assert.That(
-                visual
-                    .GetComponentsInChildren<Renderer>(includeInactive: true)
-                    .Select(renderer => renderer.sharedMaterial.shader.name),
-                Is.All.EqualTo("BattlePlan/GroundGlow")
+                UnitBasePlate.ClearanceAbovePlane(unit.transform, 0.08f),
+                Is.EqualTo(plateTop - boardPlane + 0.08f).Within(0.001f),
+                "Clearance is measured from the plate's top face, not the board plane."
             );
 
-            visual.SetForceRenderingOff(false);
-            visual.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
-            Assert.That(visual.IsVisible, Is.True, "A landed dodger shows its recovery.");
-            visual.SetRecovery(default);
-            Assert.That(visual.IsVisible, Is.False, "Standing back up clears the gauge.");
+            Transform visual = SpeedBoostIndicatorVisual.Create(unit.transform).transform;
+            Assert.That(
+                visual.position.y,
+                Is.EqualTo(plateTop + 0.08f).Within(0.001f),
+                "The ring must sit above the plate, not inside it where depth buries it."
+            );
+            Assert.That(
+                visual.position.y,
+                Is.GreaterThan(boardPlane + 0.08f),
+                "The ring must be lifted clear of the bare board plane."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    [Test]
+    public void GroundVisuals_FallBackToTheBoardPlaneWithoutABasePlate()
+    {
+        GameObject unit = new("Plateless clearance test unit");
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+        try
+        {
+            Assert.That(
+                UnitBasePlate.ClearanceAbovePlane(unit.transform, 0.08f),
+                Is.EqualTo(0.08f).Within(0.001f)
+            );
+            Assert.That(
+                UnitBasePlate.ClearanceAbovePlane(null, 0.08f),
+                Is.EqualTo(0.08f).Within(0.001f),
+                "A missing unit must not throw on a purely presentational lookup."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    [Test]
+    public void DodgeRecoveryPulse_TintsTheCharacterAndRestoresItOnStandingUp()
+    {
+        GameObject unit = new("Dodge recovery pulse test unit");
+        GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        body.transform.SetParent(unit.transform, worldPositionStays: false);
+        Renderer bodyRenderer = body.GetComponent<Renderer>();
+        try
+        {
+            DiveRecoveryPulse pulse = DiveRecoveryPulse.Attach(unit);
+            Assert.That(pulse, Is.Not.Null);
+            Assert.That(pulse.IsPulsing, Is.False, "A unit on its feet is not pulsing.");
+            Assert.That(
+                DiveRecoveryPulse.Attach(unit),
+                Is.SameAs(pulse),
+                "Repeated state application must reuse the one driver on the unit."
+            );
+
+            pulse.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
+            Assert.That(pulse.IsPulsing, Is.True);
+            Assert.That(
+                bodyRenderer.HasPropertyBlock(),
+                Is.True,
+                "The pulse opens lit, on the frame the dodger hits the floor."
+            );
+
+            // Read per material slot, not per renderer: the body mesh carries several materials
+            // and each one is tinted from its own colour rather than the renderer's first.
+            MaterialPropertyBlock lit = new();
+            bodyRenderer.GetPropertyBlock(lit, 0);
+            Color tinted = lit.GetColor("_BaseColor");
+            Color untouched = bodyRenderer.sharedMaterial.GetColor("_BaseColor");
+            Assert.That(
+                tinted,
+                Is.Not.EqualTo(untouched),
+                "The body has to actually change colour for the pulse to read."
+            );
+            Assert.That(
+                tinted.r,
+                Is.GreaterThan(tinted.b),
+                "Recovery is amber, which must stay distinct from a white hit flash."
+            );
+
+            pulse.SetRecovery(default);
+            Assert.That(pulse.IsPulsing, Is.False);
+            Assert.That(
+                bodyRenderer.HasPropertyBlock(),
+                Is.False,
+                "Standing back up must hand the character's own materials back untouched."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    [Test]
+    public void DodgeRecoveryPulse_LeavesTheUnitsOwnEffectRenderersAlone()
+    {
+        GameObject unit = new("Dodge recovery pulse effect-exclusion test unit");
+        GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        body.transform.SetParent(unit.transform, worldPositionStays: false);
+
+        // Ground rings, the vision cone and the target laser drive their own property blocks on
+        // BattlePlan/* shaders; tinting them would recolour them and clearing would wipe them.
+        GameObject effect = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        effect.transform.SetParent(unit.transform, worldPositionStays: false);
+        Renderer effectRenderer = effect.GetComponent<Renderer>();
+        effectRenderer.sharedMaterial = new Material(Shader.Find("BattlePlan/GroundGlow"));
+        LineRenderer laser = unit.AddComponent<LineRenderer>();
+
+        try
+        {
+            Assert.That(
+                DiveRecoveryPulse.IsCharacterRenderer(body.GetComponent<Renderer>()),
+                Is.True
+            );
+            Assert.That(DiveRecoveryPulse.IsCharacterRenderer(effectRenderer), Is.False);
+            Assert.That(DiveRecoveryPulse.IsCharacterRenderer(laser), Is.False);
+
+            DiveRecoveryPulse pulse = DiveRecoveryPulse.Attach(unit);
+            pulse.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
 
             Assert.That(
-                DiveRecoveryIndicatorVisual.Create(unit.transform),
-                Is.SameAs(visual),
-                "Repeated state application must reuse the runtime-local visual."
+                effectRenderer.HasPropertyBlock(),
+                Is.False,
+                "A body tint must not reach the effects parked on the unit."
             );
         }
         finally

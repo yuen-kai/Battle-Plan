@@ -570,6 +570,8 @@ public class PlanMovement : MonoBehaviour
     /// clicks pick a target square inside the displayed range. Directional abilities use one of
     /// the eight adjacent cells as a direction anchor; self-targeted abilities need no square.
     /// The square is stored as the plan's second element: (true, [startCell, targetSquare]).
+    /// Clicks that land on one of your own units are read as picking that unit instead; the
+    /// square it stands on is still a square, and still aimable.
     /// </summary>
     void AbilitySelection()
     {
@@ -584,6 +586,14 @@ public class PlanMovement : MonoBehaviour
             ShowInvalidTargetFeedback(AbilityTargetValidationReason.AbilityUnavailable);
             return;
         }
+
+        // Pointing at a unit asks for that unit; pointing at the board names a square. What the
+        // pointer is actually over decides which, so a team-mate standing inside an ability's
+        // range can be given its orders without the click reading as an aim, while the ground it
+        // stands on stays aimable — smoke underfoot is one of the Commander's better plays.
+        GameObject pointedUnit = Mouse.GetFriendlyUnitUnderMouse();
+        if (pointedUnit != null && TrySelectPlanningUnit(pointedUnit))
+            return;
 
         Vector3? clicked = Mouse.GetGridCellUnderMouse();
         if (clicked == null)
@@ -1103,6 +1113,36 @@ public class PlanMovement : MonoBehaviour
             return false;
 
         return TrySetSelectionMode(unit, true);
+    }
+
+    /// <summary>
+    /// Resolves a click that landed on one of your own units rather than on the board. Pointing at
+    /// a unit asks for that unit: another unit takes over the selection, and the unit already
+    /// holding it turns over to its other face. This is what its card does, so pointing at a unit
+    /// on the board and pointing at it in the roster ask for the same thing. Returns true when the
+    /// click was spent on the selection and must not also be read as naming a square.
+    /// </summary>
+    public bool TrySelectPlanningUnit(GameObject unit)
+    {
+        // teamCharacters is the set that may be given orders, which during a dodge window is only
+        // the alerted units — the rest of the team is on the board but is not taking any.
+        if (!CanEditPlan || unit == null || !teamCharacters.Contains(unit))
+            return false;
+        if (!IsPlanningUnitAvailable(unit))
+            return false;
+
+        if (unit != selectedUnit)
+        {
+            SwitchToUnit(unit);
+            return selectedUnit == unit;
+        }
+
+        bool abilityMode = plans.TryGetValue(unit, out (bool, List<Vector3>) plan) && plan.Item1;
+        return abilityMode
+            ? TrySetSelectionMode(unit, false)
+            // Turning the other way has rules of its own — no abilities in a dodge, and a drawn
+            // route is given up before it is replaced — and they are kept in one place.
+            : TrySwitchToAbilityPlan(unit);
     }
 
     private static bool IsPlanningUnitAvailable(GameObject unit)
