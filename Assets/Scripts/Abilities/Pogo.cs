@@ -87,6 +87,53 @@ public partial class Pogo : Ability
     private void LandingFxClientRpc(Vector3 landingPosition)
     {
         Color teamColor = GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1);
-        ImpactShockwave.Spawn(landingPosition, teamColor, 1.8f, 0.4f);
+
+        // An arrival, and deliberately the opposite read to a death: everything here leaves the
+        // point of contact outward and upward, and the rider is still standing in the middle of it
+        // once the dust settles. The expanding ring belongs to this event and to no other on the
+        // board — anything else that fires one is indistinguishable from a rider coming down.
+        //
+        // The front has to cross two and a half cells: under 2.1 units of radius the shockwave
+        // throws no clods at all, which leaves a landing as a rim and nothing else.
+        ImpactShockwave.Spawn(landingPosition, teamColor, 3.4f, 0.5f);
+
+        // Everything else is placed against the rider's own silhouette rather than on top of it.
+        // The one thing that makes this an arrival is a unit standing in the middle of the mess,
+        // and measured on the frames either side of the peak the plume was burying seventy percent
+        // of him — so the plates are nudged into the near ground and the dust becomes two unequal
+        // plumes flanking him instead of one stamped on his chest.
+        Vector3 lateral = ViewerLateral();
+        Vector3 towardViewer = Vector3.Cross(Vector3.up, lateral);
+
+        DebrisBurst.Spawn(landingPosition + towardViewer * 0.3f, teamColor, 3.2f, 20);
+        // Displaced material rather than a burn: nothing here is on fire, the deck was struck.
+        Aftermath.Spawn(
+            landingPosition + lateral * 1.05f - towardViewer * 0.2f,
+            teamColor,
+            1.2f,
+            AftermathKind.Dust
+        );
+        Aftermath.Spawn(
+            landingPosition - lateral * 0.9f + towardViewer * 0.55f,
+            teamColor,
+            0.85f,
+            AftermathKind.Dust
+        );
+    }
+
+    /// <summary>
+    /// Screen-right along the ground, taken from whichever seat is watching. The two crews look at
+    /// the board from opposite ends, so "beside the rider" has to be resolved per viewer or the
+    /// dust that clears him on one screen lands on him on the other.
+    /// </summary>
+    private static Vector3 ViewerLateral()
+    {
+        Camera board = GameLoop.Instance != null ? GameLoop.Instance.TeamCamera : null;
+        if (board == null)
+            board = Camera.main;
+
+        Vector3 right = board != null ? board.transform.right : Vector3.right;
+        right.y = 0f;
+        return right.sqrMagnitude > 0.0001f ? right.normalized : Vector3.right;
     }
 }

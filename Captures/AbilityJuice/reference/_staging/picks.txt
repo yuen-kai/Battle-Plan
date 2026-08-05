@@ -1,0 +1,27 @@
+# Approved ability moments (triplet keys: <tag>-<NN>)
+# Each yields an aligned windup / impact / aftermath frame.
+cm-everyability-03
+cm-everyability-05
+cm-everyability-10
+cm-everyability-11
+cm-everyability-12
+cm-everyability-14
+cm-everyability-18
+cm-everyability-20
+cm-everyability-22
+cm-everyability-23
+cm-everyability-26
+cm-everyability-27
+cm-everyability-30
+cm-8newabilities-05
+cm-8newabilities-06
+cm-8newabilities-08
+cm-8newabilities-09
+cm-8newabilities-12
+cm-8newabilities-13
+cm-8newabilities-14
+cm-clashabilities-02
+cm-clashabilities-03
+cm-clashabilities-04
+cm-season2-05
+cm-season2-10

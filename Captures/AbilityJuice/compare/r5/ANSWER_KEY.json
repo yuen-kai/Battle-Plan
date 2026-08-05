@@ -1,0 +1,17 @@
+{
+  "death": {
+    "A": "reference",
+    "B": "ours",
+    "reference_file": "cm-everyability-23.jpg"
+  },
+  "grenade": {
+    "A": "reference",
+    "B": "ours",
+    "reference_file": "cm-everyability-22.jpg"
+  },
+  "pogo": {
+    "A": "reference",
+    "B": "ours",
+    "reference_file": "cm-everyability-20.jpg"
+  }
+}

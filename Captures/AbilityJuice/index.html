@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Battle Plan — Ability Juice</title>
+<style>
+  :root {
+    --ink: #0a0c12;
+    --ink-2: #11141d;
+    --ink-3: #171b26;
+    --line: #232838;
+    --text: #e7ecf5;
+    --dim: #8792a8;
+    --dimmer: #5a6479;
+    --blue: #5b73ff;
+    --red: #ff4d5e;
+    --amber: #ffc400;
+    --green: #4dd98b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--ink); color: var(--text);
+    font: 14px/1.55 ui-sans-serif, -apple-system, "SF Pro Text", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    padding: 18px 26px 14px;
+    background: linear-gradient(180deg, rgba(10,12,18,.97), rgba(10,12,18,.86));
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  h1 { font-size: 19px; margin: 0; letter-spacing: -.015em; font-weight: 650; }
+  .sub { color: var(--dim); font-size: 12.5px; }
+  .bar { margin-top: 12px; height: 5px; border-radius: 99px; background: var(--ink-3); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--blue), var(--green)); transition: width .5s ease; }
+  .meta { margin-top: 9px; display: flex; gap: 18px; flex-wrap: wrap; color: var(--dim); font-size: 12px; }
+  .meta b { color: var(--text); font-weight: 600; }
+  main { padding: 22px 26px 70px; display: grid; gap: 16px; }
+  .card { background: var(--ink-2); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+  .card > .head {
+    display: flex; align-items: center; gap: 12px; padding: 13px 16px;
+    border-bottom: 1px solid var(--line); flex-wrap: wrap;
+  }
+  .name { font-weight: 640; letter-spacing: -.01em; font-size: 15px; }
+  .kind { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--dimmer); }
+  .pill {
+    font-size: 11px; padding: 3px 9px; border-radius: 99px; font-weight: 600;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .pill.pending  { color: var(--dimmer); border-color: var(--line); }
+  .pill.building { color: var(--amber); border-color: #4a3d10; background: #241d07; }
+  .pill.capturing{ color: #7fd6ff; border-color: #17384a; background: #0a222e; }
+  .pill.judging  { color: #c9a0ff; border-color: #3a2b52; background: #1d1430; }
+  .pill.rejected { color: var(--red); border-color: #4d1d24; background: #2a0f14; }
+  .pill.passed   { color: var(--green); border-color: #1c4a33; background: #0c2418; }
+  .spacer { flex: 1; }
+  .iter { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 12px; }
+  .body { padding: 14px 16px 16px; display: grid; gap: 13px; }
+  .strip { width: 100%; border-radius: 8px; display: block; background: #05070b; border: 1px solid var(--line); }
+  .frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 10.5px; letter-spacing: .085em; text-transform: uppercase; color: var(--dimmer); text-align: center; }
+  .verdict { border-left: 2px solid var(--line); padding-left: 13px; }
+  .verdict .label { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 3px; }
+  .verdict p { margin: 0 0 9px; color: #cdd6e6; }
+  .verdict .gap { color: #ffd7a0; }
+  .history { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 3px; }
+  .history img { height: 58px; border-radius: 5px; border: 1px solid var(--line); opacity: .55; transition: opacity .2s; }
+  .history img:hover { opacity: 1; }
+  .history .h { flex: 0 0 auto; text-align: center; }
+  .history .h span { display: block; font-size: 10px; color: var(--dimmer); margin-top: 2px; }
+  .empty { color: var(--dimmer); font-size: 13px; padding: 8px 0; }
+  footer { padding: 0 26px 40px; color: var(--dimmer); font-size: 11.5px; }
+  .flash { animation: flash .7s ease; }
+  @keyframes flash { from { background: #1a2136; } to { background: var(--ink-2); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <h1>Ability Juice</h1>
+    <span class="sub" id="headline">loading…</span>
+  </div>
+  <div class="bar"><i id="progressbar" style="width:0%"></i></div>
+  <div class="meta">
+    <span>round <b id="round">—</b></span>
+    <span>passed <b id="passed">—</b></span>
+    <span>captures <b id="captures">—</b></span>
+    <span>updated <b id="updated">—</b></span>
+  </div>
+</header>
+<main id="cards"></main>
+<footer>Frames are captured from the running game at a fixed 60&nbsp;Hz clock. Strips are unlabelled: wind-up, impact, aftermath.</footer>
+
+<script>
+const STATUS_ORDER = { rejected: 0, building: 1, capturing: 2, judging: 3, pending: 4, passed: 5 };
+let lastSignature = "";
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function render(state) {
+  document.getElementById("headline").textContent = state.headline || "";
+  document.getElementById("round").textContent = state.round ?? "—";
+  document.getElementById("captures").textContent = state.captures ?? "—";
+  document.getElementById("updated").textContent = state.updated || "—";
+
+  const pieces = (state.pieces || []).slice().sort((a, b) =>
+    (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) ||
+    (a.name || "").localeCompare(b.name || ""));
+
+  const passed = pieces.filter(p => p.status === "passed").length;
+  document.getElementById("passed").textContent = pieces.length ? `${passed}/${pieces.length}` : "—";
+  document.getElementById("progressbar").style.width =
+    pieces.length ? `${Math.round(100 * passed / pieces.length)}%` : "0%";
+
+  const host = document.getElementById("cards");
+  host.textContent = "";
+
+  if (!pieces.length) {
+    host.appendChild(el("div", "empty", "No pieces registered yet."));
+    return;
+  }
+
+  for (const piece of pieces) {
+    const card = el("div", "card");
+
+    const head = el("div", "head");
+    head.appendChild(el("div", "name", piece.name));
+    if (piece.kind) head.appendChild(el("div", "kind", piece.kind));
+    head.appendChild(el("div", "spacer"));
+    if (piece.iteration !== undefined) head.appendChild(el("div", "iter", `v${piece.iteration}`));
+    head.appendChild(el("div", `pill ${piece.status || "pending"}`, piece.status || "pending"));
+    card.appendChild(head);
+
+    const body = el("div", "body");
+
+    if (piece.strip) {
+      const img = el("img", "strip");
+      img.src = piece.strip + "?t=" + (piece.stamp || Date.now());
+      img.alt = "";
+      body.appendChild(img);
+      const frames = el("div", "frames");
+      for (const label of ["wind-up", "impact", "aftermath"]) frames.appendChild(el("div", null, label));
+      body.appendChild(frames);
+    } else {
+      body.appendChild(el("div", "empty", "no capture yet"));
+    }
+
+    if (piece.verdict || piece.gap) {
+      const verdict = el("div", "verdict");
+      if (piece.verdict) {
+        verdict.appendChild(el("div", "label", "critic"));
+        verdict.appendChild(el("p", null, piece.verdict));
+      }
+      if (piece.gap) {
+        verdict.appendChild(el("div", "label", "biggest remaining gap"));
+        const gap = el("p", "gap", piece.gap);
+        verdict.appendChild(gap);
+      }
+      body.appendChild(verdict);
+    }
+
+    if (piece.history && piece.history.length) {
+      const history = el("div", "history");
+      for (const entry of piece.history) {
+        const wrap = el("div", "h");
+        const img = el("img");
+        img.src = entry.strip;
+        img.alt = "";
+        wrap.appendChild(img);
+        wrap.appendChild(el("span", null, "v" + entry.iteration));
+        history.appendChild(wrap);
+      }
+      body.appendChild(history);
+    }
+
+    card.appendChild(body);
+    host.appendChild(card);
+  }
+}
+
+async function tick() {
+  try {
+    const response = await fetch("state.json?t=" + Date.now(), { cache: "no-store" });
+    const state = await response.json();
+    const signature = JSON.stringify(state);
+    if (signature !== lastSignature) {
+      lastSignature = signature;
+      render(state);
+      document.body.classList.remove("flash");
+      void document.body.offsetWidth;
+    }
+  } catch (error) {
+    document.getElementById("headline").textContent = "waiting for state.json…";
+  }
+}
+
+tick();
+setInterval(tick, 2500);
+</script>
+</body>
+</html>

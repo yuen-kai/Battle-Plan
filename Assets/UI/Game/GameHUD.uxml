@@ -7,6 +7,7 @@
         <ui:VisualElement name="hud-flash" class="hud-flash" picking-mode="Ignore" />
 
         <ui:VisualElement name="enemy-status-strip" class="enemy-status-strip">
+            <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
             <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
 
             <ui:VisualElement class="hud-top toybox-ui" picking-mode="Ignore">
@@ -20,16 +21,22 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
+            <!-- The objective banner. Its two angled caps make the plate a trapezoid that narrows
+                 downward, which is what stops a tab hanging onto the board from reading as a
+                 rectangle someone forgot to align. -->
             <ui:VisualElement class="phase-notch toybox-ui" picking-mode="Ignore">
+                <ui:VisualElement class="toy-slant toy-slant--left phase-notch__cap" picking-mode="Ignore" />
                 <ui:VisualElement class="phase-cluster toy-readout" picking-mode="Ignore">
                     <ui:VisualElement class="phase-cluster__mark" picking-mode="Ignore" />
                     <ui:Label name="phase-label" text="Preparing match" class="phase-label" picking-mode="Ignore" />
                     <ui:Label name="timer-label" class="timer-label" picking-mode="Ignore" />
                 </ui:VisualElement>
+                <ui:VisualElement class="toy-slant toy-slant--right phase-notch__cap" picking-mode="Ignore" />
             </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement name="hud-dock" class="hud-dock">
+            <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
             <ui:VisualElement name="lesson-popup" class="lesson-popup toybox-ui hidden" picking-mode="Ignore">
                 <ui:VisualElement class="lesson-popup__card toy-panel" picking-mode="Ignore">
                     <ui:Label name="lesson-popup-label" class="lesson-popup__copy" picking-mode="Ignore" />
@@ -55,6 +62,8 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="deployment-overlay" class="deployment-overlay toybox-ui" focusable="true" tabindex="-1">
+            <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+            <ui:VisualElement class="toy-vignette" picking-mode="Ignore" />
             <ui:VisualElement class="deployment-overlay__content toy-panel" picking-mode="Ignore">
                 <ui:VisualElement class="deployment-overlay__mark" picking-mode="Ignore" />
                 <ui:Label text="Deploying crews" class="deployment-overlay__title title-lg" picking-mode="Ignore" />
@@ -143,6 +152,7 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="results-overlay" class="modal-shade results-overlay toybox-ui hidden">
+            <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
             <ui:VisualElement name="results-panel" class="modal results-panel" focusable="true" tabindex="-1">
                 <ui:ScrollView name="results-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="results-scroll" focusable="true" tabindex="0">
                     <ui:Label text="Battle report" class="section-label" picking-mode="Ignore" />

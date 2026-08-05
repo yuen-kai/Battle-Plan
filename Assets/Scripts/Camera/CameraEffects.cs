@@ -4,6 +4,10 @@ using UnityEngine;
 
 public class CameraEffects : NetworkBehaviour
 {
+    // The legacy intensity that now means "a standard grenade". Callers all pass the default.
+    private const float StandardShakeIntensity = 0.1f;
+    private const float MaxShakeStrength = 3f;
+
     public static CameraEffects Instance { get; private set; }
 
     private void Awake()
@@ -33,34 +37,43 @@ public class CameraEffects : NetworkBehaviour
     }
 
     /// <summary>
-    /// Shakes the camera for the local client's team
+    /// Shakes the camera for the local client's team.
     /// </summary>
-    /// <param name="shakeDuration">Duration of the shake</param>
-    /// <param name="shakeIntensity">Intensity of the shake</param>
+    /// <param name="shakeDuration">
+    /// How long a caller expects to wait on this coroutine. The shake itself is an impulse owned by
+    /// <see cref="ImpactCamera"/> and lasts as long as its strength earns, not as long as this.
+    /// </param>
+    /// <param name="shakeIntensity">Intensity of the shake; 0.1 is a standard hit.</param>
     public IEnumerator CameraShake(float shakeDuration = 0.5f, float shakeIntensity = 0.1f)
     {
-        Camera teamCamera = GameLoop.Instance.TeamCamera;
+        PunchAtViewCentre(shakeIntensity);
+        yield return new WaitForSecondsRealtime(Mathf.Clamp(shakeDuration, 0f, 1f));
+    }
+
+    /// <summary>
+    /// The legacy call carries no impact position, so the hit is treated as happening where the
+    /// camera is already looking. The punch still rolls and zooms at full force — those axes do not
+    /// need a direction — but it can only shove the board straight down the screen, and every hit
+    /// routed through here leans the same way. Callers that know where the impact landed should
+    /// reach <see cref="ImpactCamera.Punch"/> directly and pass it.
+    /// </summary>
+    private static void PunchAtViewCentre(float shakeIntensity)
+    {
+        Camera teamCamera = GameLoop.Instance != null ? GameLoop.Instance.TeamCamera : null;
         if (teamCamera == null)
         {
             Debug.LogWarning("[CameraEffects] No camera found, shake effect skipped");
-            yield break;
+            return;
         }
 
-        Vector3 originalPosition = teamCamera.transform.position;
-        float elapsed = 0f;
+        Transform view = teamCamera.transform;
+        Vector3 forward = view.forward;
+        float toDeck = forward.y < -0.01f ? view.position.y / -forward.y : GameLoop.cellSize * 5f;
 
-        while (elapsed < shakeDuration)
-        {
-            float x = Random.Range(-1f, 1f) * shakeIntensity;
-            float y = Random.Range(-1f, 1f) * shakeIntensity;
-
-            teamCamera.transform.position = originalPosition + new Vector3(x, y, 0);
-
-            elapsed += Time.unscaledDeltaTime;
-            yield return null;
-        }
-
-        teamCamera.transform.position = originalPosition;
+        ImpactCamera.Punch(
+            view.position + forward * Mathf.Max(toDeck, GameLoop.cellSize),
+            Mathf.Clamp(shakeIntensity / StandardShakeIntensity, 0f, MaxShakeStrength)
+        );
     }
 
     // [ClientRpc]

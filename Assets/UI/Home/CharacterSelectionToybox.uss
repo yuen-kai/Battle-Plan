@@ -1,5 +1,42 @@
+/* The crew screen: Overwatch's hero select, adapted to picking five.
+
+   Three bands over a lit 3D stage. The title and the match readout float at the
+   top with a single hairline under them. The portrait grid is the middle band,
+   with the board thumbnail beside it, because a 1v1 tactics match is chosen on
+   the map as much as on the crew. Your five slots run along the bottom, which is
+   where the team strip lives in the game this is borrowing from.
+
+   The screen paints nothing of its own: .screen's --toy-ground is overridden
+   immediately below so the stage camera shows through. That is why the vignette
+   and the bottom scrim are in the markup rather than being decoration — without
+   them the header is white type on whatever the stage happens to be lit to. */
+
 .roster-screen {
     background-color: var(--toy-transparent);
+}
+
+/* The scrim texture is a 4x256 alpha ramp with no intrinsic height, so it
+   collapses to nothing unless it is given one. It reaches far above the dock so
+   the stage falls away into the crew strip instead of stopping at a panel edge. */
+.roster-screen .toy-scrim-bottom {
+    height: 44%;
+}
+
+/* The header is the one block on this screen with no plate under it, and the
+   comment above claimed the vignette covered it. It does not: the title, the
+   eyebrow and the instruction were reading against whatever the crew was lit to
+   behind them, and against the dark half of the stage the instruction measured
+   1.45:1.
+
+   Unlike the other two masks this one is a plateau rather than a ramp — it
+   holds full cover for its first 45% and only then falls off. A pure gradient
+   deep enough to carry the instruction would still have been a gradient
+   *behind* it, which is a backdrop whose contrast changes down the line. The
+   height is set so the plateau ends level with the hairline the header closes
+   on and the falloff is spent before the portrait grid, which keeps the stage
+   open between the two bands. */
+.roster-screen .toy-scrim-top {
+    height: 30%;
 }
 
 .roster-frame {
@@ -16,61 +53,107 @@
     background-color: var(--toy-inset);
 }
 
+/* ------------------------------------------------------------------ header */
+
+/* One hairline carries the whole top of the screen. The heading used to be a
+   second dark plate beside the match readout, which turned the header into a
+   two-column form and covered the stage across the full width. */
 .roster-header {
-    min-height: 104px;
+    min-height: 116px;
     flex-direction: row;
-    align-items: stretch;
-    margin-bottom: var(--toy-space-md);
+    align-items: flex-start;
+    margin-bottom: var(--toy-space-lg);
+    padding-bottom: var(--toy-space-panel-compact);
+    border-bottom-width: var(--toy-stroke-thin);
+    border-bottom-color: var(--toy-divider);
 }
 
-.toybox-ui.roster-screen .roster-heading {
+.roster-heading {
     width: 58%;
-    justify-content: center;
-    padding: var(--toy-space-panel-compact) 22px;
+    padding-top: 2px;
 }
 
-.roster-heading .roster-instruction {
-    margin-top: 3px;
+/* Nothing sits between the title and the stage, so it carries a wash of the
+   scrim colour: the vignette handles a bright frame at the corners, not behind
+   46px of condensed caps sitting a third of the way in. */
+.roster-title {
+    margin-bottom: 5px;
+    text-shadow: 0 2px 14px var(--toy-scrim);
+}
+
+/* The instruction also carries .label, and `.toybox-ui .label` outranks a lone
+   class selector: sized from one, the line comes back at body size and reads as
+   a second heading under the title instead of the aside it is. */
+/* Lifted off muted and given the stage halo. This line has no plate under it —
+   it sits on lit geometry that changes colour as the crew turns — and at muted
+   it disappeared entirely against the brighter half of the backdrop. */
+.toybox-ui.roster-screen .roster-heading .roster-instruction {
+    max-width: 580px;
     font-size: var(--toy-type-label);
+    color: var(--toy-text-copy);
     white-space: normal;
 }
 
-.toybox-ui.roster-screen .match-summary {
-    width: 330px;
+/* Both of these sit on the stage with no plate under them, so they carry full
+   ink rather than the muted step a heading gets inside a panel. */
+.toybox-ui.roster-screen .roster-heading .section-label {
+    color: var(--toy-text);
+}
+
+/* The match readout. Keys and values are both display face because this is an
+   instrument panel, not prose, and a hairline per row is the only structure it
+   needs: boxing each pair produced a table nobody reads. */
+.roster-screen .match-summary {
+    width: 320px;
     margin-left: auto;
-    padding: 14px var(--toy-space-panel-compact);
+    align-self: flex-start;
+    padding: var(--toy-space-md) var(--toy-space-control-x) 14px var(--toy-space-control-x);
 }
 
 .roster-count-label {
-    margin-bottom: 6px;
-    font-size: var(--toy-type-body-lg);
-    -unity-font-style: bold;
+    margin-bottom: var(--toy-space-sm);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-title);
+    -unity-font-style: normal;
     color: var(--toy-primary-copy);
+    letter-spacing: var(--toy-track-title);
 }
 
 .summary-row {
-    min-height: 20px;
+    min-height: 30px;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
+    border-top-width: var(--toy-stroke-thin);
+    border-top-color: var(--toy-divider);
 }
 
 .summary-row__key {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
+    -unity-font-style: normal;
     color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
 }
 
 .summary-row__value {
     margin-left: var(--toy-space-panel-compact);
-    font-size: var(--toy-type-label);
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-body-lg);
+    -unity-font-style: normal;
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-title);
 }
 
+/* A hole in the layout rather than an element. It eats the vertical slack so the
+   header floats at the top and the working panels sit at the bottom; what shows
+   through it is the stage. */
 .roster-model-stage {
     flex-grow: 1;
     min-height: 120px;
 }
+
+/* ----------------------------------------------------------------- library */
 
 .roster-body {
     flex-grow: 0;
@@ -80,7 +163,9 @@
     flex-direction: row;
 }
 
-.toybox-ui.roster-screen .unit-library {
+/* The grid is the one thing this screen exists to do, so it is the plate that
+   wears the keyed rule. */
+.roster-screen .unit-library {
     width: 70%;
     margin-right: 14px;
     padding: var(--toy-space-panel-compact);
@@ -96,52 +181,83 @@
     align-items: stretch;
 }
 
+/* An instantiated template arrives wrapped in a container, and it is the wrapper
+   that the row lays out. Left shrinkable it gives up width while the tile inside
+   holds its minimum, and the portraits climb over each other instead of the row
+   reaching for the scroller. */
+.roster-options .unity-scroll-view__content-container > * {
+    flex-shrink: 0;
+}
+
 .roster-options .unity-scroller--horizontal {
     min-height: var(--toy-scroll-size);
     background-color: var(--toy-inset);
 }
 
+/* The tile. Margin is stated because the default runtime theme puts three
+   pixels around every Button, which read as an uneven gutter between portraits.
+
+   The left border is three pixels in every state and only ever changes colour:
+   growing it on hover moved the portrait sideways under the pointer. At rest it
+   is the edge wash, which reads as a marker rail waiting to be lit. */
 .unit-option {
     position: relative;
-    width: 206px;
-    min-width: 206px;
+    width: 230px;
+    min-width: 230px;
     min-height: 0;
     height: 100%;
-    margin-right: var(--toy-space-md);
+    margin: 0 var(--toy-space-md) 0 0;
     padding: 0;
     flex-direction: column;
     align-items: stretch;
     overflow: hidden;
     background-color: var(--toy-surface-raised);
     color: var(--toy-text);
-    border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-depth-rest);
+    border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-edge);
     border-radius: var(--toy-radius-lg);
     -unity-text-align: upper-left;
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, border-color, color;
 }
 
 .unit-option:hover {
-    background-color: var(--toy-surface-hover);
-    border-color: var(--toy-edge-strong);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select);
+    border-left-color: var(--toy-primary);
+}
+
+/* Pressing an already-chosen tile adds a second copy of that unit, so the
+   selected plate has to answer the pointer as well as the empty one does. */
+.unit-option:active,
+.unit-option.unit-option--selected:active {
+    background-color: var(--toy-select-pressed);
+    border-color: var(--toy-select-pressed);
+    border-left-color: var(--toy-primary);
 }
 
 .unit-option:focus {
     border-width: var(--toy-focus-emphasis);
     border-color: var(--toy-focus);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
-.unit-option:active {
-    border-bottom-width: var(--toy-depth-pressed);
-}
-
+/* Every tile goes disabled the moment the fifth slot fills, so the disabled
+   plate has to be a resting state and not a warning. */
 .unit-option:disabled,
 .unit-option:disabled:hover {
     opacity: 1;
     background-color: var(--toy-disabled-surface);
-    border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-focus-width);
+    color: var(--toy-text-muted);
+    border-width: var(--toy-stroke-thin);
     border-color: var(--toy-disabled-border);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-disabled-border);
 }
 
 .unit-option.unit-option--selected,
@@ -150,15 +266,21 @@
     opacity: 1;
     background-color: var(--toy-select);
     color: var(--toy-text-on-deep);
-    border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-depth-rest);
-    border-color: var(--toy-edge-strong);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-select);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
-.unit-option.unit-option--selected:focus {
+/* A white ring on the white plate is not a ring, so focus steps the plate down
+   and outlines it in the dark ink instead. */
+.unit-option.unit-option--selected:focus,
+.unit-option:hover:focus {
     background-color: var(--toy-select-pressed);
     border-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-focus);
+    border-color: var(--toy-text-on-deep);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .unit-option.unit-option--unavailable,
@@ -166,45 +288,66 @@
 .unit-option.unit-option--unavailable:disabled:hover {
     opacity: 1;
     background-color: var(--toy-disabled-surface);
-    border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-focus-width);
+    color: var(--toy-text-muted);
+    border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-disabled-border);
 }
 
 .unit-option__portrait {
-    height: 132px;
-    flex-shrink: 0;
-    -unity-background-scale-mode: scale-and-crop;
-    background-color: var(--toy-warm);
-    border-bottom-width: var(--toy-focus-width);
-    border-bottom-color: var(--toy-edge);
-}
-
-.unit-option--unavailable .unit-option__portrait {
-    opacity: 0.28;
-}
-
-.unit-option__copy {
     flex-grow: 1;
-    min-height: 0;
-    padding: 10px 13px;
+    flex-shrink: 1;
+    min-height: 132px;
+    justify-content: flex-end;
+    background-color: var(--toy-warm);
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+/* Dimming the picture through the tint rather than the element: opacity here
+   takes the nameplate sitting inside the portrait down with it, and a unit you
+   cannot deploy still has to be identifiable. */
+.unit-option--unavailable .unit-option__portrait {
+    -unity-background-image-tint-color: var(--toy-disabled-border);
+}
+
+/* The name is burned into the foot of the picture instead of sitting under it.
+   Below the portrait it cost the tile forty pixels of face, which is the only
+   thing on a hero tile anyone actually reads at a glance. */
+.unit-option__name {
+    flex-shrink: 0;
+    padding: 4px 11px 5px 11px;
+    background-color: var(--toy-panel);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-title);
+    -unity-font-style: normal;
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-label);
+    white-space: nowrap;
     overflow: hidden;
 }
 
-.unit-option__name {
-    flex-shrink: 0;
-    margin-bottom: 3px;
-    font-size: 17px;
-    -unity-font-style: bold;
-    color: var(--toy-text);
-}
-
+.unit-option:hover .unit-option__name,
 .unit-option--selected .unit-option__name {
+    background-color: var(--toy-select);
     color: var(--toy-text-on-deep);
 }
 
 .unit-option--unavailable .unit-option__name {
+    background-color: var(--toy-panel);
     color: var(--toy-text-muted);
+}
+
+/* Fixed height so the ability line lands on the same baseline across the row.
+   The unit descriptions run from one word to a full sentence, and letting the
+   copy size itself gave every tile a different portrait. */
+.unit-option__copy {
+    height: 100px;
+    flex-shrink: 0;
+    padding: 10px 12px;
+    overflow: hidden;
+    border-top-width: var(--toy-stroke-thin);
+    border-top-color: var(--toy-edge);
 }
 
 .unit-option__description {
@@ -217,8 +360,13 @@
     overflow: hidden;
 }
 
+.unit-option:hover .unit-option__description,
 .unit-option--selected .unit-option__description {
     color: var(--toy-text-on-accent-quiet);
+}
+
+.unit-option--unavailable .unit-option__description {
+    color: var(--toy-text-muted);
 }
 
 .unit-option__ability-row {
@@ -226,62 +374,83 @@
     flex-direction: row;
     align-items: center;
     margin-top: var(--toy-space-sm);
-    padding: 4px 7px;
-    background-color: var(--toy-surface-quiet);
-    border-radius: var(--toy-radius-sm);
 }
 
 .unit-option__ability-mark {
-    width: 8px;
-    height: 8px;
+    width: 11px;
+    min-width: 11px;
+    height: 11px;
     margin-right: 7px;
-    background-color: var(--toy-primary);
-    border-radius: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--toy-primary);
+}
+
+/* The mark follows the plate, not the accent: on the inverted tile the orange
+   rule down the leading edge is already saying "chosen", and a second orange
+   mark inside it made the state read as two different things. */
+.unit-option:hover .unit-option__ability-mark,
+.unit-option--selected .unit-option__ability-mark {
+    -unity-background-image-tint-color: var(--toy-text-on-deep);
+}
+
+.unit-option--unavailable .unit-option__ability-mark {
+    -unity-background-image-tint-color: var(--toy-text-muted);
 }
 
 .unit-option__ability {
     flex-grow: 1;
     min-width: 0;
-    font-size: 11px;
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-caption);
+    -unity-font-style: normal;
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-label);
     white-space: normal;
 }
 
-.unit-option__status {
-    position: absolute;
-    top: var(--toy-space-sm);
-    right: var(--toy-space-sm);
-    min-width: 76px;
-    min-height: 25px;
-    padding: var(--toy-space-xs) var(--toy-space-sm);
-    background-color: var(--toy-inset);
-    color: var(--toy-text);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge-strong);
-    border-radius: var(--toy-radius-md);
-    font-size: 11px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-center;
-    letter-spacing: 0;
+.unit-option:hover .unit-option__ability,
+.unit-option--selected .unit-option__ability {
+    color: var(--toy-text-on-deep);
 }
 
-.unit-option--selected .unit-option__status {
+.unit-option--unavailable .unit-option__ability {
+    color: var(--toy-text-muted);
+}
+
+/* The stack counter, flush into the corner. Inset from the edge it reads as a
+   sticker on the picture; flush it reads as part of the frame. Never give this
+   a display property — the controller hides it with the shared .hidden class,
+   which this rule would outrank. */
+.unit-option__status {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-height: 22px;
+    padding: 3px 9px;
     background-color: var(--toy-primary);
     color: var(--toy-text-on-accent);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-caption);
+    -unity-font-style: normal;
+    letter-spacing: var(--toy-track-label);
+    -unity-text-align: middle-center;
 }
 
 .unit-option--unavailable .unit-option__status {
-    background-color: var(--toy-text-muted);
-    color: var(--toy-text-on-accent);
+    background-color: var(--toy-disabled-surface);
+    color: var(--toy-text-muted);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-disabled-border);
 }
 
-.toybox-ui.roster-screen .map-column {
+/* --------------------------------------------------------------- the board */
+
+.roster-screen .map-column {
     flex-grow: 1;
     min-width: 250px;
     justify-content: center;
     align-items: center;
-    padding: var(--toy-space-control-x);
+    padding: var(--toy-space-panel-compact);
 }
 
 .map-label {
@@ -295,24 +464,31 @@
     background-image: url("project://database/Assets/Images/MapPreview.png");
     -unity-background-scale-mode: scale-to-fit;
     background-color: var(--toy-inset);
-    border-width: var(--toy-focus-width);
-    border-color: var(--toy-edge-strong);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
     border-radius: var(--toy-radius-md);
 }
 
 .map-caption {
+    align-self: flex-start;
     margin-top: var(--toy-space-sm);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
+    -unity-font-style: normal;
     color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
 }
 
-.toybox-ui.roster-screen .selection-dock {
-    min-height: 126px;
+/* ------------------------------------------------------------------- crew */
+
+.roster-screen .selection-dock {
+    min-height: 134px;
     margin-top: 14px;
     padding: 14px var(--toy-space-panel-compact);
     flex-direction: row;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-end;
 }
 
 .selection-column {
@@ -325,89 +501,107 @@
     flex-wrap: wrap;
 }
 
+/* The five slots divide the strip between them rather than carrying a width per
+   breakpoint: the dock is the full width of the screen at every size, and a
+   fixed slot left either a ragged gap at 1920 or an overflow at 1000. */
 .selected-slot {
-    width: 200px;
-    min-width: 176px;
-    min-height: 64px;
-    margin-right: var(--toy-space-sm);
-    padding: 7px 9px 9px 9px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-width: 0;
+    min-height: 76px;
+    margin: 0 var(--toy-space-sm) 0 0;
+    padding: 9px 12px;
     flex-direction: row;
     align-items: center;
     overflow: hidden;
-    background-color: var(--toy-surface-quiet);
-    color: var(--toy-text-muted);
-    border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-depth-rest);
+    background-color: var(--toy-inset);
+    color: var(--toy-text-copy);
+    border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-edge);
     border-radius: var(--toy-radius-md);
     -unity-text-align: middle-left;
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, border-color, color;
 }
 
-.selected-slot:hover {
-    background-color: var(--toy-surface-raised);
-    border-color: var(--toy-edge-strong);
-}
+/* An empty slot is disabled, so it must not light up under the pointer: there is
+   nothing in it to remove.
 
-.selected-slot:focus {
-    background-color: var(--toy-surface-raised);
-    border-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-focus);
-}
-
-.selected-slot:active {
-    border-bottom-width: var(--toy-depth-pressed);
-}
-
+   Disabled is not the same as unreadable, and this is the well — the darkest
+   surface on the paper theme. Muted ink measures 2.7:1 in here, so an empty
+   slot carries copy and takes its de-emphasis from the missing portrait and
+   the empty leading rule instead. */
 .selected-slot:disabled,
 .selected-slot:disabled:hover,
 .selected-slot:disabled:active {
     opacity: 1;
-    background-color: var(--toy-surface-quiet);
-    border-bottom-width: var(--toy-depth-rest);
+    background-color: var(--toy-inset);
+    color: var(--toy-text-copy);
     border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
+    border-left-color: var(--toy-edge);
 }
 
-.selected-slot--filled {
-    background-color: var(--toy-select);
-    border-color: var(--toy-edge-strong);
-    color: var(--toy-text-on-deep);
-}
-
+.selected-slot.selected-slot--filled,
 .selected-slot.selected-slot--filled:disabled,
 .selected-slot.selected-slot--filled:disabled:hover,
 .selected-slot.selected-slot--filled:disabled:active {
     opacity: 1;
     background-color: var(--toy-select);
     color: var(--toy-text-on-deep);
-    border-bottom-width: var(--toy-depth-rest);
-    border-color: var(--toy-edge-strong);
+    border-color: var(--toy-select);
+    border-left-color: var(--toy-primary);
+}
+
+.selected-slot--filled:hover {
+    background-color: var(--toy-select-hover);
+    border-color: var(--toy-select-hover);
+    border-left-color: var(--toy-primary);
+}
+
+.selected-slot--filled:active {
+    background-color: var(--toy-select-pressed);
+    border-color: var(--toy-select-pressed);
+    border-left-color: var(--toy-primary);
 }
 
 .selected-slot--filled:focus {
     background-color: var(--toy-select-pressed);
-    border-color: var(--toy-focus);
+    border-width: var(--toy-focus-emphasis);
+    border-color: var(--toy-text-on-deep);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
+/* The numeral is the whole of an empty slot, so it is set at title size. Filled,
+   it drops to the quiet ink and lets the unit name lead. */
 .selected-slot__index {
-    width: 20px;
-    margin-right: 6px;
-    font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
-    color: var(--toy-text-muted);
+    width: 24px;
+    min-width: 24px;
+    margin-right: 10px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-title-lg);
+    -unity-font-style: normal;
+    color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-title);
+    -unity-text-align: middle-center;
 }
 
 .selected-slot--filled .selected-slot__index {
-    color: var(--toy-text-on-deep);
+    color: var(--toy-text-on-accent-quiet);
 }
 
 .selected-slot__portrait {
     display: none;
-    width: var(--toy-target-compact);
-    min-width: var(--toy-target-compact);
-    height: var(--toy-target-compact);
-    margin-right: var(--toy-space-sm);
+    width: var(--toy-target);
+    min-width: var(--toy-target);
+    height: var(--toy-target);
+    margin-right: var(--toy-space-md);
     background-color: var(--toy-warm);
-    border-radius: var(--toy-radius-sm);
     -unity-background-scale-mode: scale-and-crop;
 }
 
@@ -423,64 +617,92 @@
 }
 
 .selected-slot__name {
-    font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
-    color: var(--toy-text-muted);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-body);
+    -unity-font-style: normal;
+    color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-label);
     white-space: nowrap;
+    overflow: hidden;
 }
 
 .selected-slot--filled .selected-slot__name {
     color: var(--toy-text-on-deep);
 }
 
+/* The ability line only exists once there is a unit to describe. Empty, the
+   numeral and "Open slot" already say everything, and a second line of filler
+   under them made five hollow slots look like five broken ones. */
 .selected-slot__detail {
+    display: none;
     margin-top: 2px;
-    font-size: 10px;
-    color: var(--toy-text-muted);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-caption);
+    -unity-font-style: normal;
+    color: var(--toy-text-on-accent-quiet);
+    letter-spacing: var(--toy-track-label);
     white-space: nowrap;
+    overflow: hidden;
 }
 
 .selected-slot--filled .selected-slot__detail {
-    color: var(--toy-text-on-accent-quiet);
+    display: flex;
 }
 
 .confirm-column {
-    width: 260px;
-    min-width: 230px;
-    margin-left: 14px;
+    width: 280px;
+    min-width: 240px;
+    margin-left: var(--toy-space-lg);
     align-items: stretch;
 }
 
-.selection-status {
+.roster-screen .selection-status {
     min-height: 22px;
-    margin-bottom: 5px;
+    margin-bottom: var(--toy-space-sm);
+    font-size: var(--toy-type-label);
     -unity-text-align: middle-right;
 }
 
-.confirm-button {
+/* Composition has to outrank the shared button: .toybox-ui .button justifies to
+   flex-start, so a plain .confirm-button rule left the check and the word parked
+   against the left edge of a 280px plate. */
+.roster-screen .confirm-button {
     width: 100%;
+    min-height: 60px;
+    margin: 0;
     justify-content: center;
 }
 
 .confirm-button__label {
-    -unity-font-style: bold;
+    font-size: var(--toy-type-title);
     color: var(--toy-text-on-accent);
+    letter-spacing: var(--toy-track-title);
 }
 
 .confirm-button:disabled {
     opacity: 1;
 }
 
+/* -------------------------------------------------------------------------
+   Breakpoints. Every rule below is one class deep, which ties with the
+   composition rules above and wins on order. Naming the screen class here too
+   would bind each override to which element the controller happens to put the
+   breakpoint class on, and that is not the element the screen class is on. */
+
 .compact .roster-frame {
     padding-left: var(--toy-space-panel);
     padding-right: var(--toy-space-panel);
 }
 
-.compact .roster-screen .roster-heading {
+.compact .roster-header {
+    min-height: 104px;
+}
+
+.compact .roster-heading {
     width: 55%;
 }
 
-.compact .roster-screen .match-summary {
+.compact .match-summary {
     width: 286px;
 }
 
@@ -498,28 +720,34 @@
     min-width: 178px;
 }
 
-.compact .unit-option__portrait {
-    height: 106px;
+.compact .unit-option__name {
+    font-size: var(--toy-type-body-lg);
 }
 
-.compact .unit-option__description {
+/* The sentence is the first thing to go: at this width it wraps to five lines
+   and eats the portrait. What is left is the ability, so the copy strip shrinks
+   to exactly that line. */
+.compact .unit-option__copy,
+.short .unit-option__copy {
+    height: 42px;
+}
+
+.compact .unit-option__description,
+.short .unit-option__description {
     display: none;
 }
 
-/* Without the description there is no flexible child left to hold the
-   ability chip against the bottom of the card. */
-.compact .unit-option__copy,
-.short .unit-option__copy {
-    justify-content: space-between;
-}
-
-.compact .selected-slot {
-    width: 190px;
-    min-width: 168px;
+.compact .unit-option__ability-row,
+.short .unit-option__ability-row {
+    margin-top: 0;
 }
 
 .narrow .roster-frame {
     padding: var(--toy-space-panel-compact);
+}
+
+.narrow .roster-title {
+    font-size: var(--toy-type-title-lg);
 }
 
 .narrow .roster-model-stage {
@@ -531,7 +759,7 @@
     min-height: 300px;
 }
 
-.narrow .roster-screen .unit-library {
+.narrow .unit-library {
     width: 100%;
     margin-right: 0;
 }
@@ -540,7 +768,7 @@
     display: none;
 }
 
-.narrow .roster-screen .selection-dock {
+.narrow .selection-dock {
     flex-direction: column;
     align-items: stretch;
 }
@@ -563,17 +791,18 @@
 .phone .roster-header {
     min-height: 0;
     flex-direction: column;
+    padding-bottom: var(--toy-space-md);
 }
 
-.phone .roster-screen .roster-heading {
+.phone .roster-heading {
     width: 100%;
-    padding: 14px var(--toy-space-control-x);
 }
 
-.phone .roster-screen .match-summary {
+.phone .match-summary {
     width: 100%;
-    margin-top: var(--toy-space-sm);
+    margin-top: var(--toy-space-md);
     margin-left: 0;
+    align-self: stretch;
 }
 
 .phone .roster-model-stage {
@@ -590,24 +819,28 @@
     min-width: 154px;
 }
 
+/* Five slots across a phone leave room for a numeral and a name and nothing
+   else. The portrait is the first thing to go because the name is the thing you
+   are checking. */
 .phone .selected-slot {
-    width: 19%;
-    min-width: 0;
-    margin-right: 1%;
-    margin-bottom: 7px;
-    padding-left: 6px;
-    padding-right: 6px;
+    min-height: var(--toy-target-phone);
+    margin-right: var(--toy-space-xs);
+    padding-left: 7px;
+    padding-right: 7px;
 }
 
 .phone .selected-slot__portrait,
 .phone .selected-slot--filled .selected-slot__portrait,
-.phone .selected-slot__detail {
+.phone .selected-slot__detail,
+.phone .selected-slot--filled .selected-slot__detail {
     display: none;
 }
 
 .phone .selected-slot__index {
-    width: 14px;
-    margin-right: 3px;
+    width: 16px;
+    min-width: 16px;
+    margin-right: 5px;
+    font-size: var(--toy-type-title);
 }
 
 .phone .selected-slot__name {
@@ -621,13 +854,13 @@
 }
 
 .short .roster-header {
-    min-height: 82px;
-    margin-bottom: 6px;
+    min-height: 0;
+    margin-bottom: var(--toy-space-md);
+    padding-bottom: var(--toy-space-md);
 }
 
-.short .roster-screen .roster-heading {
-    padding-top: var(--toy-space-control-top);
-    padding-bottom: var(--toy-space-control-top);
+.short .roster-title {
+    font-size: var(--toy-type-title-lg);
 }
 
 .short .roster-instruction {
@@ -644,24 +877,26 @@
 }
 
 .short .unit-option__portrait {
-    height: 96px;
-}
-
-.short .unit-option__description {
-    display: none;
+    min-height: 96px;
 }
 
 .short .map-preview {
     height: 165px;
 }
 
-.short .roster-screen .selection-dock {
-    min-height: 112px;
+.short .selection-dock {
+    min-height: 116px;
     margin-top: var(--toy-space-sm);
-    padding-top: 9px;
-    padding-bottom: 9px;
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
 .short .selected-slot {
-    min-height: var(--toy-target-phone);
+    min-height: 64px;
+}
+
+.short .selected-slot__portrait {
+    width: var(--toy-target-compact);
+    min-width: var(--toy-target-compact);
+    height: var(--toy-target-compact);
 }

@@ -1,28 +1,37 @@
 /* The base reset, layered under TacticalToybox.uss on every screen.
 
    This file used to carry a second, hand-written copy of the whole palette:
-   forty-odd rgb() literals that disagreed with the tokens by a few points each
-   (text #E0E9EB against #D6DBDD, edge #3C353E against #393839, disabled text at
-   4.01:1 where the token cleared AA). The Toybox rules win on specificity
-   wherever both define a property, so most of that copy was invisible — but the
-   gameplay unit cards sit outside .toybox-ui on purpose, which meant the in-match
-   HUD inherited the divergent values and the menus did not. Two sources of truth,
-   one of them silently authoritative for the part of the game people look at
-   most. Everything below now reads the tokens. */
+   forty-odd rgb() literals that disagreed with the tokens by a few points each.
+   The Toybox rules win on specificity wherever both define a property, so most
+   of that copy was invisible — but the gameplay unit cards sit outside
+   .toybox-ui on purpose, which meant the in-match HUD inherited the divergent
+   values and the menus did not. Two sources of truth, one of them silently
+   authoritative for the part of the game people look at most. Everything below
+   now reads the tokens. */
 @import url("TacticalToyboxTokens.uss");
 
-/* Rubik is the interface family. This default matters beyond the menus: the gameplay unit and
-   ability cards sit outside .toybox-ui scope on purpose, so they inherit their type from here
-   rather than from the Toybox component library. */
+/* Jost is the reading face: a geometric sans in the place Overwatch uses
+   Futura. It is the default because prose must never be caught by the caps
+   face, and because the in-match unit and ability cards sit outside the
+   .toybox-ui scope on purpose and inherit their type from here.
+
+   Anything that is chrome rather than prose asks for the display face
+   explicitly. There is no shorthand for it: USS cannot put a var() inside a
+   url(), so the path is written out at each call site. */
 :root {
-    -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
+    -unity-font-definition: url("project://database/Assets/Fonts/Jost/Jost-Regular UI SDF.asset");
     color: var(--toy-text);
     font-size: 12px;
+    letter-spacing: var(--toy-track-body);
 }
 
-/* Tabular figures for relay codes, counts, and timers only. Prose never takes this. */
+/* Numerals, codes and timers. Condensed caps rather than a typewriter face:
+   a countdown in this interface should look like the one over an Overwatch
+   objective, and Oswald's digits are uniform enough not to jitter as they
+   count. */
 .mono {
-    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    letter-spacing: var(--toy-track-label);
 }
 
 .screen {
@@ -37,8 +46,8 @@
 }
 
 .command-ribbon {
-    height: 36px;
-    min-height: 36px;
+    height: 34px;
+    min-height: 34px;
     flex-direction: row;
     align-items: center;
     padding-left: 16px;
@@ -56,16 +65,18 @@
 }
 
 .command-ribbon__text {
-    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 12px;
     color: var(--toy-text-copy);
-    letter-spacing: 1px;
+    letter-spacing: var(--toy-track-label);
 }
 
 .command-ribbon__route {
     margin-left: auto;
-    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 12px;
     color: var(--toy-text-muted);
-    letter-spacing: 1px;
+    letter-spacing: var(--toy-track-label);
 }
 
 .brand-mark {
@@ -74,11 +85,12 @@
 }
 
 .panel {
-    padding: 28px;
+    padding: 26px;
     background-color: var(--toy-panel);
     border-width: 1px;
     border-color: var(--toy-edge);
-    border-radius: 10px;
+    border-top-color: var(--toy-edge-strong);
+    border-radius: var(--toy-radius-md);
 }
 
 .panel--quiet {
@@ -87,30 +99,41 @@
 }
 
 .panel--blue {
-    border-color: var(--toy-select);
+    border-color: var(--toy-team-friendly);
 }
 
 .panel--amber {
-    border-color: var(--toy-primary);
+    border-top-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-primary);
+}
+
+/* The oblique cut, available to the gameplay subtrees that sit outside the
+   component library's scope. Reserved for the big moments — a verdict, a
+   callout — never for a control. */
+.toy-oblique {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
 }
 
 .title-xl {
-    font-size: 34px;
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
+    font-size: 38px;
     color: var(--toy-text);
-    letter-spacing: 1px;
+    letter-spacing: var(--toy-track-display);
+    text-shadow: 0 2px 6px var(--toy-shadow-stage);
 }
 
 .title-lg {
-    font-size: 25px;
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 27px;
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-title);
 }
 
 .title-md {
-    font-size: 18px;
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 19px;
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-title);
 }
 
 .label {
@@ -130,16 +153,15 @@
     color: var(--toy-primary-copy);
 }
 
-.label--blue {
-    color: var(--toy-team-friendly-copy);
-}
-
 .section-label {
     margin-bottom: 10px;
-    font-size: 11px;
-    -unity-font-style: bold;
+    padding-left: 9px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 12px;
     color: var(--toy-text-muted);
-    letter-spacing: 1px;
+    letter-spacing: var(--toy-track-label);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .divider {
@@ -156,21 +178,24 @@
     color: var(--toy-text);
     border-width: 1px;
     border-color: var(--toy-edge);
-    border-radius: 8px;
-    -unity-font-style: bold;
-    font-size: 14px;
-    transition-duration: 0.12s;
-    transition-property: background-color, border-color, color, opacity;
+    border-radius: var(--toy-radius-md);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 15px;
+    letter-spacing: var(--toy-track-label);
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, border-color, color;
 }
 
 .button:hover {
-    background-color: var(--toy-surface-hover);
-    border-color: var(--toy-edge-strong);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select);
 }
 
 .button:active {
-    background-color: var(--toy-surface-pressed);
-    border-color: var(--toy-edge-strong);
+    background-color: var(--toy-select-pressed);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select-pressed);
 }
 
 .button:focus {
@@ -190,13 +215,14 @@
 
 .button--primary {
     background-color: var(--toy-primary);
-    border-color: var(--toy-primary-pressed);
-    color: var(--toy-text-on-accent);
+    border-color: var(--toy-primary);
+    color: var(--toy-text-on-primary);
 }
 
 .button--primary:hover {
     background-color: var(--toy-primary-hover);
-    border-color: var(--toy-text);
+    border-color: var(--toy-primary-hover);
+    color: var(--toy-text-on-primary);
 }
 
 .button--primary:focus {
@@ -213,26 +239,33 @@
     color: var(--toy-text-muted);
 }
 
+/* The red plate stays red in both themes, so its ink cannot be the one that
+   flips with them: --toy-text-on-deep turns near-black on the HUD and lands at
+   3.8:1 on this fill. */
 .button--danger {
     background-color: var(--toy-danger);
-    border-color: var(--toy-danger-pressed);
-    color: var(--toy-text-on-deep);
+    border-color: var(--toy-danger);
+    color: var(--toy-text-on-danger);
 }
 
 .button--danger:hover {
     background-color: var(--toy-danger-hover);
-    border-color: var(--toy-edge-strong);
+    border-color: var(--toy-danger-hover);
+    color: var(--toy-text-on-danger);
 }
 
 .button--selected {
     background-color: var(--toy-select);
-    border-color: var(--toy-select-pressed);
+    border-color: var(--toy-select);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
     color: var(--toy-text-on-deep);
 }
 
 .button--selected:hover {
     background-color: var(--toy-select-hover);
-    border-color: var(--toy-edge-strong);
+    border-color: var(--toy-select-hover);
+    border-left-color: var(--toy-primary);
 }
 
 .button--flat {
@@ -242,9 +275,9 @@
 }
 
 .button--flat:hover {
-    background-color: var(--toy-text-wash);
-    border-color: var(--toy-text-border);
-    color: var(--toy-text);
+    background-color: var(--toy-select);
+    border-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
 }
 
 .text-field {
@@ -260,7 +293,7 @@
     color: var(--toy-text);
     border-width: 1px;
     border-color: var(--toy-edge);
-    border-radius: 8px;
+    border-radius: var(--toy-radius-md);
     font-size: 18px;
 }
 
@@ -295,7 +328,7 @@
     background-color: var(--toy-inset);
     border-width: 1px;
     border-color: var(--toy-edge);
-    border-radius: 6px;
+    border-radius: var(--toy-radius-sm);
 }
 
 .toggle:hover > .unity-toggle__input > .unity-toggle__checkmark {
@@ -307,8 +340,8 @@
 }
 
 .toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
-    background-color: var(--toy-select);
-    border-color: var(--toy-select-pressed);
+    background-color: var(--toy-primary);
+    border-color: var(--toy-primary);
 }
 
 .modal-shade {
@@ -328,14 +361,17 @@
     max-width: 92%;
     max-height: 88%;
     padding: 30px;
-    background-color: var(--toy-surface);
+    background-color: var(--toy-panel-sheer);
     border-width: 1px;
     border-color: var(--toy-edge);
-    border-radius: 12px;
+    border-top-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-primary);
+    border-radius: var(--toy-radius-lg);
 }
 
 .modal:focus {
-    border-color: var(--toy-focus);
+    border-color: var(--toy-edge-strong);
+    border-top-color: var(--toy-primary);
 }
 
 .modal__header {
@@ -346,7 +382,7 @@
 
 .modal-close {
     align-self: flex-end;
-    min-width: 140px;
+    min-width: 160px;
     margin-top: 24px;
 }
 
@@ -367,18 +403,23 @@
 }
 
 .controls-scroll .unity-scroller--vertical {
-    width: 12px;
+    width: var(--toy-scroll-size);
     background-color: var(--toy-inset);
 }
 
 .controls-scroll .unity-base-slider__tracker {
-    background-color: var(--toy-surface-pressed);
+    background-color: var(--toy-inset);
     border-color: var(--toy-divider);
 }
 
 .controls-scroll .unity-base-slider__dragger {
     background-color: var(--toy-text-muted);
-    border-color: var(--toy-edge-strong);
+    border-width: 0;
+}
+
+.unity-scroller__low-button,
+.unity-scroller__high-button {
+    display: none;
 }
 
 .control-section {
@@ -387,11 +428,14 @@
 
 .control-section__label {
     margin-top: 4px;
-    margin-bottom: 2px;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: var(--toy-text-muted);
-    letter-spacing: 1px;
+    margin-bottom: 6px;
+    padding-left: 9px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 11px;
+    color: var(--toy-primary-copy);
+    letter-spacing: var(--toy-track-label);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .control-row {
@@ -408,8 +452,9 @@
     width: 176px;
     min-width: 176px;
     padding-right: 18px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     color: var(--toy-text);
-    -unity-font-style: bold;
+    letter-spacing: var(--toy-track-label);
 }
 
 .control-copy {
@@ -447,7 +492,7 @@
 }
 
 .compact .title-xl {
-    font-size: 29px;
+    font-size: 32px;
 }
 
 .narrow .command-ribbon__route {

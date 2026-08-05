@@ -1,0 +1,12 @@
+[
+  {
+    "shot": "windup",
+    "windup_frame": 22,
+    "impact_frame": 40,
+    "aftermath_frame": 54,
+    "windup_time": 0.3333,
+    "impact_time": 0.9333,
+    "aftermath_time": 1.4,
+    "peak_score": 0.3993018567562103
+  }
+]

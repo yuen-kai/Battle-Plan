@@ -1,27 +1,79 @@
+/* The component library, layered over the tokens on every screen.
+
+   Everything here is an implementation of one of the four moves described at
+   the top of TacticalToyboxTokens.uss: translucent near-black chrome, structure
+   drawn in light rather than in boxes, one warm accent for the objective, and a
+   chosen thing that inverts to a white plate.
+
+   Two rules are worth stating once because they explain most of the file:
+
+   The hover invert. Every plain control turns into a white plate with dark ink
+   when you point at it, and its icon and label flip with it. That single
+   behaviour does more to place this interface than any colour choice — it is
+   what a menu row does in Overwatch, and it is why the rest of the chrome can
+   stay as quiet as it is.
+
+   The two families. Display type is OswaldCaps, a condensed face whose
+   lowercase codepoints are mapped to uppercase glyphs, so anything set in it
+   renders as caps without a single ToUpper() in the codebase or a hand-edited
+   string in a UXML. It is applied to chrome only: titles, controls, labels,
+   chips, readouts, numerals. Prose stays in Jost, a geometric sans standing in
+   for the Futura the real thing uses, because a paragraph of condensed caps is
+   not readable and no shipping game sets one. If you add an element whose text
+   is a sentence, leave it in the inherited body face. */
+
 @import url("TacticalToyboxTokens.uss");
 
 .toybox-ui {
-    -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
+    -unity-font-definition: url("project://database/Assets/Fonts/Jost/Jost-Regular UI SDF.asset");
     color: var(--toy-text);
     font-size: var(--toy-type-body);
+    letter-spacing: var(--toy-track-body);
     background-color: var(--toy-transparent);
 }
 
+/* Opt in to the condensed caps face. Inherited, so a container wearing this
+   hands it to every label inside it. */
+.toybox-ui .toy-display {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+}
+
+/* The oblique cut. The reference leans its display type on the big moments and
+   only those: the wordmark, a screen's one-line statement, a match verdict, a
+   callout about the objective. Controls, labels, chips and figures stay upright,
+   which is what keeps the lean reading as emphasis rather than as a typeface. */
+.toybox-ui .toy-oblique {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
+}
+
+/* ------------------------------------------------------------------ panels */
+
+/* Panels are a tint over the world rather than a plate on a background, and
+   they are lit from above: the top hairline is brighter than the other three,
+   which is the whole of the depth model here. */
 .toybox-ui .toy-panel,
 .toybox-ui .panel {
     padding: var(--toy-space-panel);
     background-color: var(--toy-panel);
     border-width: var(--toy-stroke-thin);
-    border-bottom-width: var(--toy-depth-panel);
     border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
     border-radius: var(--toy-radius-lg);
 }
 
 .toybox-ui .toy-panel--compact {
     padding: var(--toy-space-panel-compact);
-    border-bottom-width: var(--toy-depth-pressed);
     border-radius: var(--toy-radius-md);
 }
+
+/* A plate that announces itself: the orange rule across the top is how this
+   interface marks the thing you are meant to deal with next. */
+.toybox-ui .toy-panel--keyed {
+    border-top-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-primary);
+}
+
+/* ----------------------------------------------------------------- buttons */
 
 .toybox-ui .button {
     min-height: var(--toy-target);
@@ -32,113 +84,181 @@
     background-color: var(--toy-surface-raised);
     color: var(--toy-text);
     border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-depth-rest);
     border-color: var(--toy-edge);
     border-radius: var(--toy-radius-md);
-    -unity-font-style: bold;
-    font-size: var(--toy-type-body);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    -unity-font-style: normal;
+    font-size: var(--toy-type-body-lg);
+    letter-spacing: var(--toy-track-label);
     transition-duration: var(--toy-motion-fast);
-    transition-property: background-color, border-color, color, opacity;
+    transition-property: background-color, border-color, color;
 }
 
+/* The invert. Ink, icon and border all have to move together or the plate
+   comes up white with white text on it. */
 .toybox-ui .button:hover {
-    background-color: var(--toy-surface-hover);
-    border-color: var(--toy-edge-strong);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select);
+}
+
+.toybox-ui .button:hover .toy-button__label {
+    color: var(--toy-text-on-deep);
+}
+
+.toybox-ui .button:hover .toy-icon {
+    -unity-background-image-tint-color: var(--toy-text-on-deep);
 }
 
 .toybox-ui .button:active {
-    padding-top: var(--toy-space-control-active-top);
-    padding-bottom: var(--toy-space-control-active-bottom);
-    border-bottom-width: var(--toy-depth-pressed);
-    background-color: var(--toy-surface-pressed);
+    background-color: var(--toy-select-pressed);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select-pressed);
 }
 
-/* Flat theme: the ring is a uniform two-pixel border rather than a thickening of
-   three sides around an offset bottom edge. */
+/* Flat theme: the ring is a uniform two-pixel border rather than a thickening
+   of three sides. On the dark plate it is white; every light fill below
+   overrides it to the dark ink, where a white ring would not exist. */
 .toybox-ui .button:focus {
     border-width: var(--toy-focus-emphasis);
     border-color: var(--toy-focus);
 }
 
-/* Focus reads as primary orange everywhere except on the primary fill itself.
-   An orange ring would vanish there, and a light one only reaches 2:1 against
-   the orange; a dark ring clears 7:1. */
 .toybox-ui .button--primary:focus,
 .toybox-ui .button--primary:hover:focus,
-.toybox-ui .button--primary:active:focus {
-    border-color: var(--toy-text-on-accent);
+.toybox-ui .button--primary:active:focus,
+.toybox-ui .button:hover:focus,
+.toybox-ui .button:active:focus,
+.toybox-ui .button--selected:focus,
+.toybox-ui .button--selected:hover:focus,
+.toybox-ui .button--danger:hover:focus,
+.toybox-ui .button--flat:hover:focus {
+    border-color: var(--toy-text-on-deep);
 }
 
 .toybox-ui .button:disabled,
 .toybox-ui .button:disabled:hover,
 .toybox-ui .button:disabled:active {
-    padding-top: var(--toy-space-control-top);
-    padding-bottom: var(--toy-space-control-bottom);
     background-color: var(--toy-disabled-surface);
     color: var(--toy-text-muted);
     border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-focus-width);
     border-color: var(--toy-disabled-border);
     opacity: 1;
 }
 
-.toybox-ui .button--primary {
+/* Dark ink on the orange. The reference puts white here and this sheet followed
+   it behind a drop shadow, which reads as contrast without being any: the
+   stroke stayed 2.4:1 from the fill and only its edge moved. The focus ring is
+   the same ink, which is now the plate's own — see the token. */
+.toybox-ui .button--primary,
+.toybox-ui .button--primary:hover {
     background-color: var(--toy-primary);
-    color: var(--toy-text-on-accent);
-    border-color: var(--toy-edge);
+    color: var(--toy-text-on-primary);
+    border-color: var(--toy-primary);
 }
 
 .toybox-ui .button--primary:hover {
     background-color: var(--toy-primary-hover);
-    border-color: var(--toy-edge-strong);
+    border-color: var(--toy-primary-hover);
+}
+
+.toybox-ui .button--primary .toy-button__label,
+.toybox-ui .button--primary:hover .toy-button__label {
+    color: var(--toy-text-on-primary);
+}
+
+.toybox-ui .button--primary .toy-icon,
+.toybox-ui .button--primary:hover .toy-icon {
+    -unity-background-image-tint-color: var(--toy-text-on-primary);
 }
 
 .toybox-ui .button--primary:active {
     background-color: var(--toy-primary-pressed);
+    border-color: var(--toy-primary-pressed);
 }
 
+/* The chosen one. Already inverted, so it wears the orange rule on its leading
+   edge to say that the inversion is a state and not a hover. */
 .toybox-ui .button--selected,
 .toybox-ui .button--selected:hover {
     background-color: var(--toy-select);
     color: var(--toy-text-on-deep);
-    border-color: var(--toy-edge-strong);
+    border-color: var(--toy-select);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
-.toybox-ui .button--selected:focus {
-    background-color: var(--toy-select-pressed);
-    border-color: var(--toy-focus);
+.toybox-ui .button--selected .toy-button__label,
+.toybox-ui .button--selected:hover .toy-button__label {
+    color: var(--toy-text-on-deep);
+}
+
+.toybox-ui .button--selected .toy-icon,
+.toybox-ui .button--selected:hover .toy-icon {
+    -unity-background-image-tint-color: var(--toy-text-on-deep);
 }
 
 .toybox-ui .button--selected:active {
     background-color: var(--toy-select-pressed);
+    border-color: var(--toy-select-pressed);
+    border-left-color: var(--toy-primary);
 }
 
+/* Focus on an already-inverted control has nowhere brighter to go, so it steps
+   the plate down instead and rings it in the dark ink. */
+.toybox-ui .button--selected:focus {
+    background-color: var(--toy-select-pressed);
+    border-width: var(--toy-focus-emphasis);
+    border-color: var(--toy-text-on-deep);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
+}
+
+/* Danger keeps its own fill through hover rather than inverting: the invert is
+   how this interface says "this is the one", and a delete button is not.
+
+   Its ink is --toy-text-on-danger rather than --toy-text-on-deep, because the
+   fill does not flip with the theme and that token does: in the match settings
+   this button was near-black on red at 3.8:1. */
 .toybox-ui .button--danger {
     background-color: var(--toy-danger);
-    color: var(--toy-text-on-deep);
+    color: var(--toy-text-on-danger);
+    border-color: var(--toy-danger);
 }
 
 .toybox-ui .button--danger:hover {
     background-color: var(--toy-danger-hover);
-    border-color: var(--toy-edge-strong);
+    color: var(--toy-text-on-danger);
+    border-color: var(--toy-danger-hover);
+}
+
+.toybox-ui .button--danger:hover .toy-button__label {
+    color: var(--toy-text-on-danger);
+}
+
+.toybox-ui .button--danger:hover .toy-icon {
+    -unity-background-image-tint-color: var(--toy-text-on-danger);
 }
 
 .toybox-ui .button--danger:active {
     background-color: var(--toy-danger-pressed);
+    border-color: var(--toy-danger-pressed);
 }
 
+/* Secondary navigation — a back arrow, a quiet cancel. No plate until touched,
+   and then the same invert as everything else. */
 .toybox-ui .button--flat {
     min-height: var(--toy-target-compact);
     padding: var(--toy-space-sm) var(--toy-space-md);
     background-color: var(--toy-transparent);
-    color: var(--toy-text);
-    border-bottom-width: var(--toy-focus-width);
+    color: var(--toy-text-copy);
     border-color: var(--toy-text-border);
 }
 
 .toybox-ui .button--flat:hover {
-    background-color: var(--toy-text-wash);
-    border-color: var(--toy-edge-strong);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select);
 }
 
 .toybox-ui .button--primary:disabled,
@@ -149,17 +269,21 @@
 .toybox-ui .button--danger:disabled:hover {
     background-color: var(--toy-disabled-surface);
     color: var(--toy-text-muted);
+    border-width: var(--toy-focus-width);
     border-color: var(--toy-disabled-border);
 }
 
-/* Primary is deliberately absent here; its own rule above keeps a light ring. */
-.toybox-ui .button:hover:focus,
-.toybox-ui .button:active:focus,
-.toybox-ui .button--selected:hover:focus,
-.toybox-ui .button--danger:hover:focus,
-.toybox-ui .button--flat:hover:focus {
-    border-color: var(--toy-focus);
+.toybox-ui .button:disabled .toy-icon,
+.toybox-ui .button:disabled:hover .toy-icon {
+    -unity-background-image-tint-color: var(--toy-text-muted);
 }
+
+.toybox-ui .button:disabled .toy-button__label,
+.toybox-ui .button:disabled:hover .toy-button__label {
+    color: var(--toy-text-muted);
+}
+
+/* ------------------------------------------------------------------- icons */
 
 .toybox-ui .toy-icon {
     width: var(--toy-icon-size);
@@ -168,14 +292,6 @@
     margin-right: var(--toy-icon-gap);
     -unity-background-scale-mode: scale-to-fit;
     -unity-background-image-tint-color: var(--toy-text);
-}
-
-.toybox-ui .button:disabled .toy-icon {
-    -unity-background-image-tint-color: var(--toy-text-muted);
-}
-
-.toybox-ui .button:disabled .toy-button__label {
-    color: var(--toy-text-muted);
 }
 
 .toybox-ui .toy-icon--play {
@@ -242,29 +358,146 @@
     background-image: url("project://database/Assets/UI/Shared/Icons/chevron-right.svg");
 }
 
+.toybox-ui .toy-icon--chevron-down {
+    background-image: url("project://database/Assets/UI/Shared/Icons/chevron-down.svg");
+}
+
+.toybox-ui .toy-icon--hex {
+    background-image: url("project://database/Assets/UI/Shared/Icons/hex.svg");
+}
+
+.toybox-ui .toy-icon--hex-frame {
+    background-image: url("project://database/Assets/UI/Shared/Icons/hex-frame.svg");
+}
+
+.toybox-ui .toy-icon--ring {
+    background-image: url("project://database/Assets/UI/Shared/Icons/ring.svg");
+}
+
+/* -------------------------------------------------------------- decoration */
+
+/* The angled cap. Flanking a rectangle with the left and right pair turns it
+   into a trapezoid that narrows downward — the shape Overwatch hangs its
+   objective banner and its tab strip in. Two fixed-width caps rather than one
+   stretched image, because a stretched bevel changes its angle with the width
+   of the element it is decorating. Tint them to match the plate they extend. */
+.toybox-ui .toy-slant {
+    width: var(--toy-slant);
+    min-width: var(--toy-slant);
+    align-self: stretch;
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: var(--toy-primary);
+}
+
+.toybox-ui .toy-slant--left {
+    background-image: url("project://database/Assets/UI/Shared/Icons/slant-left.svg");
+}
+
+.toybox-ui .toy-slant--right {
+    background-image: url("project://database/Assets/UI/Shared/Icons/slant-right.svg");
+}
+
+/* Diagonal hatch, the texture this interface uses to mark a strip as chrome
+   rather than content. Always under something and always nearly invisible. */
+.toybox-ui .toy-hatch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0.05;
+    background-image: url("project://database/Assets/UI/Shared/Textures/Hatch.png");
+    background-repeat: repeat;
+    background-size: 18px 18px;
+    -unity-background-image-tint-color: var(--toy-text-copy);
+}
+
+/* Cinematic edges. The vignette and the three scrims are the only reason a lit
+   3D stage can sit directly behind white text and still lose to it. */
+/* All four masks are white with their shape in alpha, so the tint is what
+   decides whether an edge falls off into paper or into near-black. That is the
+   one hook the in-match HUD needs to keep its dark chrome while the front end
+   is light.
+
+   Which edge a screen needs is not decoration: type over the stage measures
+   whatever the stage happens to be lit to behind it, and the crew screen's
+   header ran at 1.45:1 against a dark model with only a vignette — whose alpha
+   is 36/255 at the frame edge and zero across the middle — nominally covering
+   it. A screen that puts a line of type on the stage takes the scrim on that
+   edge. */
+.toybox-ui .toy-vignette {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-image: url("project://database/Assets/UI/Shared/Textures/Vignette.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: var(--toy-vignette-tint);
+}
+
+.toybox-ui .toy-scrim-left {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-image: url("project://database/Assets/UI/Shared/Textures/ScrimLeft.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: var(--toy-scrim-tint);
+}
+
+.toybox-ui .toy-scrim-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("project://database/Assets/UI/Shared/Textures/ScrimBottom.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: var(--toy-scrim-tint);
+}
+
+.toybox-ui .toy-scrim-top {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    background-image: url("project://database/Assets/UI/Shared/Textures/ScrimTop.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: var(--toy-scrim-tint);
+}
+
+/* -------------------------------------------------------------------- type */
+
+/* A screen's one-line statement, and the only heading level that leans. */
 .toybox-ui .title-xl {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
     font-size: var(--toy-type-display);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     color: var(--toy-text);
-    letter-spacing: -0.5px;
+    letter-spacing: var(--toy-track-display);
+    text-shadow: 0 2px 6px var(--toy-shadow-stage);
 }
 
 .toybox-ui .title-lg {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-title-lg);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     color: var(--toy-text);
-    letter-spacing: -0.25px;
+    letter-spacing: var(--toy-track-title);
 }
 
 .toybox-ui .title-md {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-title);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-title);
 }
 
 .toybox-ui .label {
     font-size: var(--toy-type-body);
     color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-body);
 }
 
 .toybox-ui .label--muted {
@@ -279,16 +512,19 @@
     color: var(--toy-primary-copy);
 }
 
-.toybox-ui .label--blue {
-    color: var(--toy-team-friendly-copy);
-}
-
+/* A group heading, and the one place a three-pixel orange tick is allowed to
+   appear on something that is not interactive: it is what turns a stack of
+   sections into a briefing rather than a form. */
 .toybox-ui .section-label {
     margin-bottom: var(--toy-space-sm);
+    padding-left: 9px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-label);
-    -unity-font-style: bold;
-    color: var(--toy-text);
-    letter-spacing: 0;
+    -unity-font-style: normal;
+    color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .toybox-ui .divider {
@@ -298,30 +534,34 @@
     background-color: var(--toy-divider);
 }
 
+/* ---------------------------------------------------------------- readouts */
+
 .toybox-ui .toy-readout {
     padding: var(--toy-space-md) var(--toy-space-control-x);
     background-color: var(--toy-panel);
     border-width: var(--toy-stroke-thin);
-    border-bottom-width: var(--toy-depth-panel);
     border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
     border-radius: var(--toy-radius-md);
 }
 
 .toybox-ui .toy-readout__label {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
     color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
 }
 
 .toybox-ui .toy-readout__value {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-title);
-    -unity-font-style: bold;
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-title);
 }
 
 .toybox-ui .toy-chip {
     min-height: var(--toy-target-status);
-    padding: var(--toy-space-xs) 9px;
+    padding: var(--toy-space-xs) 10px;
     align-items: center;
     justify-content: center;
     background-color: var(--toy-surface-quiet);
@@ -329,23 +569,29 @@
     border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
     border-radius: var(--toy-radius-sm);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
+    letter-spacing: var(--toy-track-label);
 }
 
 .toybox-ui .toy-chip--selected {
     background-color: var(--toy-select);
     color: var(--toy-text-on-deep);
+    border-color: var(--toy-select);
 }
 
 .toybox-ui .toy-chip--info {
+    color: var(--toy-primary-copy);
     border-color: var(--toy-primary);
 }
 
 .toybox-ui .toy-chip--danger {
     background-color: var(--toy-danger);
-    color: var(--toy-text-on-deep);
+    color: var(--toy-text-on-danger);
+    border-color: var(--toy-danger);
 }
+
+/* ------------------------------------------------------------------ fields */
 
 .toybox-ui .text-field {
     margin-top: 7px;
@@ -358,20 +604,27 @@
     padding: var(--toy-space-control-top) 14px;
     background-color: var(--toy-inset);
     color: var(--toy-text);
-    --unity-cursor-color: var(--toy-text);
+    --unity-cursor-color: var(--toy-primary);
     border-width: var(--toy-focus-width);
     border-color: var(--toy-edge);
-    border-radius: 9px;
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-edge-strong);
+    border-radius: var(--toy-radius-md);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-mono);
+    letter-spacing: var(--toy-track-title);
 }
 
 .toybox-ui .text-field > .unity-base-text-field__input:hover {
-    border-color: var(--toy-text-muted);
+    border-color: var(--toy-edge-strong);
+    border-left-color: var(--toy-primary);
 }
 
 .toybox-ui .text-field > .unity-base-text-field__input:focus {
     border-width: var(--toy-focus-emphasis);
     border-color: var(--toy-focus);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .toybox-ui .text-field.text-field--caret-hidden > .unity-base-text-field__input {
@@ -381,10 +634,13 @@
 .toybox-ui .toggle {
     min-height: var(--toy-target-compact);
     color: var(--toy-text);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-body);
-    -unity-font-style: bold;
+    letter-spacing: var(--toy-track-label);
 }
 
+/* A square well that fills with the accent when it is on. Overwatch's switches
+   do not slide and they do not tick — they light up. */
 .toybox-ui .toggle > .unity-toggle__input > .unity-toggle__checkmark {
     width: var(--toy-icon-size);
     min-width: var(--toy-icon-size);
@@ -394,7 +650,7 @@
     background-color: var(--toy-inset);
     border-width: var(--toy-focus-width);
     border-color: var(--toy-edge);
-    border-radius: 7px;
+    border-radius: var(--toy-radius-sm);
 }
 
 .toybox-ui .toggle:hover > .unity-toggle__input > .unity-toggle__checkmark {
@@ -407,8 +663,8 @@
 }
 
 .toybox-ui .toggle:checked > .unity-toggle__input > .unity-toggle__checkmark {
-    background-color: var(--toy-select);
-    border-color: var(--toy-edge-strong);
+    background-color: var(--toy-primary);
+    border-color: var(--toy-primary);
 }
 
 .toybox-ui .toggle:checked:focus > .unity-toggle__input > .unity-toggle__checkmark {
@@ -416,9 +672,9 @@
     border-color: var(--toy-focus);
 }
 
-/* Volume-style slider. The built-in template is a hairline track with a small round pill, and it
-   positions both of those absolutely, so each one is given its own geometry here rather than
-   nudged: an inset channel and a handle wide enough to grab or to see from across a room. */
+/* Volume-style slider. The built-in template is a hairline track with a small
+   round pill positioned absolutely, so each part is given its own geometry here
+   rather than nudged: a shallow inset channel and a rectangular grip. */
 .toybox-ui .toy-slider {
     min-height: var(--toy-target-compact);
     margin: 0;
@@ -430,8 +686,6 @@
     align-items: center;
 }
 
-/* The channel and the handle hang off this box, so it carries the height they centre on and the
-   full width they travel across. */
 .toybox-ui .toy-slider .unity-base-slider__drag-container {
     width: 100%;
     height: 28px;
@@ -444,15 +698,14 @@
     left: 0;
     right: 0;
     top: 50%;
-    height: 8px;
-    margin-top: -4px;
+    height: 6px;
+    margin-top: -3px;
     background-color: var(--toy-inset);
     border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
     border-radius: var(--toy-radius-sm);
 }
 
-/* The handle draws its own outline, so the template's separate border box is redundant. */
 .toybox-ui .toy-slider .unity-base-slider__dragger-border {
     display: none;
 }
@@ -460,15 +713,14 @@
 .toybox-ui .toy-slider .unity-base-slider__dragger {
     position: absolute;
     top: 50%;
-    width: 18px;
-    height: 28px;
-    margin-top: -14px;
-    background-color: var(--toy-text-muted);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
+    width: 12px;
+    height: 26px;
+    margin-top: -13px;
+    background-color: var(--toy-text);
+    border-width: 0;
     border-radius: var(--toy-radius-sm);
     transition-duration: var(--toy-motion-fast);
-    transition-property: background-color, border-color;
+    transition-property: background-color;
 }
 
 .toybox-ui .toy-slider:hover .unity-base-slider__tracker {
@@ -476,11 +728,11 @@
 }
 
 .toybox-ui .toy-slider:hover .unity-base-slider__dragger {
-    background-color: var(--toy-text);
+    background-color: var(--toy-primary);
 }
 
-/* Focus brightens the handle and the channel edge together: a ring alone on an 18px box is not a
-   cue you can find, and a light ring on a light handle would not be one at all. */
+/* Focus lights the grip rather than ringing it: a two-pixel outline on a
+   twelve-pixel bar is not a cue anyone finds. */
 .toybox-ui .toy-slider:focus .unity-base-slider__tracker,
 .toybox-ui .toy-slider .unity-base-slider__input:focus .unity-base-slider__tracker {
     border-color: var(--toy-focus);
@@ -488,7 +740,7 @@
 
 .toybox-ui .toy-slider:focus .unity-base-slider__dragger,
 .toybox-ui .toy-slider .unity-base-slider__input:focus .unity-base-slider__dragger {
-    background-color: var(--toy-focus);
+    background-color: var(--toy-primary);
 }
 
 .toybox-ui .toy-slider:disabled {
@@ -501,9 +753,10 @@
 }
 
 .toybox-ui .toy-slider:disabled .unity-base-slider__dragger {
-    background-color: var(--toy-disabled-border);
-    border-color: var(--toy-disabled-border);
+    background-color: var(--toy-text-muted);
 }
+
+/* ------------------------------------------------------------------ modals */
 
 .toybox-ui.modal-shade,
 .toybox-ui .modal-shade {
@@ -518,21 +771,24 @@
     background-color: var(--toy-scrim);
 }
 
+/* The orange bar across the top is the dialog's whole chrome. It replaces the
+   title bar, the rounded corner and the shadow all at once. */
 .toybox-ui .modal {
     width: 680px;
     max-width: 92%;
     max-height: 90%;
     padding: var(--toy-space-modal);
-    background-color: var(--toy-surface);
+    background-color: var(--toy-panel-sheer);
     border-width: var(--toy-focus-width);
-    border-bottom-width: var(--toy-depth-modal);
     border-color: var(--toy-edge);
+    border-top-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-primary);
     border-radius: var(--toy-radius-lg);
 }
 
 .toybox-ui .modal:focus {
-    border-width: var(--toy-focus-emphasis);
-    border-color: var(--toy-focus);
+    border-color: var(--toy-edge-strong);
+    border-top-color: var(--toy-primary);
 }
 
 .toybox-ui .modal__header {
@@ -543,8 +799,9 @@
 
 .toybox-ui .modal-close {
     align-self: flex-end;
-    min-width: 140px;
+    min-width: 160px;
     margin-top: var(--toy-space-panel);
+    justify-content: center;
 }
 
 .toybox-ui .controls-panel {
@@ -569,11 +826,14 @@
 
 .toybox-ui .control-section__label {
     margin-top: var(--toy-space-xs);
-    margin-bottom: var(--toy-space-xs);
+    margin-bottom: var(--toy-space-sm);
+    padding-left: 9px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
     color: var(--toy-primary-copy);
-    letter-spacing: 0;
+    letter-spacing: var(--toy-track-label);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .toybox-ui .control-row {
@@ -590,8 +850,9 @@
     width: 176px;
     min-width: 176px;
     padding-right: var(--toy-space-panel-compact);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     color: var(--toy-text);
-    -unity-font-style: bold;
+    letter-spacing: var(--toy-track-label);
 }
 
 .toybox-ui .control-copy {
@@ -608,6 +869,8 @@
 .toybox-ui .controls-panel .modal-close {
     margin-top: var(--toy-space-control-x);
 }
+
+/* ------------------------------------------------------------------ status */
 
 .toybox-ui .status-line {
     min-height: var(--toy-icon-size);
@@ -630,51 +893,58 @@
     color: var(--toy-danger-copy);
 }
 
+/* --------------------------------------------------------------- scrollers */
+
 .toybox-ui .unity-scroller--vertical,
 .toybox-ui .unity-scroller--horizontal {
     background-color: var(--toy-inset);
 }
 
+/* Unity's scroller ships a stepper button at each end. They are editor
+   furniture — nothing else in this interface has a raised nub with an arrow on
+   it — and at the foot of a plate they read as an unfinished control. The track
+   and its thumb carry the whole job. */
 .toybox-ui .unity-scroller__low-button,
 .toybox-ui .unity-scroller__high-button {
-    background-color: var(--toy-surface-raised);
+    display: none;
+}
+
+.toybox-ui .unity-scroller .unity-base-slider__tracker {
+    background-color: var(--toy-inset);
     border-color: var(--toy-divider);
 }
 
-.toybox-ui .unity-base-slider__tracker {
-    background-color: var(--toy-surface-quiet);
-    border-color: var(--toy-divider);
-}
-
-.toybox-ui .unity-base-slider__dragger {
+/* A scrollbar is furniture, not content. At the strong edge value the thumb was
+   the brightest thing on a panel of hairlines and read as the one control
+   nobody had finished styling. */
+.toybox-ui .unity-scroller .unity-base-slider__dragger {
     background-color: var(--toy-text-muted);
-    border-color: var(--toy-text-border);
+    border-width: 0;
+    border-radius: var(--toy-radius-sm);
 }
 
+/* The route glyph on the title board: a start pip, a run of orange, a stop. */
 .toybox-ui .plan-path {
-    height: 22px;
+    height: 18px;
     flex-direction: row;
     align-items: center;
 }
 
 .toybox-ui .plan-path__start,
 .toybox-ui .plan-path__stop {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     background-color: var(--toy-primary);
-    border-width: 2px;
-    border-color: var(--toy-edge);
-}
-
-.toybox-ui .plan-path__start {
-    border-radius: var(--toy-radius-sm);
+    border-width: 0;
 }
 
 .toybox-ui .plan-path__line {
     width: 74px;
-    height: 4px;
+    height: 3px;
     background-color: var(--toy-primary);
 }
+
+/* ------------------------------------------------------------- breakpoints */
 
 .phone .toybox-ui .toy-panel {
     padding: var(--toy-space-panel-compact);

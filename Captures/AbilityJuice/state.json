@@ -1,0 +1,337 @@
+{
+  "round": 5,
+  "headline": "round 5 judged - blind test lost 0-3 to Clash Mini; three named reasons, all measurable",
+  "captures": 38,
+  "pieces": [
+    {
+      "name": "grenade",
+      "status": "rejected",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 0,
+          "strip": "strips/r0/grenade.jpg"
+        },
+        {
+          "iteration": 1,
+          "strip": "strips/r3/grenade.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/grenade.jpg"
+        }
+      ],
+      "kind": "composite",
+      "strip": "strips/r5/grenade.jpg",
+      "stamp": 1785918511,
+      "verdict": "The composite now fires the whole vocabulary at once: a golden blast, three simultaneous damage numbers, curved shockwave plates and a scorched aftermath. 2.43 percent bright-and-saturated on the impact panel, inside the reference band.",
+      "gap": "Lost the blind test. A stranger picked Clash Mini, fairly confident: our explosion does not light the room, and our aftermath frame is smaller than our impact frame where theirs is bigger."
+    },
+    {
+      "name": "pogo",
+      "status": "rejected",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 0,
+          "strip": "strips/r0/pogo.jpg"
+        },
+        {
+          "iteration": 1,
+          "strip": "strips/r3/pogo.jpg"
+        },
+        {
+          "iteration": 4,
+          "strip": "strips/r4/pogo.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/pogo.jpg"
+        }
+      ],
+      "kind": "composite",
+      "strip": "strips/r5/pogo.jpg",
+      "stamp": 1785918511,
+      "verdict": "In the blind test the critic said our impact frame BEATS the reference on craft - hard-edged shards radiating along the ground with direction, a dozen discrete debris chunks, and real light spill, against their featureless white ball.",
+      "gap": "Lost on amplitude. Our effect covers a third of the area theirs does, and our third panel collapses to low-contrast scatter where theirs is still the peak of the sequence."
+    },
+    {
+      "name": "smoke",
+      "status": "rejected",
+      "iteration": 0,
+      "history": [
+        {
+          "iteration": 0,
+          "strip": "strips/r0/smoke.jpg"
+        }
+      ],
+      "kind": "composite",
+      "strip": "strips/r0/smoke.jpg",
+      "stamp": 1785895237,
+      "verdict": "Baseline captured from the running game. Impact is a sub-cell smudge; the aftermath frame is indistinguishable from the wind-up frame.",
+      "gap": "No anticipation, no debris, no aftermath \u2014 the board resets as though nothing happened."
+    },
+    {
+      "name": "shieldrush",
+      "status": "rejected",
+      "iteration": 0,
+      "history": [
+        {
+          "iteration": 0,
+          "strip": "strips/r0/shieldrush.jpg"
+        }
+      ],
+      "kind": "composite",
+      "strip": "strips/r0/shieldrush.jpg",
+      "stamp": 1785895237,
+      "verdict": "Baseline captured from the running game. Impact is a sub-cell smudge; the aftermath frame is indistinguishable from the wind-up frame.",
+      "gap": "No anticipation, no debris, no aftermath \u2014 the board resets as though nothing happened."
+    },
+    {
+      "name": "arealock",
+      "status": "rejected",
+      "iteration": 0,
+      "history": [
+        {
+          "iteration": 0,
+          "strip": "strips/r0/arealock.jpg"
+        }
+      ],
+      "kind": "composite",
+      "strip": "strips/r0/arealock.jpg",
+      "stamp": 1785895237,
+      "verdict": "Baseline captured from the running game. Impact is a sub-cell smudge; the aftermath frame is indistinguishable from the wind-up frame.",
+      "gap": "No anticipation, no debris, no aftermath \u2014 the board resets as though nothing happened."
+    },
+    {
+      "name": "windup",
+      "status": "rejected",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/windup.jpg"
+        },
+        {
+          "iteration": 3,
+          "strip": "strips/r3/windup.jpg"
+        },
+        {
+          "iteration": 4,
+          "strip": "strips/r4/windup.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/windup.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r5/windup.jpg",
+      "stamp": 1785918511,
+      "verdict": "REGRESSION. Bright-and-saturated fell from 0.86 percent to 0.000 percent - below all 51 reference panels. The ramp and composition are genuinely fixed (10 to 72 percent growth across the panels, core at the muzzle, 17 converging blades) and must be kept.",
+      "gap": "The charge body was switched from opaque fill to additive glow, and additive light over a board whose darkest channel is 172 is mathematically capped at saturation 0.324 against a 0.45 bar."
+    },
+    {
+      "name": "impactcore",
+      "status": "passed",
+      "iteration": 3,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/impactcore.jpg"
+        },
+        {
+          "iteration": 3,
+          "strip": "strips/r3/impactcore.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r3/impactcore.jpg",
+      "stamp": 1785908206,
+      "verdict": "The white core now holds full size for four straight frames: 2.17 / 2.13 / 2.11 / 2.08 cells at 0/33/67/100ms, centre pixel-white throughout, no donut anywhere. Bigger and more blown out than the strongest Clash Mini frame in the set.",
+      "gap": "It is wired to nothing. ImpactCore.Spawn is called only by the capture rig, so the real grenade's flash still measures 0.09 cells."
+    },
+    {
+      "name": "shockwave",
+      "status": "rejected",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/shockwave.jpg"
+        },
+        {
+          "iteration": 3,
+          "strip": "strips/r3/shockwave.jpg"
+        },
+        {
+          "iteration": 4,
+          "strip": "strips/r4/shockwave.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/shockwave.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r5/shockwave.jpg",
+      "stamp": 1785918511,
+      "verdict": "The core holds six frames and 0.708 percent is fully clipped, inside the ask. Measured 1.677 percent above L240 against the 3.46 claimed.",
+      "gap": "The core is a soft gaussian at 1.3 luminance levels per pixel against Clash Mini's 49 to 91, with saturation 0.000, and it has eaten 23 percent of the dark ring built over three rounds."
+    },
+    {
+      "name": "debris",
+      "status": "rejected",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/debris.jpg"
+        },
+        {
+          "iteration": 3,
+          "strip": "strips/r3/debris.jpg"
+        },
+        {
+          "iteration": 4,
+          "strip": "strips/r4/debris.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/debris.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r5/debris.jpg",
+      "stamp": 1785918511,
+      "verdict": "The scorch colour bug is fixed: hue 15.5 instead of olive 89, at an identical luma factor, and the frozen tail now changes 47 to 92 percent of the mark per frame against 0.4 percent.",
+      "gap": "Shares the set-wide gap - the aftermath panel is 0.00 percent bright-and-saturated where Clash Mini's minimum across seventeen references is 0.105 percent."
+    },
+    {
+      "name": "hitreact",
+      "status": "rejected",
+      "iteration": 3,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/hitreact.jpg"
+        },
+        {
+          "iteration": 3,
+          "strip": "strips/r3/hitreact.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r3/hitreact.jpg",
+      "stamp": 1785908206,
+      "verdict": "The rim fix is comprehensive. The unit goes deep saturated vermilion with a true-black outline instead of blowing out; clipped pixels fell from 12,272 to 1 and the bloom halo is gone. The critic says the effect is finished.",
+      "gap": "Not the effect - the framing. The strip was cut at +0.133/+0.267/+0.700s while the whole event lives between 0 and +0.133s. The picker has since been fixed and re-cuts it correctly."
+    },
+    {
+      "name": "camera",
+      "status": "passed",
+      "iteration": 2,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/camera.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r1/camera.jpg",
+      "stamp": 1785895511,
+      "verdict": "Roll went from effectively zero to 2.845 degrees and now carries 65 percent of screen motion; translation dropped from 77px to 19.6px; decay is monotonic; and the hitstop is proven, with debris advancing 0.54px across three held frames.",
+      "gap": "None that a camera change can close. Measured against the references, our camera now moves an order of magnitude more than Clash Mini's does; the remaining distance belongs to what is in the frame."
+    },
+    {
+      "name": "aftermath",
+      "status": "passed",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/aftermath.jpg"
+        },
+        {
+          "iteration": 3,
+          "strip": "strips/r3/aftermath.jpg"
+        },
+        {
+          "iteration": 4,
+          "strip": "strips/r4/aftermath.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/aftermath.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r5/aftermath.jpg",
+      "stamp": 1785918511,
+      "verdict": "The fire is fire: a saturated gold-amber core at hue 45 and saturation 0.53, sitting exactly where Clash Mini's own flame colour sits, inside a dark occluding plume that out-reads every reference panel on the sheet.",
+      "gap": "The third panel is cold - zero bright-and-saturated pixels where every Clash Mini aftermath panel is still burning at 0.18 to 3.46 percent."
+    },
+    {
+      "name": "numbers",
+      "status": "rejected",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r1/numbers.jpg"
+        },
+        {
+          "iteration": 3,
+          "strip": "strips/r3/numbers.jpg"
+        },
+        {
+          "iteration": 4,
+          "strip": "strips/r4/numbers.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/numbers.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r5/numbers.jpg",
+      "stamp": 1785918511,
+      "verdict": "The plate is completely gone and the round-4 complaint is closed: container share fell from 55 to 36 percent, the small hit clears L200 at saturation 0.97, and every timing target is met. The cleanest work of the round.",
+      "gap": "The stroke is 4 pixels on a 53-pixel glyph, a ratio of 0.08 against Clash Mini's 0.20 to 0.71, so at thumbnail size all three grenade numbers dissolve into the fire they land on."
+    },
+    {
+      "name": "impactdip",
+      "status": "rejected",
+      "iteration": 1,
+      "history": [],
+      "kind": "primitive",
+      "verdict": "Centring, restoration and arrival shape are all correct and the board really does darken around the hit. The magnitude and the phase are not.",
+      "gap": "On the frame the strip cuts the dip is worth 2.7 luminance levels, a seventh of the board noise, because its deepest band sits under the flash's own additive halo which is drawn after it."
+    },
+    {
+      "name": "death",
+      "status": "rejected",
+      "iteration": 5,
+      "history": [
+        {
+          "iteration": 1,
+          "strip": "strips/r3/death.jpg"
+        },
+        {
+          "iteration": 4,
+          "strip": "strips/r4/death.jpg"
+        },
+        {
+          "iteration": 5,
+          "strip": "strips/r5/death.jpg"
+        }
+      ],
+      "kind": "primitive",
+      "strip": "strips/r5/death.jpg",
+      "stamp": 1785918511,
+      "verdict": "The inverted hole is genuinely fixed - radial luminance now runs 27 at the core out to 172 at the rim, a clean reversal - and lighting it did NOT cost the Pogo separation (greyscale histogram intersection unchanged at 0.599).",
+      "gap": "The cyan mass is one flat value, luminance std 14.2 against Clash Mini's 30 to 45, carrying a 44-pixel tiling artefact, so it reads as a decal laid on the floor rather than a pit punched into it."
+    }
+  ],
+  "updated": "03:28:31"
+}

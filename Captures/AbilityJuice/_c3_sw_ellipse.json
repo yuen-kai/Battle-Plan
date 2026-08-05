@@ -1,0 +1,137 @@
+[
+ {
+  "label": "r2 f15",
+  "frame": 15,
+  "origin": [
+   557.9,
+   499.0
+  ],
+  "ellipse_mean_r": 288.0,
+  "inliers": 313,
+  "resid_std_all_pct": 14.17,
+  "resid_std_inlier_pct": 0.17,
+  "resid_ptp_px": 146.3,
+  "resid_p95_px": 141.5,
+  "vent_rays": 32,
+  "vent_pct": 8.9,
+  "vent_groups": 1,
+  "vent_group_sizes": [
+   32
+  ],
+  "raw_std_pct": 13.25
+ },
+ {
+  "label": "r2 f17 (SHIPPED PANEL)",
+  "frame": 17,
+  "origin": [
+   553.6,
+   498.9
+  ],
+  "ellipse_mean_r": 291.2,
+  "inliers": 313,
+  "resid_std_all_pct": 13.35,
+  "resid_std_inlier_pct": 0.21,
+  "resid_ptp_px": 148.6,
+  "resid_p95_px": 129.6,
+  "vent_rays": 32,
+  "vent_pct": 8.9,
+  "vent_groups": 1,
+  "vent_group_sizes": [
+   32
+  ],
+  "raw_std_pct": 12.46
+ },
+ {
+  "label": "r2 f19",
+  "frame": 19,
+  "origin": [
+   545.7,
+   496.7
+  ],
+  "ellipse_mean_r": 294.1,
+  "inliers": 290,
+  "resid_std_all_pct": 13.06,
+  "resid_std_inlier_pct": 0.38,
+  "resid_ptp_px": 151.6,
+  "resid_p95_px": 130.1,
+  "vent_rays": 33,
+  "vent_pct": 9.2,
+  "vent_groups": 1,
+  "vent_group_sizes": [
+   31,
+   1,
+   1
+  ],
+  "raw_std_pct": 12.49
+ },
+ {
+  "label": "r3 f15",
+  "frame": 15,
+  "origin": [
+   545.2,
+   430.1
+  ],
+  "ellipse_mean_r": 278.7,
+  "inliers": 277,
+  "resid_std_all_pct": 22.76,
+  "resid_std_inlier_pct": 3.54,
+  "resid_ptp_px": 240.6,
+  "resid_p95_px": 204.4,
+  "vent_rays": 47,
+  "vent_pct": 13.1,
+  "vent_groups": 3,
+  "vent_group_sizes": [
+   35,
+   8,
+   4
+  ],
+  "raw_std_pct": 23.22
+ },
+ {
+  "label": "r3 f17 (SHIPPED PANEL)",
+  "frame": 17,
+  "origin": [
+   543.8,
+   435.9
+  ],
+  "ellipse_mean_r": 282.4,
+  "inliers": 276,
+  "resid_std_all_pct": 21.79,
+  "resid_std_inlier_pct": 3.59,
+  "resid_ptp_px": 234.2,
+  "resid_p95_px": 193.6,
+  "vent_rays": 49,
+  "vent_pct": 13.6,
+  "vent_groups": 2,
+  "vent_group_sizes": [
+   37,
+   9,
+   2,
+   1
+  ],
+  "raw_std_pct": 22.18
+ },
+ {
+  "label": "r3 f19",
+  "frame": 19,
+  "origin": [
+   545.2,
+   445.3
+  ],
+  "ellipse_mean_r": 283.9,
+  "inliers": 311,
+  "resid_std_all_pct": 16.58,
+  "resid_std_inlier_pct": 6.79,
+  "resid_ptp_px": 217.1,
+  "resid_p95_px": 153.6,
+  "vent_rays": 32,
+  "vent_pct": 8.9,
+  "vent_groups": 2,
+  "vent_group_sizes": [
+   28,
+   3,
+   1
+  ],
+  "raw_std_pct": 17.22
+ }
+]

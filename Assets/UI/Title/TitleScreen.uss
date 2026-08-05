@@ -1,169 +1,291 @@
+/* The title screen.
+
+   One composition: a full-height rail flush to the left edge of the window, and
+   the lit character stage open beside it. The rail carries no plate of its own —
+   a card with a hard right edge cuts the stage in half and puts the crew behind
+   a window — so the darkening is a wide scrim that is still fading at twice the
+   width of the menu, and the two halves meet in the middle of a gradient
+   instead of at a border.
+
+   The menu is rows rather than buttons in boxes: a line of type and a hairline
+   until you touch one, and then the row inverts to a white plate with dark ink
+   and takes the orange rule on its leading edge. That single behaviour is what
+   places this screen, so most of the sheet below exists to keep it exact
+   through hover, focus and press, on the label and on the icon alike. */
+
+/* --------------------------------------------------------------- the stage */
+
+/* The ground stays transparent: the characters are lit geometry in the scene
+   behind this panel, not an image in it. */
 .title-screen {
     background-color: var(--toy-transparent);
 }
 
+/* Wide on purpose. A scrim that ended near the menu would draw the edge of the
+   card this screen is trying not to be. */
+.title-scrim {
+    width: 46%;
+}
+
+/* No .screen-frame on the layout row. Its padding — and the three breakpoint
+   rules that change it — would have to be zeroed four times over to keep the
+   rail against the window edge. */
 .title-layout {
+    flex-grow: 1;
     flex-direction: row;
-    align-items: center;
-    padding: 48px 56px;
+    align-items: stretch;
 }
 
-.toybox-ui.title-screen .title-board {
-    width: 430px;
-    min-width: 430px;
-    padding: var(--toy-space-xl);
-    background-color: var(--toy-panel);
+/* Room held for the crew. Nothing is drawn here; hiding it only gives the space
+   back to the rail. */
+.title-model-stage {
+    flex-grow: 1;
+    min-width: 320px;
 }
 
-.title-wordmark {
-    font-size: 66px;
-    -unity-font-style: bold;
+/* ---------------------------------------------------------------- the rail */
+
+.title-rail {
+    width: 440px;
+    min-width: 440px;
+    padding-top: 46px;
+    padding-bottom: 28px;
+    justify-content: space-between;
+}
+
+/* ---------------------------------------------------------------- the mark */
+
+/* The rail has no horizontal padding of its own, because the menu rows have to
+   bleed past it to the window edge. The blocks that are not rows carry the
+   inset instead, and every one of them lands on the same 56px line. */
+.title-masthead {
+    padding-left: 56px;
+    padding-right: 44px;
+}
+
+/* The tick hangs back into the margin so the eyebrow's text and the wordmark
+   share one left edge rather than stepping by the width of a rule. */
+/* Full ink, not copy. The scrim is still a gradient this far up and the stage
+   under it is a lit render, so the backdrop here is around 0.43 luminance
+   rather than the paper the copy step is tuned against: at 12px it measured
+   4.06:1. The crew screen's eyebrow already takes full ink for the same
+   reason — type on the stage does not get the panel's de-emphasis. */
+.toybox-ui.title-screen .title-eyebrow {
+    margin-left: -12px;
+    margin-bottom: var(--toy-space-md);
     color: var(--toy-text);
-    letter-spacing: -1.5px;
     white-space: normal;
 }
 
+/* White type over a lit render loses its edges wherever the two agree in value,
+   and the character behind this moves. The glow is what keeps the wordmark in
+   front of the stage instead of dissolving into it. */
+/* The oblique cut, because a wordmark is the one thing on the screen that is
+   allowed to be a logo. Upright it read as a heading. */
+.title-wordmark {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
+    font-size: 88px;
+    -unity-font-style: normal;
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-display);
+    white-space: normal;
+    text-shadow: 0 0 14px var(--toy-shadow-stage);
+}
+
+/* Two waypoints and the run between them: the game in one glyph, and the only
+   orange in the masthead. It is longer here than on a card because it is
+   reading as a rule under a wordmark rather than as a route on a board. */
 .title-plan-path {
-    margin-top: var(--toy-space-sm);
-    margin-bottom: var(--toy-space-panel);
+    margin-top: var(--toy-space-lg);
 }
 
-.title-actions {
-    width: 100%;
+.toybox-ui.title-screen .title-plan-path .plan-path__line {
+    width: 132px;
 }
 
-/* Unity's built-in Button style carries a 3px side margin. Left unzeroed it
-   insets every action from the divider and the credits row below, and it is
-   what pushed the half-width row past the panel edge. */
-.title-action {
-    margin-top: 5px;
-    margin-bottom: 5px;
-    margin-left: 0;
-    margin-right: 0;
+/* ---------------------------------------------------------------- the menu */
+
+/* The row runs off the left edge of the window, so the leading rule and the
+   inverted plate both start at the edge itself. The 56px the labels stand on is
+   the row's own padding plus that rule, which is what keeps them in line with
+   the wordmark above and the links below. */
+.toybox-ui.title-screen .title-action {
+    min-height: 62px;
+    margin: 0;
+    padding-top: var(--toy-space-md);
+    padding-right: 44px;
+    padding-bottom: var(--toy-space-md);
+    padding-left: 53px;
+    justify-content: flex-start;
+    border-top-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    border-left-width: var(--toy-accent-rule);
 }
 
+/* No colour on the label. It inherits the row's, which is what lets one rule
+   invert the whole row instead of four, and is why the invert cannot fall out
+   of step with itself. */
+.title-action__label {
+    font-size: 24px;
+    letter-spacing: var(--toy-track-title);
+    transition-duration: var(--toy-motion-fast);
+    transition-property: color;
+}
+
+.toybox-ui.title-screen .title-action .toy-icon {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    margin-right: var(--toy-space-lg);
+}
+
+/* The one thing anybody opened the game for: the only large warm fill on the
+   screen, and the only row that keeps a plate at rest.
+
+   Its ring's width is carried at rest so that taking focus recolours a border
+   that is already there. Grown on focus instead, it would resize the plate and
+   nudge the label sideways on the control that holds focus from load. */
 .toybox-ui.title-screen .title-play {
-    min-height: 70px;
-    font-size: 22px;
+    min-height: 78px;
+    margin-bottom: var(--toy-space-md);
+    border-top-width: var(--toy-focus-emphasis);
+    border-right-width: var(--toy-focus-emphasis);
+    border-bottom-width: var(--toy-focus-emphasis);
+}
+
+.toybox-ui.title-screen .title-play .title-action__label {
+    font-size: 28px;
 }
 
 .toybox-ui.title-screen .title-play .toy-icon {
     width: 30px;
     min-width: 30px;
     height: 30px;
-    margin-right: 14px;
 }
 
-.title-action__label {
-    -unity-font-style: bold;
-    color: var(--toy-text);
+/* At rest a row is a line of type and a hairline, and nothing else. The leading
+   rule is carried transparent rather than added on hover: added, it would shove
+   every label three pixels right the moment the pointer arrived. */
+.toybox-ui.title-screen .title-action--ghost {
+    background-color: var(--toy-transparent);
+    border-bottom-width: var(--toy-stroke-thin);
+    border-top-color: var(--toy-transparent);
+    border-right-color: var(--toy-transparent);
+    border-bottom-color: var(--toy-divider);
+    border-left-color: var(--toy-transparent);
 }
 
-.button--primary .title-action__label {
-    color: var(--toy-text-on-accent);
+/* The invert. Focus takes the same treatment as hover because on a pad there is
+   no pointer to say which row is live, and a row that only answered the mouse
+   would leave the gamepad with nothing at all.
+
+   The widths are restated because the shared focus ring is a uniform two-pixel
+   border, which on a row that is drawn by one hairline would box it in on all
+   four sides. */
+.toybox-ui.title-screen .title-action--ghost:hover,
+.toybox-ui.title-screen .title-action--ghost:focus,
+.toybox-ui.title-screen .title-action--ghost:hover:focus {
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-top-width: 0;
+    border-right-width: 0;
+    border-bottom-width: var(--toy-stroke-thin);
+    border-left-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-transparent);
+    border-right-color: var(--toy-transparent);
+    border-bottom-color: var(--toy-select);
+    border-left-color: var(--toy-primary);
 }
 
-.title-action-row {
-    width: 100%;
-    flex-direction: row;
+/* Pressing steps the plate down. The rule stays orange through it — the shared
+   press state recolours every edge, and it would take the rule with it. */
+.toybox-ui.title-screen .title-action--ghost:active,
+.toybox-ui.title-screen .title-action--ghost:active:focus {
+    background-color: var(--toy-select-pressed);
+    color: var(--toy-text-on-deep);
+    border-bottom-color: var(--toy-select-pressed);
+    border-left-color: var(--toy-primary);
 }
 
-/* Split the row by growth rather than by a 50% width: two halves plus the
-   10px between them add up to more than the row, and the excess spilled to
-   the right of Play instead of shrinking. */
-.title-action--half {
-    width: 0;
-    min-width: 0;
-    flex-grow: 1;
-    flex-basis: 0;
-    margin-right: 5px;
+/* Tint does not inherit, so the icon is flipped by hand or the row comes up as
+   a white plate with a white icon on it. The shared library covers hover; focus
+   and press are ours. */
+.toybox-ui.title-screen .title-action--ghost:hover .toy-icon,
+.toybox-ui.title-screen .title-action--ghost:focus .toy-icon,
+.toybox-ui.title-screen .title-action--ghost:active .toy-icon {
+    -unity-background-image-tint-color: var(--toy-text-on-deep);
 }
 
-.title-action--row-last {
-    margin-right: 0;
-    margin-left: 5px;
-}
+/* -------------------------------------------------------------- the footer */
 
-/* Credits and Quit are not choices the player came here to make, so they are text under a
-   rule rather than a third pair of buttons competing with Play. */
-.title-rule {
-    height: 1px;
-    width: 100%;
-    margin-top: var(--toy-space-md);
-    background-color: var(--toy-text-border);
-}
-
-.title-action-row--quiet {
-    margin-top: var(--toy-space-sm);
-    justify-content: flex-start;
-}
-
-.title-quiet-action {
+/* Neither of these is why anyone opened the game, so they are text under a rule
+   rather than two more rows competing with Play. The inset is short by the
+   width of a link's own padding so the words still land on the 56px line. */
+.title-footer {
     flex-direction: row;
     align-items: center;
-    min-height: auto;
-    min-width: auto;
+    padding-top: var(--toy-space-md);
+    padding-right: 44px;
+    padding-left: 46px;
+    border-top-width: var(--toy-stroke-thin);
+    border-top-color: var(--toy-edge);
+}
+
+.toybox-ui.title-screen .title-quiet-action {
     width: auto;
-    padding-top: 2px;
-    padding-bottom: 2px;
-    padding-left: 0;
-    padding-right: 0;
-    margin: 0;
-    margin-right: var(--toy-space-lg);
-    background-color: var(--toy-transparent);
-    border-width: 0;
-    color: var(--toy-text-muted);
-    font-size: var(--toy-type-label);
-    -unity-font-style: normal;
-}
-
-.title-quiet-action--last {
-    margin-right: 0;
-}
-
-.title-quiet-action:hover {
-    background-color: var(--toy-transparent);
-    color: var(--toy-text);
-}
-
-.title-quiet-action:active {
-    background-color: var(--toy-transparent);
-    color: var(--toy-text);
-}
-
-.title-quiet-action__label {
-    color: var(--toy-text-muted);
-    font-size: var(--toy-type-label);
-}
-
-.title-quiet-action:hover .title-quiet-action__label {
-    color: var(--toy-text);
-}
-
-.toybox-ui.title-screen .toy-icon--sm {
-    width: 14px;
-    min-width: 14px;
-    height: 14px;
+    min-width: auto;
+    min-height: auto;
+    margin-top: 0;
     margin-right: var(--toy-space-xs);
-    -unity-background-image-tint-color: var(--toy-text-muted);
+    margin-bottom: 0;
+    margin-left: 0;
+    padding: 7px 12px;
+    background-color: var(--toy-transparent);
+    color: var(--toy-text-copy);
+    border-width: 0;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-body);
+    -unity-font-style: normal;
+    letter-spacing: var(--toy-track-label);
+    transition-duration: var(--toy-motion-fast);
+    transition-property: background-color, color;
 }
 
-.toybox-ui.title-screen .title-quiet-action:hover .toy-icon--sm {
-    -unity-background-image-tint-color: var(--toy-text);
+/* Small, but it still inverts. One hover behaviour across the whole screen is
+   worth more than a second, quieter one nobody has to learn — and it is the
+   only focus cue these two have, since they are not shared buttons. */
+.toybox-ui.title-screen .title-quiet-action:hover,
+.toybox-ui.title-screen .title-quiet-action:focus {
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
 }
 
-.title-model-stage {
-    flex-grow: 1;
-    min-width: 320px;
-    height: 100%;
+.toybox-ui.title-screen .title-quiet-action:active {
+    background-color: var(--toy-select-pressed);
+    color: var(--toy-text-on-deep);
 }
 
-/* The settings panel's rows, columns, and quality field live in Assets/UI/Shared/Settings.uss so
-   the in-match overlay draws the same panel. */
+/* The footer carried a "Prototype" build tag. It was development residue, it
+   was the least legible thing on the screen, and a title screen has no reason
+   to advertise its own unfinishedness — removed rather than restyled. */
+
+/* ------------------------------------------------------------- the credits */
+
+/* The settings panel's rows, columns and quality field live in
+   Assets/UI/Shared/Settings.uss so the in-match overlay draws the same panel. */
 
 .credit-row {
-    margin-top: var(--toy-space-sm);
-    margin-bottom: 14px;
+    padding-top: var(--toy-space-md);
+    padding-bottom: var(--toy-space-md);
+    border-bottom-width: var(--toy-stroke-thin);
+    border-bottom-color: var(--toy-divider);
+}
+
+/* The close button follows, and a rule immediately above it reads as the top of
+   a second panel. */
+.credit-row--last {
+    border-bottom-width: 0;
 }
 
 .credit-name {
@@ -174,95 +296,122 @@
     white-space: normal;
 }
 
-.compact .title-layout {
-    padding: 36px;
-}
+/* ------------------------------------------------------------- breakpoints */
 
-.compact .title-screen .title-board {
-    width: 390px;
-    min-width: 390px;
-    padding: 26px;
+.compact .title-rail {
+    width: 400px;
+    min-width: 400px;
+    padding-top: 36px;
 }
 
 .compact .title-wordmark {
-    font-size: 56px;
+    font-size: 76px;
 }
 
-.narrow .title-layout {
-    align-items: flex-end;
-    justify-content: flex-end;
-    padding: 28px;
-}
-
-.narrow .title-screen .title-board {
-    width: 410px;
-    min-width: 0;
-}
-
+/* Under a thousand points the stage has no room left to hold a character, so it
+   gives its share back and the rail becomes the window. With nothing left to
+   compose against, the rail can finally afford the plate it refuses at full
+   width, and the scrim has to reach the far edge or the menu ends up half over
+   a gradient and half over a lit floor. */
 .narrow .title-model-stage {
     display: none;
 }
 
-.phone .title-layout {
-    align-items: stretch;
-    justify-content: flex-end;
-    padding: var(--toy-space-control-x);
-}
-
-.phone .title-screen .title-board {
+.narrow .title-rail {
     width: 100%;
     min-width: 0;
-    padding: var(--toy-space-lg);
     background-color: var(--toy-panel);
 }
 
-.phone .title-wordmark {
-    font-size: 48px;
-}
-
-.phone .title-action-row {
-    flex-direction: column;
-}
-
-/* The row stacks on phone, so growth would apply to height and collapse both
-   buttons against an auto-height row. */
-.phone .title-action--half {
+.narrow .title-scrim {
     width: 100%;
-    flex-grow: 0;
-    flex-basis: auto;
-    margin-left: 0;
-    margin-right: 0;
 }
 
-.short .title-layout {
-    padding-top: 14px;
-    padding-bottom: 14px;
+.phone .title-rail {
+    padding-top: 28px;
+    padding-bottom: 20px;
 }
 
-.short .title-screen .title-board {
-    padding-top: var(--toy-space-panel-compact);
-    padding-bottom: var(--toy-space-panel-compact);
+.phone .title-masthead {
+    padding-left: 20px;
+    padding-right: 20px;
 }
 
-.short .title-wordmark {
-    font-size: 42px;
+.phone .title-wordmark {
+    font-size: 62px;
 }
 
-.short .title-plan-path {
-    margin-top: 2px;
+.phone .toybox-ui.title-screen .title-action {
+    min-height: var(--toy-target-phone);
+    padding-right: 20px;
+    padding-left: 17px;
+}
+
+.phone .toybox-ui.title-screen .title-action .toy-icon {
+    margin-right: var(--toy-space-md);
+}
+
+.phone .toybox-ui.title-screen .title-play {
+    min-height: 66px;
+}
+
+.phone .title-action__label {
+    font-size: 21px;
+}
+
+.phone .toybox-ui.title-screen .title-play .title-action__label {
+    font-size: 24px;
+}
+
+.phone .title-footer {
+    padding-right: 20px;
+    padding-left: 10px;
+}
+
+.short .title-rail {
+    padding-top: 26px;
+    padding-bottom: 18px;
+}
+
+.short .toybox-ui.title-screen .title-eyebrow {
     margin-bottom: var(--toy-space-sm);
 }
 
-.short .title-screen .title-action {
-    min-height: 46px;
-    margin-top: 2px;
-    margin-bottom: 2px;
+/* Small enough that the wordmark stops wrapping and gives the rail back a whole
+   line of height, which is the only place a short window has left to find it. */
+.short .title-wordmark {
+    font-size: 54px;
 }
 
-.short .title-screen .title-play {
-    min-height: var(--toy-target-phone);
+.short .title-plan-path {
+    margin-top: var(--toy-space-sm);
 }
 
-.phone.short .title-screen .title-action {
+.short .toybox-ui.title-screen .title-action {
+    min-height: 52px;
+}
+
+.short .toybox-ui.title-screen .title-play {
+    min-height: 62px;
+    margin-bottom: var(--toy-space-sm);
+}
+
+.short .title-action__label {
+    font-size: 21px;
+}
+
+.short .toybox-ui.title-screen .title-play .title-action__label {
+    font-size: 24px;
+}
+
+.short .title-footer {
+    padding-top: var(--toy-space-sm);
+}
+
+/* A handset in landscape is short and narrow at once, and the row is still the
+   thing a thumb has to hit. Play is left out of it: it is already taller than
+   the target, and catching it here would flatten it to the height of everything
+   it is supposed to outrank. */
+.phone.short .toybox-ui.title-screen .title-action--ghost {
     min-height: var(--toy-target-phone);
 }

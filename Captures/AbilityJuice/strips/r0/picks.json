@@ -1,0 +1,52 @@
+[
+  {
+    "shot": "arealock",
+    "windup_frame": 72,
+    "impact_frame": 78,
+    "aftermath_frame": 95,
+    "windup_time": 1.9,
+    "impact_time": 2.1,
+    "aftermath_time": 2.6667,
+    "peak_score": 1.0
+  },
+  {
+    "shot": "grenade",
+    "windup_frame": 40,
+    "impact_frame": 45,
+    "aftermath_frame": 58,
+    "windup_time": 0.8333,
+    "impact_time": 1.0,
+    "aftermath_time": 1.4333,
+    "peak_score": 1.0
+  },
+  {
+    "shot": "pogo",
+    "windup_frame": 50,
+    "impact_frame": 54,
+    "aftermath_frame": 67,
+    "windup_time": 1.1667,
+    "impact_time": 1.3,
+    "aftermath_time": 1.7333,
+    "peak_score": 0.9795193672180176
+  },
+  {
+    "shot": "shieldrush",
+    "windup_frame": 114,
+    "impact_frame": 123,
+    "aftermath_frame": 123,
+    "windup_time": 3.3,
+    "impact_time": 3.6,
+    "aftermath_time": 3.6,
+    "peak_score": 0.9784925580024719
+  },
+  {
+    "shot": "smoke",
+    "windup_frame": 10,
+    "impact_frame": 17,
+    "aftermath_frame": 40,
+    "windup_time": -0.1667,
+    "impact_time": 0.0667,
+    "aftermath_time": 0.8333,
+    "peak_score": 0.4000000059604645
+  }
+]

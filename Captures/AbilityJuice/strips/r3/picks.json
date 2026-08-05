@@ -1,0 +1,112 @@
+[
+  {
+    "shot": "aftermath",
+    "windup_frame": 25,
+    "impact_frame": 30,
+    "aftermath_frame": 43,
+    "windup_time": 0.4333,
+    "impact_time": 0.6,
+    "aftermath_time": 1.0333,
+    "peak_score": 0.9658617297417275
+  },
+  {
+    "shot": "camera",
+    "windup_frame": 11,
+    "impact_frame": 16,
+    "aftermath_frame": 29,
+    "windup_time": -0.0333,
+    "impact_time": 0.1333,
+    "aftermath_time": 0.5667,
+    "peak_score": 0.950080837726593
+  },
+  {
+    "shot": "death",
+    "windup_frame": 10,
+    "impact_frame": 14,
+    "aftermath_frame": 27,
+    "windup_time": -0.0667,
+    "impact_time": 0.0667,
+    "aftermath_time": 0.5,
+    "peak_score": 0.9413462343887686
+  },
+  {
+    "shot": "debris",
+    "windup_frame": 10,
+    "impact_frame": 14,
+    "aftermath_frame": 27,
+    "windup_time": -0.0667,
+    "impact_time": 0.0667,
+    "aftermath_time": 0.5,
+    "peak_score": 0.9136121702806125
+  },
+  {
+    "shot": "grenade",
+    "windup_frame": 44,
+    "impact_frame": 48,
+    "aftermath_frame": 61,
+    "windup_time": 0.9667,
+    "impact_time": 1.1,
+    "aftermath_time": 1.5333,
+    "peak_score": 0.9719027432349602
+  },
+  {
+    "shot": "hitreact",
+    "windup_frame": 9,
+    "impact_frame": 13,
+    "aftermath_frame": 26,
+    "windup_time": -0.1,
+    "impact_time": 0.0333,
+    "aftermath_time": 0.4667,
+    "peak_score": 0.7329192546583851
+  },
+  {
+    "shot": "impactcore",
+    "windup_frame": 11,
+    "impact_frame": 15,
+    "aftermath_frame": 28,
+    "windup_time": -0.0333,
+    "impact_time": 0.1,
+    "aftermath_time": 0.5333,
+    "peak_score": 0.6000000029802323
+  },
+  {
+    "shot": "numbers",
+    "windup_frame": 8,
+    "impact_frame": 13,
+    "aftermath_frame": 26,
+    "windup_time": -0.1333,
+    "impact_time": 0.0333,
+    "aftermath_time": 0.4667,
+    "peak_score": 0.9349633845031684
+  },
+  {
+    "shot": "pogo",
+    "windup_frame": 44,
+    "impact_frame": 48,
+    "aftermath_frame": 61,
+    "windup_time": 0.9667,
+    "impact_time": 1.1,
+    "aftermath_time": 1.5333,
+    "peak_score": 0.9033454955363077
+  },
+  {
+    "shot": "shockwave",
+    "windup_frame": 13,
+    "impact_frame": 17,
+    "aftermath_frame": 30,
+    "windup_time": 0.0333,
+    "impact_time": 0.1667,
+    "aftermath_time": 0.6,
+    "peak_score": 0.9420897485077984
+  },
+  {
+    "shot": "windup",
+    "windup_frame": 22,
+    "impact_frame": 40,
+    "aftermath_frame": 54,
+    "windup_time": 0.3333,
+    "impact_time": 0.9333,
+    "aftermath_time": 1.4,
+    "peak_score": 0.4082329665729514
+  }
+]

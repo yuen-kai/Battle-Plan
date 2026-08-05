@@ -772,15 +772,25 @@ public class GameHUDController : MonoBehaviour
     )
     {
         ShowResults(result.GetStatusForTeam(localTeamIndex), onPlayAgain, onMainMenu);
+        SetVerdictTone(result, localTeamIndex);
     }
 
     public void ShowResults(string status, Action onPlayAgain, Action onMainMenu)
     {
         if (resultsStatus != null)
             resultsStatus.text = status ?? "Match complete";
+        // Neutral until a typed result says otherwise. The string overload is the tutorial and the
+        // dev harness, neither of which won anything.
+        resultsStatus?.RemoveFromClassList("results-status--victory");
+        resultsStatus?.RemoveFromClassList("results-status--defeat");
 
         playAgainAction = onPlayAgain;
         mainMenuAction = onMainMenu;
+        // The round is over, so nothing may still be offering to commit orders for it. The planning
+        // cluster is normally retired when planning ends, but a match can also finish from a
+        // forfeit or a disconnect mid-phase, and a live "Lock in" behind a result reads as a HUD
+        // that has not noticed the game stopped.
+        HidePlanningCommit();
         SetResultButtonsEnabled(true, true);
         CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
@@ -788,6 +798,24 @@ public class GameHUDController : MonoBehaviour
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);
+    }
+
+    /// <summary>
+    /// Colours the verdict. A draw and the tutorial's own ending stay neutral for the same reason
+    /// the copy does: nobody won, and a gold headline over "Draw" would say otherwise.
+    /// </summary>
+    private void SetVerdictTone(MatchResult result, int localTeamIndex)
+    {
+        if (resultsStatus == null)
+            return;
+
+        bool decided =
+            result.IsValid
+            && result.HasWinner
+            && result.Reason != MatchResultReason.TutorialComplete;
+        bool won = decided && result.WinningTeamIndex == localTeamIndex;
+        resultsStatus.EnableInClassList("results-status--victory", won);
+        resultsStatus.EnableInClassList("results-status--defeat", decided && !won);
     }
 
     // === BATTLE REPORT REVEAL ===

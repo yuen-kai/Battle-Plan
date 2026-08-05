@@ -9,6 +9,16 @@ using UnityEngine.UIElements;
 
 public class UIToolkitAssetSmokeTests
 {
+    private const string BodyFontPath = "Assets/Fonts/Jost/Jost-Regular UI SDF.asset";
+    private const string DisplayFontPath =
+        "Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset";
+    private const string DisplayFontSourcePath =
+        "Assets/Fonts/OswaldCaps/OswaldCaps-Regular.ttf";
+    private const string BodyFontReference =
+        "project://database/Assets/Fonts/Jost/Jost-Regular UI SDF.asset";
+    private const string DisplayFontReference =
+        "project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset";
+
     private static readonly object[] ScreenContracts =
     {
         new object[]
@@ -329,78 +339,136 @@ public class UIToolkitAssetSmokeTests
         );
     }
 
+    /// <summary>
+    /// Both families ship as dynamic SDF font assets and are referenced as assets, never as the
+    /// raw TrueType file: a .ttf reference renders through a second, non-SDF path that ignores
+    /// every size and weight the interface is tuned at.
+    /// </summary>
     [Test]
-    public void SharedStylesUseSdfFontAsset()
+    public void SharedStylesUseSdfFontAssets()
     {
-        const string fontPath = "Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset";
-        const string fontReference =
-            "project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset";
+        string[] fontPaths =
+        {
+            BodyFontPath,
+            DisplayFontPath,
+            "Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset",
+        };
         string[] stylePaths =
         {
             "Assets/UI/Shared/BattlePlan.uss",
         };
 
-        UnityEngine.TextCore.Text.FontAsset fontAsset =
-            AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(fontPath);
-        Assert.That(fontAsset, Is.Not.Null, $"Could not import {fontPath}.");
-        Assert.That(
-            fontAsset.atlasRenderMode,
-            Is.EqualTo(UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA)
-        );
-        Assert.That(
-            fontAsset.atlasPopulationMode,
-            Is.EqualTo(UnityEngine.TextCore.Text.AtlasPopulationMode.Dynamic)
-        );
+        foreach (string fontPath in fontPaths)
+        {
+            UnityEngine.TextCore.Text.FontAsset fontAsset =
+                AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(fontPath);
+            Assert.That(fontAsset, Is.Not.Null, $"Could not import {fontPath}.");
+            Assert.That(
+                fontAsset.atlasRenderMode,
+                Is.EqualTo(UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA)
+            );
+            Assert.That(
+                fontAsset.atlasPopulationMode,
+                Is.EqualTo(UnityEngine.TextCore.Text.AtlasPopulationMode.Dynamic)
+            );
+        }
 
         foreach (string stylePath in stylePaths)
         {
             string source = File.ReadAllText(stylePath);
-            Assert.That(source, Does.Contain(fontReference));
+            Assert.That(source, Does.Contain(BodyFontReference));
+            Assert.That(source, Does.Contain(DisplayFontReference));
             Assert.That(
                 source,
-                Does.Not.Contain("CascadiaCode-VariableFont_wght.ttf"),
-                $"{stylePath} should use the SDF asset instead of the raw font."
+                Does.Not.Contain("Jost-Regular.ttf").And.Not.Contain("OswaldCaps-Regular.ttf"),
+                $"{stylePath} should use the SDF assets instead of the raw fonts."
             );
         }
     }
 
+    /// <summary>
+    /// Two families, split by job. Prose reads in Jost; chrome — titles, controls, labels, figures
+    /// — is set in the condensed caps face. The default has to be the prose one: the gameplay unit
+    /// cards sit outside .toybox-ui scope on purpose and inherit from :root, so a display default
+    /// here would set the whole in-match HUD, including its sentences, in condensed capitals.
+    /// </summary>
     [Test]
-    public void InterfaceTypeDefaultsToRubikAndReservesMonoForFigures()
+    public void InterfaceTypeDefaultsToProseAndReservesTheDisplayFaceForFigures()
     {
         string reset = File.ReadAllText("Assets/UI/Shared/BattlePlan.uss");
-        const string rubik =
-            "project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
 
         int rootStart = reset.IndexOf(":root {");
         Assert.That(rootStart, Is.GreaterThanOrEqualTo(0));
         string rootRule = reset.Substring(rootStart, reset.IndexOf('}', rootStart) - rootStart);
         Assert.That(
             rootRule,
-            Does.Contain(rubik),
-            "Rubik is the interface family. The gameplay cards sit outside .toybox-ui scope, so a "
-                + "monospace default here renders the whole in-match HUD in a coding font."
+            Does.Contain(BodyFontReference),
+            "The reading face is the default; the display face is opted into."
         );
+        Assert.That(rootRule, Does.Not.Contain(DisplayFontReference));
 
         int monoStart = reset.IndexOf(".mono {");
-        Assert.That(monoStart, Is.GreaterThanOrEqualTo(0), "The mono role needs a named class.");
+        Assert.That(monoStart, Is.GreaterThanOrEqualTo(0), "The figures role needs a named class.");
         string monoRule = reset.Substring(monoStart, reset.IndexOf('}', monoStart) - monoStart);
-        Assert.That(monoRule, Does.Contain("CascadiaCode-VariableFont_wght UI SDF.asset"));
+        Assert.That(monoRule, Does.Contain(DisplayFontReference));
 
         string card = File.ReadAllText("Assets/UI/Shared/Templates/UnitCard.uxml");
         Assert.That(
             card,
             Does.Contain("unit-card__health-value mono"),
-            "Health counts need tabular figures so the digits do not jitter as damage lands."
+            "Health counts need even figures so the digits do not jitter as damage lands."
         );
     }
 
+    /// <summary>
+    /// The display face is an all-caps cut: its lowercase codepoints are remapped to the uppercase
+    /// glyphs. That is what lets every heading, button and label in the game render in capitals
+    /// without a ToUpper() in the controllers or a shouted string in a UXML — and it is invisible
+    /// from the USS, so swapping in a stock Oswald would quietly un-capitalise the whole interface
+    /// with nothing else failing.
+    /// </summary>
     [Test]
-    public void TacticalToyboxUsesRubikSdfAndVectorIcons()
+    public void DisplayFaceMapsLowercaseOntoCapitals()
     {
-        const string fontPath = "Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
+        Font source = AssetDatabase.LoadAssetAtPath<Font>(DisplayFontSourcePath);
+        Assert.That(source, Is.Not.Null, $"Could not import {DisplayFontSourcePath}.");
+
+        // Probed on a throwaway clone rather than the shipped asset: the project asset populates
+        // its atlas dynamically, and asking it for glyphs would dirty it from a test run.
+        UnityEngine.TextCore.Text.FontAsset probe =
+            UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(
+                source,
+                32,
+                4,
+                UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,
+                256,
+                256,
+                UnityEngine.TextCore.Text.AtlasPopulationMode.Dynamic,
+                true
+            );
+        try
+        {
+            Assert.That(probe.TryAddCharacters("aAzZ"), Is.True);
+            Assert.That(
+                probe.characterLookupTable['a'].glyphIndex,
+                Is.EqualTo(probe.characterLookupTable['A'].glyphIndex),
+                "The display cut must draw lowercase with the capital glyph."
+            );
+            Assert.That(
+                probe.characterLookupTable['z'].glyphIndex,
+                Is.EqualTo(probe.characterLookupTable['Z'].glyphIndex)
+            );
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(probe);
+        }
+    }
+
+    [Test]
+    public void TacticalToyboxUsesTheDisplaySdfFontAndVectorIcons()
+    {
         const string stylePath = "Assets/UI/Shared/TacticalToybox.uss";
-        const string fontReference =
-            "project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
         string[] iconPaths =
         {
             "Assets/UI/Shared/Icons/play.svg",
@@ -417,11 +485,17 @@ public class UIToolkitAssetSmokeTests
             "Assets/UI/Shared/Icons/bot.svg",
             "Assets/UI/Shared/Icons/fog.svg",
             "Assets/UI/Shared/Icons/check.svg",
+            "Assets/UI/Shared/Icons/hex.svg",
+            "Assets/UI/Shared/Icons/hex-frame.svg",
+            "Assets/UI/Shared/Icons/ring.svg",
+            "Assets/UI/Shared/Icons/slant-left.svg",
+            "Assets/UI/Shared/Icons/slant-right.svg",
+            "Assets/UI/Shared/Icons/chevron-down.svg",
         };
 
         UnityEngine.TextCore.Text.FontAsset fontAsset =
-            AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(fontPath);
-        Assert.That(fontAsset, Is.Not.Null, $"Could not import {fontPath}.");
+            AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(DisplayFontPath);
+        Assert.That(fontAsset, Is.Not.Null, $"Could not import {DisplayFontPath}.");
         Assert.That(
             fontAsset.atlasRenderMode,
             Is.EqualTo(UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA)
@@ -432,10 +506,10 @@ public class UIToolkitAssetSmokeTests
         );
 
         string style = File.ReadAllText(stylePath);
-        Assert.That(style, Does.Contain(fontReference));
-        Assert.That(style, Does.Not.Contain("Rubik-VariableFont_wght.ttf"));
+        Assert.That(style, Does.Contain(DisplayFontReference));
+        Assert.That(style, Does.Not.Contain("OswaldCaps-Regular.ttf"));
         string runtimeTheme = File.ReadAllText("Assets/UI/Shared/BattlePlanRuntime.tss");
-        Assert.That(runtimeTheme, Does.Contain(fontReference));
+        Assert.That(runtimeTheme, Does.Contain(DisplayFontReference));
 
         foreach (string iconPath in iconPaths)
         {

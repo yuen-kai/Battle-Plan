@@ -1,0 +1,82 @@
+[
+  {
+    "shot": "aftermath",
+    "windup_frame": 11,
+    "impact_frame": 15,
+    "aftermath_frame": 28,
+    "windup_time": -0.0333,
+    "impact_time": 0.1,
+    "aftermath_time": 0.5333,
+    "peak_score": 0.676010012626648
+  },
+  {
+    "shot": "camera",
+    "windup_frame": 7,
+    "impact_frame": 12,
+    "aftermath_frame": 25,
+    "windup_time": -0.1667,
+    "impact_time": 0.0,
+    "aftermath_time": 0.4333,
+    "peak_score": 1.0
+  },
+  {
+    "shot": "debris",
+    "windup_frame": 11,
+    "impact_frame": 15,
+    "aftermath_frame": 28,
+    "windup_time": -0.0333,
+    "impact_time": 0.1,
+    "aftermath_time": 0.5333,
+    "peak_score": 0.8130757808685303
+  },
+  {
+    "shot": "hitreact",
+    "windup_frame": 8,
+    "impact_frame": 13,
+    "aftermath_frame": 26,
+    "windup_time": -0.1333,
+    "impact_time": 0.0333,
+    "aftermath_time": 0.4667,
+    "peak_score": 0.9241563081741333
+  },
+  {
+    "shot": "impactcore",
+    "windup_frame": 8,
+    "impact_frame": 13,
+    "aftermath_frame": 26,
+    "windup_time": -0.1333,
+    "impact_time": 0.0333,
+    "aftermath_time": 0.4667,
+    "peak_score": 1.0
+  },
+  {
+    "shot": "numbers",
+    "windup_frame": 7,
+    "impact_frame": 12,
+    "aftermath_frame": 25,
+    "windup_time": -0.1667,
+    "impact_time": 0.0,
+    "aftermath_time": 0.4333,
+    "peak_score": 1.0
+  },
+  {
+    "shot": "shockwave",
+    "windup_frame": 13,
+    "impact_frame": 17,
+    "aftermath_frame": 30,
+    "windup_time": 0.0333,
+    "impact_time": 0.1667,
+    "aftermath_time": 0.6,
+    "peak_score": 1.0
+  },
+  {
+    "shot": "windup",
+    "windup_frame": 34,
+    "impact_frame": 39,
+    "aftermath_frame": 52,
+    "windup_time": 0.7333,
+    "impact_time": 0.9,
+    "aftermath_time": 1.3333,
+    "peak_score": 1.0
+  }
+]

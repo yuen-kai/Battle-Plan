@@ -4,7 +4,7 @@
    composition. */
 
 .toybox-ui .settings-panel {
-    width: 600px;
+    width: 620px;
 }
 
 .settings-scroll {
@@ -41,8 +41,10 @@
     width: 148px;
     min-width: 148px;
     padding-right: var(--toy-space-md);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-body-lg);
     color: var(--toy-text);
-    -unity-font-style: bold;
+    letter-spacing: var(--toy-track-label);
 }
 
 .setting-row__control {
@@ -50,25 +52,30 @@
     min-width: 0;
 }
 
+/* The readout takes the accent: a number the player is actively moving is the
+   one thing on this panel that is changing, and orange is where the eye goes.
+   Its face comes from .mono, so nothing here restates it. */
 .setting-row__value {
-    width: 58px;
-    min-width: 58px;
+    width: 62px;
+    min-width: 62px;
     margin-left: var(--toy-space-md);
-    color: var(--toy-text-copy);
-    font-size: var(--toy-type-body);
+    color: var(--toy-primary-copy);
+    font-size: var(--toy-type-body-lg);
     -unity-text-align: middle-right;
 }
 
 /* Rows with no readout hold that column open so every control shares one right edge. */
 .setting-row--single .setting-row__control {
-    margin-right: 70px;
+    margin-right: 74px;
 }
 
 .quality-dropdown {
     min-height: var(--toy-target);
     margin: 0;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     color: var(--toy-text);
     font-size: var(--toy-type-body-lg);
+    letter-spacing: var(--toy-track-label);
 }
 
 .quality-dropdown > .unity-base-field__input {
@@ -78,16 +85,20 @@
     color: var(--toy-text);
     border-width: var(--toy-focus-width);
     border-color: var(--toy-edge);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-edge-strong);
     border-radius: var(--toy-radius-md);
 }
 
 .quality-dropdown > .unity-base-field__input:hover {
     border-color: var(--toy-edge-strong);
+    border-left-color: var(--toy-primary);
 }
 
 .quality-dropdown:focus > .unity-base-field__input,
 .quality-dropdown > .unity-base-field__input:focus {
     border-color: var(--toy-focus);
+    border-left-color: var(--toy-primary);
 }
 
 .quality-dropdown:disabled {
@@ -100,6 +111,17 @@
     background-color: var(--toy-disabled-surface);
     color: var(--toy-text-muted);
     border-color: var(--toy-disabled-border);
+}
+
+/* The built-in arrow is a dark chevron sprite authored for a light editor
+   theme; on a near-black well it is invisible, and the field reads as a plain
+   box the player has no reason to click. */
+.quality-dropdown .unity-base-popup-field__arrow {
+    -unity-background-image-tint-color: var(--toy-primary);
+}
+
+.quality-dropdown:hover .unity-base-popup-field__arrow {
+    -unity-background-image-tint-color: var(--toy-primary-hover);
 }
 
 .phone .setting-row {
@@ -116,14 +138,14 @@
 }
 
 .phone .setting-row__value {
-    width: 48px;
-    min-width: 48px;
+    width: 50px;
+    min-width: 50px;
     margin-left: var(--toy-space-sm);
     font-size: var(--toy-type-label);
 }
 
 .phone .setting-row--single .setting-row__control {
-    margin-right: 56px;
+    margin-right: 58px;
 }
 
 .phone .settings-panel .modal-close {
