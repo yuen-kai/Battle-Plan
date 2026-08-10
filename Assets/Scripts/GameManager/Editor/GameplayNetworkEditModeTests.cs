@@ -1183,27 +1183,28 @@ public class GameplayNetworkEditModeTests
     /// board plane is depth-buried by the very puck it is supposed to be cut into.
     /// </summary>
     [Test]
-    public void AbilityChargeDial_SitsOnTheBasePlateRatherThanTheBoard()
+    public void AbilityChargeDial_TakesTheHigherOfItsPlateAndTheRangeOverlay()
     {
-        GameObject unit = new("Ability charge dial plate test unit");
-        unit.transform.position = Vector3.up;
-        unit.AddComponent<CapsuleCollider>();
-
-        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        plate.name = UnitBasePlate.NamePrefix;
-        plate.transform.SetParent(unit.transform, worldPositionStays: false);
-        plate.transform.localScale = new Vector3(1.75f, 0.12f, 1.75f);
+        // A plate the depth of the ones the units actually carry. The dial would sit inside it
+        // without the lift, and on top of it the range overlay would still bury the pair, so the
+        // overlay's floor is what decides the height here.
+        GameObject unit = BuildPlatedUnit("Ability charge dial plate test unit", 0.12f);
         Collider unitCollider = unit.GetComponent<Collider>();
-        plate.transform.position = new Vector3(0f, unitCollider.bounds.min.y + 0.06f, 0f);
-        float plateTop = plate.GetComponent<Renderer>().bounds.max.y;
+        float boardPlane = unitCollider.bounds.min.y;
+        float plateTop = boardPlane + 0.12f;
 
         try
         {
             Transform dial = AbilityStatusRing.Create(unit.transform).transform;
             Assert.That(
                 dial.position.y,
-                Is.EqualTo(plateTop + 0.035f).Within(0.001f),
-                "The dial must sit just proud of the plate face it is cut into."
+                Is.GreaterThan(plateTop),
+                "The dial must clear the plate face it is cut into rather than sit inside it."
+            );
+            Assert.That(
+                dial.position.y,
+                Is.EqualTo(boardPlane + 0.245f).Within(0.001f),
+                "A plate this shallow leaves the range overlay as the binding floor."
             );
             Assert.That(
                 dial.GetChild(0).rotation.eulerAngles.x,
@@ -1220,7 +1221,7 @@ public class GameplayNetworkEditModeTests
             Transform plateOnly = AbilityStatusRing.Create(unit.transform).transform;
             Assert.That(
                 plateOnly.position.y,
-                Is.EqualTo(plateTop + 0.035f).Within(0.001f),
+                Is.EqualTo(boardPlane + 0.245f).Within(0.001f),
                 "Placement must read the base plate and nothing else."
             );
         }
@@ -1228,6 +1229,45 @@ public class GameplayNetworkEditModeTests
         {
             Object.DestroyImmediate(unit);
         }
+
+        // Give a unit a plate tall enough to stand above the overlay and the plate wins again, so
+        // the lift is a floor rather than a fixed height every dial is pinned to.
+        GameObject stilted = BuildPlatedUnit("Ability charge dial tall plate unit", 0.4f);
+        float stiltedBoard = stilted.GetComponent<Collider>().bounds.min.y;
+        try
+        {
+            Assert.That(
+                AbilityStatusRing.Create(stilted.transform).transform.position.y,
+                Is.EqualTo(stiltedBoard + 0.4f + 0.035f).Within(0.001f),
+                "A plate that already clears the overlay keeps the dial engraved in its face."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(stilted);
+        }
+    }
+
+    /// <summary>
+    /// A unit carrying a base plate of the given thickness, resting on the board plane its collider
+    /// defines.
+    /// </summary>
+    private static GameObject BuildPlatedUnit(string name, float plateThickness)
+    {
+        GameObject unit = new(name);
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+
+        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plate.name = UnitBasePlate.NamePrefix;
+        plate.transform.SetParent(unit.transform, worldPositionStays: false);
+        plate.transform.localScale = new Vector3(1.75f, plateThickness, 1.75f);
+        plate.transform.position = new Vector3(
+            0f,
+            unit.GetComponent<Collider>().bounds.min.y + plateThickness * 0.5f,
+            0f
+        );
+        return unit;
     }
 
     [Test]
@@ -1357,6 +1397,83 @@ public class GameplayNetworkEditModeTests
         finally
         {
             Object.DestroyImmediate(unit);
+        }
+    }
+
+    /// <summary>
+    /// The ability dial has to survive a shown range. Every unit's base plate tops out below the
+    /// range overlay, whose tile is opaque and writes depth, so a dial that only cleared its own
+    /// plate vanished outright the moment a player asked where a unit could go — the one moment
+    /// the cooldown is being read. Measured against the overlay prefab rather than a copied
+    /// number, so moving the tile fails here instead of in a match.
+    /// </summary>
+    [Test]
+    public void AbilityDial_ClearsTheRangeOverlayThatPavesTheCellUnderIt()
+    {
+        float overlayTop = RangeOverlayTop();
+
+        // The deepest plate any unit prefab carries, so the test binds the clearance to the worst
+        // real case rather than to a plate invented to pass it.
+        GameObject unit = BuildPlatedUnit("Ability dial clearance test unit", 0.125f);
+        float boardPlane = unit.GetComponent<Collider>().bounds.min.y;
+
+        try
+        {
+            AbilityStatusRing ring = AbilityStatusRing.Create(unit.transform);
+            Assert.That(ring, Is.Not.Null, "The dial's shader must be present in the project.");
+            Assert.That(
+                ring.transform.position.y,
+                Is.GreaterThan(boardPlane + overlayTop),
+                "A dial at or under the range overlay fails the depth test against its opaque "
+                    + "tile and is hidden completely, not merely dimmed."
+            );
+
+            Shader dial = Shader.Find(AbilityStatusRing.ShaderName);
+            Assert.That(dial, Is.Not.Null);
+            Assert.That(
+                dial.renderQueue,
+                Is.GreaterThan(3000),
+                "The overlay's highlight quad is a translucent full-cell wash at 3000. Drawn "
+                    + "after the dial it repaints the charge in its own colour."
+            );
+            Assert.That(
+                dial.renderQueue,
+                Is.LessThan(3030),
+                "Smoke, the vision cone and the explosion juice still have to cover a dial; the "
+                    + "readout wins against the floor, not against what legitimately hides a unit."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    /// <summary>
+    /// Top of the range overlay's stack in the prefab's own frame, plus the height GridSystem lays
+    /// it at: the tile plane and the highlight quad riding above it.
+    /// </summary>
+    private static float RangeOverlayTop()
+    {
+        const string overlayPath = "Assets/Prefabs/Visuals/MoveOverlayCell.prefab";
+        GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(overlayPath);
+        Assert.That(prefab, Is.Not.Null, $"Could not import {overlayPath}.");
+
+        // Instantiated and measured in world space rather than read off localPosition: the tile's
+        // parts are laid out in the root's own scaled frame, where the highlight's 0.1 is 0.027 of
+        // a world unit.
+        GameObject tile = Object.Instantiate(prefab);
+        try
+        {
+            tile.transform.position = new Vector3(0f, GridSystem.RangeOverlayHeight, 0f);
+            float top = GridSystem.RangeOverlayHeight;
+            foreach (Renderer part in tile.GetComponentsInChildren<Renderer>(true))
+                top = Mathf.Max(top, part.bounds.max.y);
+            return top;
+        }
+        finally
+        {
+            Object.DestroyImmediate(tile);
         }
     }
 
@@ -2367,6 +2484,12 @@ public class GameplayNetworkEditModeTests
 
             card.SetPlanningState(true, true);
             VisualElement root = host.Q<VisualElement>("unit-card-0-root");
+            Assert.That(
+                root.ClassListContains("unit-card--friendly"),
+                Is.True,
+                "An ability card styles itself from its own modifier, not from lacking the enemy one."
+            );
+            Assert.That(root.ClassListContains("unit-card--enemy"), Is.False);
             Assert.That(root.ClassListContains("unit-card--ability"), Is.True);
             Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Smoke Screen"));
             Assert.That(

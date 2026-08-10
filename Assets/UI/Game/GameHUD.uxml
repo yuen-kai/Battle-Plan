@@ -85,11 +85,11 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Select a unit, then choose the highlighted destination or target. Click a unit with no route to switch it to its ability; its card switches back." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Click a unit on the board, then click a highlighted square to set its route. Press that unit's ability card in the dock to spend its round on the ability instead." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Using an ability replaces movement and recharges after its listed full-round cooldown." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="An ability replaces that unit's movement for the round. The dial on the unit's base plate and the disc on its card both count the rounds until it is back." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Lock in" class="control-key" picking-mode="Ignore" />

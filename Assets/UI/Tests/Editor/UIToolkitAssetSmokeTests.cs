@@ -1163,7 +1163,7 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
-    public void UnitCardFlipIndicatorExposesRoundCooldownState()
+    public void AbilityCardChargeDiscExposesRoundCooldownState()
     {
         const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
         VisualTreeAsset card = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(cardPath);
@@ -1173,18 +1173,14 @@ public class UIToolkitAssetSmokeTests
         VisualElement indicator = tree.Q<VisualElement>("unit-card-flip-indicator");
         VisualElement icon = tree.Q<VisualElement>("unit-card-flip-icon");
         Label cooldownLabel = tree.Q<Label>("unit-card-cooldown");
-        Assert.That(
-            indicator,
-            Is.Not.Null,
-            "UnitCard must expose the whole-card mode indicator."
-        );
-        Assert.That(icon, Is.Not.Null, "The mode indicator must expose the flip-card icon.");
-        Assert.That(cooldownLabel, Is.Not.Null, "The mode indicator must expose cooldown rounds.");
+        Assert.That(indicator, Is.Not.Null, "UnitCard must expose the ability charge disc.");
+        Assert.That(icon, Is.Not.Null, "The charge disc must expose its charged pip.");
+        Assert.That(cooldownLabel, Is.Not.Null, "The charge disc must expose cooldown rounds.");
         Assert.That(cooldownLabel.ClassListContains("hidden"), Is.True);
         Assert.That(
             tree.Query<Button>().ToList().Count,
             Is.EqualTo(1),
-            "A friendly unit card must expose one whole-card button."
+            "An ability card must expose one whole-card button."
         );
         Assert.That(
             tree.Q<Button>("unit-card-move"),
@@ -1205,14 +1201,55 @@ public class UIToolkitAssetSmokeTests
         Assert.That(source, Does.Not.Contain("spent this match"));
 
         string styles = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
-        Assert.That(styles, Does.Contain("flip-card.svg"));
         Assert.That(styles, Does.Contain("ability-flare.svg"));
         Assert.That(styles, Does.Contain(".unit-card--ability"));
         Assert.That(
             styles,
-            Does.Contain(".unit-card--selected .unit-card__flip-indicator--cooldown"),
-            "Cooldown styling must override the selected-card accent."
+            Does.Not.Contain("flip-card.svg"),
+            "The charge disc replaced the flip glyph; an ability card has only one face."
         );
+        Assert.That(
+            styles,
+            Does.Contain(".unit-card__flip-indicator--cooldown .unit-card__flip-icon"),
+            "A recharging disc must drop its charged pip so only the round count reads."
+        );
+    }
+
+    /// <summary>
+    /// The dock and the contact strip share one template, so the only thing keeping them from
+    /// reading as the same component at two sizes is that each fully styles itself from its own
+    /// modifier. An ability card leads with the ability; a contact card leads with the unit.
+    /// </summary>
+    [Test]
+    public void AbilityCardLeadsWithTheAbilityAndContactCardLeadsWithTheUnit()
+    {
+        string styles = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
+        string element = File.ReadAllText("Assets/Scripts/Menus/UnitCardElement.cs");
+
+        Assert.That(
+            element,
+            Does.Contain("unit-card--friendly"),
+            "Your own crew's cards must carry their own modifier, not merely lack the enemy one."
+        );
+        Assert.That(styles, Does.Contain(".unit-card--friendly .unit-card__ability"));
+        Assert.That(styles, Does.Contain(".unit-card--friendly .unit-card__name"));
+        Assert.That(styles, Does.Contain(".unit-card--enemy .unit-card__ability"));
+        Assert.That(styles, Does.Contain(".unit-card--enemy .unit-card__name"));
+
+        // Selection and "ability ordered" are separate facts and must not both be the accent, or
+        // the loudest colour on the screen stops answering which orders have been given.
+        int selectedRule = styles.IndexOf(".unit-card--selected {", StringComparison.Ordinal);
+        Assert.That(selectedRule, Is.GreaterThan(-1), "The selected card must still be styled.");
+        string selectedBody = styles.Substring(
+            selectedRule,
+            styles.IndexOf('}', selectedRule) - selectedRule
+        );
+        Assert.That(
+            selectedBody,
+            Does.Not.Contain("--toy-primary"),
+            "Selection must not spend the accent; that belongs to the ordered card."
+        );
+        Assert.That(selectedBody, Does.Contain("--toy-select"));
     }
 
     [Test]
@@ -1228,6 +1265,16 @@ public class UIToolkitAssetSmokeTests
         Assert.That(controller, Does.Contain("TryActivateUnitCard(cardIndex)"));
         Assert.That(planner, Does.Contain("public bool TryActivateUnitCard(int unitIndex)"));
         Assert.That(planner, Does.Contain("plans.TryGetValue(unit"));
+
+        // One press orders the ability. It used to take two, the first spent only on selecting the
+        // unit, so reaching an ability from the dock meant already knowing the card had a back.
+        Assert.That(planner, Does.Contain("TrySetSelectionMode(unit, true)"));
+        Assert.That(card, Does.Contain("Order "));
+        Assert.That(
+            card,
+            Does.Not.Contain("Select again"),
+            "The card names the order a press gives, not how many presses it has taken."
+        );
     }
 
     [Test]

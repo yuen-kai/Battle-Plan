@@ -92,7 +92,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Select a unit. Click it again with no route drawn to switch to its ability; its card switches back to movement." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Click a unit, then a highlighted square to set its route. Press its ability card to spend the round on the ability instead." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />

@@ -608,9 +608,7 @@ public static class UIThemeCapture
             return;
 
         List<Texture2D> portraits = LoadPortraits();
-        float[] fractions = enemy
-            ? new[] { 0.72f, 1f, 0.34f, 0.9f, 0f }
-            : new[] { 1f, 0.52f, 0.24f, 0.86f, 1f };
+        float[] fractions = { 0.72f, 1f, 0.34f, 0.9f, 0f };
 
         for (int i = 0; i < UnitNames.Length; i++)
         {
@@ -624,10 +622,13 @@ public static class UIThemeCapture
             TemplateContainer instance = template.Instantiate();
             instance.style.flexGrow = 1f;
             VisualElement card = instance.Q<VisualElement>("unit-card-root");
-            bool eliminated = enemy && i == 4;
+            card.AddToClassList(enemy ? "unit-card--enemy" : "unit-card--friendly");
+
+            // One card per state each strip can be in, so a capture is a state sheet rather than
+            // the same card photographed five times.
+            bool eliminated = i == 4;
             if (enemy)
             {
-                card.AddToClassList("unit-card--enemy");
                 if (i == 1)
                     card.AddToClassList("unit-card--enemy-active");
                 if (eliminated)
@@ -639,28 +640,37 @@ public static class UIThemeCapture
                     card.AddToClassList("unit-card--selected");
                 if (i == 2)
                     card.AddToClassList("unit-card--ability");
+                if (eliminated)
+                    card.AddToClassList("unit-card--disabled");
             }
 
             SetText(instance, "unit-card-name", UnitNames[i]);
-            instance.Q<VisualElement>("unit-card-health").RemoveFromClassList("hidden");
-            float fraction = fractions[i];
-            VisualElement fill = instance.Q<VisualElement>("unit-card-health-fill");
-            fill.style.width = new Length(fraction * 100f, LengthUnit.Percent);
-            fill.AddToClassList(
-                "unit-card__health-fill--" + TeamPalette.HealthClassSuffix(fraction)
-            );
-            SetText(
-                instance,
-                "unit-card-health-value",
-                $"{Mathf.RoundToInt(fraction * MaxHealth[i])} / {MaxHealth[i]}"
-            );
+
+            // Only the contact cards carry health. Your own crew's is on the board, over the unit,
+            // and staging it here reported a row the dock has never actually drawn.
+            if (enemy)
+            {
+                instance.Q<VisualElement>("unit-card-health").RemoveFromClassList("hidden");
+                float fraction = fractions[i];
+                VisualElement fill = instance.Q<VisualElement>("unit-card-health-fill");
+                fill.style.width = new Length(fraction * 100f, LengthUnit.Percent);
+                fill.AddToClassList(
+                    "unit-card__health-fill--" + TeamPalette.HealthClassSuffix(fraction)
+                );
+                SetText(
+                    instance,
+                    "unit-card-health-value",
+                    $"{Mathf.RoundToInt(fraction * MaxHealth[i])} / {MaxHealth[i]}"
+                );
+            }
+
             SetText(
                 instance,
                 "unit-card-ability",
-                enemy ? AbilityNames[i] + " ready" : i == 2 ? AbilityNames[i] + " armed" : AbilityNames[i]
+                enemy ? AbilityNames[i] + " ready" : AbilityNames[i]
             );
             if (eliminated)
-                SetText(instance, "unit-card-state", "Eliminated");
+                SetText(instance, "unit-card-state", "ELIMINATED");
             if (portraits.Count > 0)
                 instance.Q<VisualElement>("unit-card-portrait").style.backgroundImage =
                     new StyleBackground(portraits[i % portraits.Count]);

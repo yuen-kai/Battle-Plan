@@ -13,7 +13,7 @@ public class TutorialDirector : MonoBehaviour
     public const string DrawRoutePrompt = "Drag your unit to draw a route.";
     public const string MoveCloserPrompt = "Move toward the enemy.";
     public const string LockInPrompt = "Lock in.";
-    public const string UseAbilityPrompt = "Click your unit again to use its ability.";
+    public const string UseAbilityPrompt = "Press your unit's ability card to use it.";
     public const string PickTargetPrompt = "Pick a cell. It hits everything nearby.";
     public const string DodgeNowPrompt = "They aimed at you. Drag your unit clear.";
 
@@ -23,7 +23,7 @@ public class TutorialDirector : MonoBehaviour
     public const string EnemyDodgedLesson =
         "Enemies can dodge your abilities; use them to force advantageous positions.";
     public const string ClosingLesson =
-        "Real matches are five a side. Click a unit's card to select it, then draw its route.";
+        "Real matches are five a side. Drag a unit to draw its route, or press its ability card instead.";
 
     /// <summary>
     /// The script advances on what the player has actually done, never on a round number, so

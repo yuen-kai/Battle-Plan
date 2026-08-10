@@ -476,6 +476,42 @@ public static class UnitBasePlate
         Collider unitCollider = unitTransform.GetComponent<Collider>();
         return (unitCollider != null ? unitCollider.bounds.min.y - originY : 0f) + groundOffset;
     }
+
+    /// <summary>
+    /// Height above a unit's own origin that clears the board itself by
+    /// <paramref name="groundOffset"/>, for a visual that has to sit at a fixed height over the
+    /// deck rather than hug whatever plate its unit happens to have.
+    /// </summary>
+    /// <remarks>
+    /// The plate's underside is the board plane: the puck's rim rests on the deck, so its lowest
+    /// renderer bound is the collider's bottom. It is read from the renderers anyway, for the
+    /// reason given on <see cref="ClearanceAboveOrigin"/> — a collider's bounds lag a transform
+    /// that moved this frame and a renderer's do not.
+    /// </remarks>
+    public static float BoardClearanceAboveOrigin(Transform unitTransform, float groundOffset)
+    {
+        if (unitTransform == null)
+            return groundOffset;
+
+        float originY = unitTransform.position.y;
+        bool foundPlate = false;
+        float plateBottom = originY;
+        foreach (Renderer part in unitTransform.GetComponentsInChildren<Renderer>(true))
+        {
+            if (!part.gameObject.name.StartsWith(NamePrefix, System.StringComparison.Ordinal))
+                continue;
+            plateBottom = foundPlate
+                ? Mathf.Min(plateBottom, part.bounds.min.y)
+                : part.bounds.min.y;
+            foundPlate = true;
+        }
+
+        if (foundPlate)
+            return plateBottom - originY + groundOffset;
+
+        Collider unitCollider = unitTransform.GetComponent<Collider>();
+        return (unitCollider != null ? unitCollider.bounds.min.y - originY : 0f) + groundOffset;
+    }
 }
 
 /// <summary>

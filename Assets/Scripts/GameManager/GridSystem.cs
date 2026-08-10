@@ -5,6 +5,18 @@ using UnityEngine;
 public class GridSystem : MonoBehaviour
 {
     private const int TransparentQueue = 3000;
+
+    /// <summary>
+    /// Height the range overlay lays its tiles at.
+    /// </summary>
+    /// <remarks>
+    /// Public because it is the ceiling every ground visual has to clear or deliberately sit
+    /// under, and it used to be a bare 0.2 written twice here and quoted from the comments of
+    /// three other files. The tile's own plane is opaque and writes depth, so anything below this
+    /// is not dimmed by a shown range, it is gone.
+    /// </remarks>
+    public const float RangeOverlayHeight = 0.2f;
+
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int LegacyColorId = Shader.PropertyToID("_Color");
 
@@ -74,7 +86,7 @@ public class GridSystem : MonoBehaviour
                 {
                     GameObject overlayCell = Instantiate(
                         overlayPrefab,
-                        new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y),
+                        new Vector3(overlayCellPos.x, RangeOverlayHeight, overlayCellPos.y),
                         Quaternion.identity
                     );
                     overlayCell.transform.parent = overlay.transform;
@@ -108,7 +120,7 @@ public class GridSystem : MonoBehaviour
 
                 GameObject overlayCell = Instantiate(
                     overlayPrefab,
-                    new Vector3(overlayCellPos.x, 0.2f, overlayCellPos.y),
+                    new Vector3(overlayCellPos.x, RangeOverlayHeight, overlayCellPos.y),
                     Quaternion.identity
                 );
                 overlayCell.transform.parent = overlay.transform;

@@ -33,6 +33,16 @@ public sealed class AbilityStatusRing : MonoBehaviour
     // depth test against that puck without visibly floating above it.
     private const float GroundOffset = 0.035f;
 
+    // The floor the dial may never sink below, whatever plate its unit is standing on.
+    //
+    // A move or ability range paves the cells it covers with MoveOverlayCell, whose plane is opaque
+    // and writes depth at y 0.2, with a translucent highlight over it at 0.227. Every unit's base
+    // plate tops out under that — 0.156, and only 0.1 on the Shotgunner — so a dial that sits on
+    // the plate is depth-rejected outright the moment a range is shown, which is the one moment a
+    // player is deciding what to spend the round on. Above both, the dial survives; the difference
+    // from the plate is under a tenth of a unit and does not read as float at the board's camera.
+    private const float RangeOverlayClearance = 0.245f;
+
     private const float RechargeSlotsPerSecond = 1.6f;
     private const float ReadyBlendPerSecond = 2.5f;
     private const float FlashDecayPerSecond = 1.7f;
@@ -234,8 +244,11 @@ public sealed class AbilityStatusRing : MonoBehaviour
 
     /// <summary>
     /// Cancels the unit's own scale so the dial is a fixed world size on every prefab variant, and
-    /// lifts it clear of the base plate. A unit does not stand on the board, it stands on its own
-    /// puck, so a quad laid on the board plane is buried by the very plate this is engraving.
+    /// lifts it clear of both the base plate and the range overlay. A unit does not stand on the
+    /// board, it stands on its own puck, so a quad laid on the board plane is buried by the very
+    /// plate this is engraving; and the plate in turn is paved over whenever a range is shown.
+    /// The dial takes whichever of the two is higher, so it is engraved when it can be and legible
+    /// when it cannot.
     /// </summary>
     private void PlaceOnBasePlate(Transform unitTransform)
     {
@@ -244,9 +257,15 @@ public sealed class AbilityStatusRing : MonoBehaviour
         float scaleY = Mathf.Max(Mathf.Abs(unitScale.y), 0.001f);
         float scaleZ = Mathf.Max(Mathf.Abs(unitScale.z), 0.001f);
 
+        float abovePlate = UnitBasePlate.ClearanceAboveOrigin(unitTransform, GroundOffset);
+        float aboveOverlay = UnitBasePlate.BoardClearanceAboveOrigin(
+            unitTransform,
+            RangeOverlayClearance
+        );
+
         transform.localPosition = new Vector3(
             0f,
-            UnitBasePlate.ClearanceAboveOrigin(unitTransform, GroundOffset) / scaleY,
+            Mathf.Max(abovePlate, aboveOverlay) / scaleY,
             0f
         );
         transform.localRotation = Quaternion.identity;

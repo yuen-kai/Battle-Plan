@@ -289,22 +289,29 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
             out (bool, List<Vector3>) afterPlan
         );
         List<Vector3> pathAfter = hasPlanAfter ? afterPlan.Item2 : null;
-        Vector3 cardUnitCell = GridSystem.GetNearestGridCell(cardUnit);
+        // A card press names an order; it never draws one. Arming an ability collapses the route
+        // to the unit's own cell, so the invariant is that the path cannot get longer.
         bool pathWasNotPainted =
-            pathBefore != null
-                ? pathAfter != null && pathAfter.SequenceEqual(pathBefore)
-                : pathAfter != null && pathAfter.Count == 1 && pathAfter[0] == cardUnitCell;
+            pathAfter != null && pathAfter.Count <= Mathf.Max(1, pathBefore?.Count ?? 1);
+        Unit cardIdentity = cardUnit.GetComponent<Unit>();
+        bool abilityWasOrderable =
+            !abilityModeBefore
+            && cardUnit.GetComponent<Ability>() != null
+            && cardIdentity != null
+            && cardIdentity.CanUseAbility;
         Check(
             planner.selectedUnit == cardUnit,
             $"live unit-card interaction selected roster slot {cardIndex}"
         );
         Check(
             pathWasNotPainted,
-            $"unit-card interaction only initialized or preserved its path ({pathBefore?.Count ?? 0}->{pathAfter?.Count ?? 0})"
+            $"unit-card interaction never paints a route ({pathBefore?.Count ?? 0}->{pathAfter?.Count ?? 0})"
         );
         Check(
-            hasPlanAfter && afterPlan.Item1 == abilityModeBefore,
-            "first activation of an unselected card preserves its existing order mode"
+            hasPlanAfter && afterPlan.Item1 == abilityWasOrderable,
+            abilityWasOrderable
+                ? "one press on an ability card ordered that unit's ability"
+                : "a card whose ability cannot be ordered left the unit on movement"
         );
 
         bool canToggleAbility = cardUnit.GetComponent<Unit>()?.CanUseAbility == true;

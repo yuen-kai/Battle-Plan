@@ -42,11 +42,17 @@ Shader "BattlePlan/AbilityRing"
     {
         Tags
         {
-            // After the wind-up plate a unit may be standing on and before the additive juice
-            // layers: the dial is a readout, so neither the floor under it nor the effects over it
-            // are allowed to paint it out.
+            // After the wind-up plate a unit may be standing on (2910) and after the move-range
+            // highlight that paves its cell (3000), but before the vision cone and the explosion
+            // juice (3020+) and well before smoke (3050). The dial is a readout: the floor under it
+            // is not allowed to paint it out, and the things that legitimately hide a unit still
+            // are.
+            //
+            // At Transparent-80 it sat before the range highlight, which is a full-cell translucent
+            // quad, so every dial under a shown range was washed to the highlight's own pale blue
+            // and the charge stopped being amber at exactly the moment it was being read.
             "RenderType" = "Transparent"
-            "Queue" = "Transparent-80"
+            "Queue" = "Transparent+5"
             "RenderPipeline" = "UniversalPipeline"
             "IgnoreProjector" = "True"
         }

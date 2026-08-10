@@ -1139,9 +1139,10 @@ public class PlanMovement : MonoBehaviour
     /// <summary>
     /// Resolves a click that landed on one of your own units rather than on the board. Pointing at
     /// a unit asks for that unit: another unit takes over the selection, and the unit already
-    /// holding it turns over to its other face. This is what its card does, so pointing at a unit
-    /// on the board and pointing at it in the roster ask for the same thing. Returns true when the
-    /// click was spent on the selection and must not also be read as naming a square.
+    /// holding it turns over to its other order. The dock reaches the same two states from the
+    /// ability's side, so a player who never discovers this gesture is not locked out of anything.
+    /// Returns true when the click was spent on the selection and must not also be read as naming
+    /// a square.
     /// </summary>
     public bool TrySelectPlanningUnit(GameObject unit)
     {
@@ -1371,6 +1372,19 @@ public class PlanMovement : MonoBehaviour
         SelectUnit(unitIndex);
     }
 
+    /// <summary>
+    /// Presses a unit's ability card. The card is the ability, so one press orders it: the unit is
+    /// taken over if it was not the one being edited, and its round is spent on the ability instead
+    /// of on movement. Pressing the card of a unit already set to its ability puts that unit back
+    /// on movement.
+    /// </summary>
+    /// <remarks>
+    /// This used to take two presses, the first only selecting the unit, because the card was a
+    /// roster entry that happened to have an ability on its back. A player who wanted an ability
+    /// had to know the card turned over. Selecting a unit to move it is what the board is for —
+    /// <see cref="TrySelectPlanningUnit"/> handles the click that lands on one — so the dock is
+    /// free to be the abilities and nothing else.
+    /// </remarks>
     public bool TryActivateUnitCard(int unitIndex)
     {
         if (
@@ -1385,15 +1399,36 @@ public class PlanMovement : MonoBehaviour
         if (!IsPlanningUnitAvailable(unit))
             return false;
 
-        if (selectedUnit != unit)
-        {
-            SwitchToUnit(unit);
-            return selectedUnit == unit;
-        }
-
         bool abilityMode =
             plans.TryGetValue(unit, out (bool, List<Vector3>) plan) && plan.Item1;
-        return TrySetSelectionMode(unit, !abilityMode);
+        if (abilityMode)
+            return TrySetSelectionMode(unit, false);
+
+        bool hadRoute = (plan.Item2?.Count ?? 0) > 1;
+
+        // Picked up first, and deliberately before the attempt rather than after it. A press on a
+        // unit whose ability is still recharging is worth something even though it cannot order
+        // anything — that unit is now the one taking a route — and selecting afterwards would wipe
+        // the very message explaining why the ability did not fire.
+        if (selectedUnit != unit)
+            SwitchToUnit(unit);
+
+        if (!TrySetSelectionMode(unit, true))
+            return false;
+
+        // The two orders are exclusive, so arming the ability throws the route away. The press
+        // named which one the player wants, but a route that vanishes without a word reads as the
+        // card having eaten it, so the swap is said out loud.
+        if (hadRoute)
+        {
+            string abilityName =
+                unit.GetComponent<Movement>()?.unitData?.abilityName ?? "This ability";
+            GameHUDController.Instance?.SetTargetFeedback(
+                $"{abilityName} replaces this unit's route.",
+                false
+            );
+        }
+        return true;
     }
 
     public void SelectUnit(int unitIndex)

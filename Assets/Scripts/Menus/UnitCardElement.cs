@@ -94,9 +94,13 @@ public sealed class UnitCardElement : IDisposable
         }
         flipIndicator?.AddToClassList("hidden");
 
+        // The two strips are different components sharing one template: a contact readout for the
+        // enemy, an ability button for your own crew. Each is styled from its own modifier rather
+        // than one being the deviation from the other.
+        cardRoot.AddToClassList(enemyCard ? "unit-card--enemy" : "unit-card--friendly");
+
         if (enemyCard)
         {
-            cardRoot.AddToClassList("unit-card--enemy");
             healthRow?.RemoveFromClassList("hidden");
             if (unitName != null)
                 unitName.text = "Enemy";
@@ -360,7 +364,7 @@ public sealed class UnitCardElement : IDisposable
 
         if (!hasAbility)
         {
-            selectButton.tooltip = "Select this unit. This unit can move only.";
+            selectButton.tooltip = "This unit has no ability. Press to select it.";
             return;
         }
 
@@ -373,19 +377,11 @@ public sealed class UnitCardElement : IDisposable
             return;
         }
 
-        if (isAbilityMode)
-        {
-            selectButton.tooltip =
-                isSelected
-                    ? $"{configuredAbilityName} selected. Select again to plan movement."
-                    : $"{configuredAbilityName} order set for this unit.";
-            return;
-        }
-
-        selectButton.tooltip =
-            isSelected
-                ? $"{configuredAbilityName} ready. Select again to use it instead of movement."
-                : $"{configuredAbilityName} ready.";
+        // Whether the card happens to be the selected one is not what the press does, so it is not
+        // what the tooltip reports. Every state here names the order the press will give.
+        selectButton.tooltip = isAbilityMode
+            ? $"{configuredAbilityName} ordered. Press again to move instead."
+            : $"Order {configuredAbilityName} instead of moving.";
     }
 
     public void Dispose()
