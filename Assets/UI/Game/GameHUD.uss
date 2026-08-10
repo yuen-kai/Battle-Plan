@@ -198,6 +198,24 @@
     -unity-background-image-tint-color: var(--toy-primary);
 }
 
+/* Both labels take the plate for their box and centre their capitals in it,
+   instead of arriving as line boxes for the row to centre.
+
+   OswaldCaps reserves 1.193em above the baseline for accents a caps-only face
+   never draws, against a cap of 0.811em. At 27px that is a 40px line box asked
+   to centre inside a 36px plate: the row clamped the countdown to the top of
+   the cluster and the digits ran down through the orange rule and onto the
+   board, a whole cap-height below the phase label's baseline. The urgent step
+   is 33px and missed by more.
+
+   Fixing the box to the plate is the part that has to scale — the breakpoints
+   below restate both sizes, and none of them can reopen this. */
+.phase-notch .phase-label,
+.phase-notch .timer-label {
+    height: 100%;
+    -unity-text-align: middle-left;
+}
+
 /* Leaned, because this is a callout about the objective and not a label on a
    control — the same distinction the reference draws between "CONTESTING
    POINT!" and the numbers underneath it. */

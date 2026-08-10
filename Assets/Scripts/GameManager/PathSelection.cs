@@ -89,6 +89,37 @@ public class PathSelection : MonoBehaviour
         return pathDragActive;
     }
 
+    /// <summary>
+    /// Arms a drag on whatever is selected right now, without re-reading the pointer.
+    /// <para>
+    /// <see cref="StartPath"/> is the press that goes and finds its own unit. This is for the
+    /// presses that have already found one somewhere else — the board click that turns the unit it
+    /// lands on out of ability mode — and only has to keep the gesture alive, so the press that
+    /// picked the unit is also the one that draws its route.
+    /// </para>
+    /// </summary>
+    public bool BeginRouteDrag()
+    {
+        if (
+            PlanMovement.Instance?.CanEditPlan != true
+            || SelectedUnit == null
+            || CurrentRibbon == null
+            || CurrentPlan == null
+            || CurrentPlan.Count == 0
+        )
+        {
+            pathDragActive = false;
+            return false;
+        }
+
+        // The unit has just been turned to movement by this very press, so releasing without
+        // drawing must leave it there rather than turning it straight back.
+        abilityTapUnit = null;
+        pathDragActive = true;
+        draggedUnit = SelectedUnit;
+        return true;
+    }
+
     public void CancelCurrentDrag()
     {
         abilityTapUnit = null;

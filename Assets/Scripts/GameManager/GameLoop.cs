@@ -322,6 +322,8 @@ public class GameLoop : NetworkBehaviour
     private readonly HashSet<Vector2Int> clientSmokeCells = new();
     private readonly List<GameObject> clientTelegraphs = new();
     private GameObject clientSmokeVisualRoot;
+    private SmokeScreenVisual clientSmokeVisual;
+    private Coroutine clientSmokeVisionCoroutine;
 
     public UnitDatabase allUnits;
 
@@ -811,6 +813,7 @@ public class GameLoop : NetworkBehaviour
         forceRevealUntil.Clear();
         forceRevealToTeamUntil.Clear();
         StopClientFog();
+        StopClientSmokeVision();
         ClearKingOfTheHillOverlay();
         unitSpawnTransforms.Clear();
         ClearActiveSmokeCells(notifyClients: false);
@@ -1748,11 +1751,17 @@ public class GameLoop : NetworkBehaviour
         foreach (Vector3 cellWorldPosition in cellWorldPositions)
             clientSmokeCells.Add(GridSystem.ConvertToGridCoords(cellWorldPosition));
 
-        clientSmokeVisualRoot = SmokeScreenVisual
-            .Create(transform, cellWorldPositions, cellSize)
-            .gameObject;
+        clientSmokeVisual = SmokeScreenVisual.Create(transform, cellWorldPositions, cellSize);
+        clientSmokeVisualRoot = clientSmokeVisual.gameObject;
 
+        // Seeded now and kept current after: with fog on by the fog loop, with fog off by the
+        // smoke's own. This used to hand the screen all nine of its own cells whenever fog was
+        // off, which left it thinned for the whole round in every fogless match — the screen only
+        // ever looked like glass. Fog being off does not mean everything is seen; it means the
+        // dark tiles are not drawn. Which cells the crew can see into is still a real question,
+        // and the smoke still answers to it because the smoke is what is blocking the look.
         RefreshClientFogForSmokeChange();
+        StartClientSmokeVision();
     }
 
     [ClientRpc]
@@ -1766,6 +1775,8 @@ public class GameLoop : NetworkBehaviour
     {
         clientSmokeCells.Clear();
 
+        StopClientSmokeVision();
+        clientSmokeVisual = null;
         if (clientSmokeVisualRoot != null)
         {
             // The visual owns its runtime materials and releases them with the object.
@@ -1777,10 +1788,65 @@ public class GameLoop : NetworkBehaviour
 
     private void RefreshClientFogForSmokeChange()
     {
-        if (!IsClient || !IsSpawned || !FogOfWarEnabled || fogOverlayTiles.Count == 0)
+        if (!IsClient || !IsSpawned)
             return;
 
-        UpdateClientFogOverlay();
+        if (FogOfWarEnabled && fogOverlayTiles.Count > 0)
+        {
+            UpdateClientFogOverlay();
+            return;
+        }
+
+        // No overlay to redraw, but the screen still wants to know which of its cells the crew can
+        // see into, so it is asked directly.
+        if (TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells))
+            RefreshSmokeSeenCells(visibleCells);
+    }
+
+    private void RefreshSmokeSeenCells(HashSet<Vector2Int> visibleCells)
+    {
+        if (clientSmokeVisual != null)
+            clientSmokeVisual.SetSeenCells(visibleCells);
+    }
+
+    /// <summary>
+    /// Keeps the screen's seen cells current in a match with no fog.
+    ///
+    /// <para>
+    /// With fog on the client fog loop already recomputes vision every tick and hands it over, so
+    /// this would be doing the work twice. With fog off that loop never starts — there are no dark
+    /// tiles to maintain — and without this the screen would be told its cells once when the
+    /// canister landed and never again, so it would not reopen as the crew walked into sight of
+    /// it. Runs only while a screen is actually standing.
+    /// </para>
+    /// </summary>
+    private void StartClientSmokeVision()
+    {
+        if (!IsClient || FogOfWarEnabled || clientSmokeVisionCoroutine != null)
+            return;
+
+        clientSmokeVisionCoroutine = StartCoroutine(ClientSmokeVisionLoop());
+    }
+
+    private IEnumerator ClientSmokeVisionLoop()
+    {
+        while (IsClient && IsSpawned && clientSmokeVisual != null && !FogOfWarEnabled)
+        {
+            if (TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells))
+                RefreshSmokeSeenCells(visibleCells);
+            yield return new WaitForSeconds(FogUpdateIntervalSeconds);
+        }
+
+        clientSmokeVisionCoroutine = null;
+    }
+
+    private void StopClientSmokeVision()
+    {
+        if (clientSmokeVisionCoroutine == null)
+            return;
+
+        StopCoroutine(clientSmokeVisionCoroutine);
+        clientSmokeVisionCoroutine = null;
     }
 
     /// <summary>
@@ -3042,9 +3108,16 @@ public class GameLoop : NetworkBehaviour
         if (IsClient)
         {
             if (newValue)
+            {
                 StartClientFog();
+                // The fog loop recomputes vision anyway, so the smoke's own would be duplicate work.
+                StopClientSmokeVision();
+            }
             else
+            {
                 StopClientFog();
+                StartClientSmokeVision();
+            }
         }
     }
 
@@ -3725,14 +3798,26 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
-    private void UpdateClientFogOverlay()
+    /// <summary>
+    /// The cells the local crew can see: their vision ranges, cut by walls and by the smoke's own
+    /// occlusion. Returns false when there is no local team to compute for.
+    ///
+    /// <para>
+    /// Pulled out of the fog overlay because the smoke needs the same answer in matches that have
+    /// no fog. Smoke is a separate occluder from fog of war — it stops a shot whether or not fog
+    /// is on — so which of its cells you can see into is a real question in a fogless match too,
+    /// and the screen has to be able to ask it without the dark tiles existing.
+    /// </para>
+    /// </summary>
+    private bool TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells)
     {
+        visibleCells = null;
         if (NetworkManager.Singleton?.SpawnManager == null)
-            return;
+            return false;
 
         int localTeamIndex = LocalTeamIndex;
         if (localTeamIndex < 0)
-            return;
+            return false;
         List<(Vector2Int cell, int range)> viewers = new();
 
         foreach (NetworkObject netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
@@ -3762,10 +3847,19 @@ public class GameLoop : NetworkBehaviour
             );
         }
 
-        HashSet<Vector2Int> visibleCells = GridSystem.ComputeVisibleCells(
-            viewers,
-            clientSmokeCells
-        );
+        visibleCells = GridSystem.ComputeVisibleCells(viewers, clientSmokeCells);
+        return true;
+    }
+
+    private void UpdateClientFogOverlay()
+    {
+        if (!TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells))
+            return;
+
+        // The cloud thins over the cells this same set says the crew can see into. Feeding it from
+        // here rather than letting it work its own vision out is the point: the smoke and the dark
+        // tiles are then two drawings of one answer and cannot drift apart.
+        RefreshSmokeSeenCells(visibleCells);
 
         foreach (var tile in fogOverlayTiles)
         {

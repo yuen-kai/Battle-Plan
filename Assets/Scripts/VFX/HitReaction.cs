@@ -1060,7 +1060,14 @@ class HitDeathPuppet : MonoBehaviour
             if (source is SkinnedMeshRenderer skinned)
             {
                 mesh = new Mesh { name = "HitDeathBake" };
-                skinned.BakeMesh(mesh);
+                // useScale, because the piece below is posed with the renderer's whole transform.
+                // A skinned mesh is drawn from its bones and its own transform's scale is never
+                // read, so the default bake leaves that scale standing in the vertices and posing
+                // a copy with the transform applies it a second time. Most of these rigs carry a
+                // fraction on the mesh node and their corpses merely came back small; the
+                // Commander carries 22 to 63 across its three axes and came back at forty-five
+                // times life size, which is wider than the board.
+                skinned.BakeMesh(mesh, true);
                 bakedMeshes.Add(mesh);
             }
             else if (source.TryGetComponent(out MeshFilter filter))
