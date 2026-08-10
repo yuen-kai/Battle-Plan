@@ -561,6 +561,7 @@
     color: var(--toy-select-copy);
 }
 
+.hud-exit-button,
 .hud-controls-button,
 .hud-settings-button {
     min-height: 46px;
@@ -572,8 +573,17 @@
 
 /* Each dock chip is spaced by the one on its left, the way the commit cluster spaces itself, so the
    rightmost chip stays flush with the dock's edge. */
+.hud-exit-button,
 .hud-controls-button {
     margin-right: 8px;
+}
+
+/* Leftmost of the three and the only one that ends the match, so it is kept off the two a player
+   reaches for mid-round and given the ink a destructive action wears everywhere else. Quiet rather
+   than filled: it is a way out, not something the HUD should be recommending. */
+.hud-exit-button {
+    color: var(--toy-danger-copy);
+    border-color: var(--toy-danger-copy);
 }
 
 /* === UNIT CARDS === */
@@ -1590,6 +1600,7 @@
     padding-right: 10px;
 }
 
+.phone .hud-exit-button,
 .phone .hud-controls-button,
 .phone .hud-settings-button {
     min-height: 44px;
@@ -1754,6 +1765,7 @@
     padding-bottom: 3px;
 }
 
+.short .hud-exit-button,
 .short .hud-controls-button,
 .short .hud-settings-button {
     min-height: 44px;
@@ -1784,6 +1796,7 @@
     letter-spacing: 3px;
 }
 
+.phone.short .hud-exit-button,
 .phone.short .hud-controls-button,
 .phone.short .hud-settings-button {
     min-height: 44px;

@@ -55,6 +55,7 @@
                         <ui:Label name="planning-commit-status" text="READY" class="planning-commit__status" picking-mode="Ignore" />
                         <ui:Button name="lock-in-button" text="Lock in" class="button button--primary planning-commit__button" tooltip="Lock current orders" />
                     </ui:VisualElement>
+                    <ui:Button name="exit-match-button" text="Exit" class="button hud-exit-button hidden" tooltip="Leave and return to the title screen" />
                     <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
                     <ui:Button name="settings-button" text="Settings" class="button hud-settings-button" tooltip="Audio and display settings" />
                 </ui:VisualElement>

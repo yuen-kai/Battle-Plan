@@ -70,6 +70,7 @@ public class GameHUDController : MonoBehaviour
     private BattleReport activeReport;
     private int reportRoundIndex;
     private int reportLocalTeamIndex;
+    private Button exitMatchButton;
     private Button controlsButton;
     private VisualElement controlsOverlay;
     private VisualElement controlsPanel;
@@ -85,6 +86,7 @@ public class GameHUDController : MonoBehaviour
     private Label rejoinNoticeStatus;
     private Action playAgainAction;
     private Action mainMenuAction;
+    private Action exitMatchAction;
     private Coroutine flashCoroutine;
     private Coroutine rejoinNoticeCoroutine;
     private bool callbacksRegistered;
@@ -156,6 +158,7 @@ public class GameHUDController : MonoBehaviour
         Array.Clear(enemyCards, 0, enemyCards.Length);
         playAgainAction = null;
         mainMenuAction = null;
+        exitMatchAction = null;
         activeOverlay = null;
 
         if (Instance == this)
@@ -202,6 +205,7 @@ public class GameHUDController : MonoBehaviour
         planningCommit = root.Q<VisualElement>("planning-commit");
         planningCommitStatus = root.Q<Label>("planning-commit-status");
         lockInButton = root.Q<Button>("lock-in-button");
+        exitMatchButton = root.Q<Button>("exit-match-button");
         controlsButton = root.Q<Button>("controls-button");
         controlsOverlay = root.Q<VisualElement>("controls-overlay");
         controlsPanel = controlsOverlay?.Q<VisualElement>(className: "controls-panel");
@@ -239,6 +243,8 @@ public class GameHUDController : MonoBehaviour
         if (reportNextButton != null)
             reportNextButton.clicked += OnReportNextClicked;
         resultsPanel?.RegisterCallback<KeyDownEvent>(OnResultsKeyDown);
+        if (exitMatchButton != null)
+            exitMatchButton.clicked += OnExitMatchClicked;
         if (controlsButton != null)
             controlsButton.clicked += ShowControlsOverlay;
         if (controlsCloseButton != null)
@@ -279,6 +285,8 @@ public class GameHUDController : MonoBehaviour
         if (reportNextButton != null)
             reportNextButton.clicked -= OnReportNextClicked;
         resultsPanel?.UnregisterCallback<KeyDownEvent>(OnResultsKeyDown);
+        if (exitMatchButton != null)
+            exitMatchButton.clicked -= OnExitMatchClicked;
         if (controlsButton != null)
             controlsButton.clicked -= ShowControlsOverlay;
         if (controlsCloseButton != null)
@@ -1124,6 +1132,44 @@ public class GameHUDController : MonoBehaviour
     {
         Action action = mainMenuAction;
         SetResultButtonsEnabled(false, false);
+        action?.Invoke();
+    }
+
+    /// <summary>
+    /// Puts a way out in the dock's action row, for the modes that have no other one.
+    ///
+    /// <para>
+    /// An ordinary match is left from the results overlay, which only exists once somebody has
+    /// won. The tutorial has no opponent that can win and no clock — its planning window is ten
+    /// minutes and the HUD hides the countdown — so a player who wants to stop partway through has
+    /// nothing to press. This is that button, and it is asked for rather than always present so
+    /// the two modes that do have an ending are not given a second, quieter way to quit mid-round.
+    /// </para>
+    /// </summary>
+    public void ShowExitMatch(string label, Action onExit)
+    {
+        exitMatchAction = onExit;
+        if (exitMatchButton == null)
+            return;
+
+        if (!string.IsNullOrEmpty(label))
+            exitMatchButton.text = label;
+        exitMatchButton.SetEnabled(true);
+        exitMatchButton.RemoveFromClassList("hidden");
+    }
+
+    public void HideExitMatch()
+    {
+        exitMatchAction = null;
+        exitMatchButton?.AddToClassList("hidden");
+    }
+
+    private void OnExitMatchClicked()
+    {
+        Action action = exitMatchAction;
+        // The button is leaving with the scene either way; disabling it stops a second press
+        // landing during the shutdown the first one starts.
+        exitMatchButton?.SetEnabled(false);
         action?.Invoke();
     }
 

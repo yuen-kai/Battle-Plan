@@ -4035,7 +4035,12 @@ public class GameLoop : NetworkBehaviour
         NetworkManager.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
     }
 
-    void ExitToMainMenu()
+    /// <summary>
+    /// Tears the match down and goes back to the title. Public because the results overlay is not
+    /// the only thing that needs it: the tutorial offers the same exit from the dock, since it has
+    /// no result screen to reach.
+    /// </summary>
+    public void ExitToMainMenu()
     {
         GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
         ReconnectSession.Clear();

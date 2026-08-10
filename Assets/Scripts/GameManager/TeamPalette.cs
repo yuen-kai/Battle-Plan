@@ -101,6 +101,18 @@ public static class TeamPalette
     public static readonly Color AbilityTelegraph = new(0.541f, 0.353f, 0.039f, 1f);
 
     /// <summary>
+    /// The same ability amber lifted to emission, for the charge dial under a unit and anything
+    /// else that carries the ability language as light on the board rather than as ink on the
+    /// deck. <see cref="AbilityRange"/> is picked to darken the deck it lies on and is far too low
+    /// in value to glow; this is its bright sibling, the way <see cref="FriendlyBright"/> is
+    /// <see cref="Friendly"/>'s. It is deliberately the accent the HUD already spends on an
+    /// ability-mode card (<c>--toy-primary</c>), so the dial on the board and the card that
+    /// commands it are one colour and not two near-miss oranges. That the health ramp's warning
+    /// step is this same hex is a coincidence of the theme having exactly one warm accent.
+    /// </summary>
+    public static readonly Color AbilityBright = Hex("#F18F01");
+
+    /// <summary>
     /// An unclaimed hill. Neutral bone rather than the old amber: unclaimed should not borrow the
     /// colour that means "your next action", and it leaves amber free for the ability language.
     /// Reuses the board's existing cream so it belongs to the diorama.

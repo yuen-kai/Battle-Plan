@@ -200,6 +200,34 @@ public class GameplayNetworkEditModeTests
         }
     }
 
+    /// <summary>
+    /// The dial counts up while the cooldown counts down, so the two are complements. Getting this
+    /// backwards is invisible in a screenshot — a full dial and an empty one are both plausible
+    /// pictures — and would tell the player an ability is ready on the exact round it is not.
+    /// </summary>
+    [Test]
+    public void AbilityChargeDial_CountsUpAsTheCooldownCountsDown()
+    {
+        Assert.That(AbilityStatusRing.ChargedSlots(4, 4), Is.Zero, "Just spent, nothing charged.");
+        Assert.That(AbilityStatusRing.ChargedSlots(3, 4), Is.EqualTo(1));
+        Assert.That(AbilityStatusRing.ChargedSlots(1, 4), Is.EqualTo(3));
+        Assert.That(
+            AbilityStatusRing.ChargedSlots(0, 4),
+            Is.EqualTo(4),
+            "A cooldown of zero is the full dial the ready state is drawn from."
+        );
+        Assert.That(
+            AbilityStatusRing.ChargedSlots(9, 2),
+            Is.Zero,
+            "A cooldown longer than the dial empties it rather than running it negative."
+        );
+        Assert.That(
+            AbilityStatusRing.ChargedSlots(0, 0),
+            Is.Zero,
+            "A unit with no ability has no slots to fill."
+        );
+    }
+
     [TestCase(5, 30f)]
     [TestCase(4, 24f)]
     [TestCase(3, 18f)]
@@ -1077,6 +1105,162 @@ public class GameplayNetworkEditModeTests
             Assert.That(visual.IsVisible, Is.True);
             visual.SetVisible(false);
             Assert.That(visual.IsVisible, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    [Test]
+    public void AbilityChargeDial_BuildsLocalPlateVisualWithoutColliders()
+    {
+        GameObject unit = new("Ability charge dial test unit");
+        unit.transform.position = Vector3.up;
+        unit.transform.localScale = new Vector3(1.3f, 1.56f, 1.3f);
+        unit.AddComponent<CapsuleCollider>();
+        MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
+        hiddenUnitRenderer.forceRenderingOff = true;
+        try
+        {
+            AbilityStatusRing dial = AbilityStatusRing.Create(unit.transform);
+
+            Assert.That(dial, Is.Not.Null);
+            Assert.That(dial.name, Is.EqualTo(AbilityStatusRing.GameObjectName));
+            Assert.That(
+                Vector3.Distance(dial.transform.lossyScale, Vector3.one),
+                Is.LessThan(0.001f),
+                "The dial cancels the unit's scale so it is the same size on every prefab variant."
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.sharedMaterial.shader.name),
+                Is.All.EqualTo(AbilityStatusRing.ShaderName)
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.forceRenderingOff),
+                Is.All.True,
+                "A dial built for a hidden unit must inherit host fog suppression immediately."
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Collider>(includeInactive: true),
+                Is.Empty,
+                "The local presentation must never affect gameplay physics."
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.shadowCastingMode),
+                Is.All.EqualTo(UnityEngine.Rendering.ShadowCastingMode.Off)
+            );
+            Assert.That(
+                AbilityStatusRing.Create(unit.transform),
+                Is.SameAs(dial),
+                "Every cooldown change reapplies state, so construction must be idempotent."
+            );
+
+            dial.SetCharge(remainingRounds: 4, configuredRounds: 4, animate: false);
+            Assert.That(dial.Slots, Is.EqualTo(4));
+            Assert.That(dial.DisplayedCharge, Is.EqualTo(0f).Within(0.001f));
+            Assert.That(dial.IsReady, Is.False);
+
+            dial.SetCharge(remainingRounds: 0, configuredRounds: 4, animate: false);
+            Assert.That(
+                dial.DisplayedCharge,
+                Is.EqualTo(4f).Within(0.001f),
+                "State that predates this client's view of the unit is adopted, not animated."
+            );
+            Assert.That(dial.IsReady, Is.True);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    /// <summary>
+    /// The dial is engraved into the base plate with a multiply, so a dial that only clears the
+    /// board plane is depth-buried by the very puck it is supposed to be cut into.
+    /// </summary>
+    [Test]
+    public void AbilityChargeDial_SitsOnTheBasePlateRatherThanTheBoard()
+    {
+        GameObject unit = new("Ability charge dial plate test unit");
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+
+        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plate.name = UnitBasePlate.NamePrefix;
+        plate.transform.SetParent(unit.transform, worldPositionStays: false);
+        plate.transform.localScale = new Vector3(1.75f, 0.12f, 1.75f);
+        Collider unitCollider = unit.GetComponent<Collider>();
+        plate.transform.position = new Vector3(0f, unitCollider.bounds.min.y + 0.06f, 0f);
+        float plateTop = plate.GetComponent<Renderer>().bounds.max.y;
+
+        try
+        {
+            Transform dial = AbilityStatusRing.Create(unit.transform).transform;
+            Assert.That(
+                dial.position.y,
+                Is.EqualTo(plateTop + 0.035f).Within(0.001f),
+                "The dial must sit just proud of the plate face it is cut into."
+            );
+            Assert.That(
+                dial.GetChild(0).rotation.eulerAngles.x,
+                Is.EqualTo(90f).Within(0.001f),
+                "The dial lies flat on the plate."
+            );
+
+            // The dial is built the instant a unit spawns, on the same frame the unit is placed,
+            // and a collider's bounds lag a transform that moved this frame where a renderer's do
+            // not. Consulting the plate alone is what keeps the two from disagreeing, so the dial
+            // has to land in the same place with the collider gone entirely.
+            Object.DestroyImmediate(unitCollider);
+            Object.DestroyImmediate(dial.gameObject);
+            Transform plateOnly = AbilityStatusRing.Create(unit.transform).transform;
+            Assert.That(
+                plateOnly.position.y,
+                Is.EqualTo(plateTop + 0.035f).Within(0.001f),
+                "Placement must read the base plate and nothing else."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    [Test]
+    public void GroundVisuals_MeasureBasePlateClearanceFromTheUnitOrigin()
+    {
+        GameObject unit = new("Origin clearance test unit");
+        unit.transform.position = new Vector3(0f, 3f, 0f);
+
+        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plate.name = UnitBasePlate.NamePrefix;
+        plate.transform.SetParent(unit.transform, worldPositionStays: false);
+        plate.transform.localScale = new Vector3(1.75f, 0.1f, 1.75f);
+        plate.transform.localPosition = new Vector3(0f, -1.2f, 0f);
+
+        try
+        {
+            Assert.That(
+                UnitBasePlate.ClearanceAboveOrigin(unit.transform, 0.035f),
+                Is.EqualTo(-1.2f + 0.05f + 0.035f).Within(0.001f),
+                "A plate below the origin puts the clearance below it too."
+            );
+
+            Object.DestroyImmediate(plate);
+            Assert.That(
+                UnitBasePlate.ClearanceAboveOrigin(unit.transform, 0.035f),
+                Is.EqualTo(0.035f).Within(0.001f),
+                "Without a plate or a collider the offset is all there is to go on."
+            );
+            Assert.That(
+                UnitBasePlate.ClearanceAboveOrigin(null, 0.035f),
+                Is.EqualTo(0.035f).Within(0.001f),
+                "A missing unit must not throw on a purely presentational lookup."
+            );
         }
         finally
         {

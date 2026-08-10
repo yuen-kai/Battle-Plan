@@ -98,7 +98,23 @@ public class TutorialDirector : MonoBehaviour
 
         hud.SuppressTimer(true);
         hud.SetFieldedCardCount(TutorialSession.UnitsPerTeam);
+        // The sandbox cannot be won or lost and its clock is hidden, so it never reaches the
+        // results overlay every other match is left from. Without this there is no way out of it
+        // short of closing the game.
+        hud.ShowExitMatch("Exit tutorial", LeaveTutorial);
         hudPrepared = true;
+    }
+
+    /// <summary>
+    /// Leaves partway through. The session is not marked completed — a tutorial walked out of has
+    /// not been taken — and the title screen ends the session on arrival, so nothing here has to
+    /// unwind the sandbox by hand.
+    /// </summary>
+    private static void LeaveTutorial()
+    {
+        GameHUDController.Instance?.SetCoachPrompt(string.Empty);
+        GameHUDController.Instance?.SetLessonPopup(string.Empty);
+        GameLoop.Instance?.ExitToMainMenu();
     }
 
     private void OnPhaseEntered(string phase)

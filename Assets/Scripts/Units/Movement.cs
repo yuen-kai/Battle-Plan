@@ -441,6 +441,41 @@ public static class UnitBasePlate
 
         return plateTop - bottom + groundOffset;
     }
+
+    /// <summary>
+    /// The same clearance measured from the unit's own origin instead of its board plane, for
+    /// anything that has to place itself on the frame the unit was positioned.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ClearanceAbovePlane"/> answers from the board plane, so a caller parenting to the
+    /// unit has to subtract the collider's half height to get back to the origin — reading the
+    /// collider twice and the plate's renderer once. A collider's bounds lag a transform that moved
+    /// this frame and a renderer's do not, so on exactly the frame a unit spawns or teleports those
+    /// two readings disagree and the visual lands a whole unit height out. This reads the plate
+    /// only, which is never stale.
+    /// </remarks>
+    public static float ClearanceAboveOrigin(Transform unitTransform, float groundOffset)
+    {
+        if (unitTransform == null)
+            return groundOffset;
+
+        float originY = unitTransform.position.y;
+        bool foundPlate = false;
+        float plateTop = originY;
+        foreach (Renderer part in unitTransform.GetComponentsInChildren<Renderer>(true))
+        {
+            if (!part.gameObject.name.StartsWith(NamePrefix, System.StringComparison.Ordinal))
+                continue;
+            plateTop = foundPlate ? Mathf.Max(plateTop, part.bounds.max.y) : part.bounds.max.y;
+            foundPlate = true;
+        }
+
+        if (foundPlate)
+            return plateTop - originY + groundOffset;
+
+        Collider unitCollider = unitTransform.GetComponent<Collider>();
+        return (unitCollider != null ? unitCollider.bounds.min.y - originY : 0f) + groundOffset;
+    }
 }
 
 /// <summary>

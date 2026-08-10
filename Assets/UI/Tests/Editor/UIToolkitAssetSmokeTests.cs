@@ -114,6 +114,7 @@ public class UIToolkitAssetSmokeTests
                 "planning-commit",
                 "planning-commit-status",
                 "lock-in-button",
+                "exit-match-button",
                 "controls-button",
                 "controls-overlay",
                 "controls-scroll",
