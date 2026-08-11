@@ -1,5 +1,107 @@
+/* The in-match HUD.
+ 
+   Overwatch puts almost nothing between the player and the fight: two bands of
+   near-black chrome, an orange objective banner hanging into the top of the
+   frame, and the crew along the bottom. Everything here is one of those three.
+ 
+   One structural constraint shapes the whole sheet: the two bands are not an
+   overlay. GameHUDController shrinks the board camera to the strip they leave
+   free, so they must be fully opaque — the camera does not paint behind them —
+   and only the objective banner is allowed to cross onto the board.
+ 
+   The unit and ability cards at the bottom deliberately sit outside .toybox-ui
+   scope, so they take their type from the :root default in BattlePlan.uss and
+   their chrome from this file. Anything they need in the display face has to
+   ask for it here. */
+
+/* === THE HUD RUNS THE BOARD'S DARK END ===
+ 
+   The front end is built from the deck: pale plates, wall-coloured ink, the
+   overlay blue for selection. The match cannot be, and this is the one place
+   the two halves of the map's palette meet.
+ 
+   The reason is the board itself. The deck is #A8B3B8 and the two HUD bands are
+   opaque by necessity — the camera is shrunk to the gap between them — so bands
+   made of the deck against the deck would erase the boundary the whole layout
+   depends on. The map already contains the answer: it has a dark end. These
+   values are Map_Cover #46525A walked down until type carries on it, the
+   hairlines are Map_WallCap #ADC7D1, and the portrait backing is Map_Void
+   #5E5346, the table the board stands on. The HUD is the inside of a wall
+   looking out at the floor.
+ 
+   The tokens are re-declared rather than the rules rewritten. Custom properties
+   inherit, so everything inside #screen — including the unit and ability cards,
+   which deliberately sit outside .toybox-ui scope — resolves against these
+   instead. Every rule below this block is written once and works in either
+   half. Deleting this block puts the HUD on the deck palette; nothing else
+   needs to change to do it. */
 .game-screen {
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--toy-transparent);
+
+    --toy-ground: rgb(22, 29, 33);
+    --toy-surface: rgb(30, 39, 44);
+    --toy-surface-raised: rgb(44, 57, 65);
+    /* Only the unit card's hover and focus fill. Pulled down a step with the
+       ink above it: a card's ability line is --toy-text-copy, and at the old
+       lift the softened ladder would have dropped it to 4.1:1 on hover — the
+       one state where the player is actually looking at that card. */
+    --toy-surface-hover: rgb(53, 68, 75);
+    --toy-surface-pressed: rgb(20, 26, 30);
+    --toy-surface-quiet: rgb(35, 46, 52);
+    --toy-inset: rgb(15, 20, 23);
+    --toy-warm: rgb(58, 53, 41);
+    --toy-scrim: rgba(15, 20, 23, 0.8);
+    --toy-panel: rgba(23, 31, 35, 0.9);
+    --toy-panel-sheer: rgba(23, 31, 35, 0.76);
+    --toy-scrim-tint: rgb(13, 18, 21);
+    --toy-vignette-tint: rgb(15, 20, 23);
+
+    --toy-edge: rgba(173, 199, 209, 0.26);
+    --toy-edge-strong: rgba(173, 199, 209, 0.6);
+    --toy-divider: rgba(173, 199, 209, 0.14);
+    --toy-disabled-surface: rgb(33, 42, 47);
+    --toy-disabled-border: rgba(173, 199, 209, 0.18);
+
+    /* The match runs long and this is the one screen a player stares at for all
+       of it, so the top of the ladder is an off-white rather than a near-white.
+       #EDF3F5 on the chrome measured 15.2:1 — well past legible and into glare,
+       which is its own kind of unreadable after twenty minutes. This sits at
+       9.2:1 on the ground and 6.4:1 on a unit card, and the whole ladder is
+       re-spaced under it rather than only its top step: the old --toy-text-copy
+       was lighter than this value and would have inverted the hierarchy.
+
+       The front end does not get this treatment. It is dark ink on paper, where
+       the same complaint does not arise and the muted step is already fighting
+       for contrast. */
+    --toy-text: rgb(180, 193, 197);
+    --toy-text-copy: rgb(166, 179, 184);
+    --toy-text-muted: rgb(147, 161, 166);
+    --toy-text-on-deep: rgb(17, 26, 30);
+    --toy-text-on-accent-quiet: rgb(74, 90, 98);
+    --toy-text-border: rgba(173, 199, 209, 0.24);
+    --toy-text-wash: rgba(173, 199, 209, 0.1);
+
+    /* Lifted again, because against the wall these are line work and labels
+       rather than ink on the floor. */
+    --toy-primary-copy: rgb(246, 184, 94);
+    --toy-primary-tint: rgb(74, 58, 30);
+    --toy-primary-wash: rgb(56, 48, 31);
+    --toy-select: rgb(220, 231, 235);
+    --toy-select-hover: rgb(241, 246, 248);
+    --toy-select-pressed: rgb(180, 198, 206);
+    --toy-select-copy: rgb(127, 194, 245);
+    --toy-danger: rgb(214, 58, 54);
+    /* Darkens under the pointer rather than brightening. A red already light
+       enough to carry white at 4.7:1 has nowhere lighter to go that still
+       does — the old hover step measured 3.8. */
+    --toy-danger-hover: rgb(188, 45, 41);
+    --toy-danger-pressed: rgb(176, 42, 39);
+    --toy-danger-copy: rgb(255, 122, 118);
+    --toy-danger-tint: rgb(56, 26, 24);
+    --toy-defeat: rgb(150, 168, 176);
+
+    --toy-focus: rgb(180, 193, 197);
+    --toy-shadow-stage: rgba(10, 16, 19, 0.7);
 }
 
 .hud-flash {
@@ -9,13 +111,28 @@
     top: 0;
     bottom: 0;
     opacity: 0;
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: var(--toy-text-wash);
     transition-duration: 0.14s;
     transition-property: opacity;
 }
 
 .hud-flash--active {
     opacity: 1;
+}
+
+/* The bands are flat black by necessity; the hatch is what keeps them from
+   reading as an unpainted letterbox above and below the game. */
+.hud-hatch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0.05;
+    background-image: url("project://database/Assets/UI/Shared/Textures/Hatch.png");
+    background-repeat: repeat;
+    background-size: 18px 18px;
+    -unity-background-image-tint-color: var(--toy-text-copy);
 }
 
 .hud-top {
@@ -25,6 +142,8 @@
     top: 16px;
     height: 78px;
 }
+
+/* === OBJECTIVE BANNER === */
 
 /* Centred tab hanging off the bottom edge of the top bar. GameHUDController reserves camera space
    for the opaque bars only, so this tab is one of the few pieces that still crosses onto the board;
@@ -39,35 +158,72 @@
     justify-content: center;
 }
 
+/* Tinted to the plate rather than the accent: these caps are the banner's own
+   silhouette, not decoration sitting beside it.
+
+   Opaque, and the cluster below with it. This is the only chrome that hangs
+   over the deck, and --toy-panel's last tenth let #A8B3B8 up through it: the
+   plate arrived at #262E32 instead of #171F23, which cost the friendly phase
+   label its AA at 19px. The label's blue mirrors TeamPalette and paints units
+   on the board, so it is the plate that had to move. */
+.phase-notch .phase-notch__cap {
+    width: 16px;
+    min-width: 16px;
+    align-self: stretch;
+    -unity-background-image-tint-color: var(--toy-ground);
+}
+
+/* No side or top borders: the caps are the edges, and a hairline drawn around
+   the middle section would stop dead where the bevel starts. The orange rule
+   goes on the bottom, which is the one edge the trapezoid and the plate share. */
 .phase-notch .phase-cluster {
     height: 39px;
     flex-direction: row;
     align-items: center;
-    padding: 0 20px;
-    background-color: var(--toy-panel);
-    border-color: var(--toy-edge);
-    border-bottom-width: var(--toy-stroke-thin);
-    border-left-width: var(--toy-stroke-thin);
-    border-right-width: var(--toy-stroke-thin);
-    border-bottom-left-radius: var(--toy-radius-lg);
-    border-bottom-right-radius: var(--toy-radius-lg);
-}
-
-.phase-notch .phase-cluster__mark {
-    width: 9px;
-    height: 9px;
-    margin-right: 11px;
-    background-color: var(--toy-primary);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
+    padding: 0 18px;
+    background-color: var(--toy-ground);
+    border-width: 0;
+    border-bottom-width: var(--toy-accent-rule);
+    border-bottom-color: var(--toy-primary);
     border-radius: var(--toy-radius-sm);
 }
 
+.phase-notch .phase-cluster__mark {
+    width: 13px;
+    min-width: 13px;
+    height: 15px;
+    margin-right: 11px;
+    background-image: url("project://database/Assets/UI/Shared/Icons/hex.svg");
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--toy-primary);
+}
+
+/* Both labels take the plate for their box and centre their capitals in it,
+   instead of arriving as line boxes for the row to centre.
+
+   OswaldCaps reserves 1.193em above the baseline for accents a caps-only face
+   never draws, against a cap of 0.811em. At 27px that is a 40px line box asked
+   to centre inside a 36px plate: the row clamped the countdown to the top of
+   the cluster and the digits ran down through the orange rule and onto the
+   board, a whole cap-height below the phase label's baseline. The urgent step
+   is 33px and missed by more.
+
+   Fixing the box to the plate is the part that has to scale — the breakpoints
+   below restate both sizes, and none of them can reopen this. */
+.phase-notch .phase-label,
+.phase-notch .timer-label {
+    height: 100%;
+    -unity-text-align: middle-left;
+}
+
+/* Leaned, because this is a callout about the objective and not a label on a
+   control — the same distinction the reference draws between "CONTESTING
+   POINT!" and the numbers underneath it. */
 .phase-notch .phase-label {
-    font-size: 17px;
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
+    font-size: 19px;
     color: var(--toy-text);
-    letter-spacing: 0;
+    letter-spacing: var(--toy-track-title);
 }
 
 /* These were amber and red, a pair that sits 1.25:1 apart in luminance and
@@ -87,12 +243,14 @@
     color: var(--toy-text);
 }
 
+/* The countdown is the loudest number on screen, which is the only treatment a
+   shot clock over an objective has ever had. */
 .phase-notch .timer-label {
-    margin-left: 16px;
-    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    font-size: 19px;
-    -unity-font-style: bold;
-    color: var(--toy-primary-copy);
+    margin-left: 18px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 27px;
+    color: var(--toy-primary);
+    letter-spacing: var(--toy-track-label);
 }
 
 /* Urgency was signalled by hue alone, on a pair that merges under tritanopia and
@@ -100,9 +258,11 @@
    riding on one channel. Size and weight carry it too now, so the timer changes
    even in greyscale. */
 .phase-notch .timer-label--urgent {
-    font-size: 24px;
+    font-size: 33px;
     color: var(--toy-danger-copy);
 }
+
+/* === TOP-BAR READOUTS === */
 
 .hud-top .hill-status-readout {
     position: absolute;
@@ -112,19 +272,18 @@
     min-height: 72px;
     align-items: stretch;
     padding: 10px 14px 12px 14px;
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .hud-top .hill-status-readout__key {
-    margin-bottom: 5px;
-    letter-spacing: 0;
+    margin-bottom: 6px;
 }
 
 .hud-top .hill-status-readout__value {
     align-self: flex-start;
-    font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
+    font-size: var(--toy-type-label);
     color: var(--toy-primary-copy);
-    letter-spacing: 0;
 }
 
 /* The pad is the one thing both seats must name identically, so this readout
@@ -161,22 +320,23 @@
     min-height: 72px;
     align-items: stretch;
     padding: 10px 14px 12px 14px;
-    border-color: var(--toy-danger);
+    border-color: var(--toy-edge);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-danger);
 }
 
 .hud-top .rejoin-notice__key {
-    margin-bottom: 5px;
-    letter-spacing: 0;
+    margin-bottom: 6px;
 }
 
 .hud-top .rejoin-notice__value {
     align-self: flex-start;
-    font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
+    font-size: var(--toy-type-label);
     color: var(--toy-danger-copy);
     border-color: var(--toy-danger);
-    letter-spacing: 0;
 }
+
+/* === BANDS === */
 
 .hud-dock {
     position: absolute;
@@ -184,10 +344,10 @@
     right: 0;
     bottom: 0;
     min-height: 0;
-    padding: 8px 16px;
+    padding: 10px 18px;
     background-color: var(--toy-surface);
     border-top-width: 1px;
-    border-color: var(--toy-edge);
+    border-color: var(--toy-edge-strong);
 }
 
 .hud-dock__row {
@@ -195,20 +355,63 @@
     align-items: center;
 }
 
+.enemy-status-strip {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    padding: 16px 16px 8px 16px;
+    background-color: var(--toy-surface);
+    border-bottom-width: 1px;
+    border-color: var(--toy-edge-strong);
+}
+
+.enemy-unit-cards {
+    flex-grow: 0;
+    height: 78px;
+}
+
+.enemy-unit-cards .unity-scroll-view__content-container {
+    flex-grow: 1;
+    flex-direction: row;
+    justify-content: center;
+}
+
+/* The hill readout floats over the right end of this same band, so King of the
+   Hill keeps the row packed left where it clears the readout at full card width. */
+.koth .enemy-unit-cards .unity-scroll-view__content-container {
+    justify-content: flex-start;
+}
+
+/* Shorter than the roster strip it replaced. An ability card carries a name and
+   a charge disc rather than a unit dossier, and every row of height given back
+   here is board the camera gets to keep. */
+.unit-cards {
+    flex-grow: 1;
+    min-width: 0;
+    height: 84px;
+}
+
+.unit-cards .unity-scroll-view__content-container {
+    flex-grow: 1;
+    flex-direction: row;
+}
+
+/* === FEEDBACK STRIPS === */
+
 /* Shares the notch's band above the dock, kept left so the two never meet. */
 .target-feedback {
     position: absolute;
     left: 0;
-    top: -31px;
+    top: -32px;
     max-width: 640px;
     min-height: 30px;
-    padding: 5px 10px;
-    background-color: var(--toy-surface-quiet);
+    padding: 6px 12px;
+    background-color: var(--toy-panel);
     color: var(--toy-text);
-    border-left-width: 3px;
-    border-left-color: var(--toy-text-muted);
-    font-size: 11px;
-    -unity-font-style: bold;
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-edge-strong);
+    font-size: 12px;
     -unity-text-align: middle-left;
     white-space: normal;
 }
@@ -235,7 +438,7 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: -80px;
+    top: -82px;
     align-items: center;
     opacity: 0;
     transition-duration: 0.14s;
@@ -266,15 +469,14 @@
 
 .toybox-ui.lesson-popup .lesson-popup__card {
     max-width: 700px;
-    padding: 20px 30px 16px 30px;
+    padding: 22px 32px 18px 32px;
     align-items: center;
-    border-left-width: 4px;
-    border-left-color: var(--toy-primary);
+    border-top-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-primary);
 }
 
 .lesson-popup__copy {
-    font-size: 20px;
-    -unity-font-style: bold;
+    font-size: 19px;
     -unity-text-align: middle-center;
     color: var(--toy-text);
     white-space: normal;
@@ -282,71 +484,72 @@
 
 /* The card waits for the player rather than a clock, so the dismiss is the only timing control. */
 .toybox-ui.lesson-popup .lesson-popup__button {
-    margin-top: 16px;
-    min-width: 140px;
+    margin-top: 18px;
+    min-width: 150px;
+    justify-content: center;
 }
 
 .coach-prompt__copy {
     max-width: 560px;
-    padding: 9px 16px;
+    padding: 10px 18px;
     background-color: var(--toy-panel);
     color: var(--toy-text);
     border-width: var(--toy-stroke-thin);
-    border-bottom-width: var(--toy-depth-panel);
-    border-left-width: 3px;
+    border-left-width: var(--toy-accent-rule);
     border-color: var(--toy-edge);
     border-left-color: var(--toy-primary);
-    border-radius: var(--toy-radius-md);
     font-size: 13px;
-    -unity-font-style: bold;
     -unity-text-align: middle-center;
     white-space: normal;
 }
+
+/* === DOCK ACTIONS === */
 
 .hud-header-actions {
     flex-direction: row;
     flex-shrink: 0;
     align-items: center;
-    margin-left: 16px;
+    margin-left: 18px;
 }
 
 .planning-commit {
-    min-height: 44px;
+    min-height: 46px;
     flex-direction: row;
     flex-shrink: 0;
     align-items: center;
     margin-right: 8px;
-    padding-left: 10px;
+    padding-left: 12px;
     background-color: var(--toy-surface-quiet);
-    border-left-width: 2px;
+    border-left-width: var(--toy-accent-rule);
     border-left-color: var(--toy-primary);
 }
 
 .planning-commit__status {
-    min-width: 72px;
+    min-width: 86px;
     flex-shrink: 0;
-    margin-right: 8px;
-    font-size: 10px;
-    -unity-font-style: bold;
+    margin-right: 10px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 13px;
     color: var(--toy-primary-copy);
-    letter-spacing: 1px;
+    letter-spacing: var(--toy-track-label);
     white-space: nowrap;
 }
 
 .planning-commit__button {
-    min-width: 112px;
-    min-height: 44px;
+    min-width: 124px;
+    min-height: 46px;
     flex-shrink: 0;
-    padding: 8px 14px;
-    font-size: 12px;
+    padding: 8px 16px;
+    justify-content: center;
+    font-size: 14px;
 }
 
 .planning-commit--ready .planning-commit__status {
     color: var(--toy-primary-copy);
 }
 
-/* Committed states read as select-indigo so they stay distinct from the amber
-   "ready to act" state; focus orange would collapse the two. */
+/* Committed states read as the cool selection blue so they stay distinct from
+   the amber "ready to act" state; the accent alone would collapse the two. */
 .planning-commit--sending .planning-commit__status,
 .planning-commit--waiting .planning-commit__status,
 .planning-commit--unlocking .planning-commit__status {
@@ -354,65 +557,39 @@
 }
 
 .planning-commit--locked {
-    border-left-color: var(--toy-select);
+    border-left-color: var(--toy-select-copy);
 }
 
 .planning-commit--locked .planning-commit__status {
     color: var(--toy-select-copy);
 }
 
+.hud-exit-button,
 .hud-controls-button,
 .hud-settings-button {
-    min-height: 44px;
+    min-height: 46px;
     flex-shrink: 0;
-    padding: 6px 11px;
-    font-size: 11px;
+    padding: 6px 14px;
+    justify-content: center;
+    font-size: 14px;
 }
 
 /* Each dock chip is spaced by the one on its left, the way the commit cluster spaces itself, so the
    rightmost chip stays flush with the dock's edge. */
+.hud-exit-button,
 .hud-controls-button {
     margin-right: 8px;
 }
 
-.enemy-status-strip {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    padding: 16px 16px 8px 16px;
-    background-color: var(--toy-surface);
-    border-bottom-width: 1px;
-    border-color: var(--toy-edge);
+/* Leftmost of the three and the only one that ends the match, so it is kept off the two a player
+   reaches for mid-round and given the ink a destructive action wears everywhere else. Quiet rather
+   than filled: it is a way out, not something the HUD should be recommending. */
+.hud-exit-button {
+    color: var(--toy-danger-copy);
+    border-color: var(--toy-danger-copy);
 }
 
-.enemy-unit-cards {
-    flex-grow: 0;
-    height: 78px;
-}
-
-.enemy-unit-cards .unity-scroll-view__content-container {
-    flex-grow: 1;
-    flex-direction: row;
-    justify-content: center;
-}
-
-/* The hill readout floats over the right end of this same band, so King of the
-   Hill keeps the row packed left where it clears the readout at full card width. */
-.koth .enemy-unit-cards .unity-scroll-view__content-container {
-    justify-content: flex-start;
-}
-
-.unit-cards {
-    flex-grow: 1;
-    min-width: 0;
-    height: 104px;
-}
-
-.unit-cards .unity-scroll-view__content-container {
-    flex-grow: 1;
-    flex-direction: row;
-}
+/* === UNIT CARDS === */
 
 .unit-card-host {
     flex-grow: 1;
@@ -420,7 +597,7 @@
     width: 0;
     min-width: 264px;
     max-width: 360px;
-    min-height: 96px;
+    min-height: 76px;
     margin-right: 8px;
 }
 
@@ -442,37 +619,61 @@
     margin-right: 0;
 }
 
+/* The leading rule is the card's identity: team colour at rest, the selection
+   mark while the card is the one being edited, and the accent once its ability
+   is the order. A player scanning the dock reads that three-pixel edge long
+   before they read the name on the card. */
 .unit-card {
     position: relative;
     flex-grow: 1;
     width: 100%;
     height: 100%;
-    min-height: 96px;
+    min-height: 76px;
     flex-direction: row;
     overflow: hidden;
     background-color: var(--toy-surface-raised);
     border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-team-friendly);
     border-radius: var(--toy-radius-md);
 }
 
+/* Selection and "ability ordered" were two shades of one orange, which left the
+   loudest colour in the interface meaning both "you are pointing at this" and
+   "this is what the unit will do with its round". They are separate facts, so
+   they are now separate marks. Selection takes --toy-select — on the HUD's dark
+   chrome that is the near-white everything else inverts to — and it moves the
+   line work only, leaving the accent free to answer the question the dock
+   exists for. */
 .unit-card--selected {
-    background-color: var(--toy-primary-wash);
-    border-color: var(--toy-primary-pressed);
+    border-color: var(--toy-select);
+    border-left-color: var(--toy-select);
 }
 
+/* Ordered. The only filled card on the strip, so the dock answers "what have I
+   already committed" from across the screen without a word being read. */
 .unit-card--ability {
     background-color: var(--toy-primary-tint);
     border-color: var(--toy-primary-pressed);
+    border-left-color: var(--toy-primary);
 }
 
+/* Ordered and being edited at once. The accent keeps the fill and the leading
+   rule, selection keeps the outline, and neither fact hides the other. */
 .unit-card--ability.unit-card--selected {
-    border-color: var(--toy-primary);
+    border-color: var(--toy-select);
+    border-left-color: var(--toy-primary);
 }
 
+/* Fading the card fades its type with it, and which unit is gone is still
+   something the player is reading. Held high enough that the ability line stays
+   above 4.5:1 against the faded plate; the red rule and the state line are what
+   say the card is out. */
 .unit-card--disabled {
-    opacity: 0.55;
+    opacity: 0.8;
     border-color: var(--toy-danger-pressed);
+    border-left-color: var(--toy-danger);
 }
 
 .unit-card__select {
@@ -484,11 +685,12 @@
     flex-direction: row;
     align-items: stretch;
     overflow: hidden;
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--toy-transparent);
+    color: var(--toy-text);
     border-width: 1px;
-    border-color: rgba(0, 0, 0, 0);
+    border-color: var(--toy-transparent);
     border-radius: 0;
-    transition-duration: 0.14s;
+    transition-duration: var(--toy-motion-fast);
     transition-property: background-color, border-color;
 }
 
@@ -538,10 +740,12 @@
 
 .unit-card__portrait {
     position: relative;
-    width: 80px;
-    min-width: 80px;
+    width: 78px;
+    min-width: 78px;
     -unity-background-scale-mode: scale-to-fit;
     background-color: var(--toy-warm);
+    border-right-width: var(--toy-stroke-thin);
+    border-right-color: var(--toy-edge);
 }
 
 .unit-card__copy {
@@ -549,30 +753,36 @@
     flex-grow: 1;
     min-width: 0;
     justify-content: center;
-    padding: 8px 40px 8px 8px;
+    padding: 8px 12px;
 }
 
+/* Shared skeleton. The two strips are different components wearing one template,
+   so each sets its own size where it needs to differ. */
 .unit-card__name {
-    font-size: 15px;
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     color: var(--toy-text);
-    white-space: normal;
+    letter-spacing: var(--toy-track-label);
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .unit-card__health {
-    min-height: 13px;
-    margin-top: 3px;
+    min-height: 14px;
+    margin-top: 5px;
     flex-direction: row;
     align-items: center;
 }
 
 .unit-card__health-track {
+    position: relative;
     flex-grow: 1;
-    height: 5px;
-    margin-right: 7px;
+    height: 9px;
+    margin-right: 9px;
     overflow: hidden;
-    background-color: var(--toy-surface-pressed);
-    border-radius: 3px;
+    background-color: var(--toy-inset);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-radius: 0;
 }
 
 /* The fill was danger red at every level on both teams, so its colour repeated
@@ -599,63 +809,141 @@
     background-color: var(--toy-health-critical);
 }
 
+/* Drawn over the fill rather than under it, so the chunks survive at every
+   length instead of disappearing as the bar empties. */
+.unit-card__health-ticks {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-image: url("project://database/Assets/UI/Shared/Textures/HealthTicks.png");
+    background-repeat: repeat;
+    background-size: 14px 8px;
+}
+
 .unit-card__health-value {
-    min-width: 68px;
-    font-size: 10px;
-    -unity-font-style: bold;
+    min-width: 78px;
+    font-size: 14px;
     color: var(--toy-text);
     -unity-text-align: middle-right;
 }
 
 .unit-card__ability {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--toy-text-muted);
+    color: var(--toy-text-copy);
     white-space: normal;
 }
 
-.unit-card--ability .unit-card__ability {
-    color: var(--toy-primary-copy);
-    -unity-font-style: bold;
+/* === ABILITY CARDS ===
+
+   The dock is five ability buttons, not a second roster.
+
+   A unit's health, its position and its cooldown are all readable on the board
+   itself: the bar above it, the square under it, and the charge dial cut into
+   its base plate. What the board cannot take is the one order that is not a
+   place — spend this unit's round on its ability instead of on movement — so
+   that is the only thing these cards are for, and the ability is the headline
+   with the unit as the kicker above it. That is the exact inverse of the contact
+   cards along the top edge, which is what stops the two strips reading as one
+   component printed at two sizes. */
+
+/* Both lines hang off one left edge. Centred, they sat on two different widths
+   and the kicker floated above the name aligned to nothing; the portrait is
+   already a hard left edge, so the type may as well use it. Inherited by both
+   labels, and set here because the card's button ancestor centres its text. */
+.unit-card--friendly .unit-card__copy {
+    -unity-text-align: middle-left;
 }
 
-/* Muted clears AA on the card at rest but not on the two lightest fills it can
-   land on — the hovered card and the ability tint, both of which moved up when
-   the surface ladder gained a real step. Copy is still a step below the name and
-   reads at 4.9:1 on each. De-emphasised has to stay readable. */
-.unit-card--ability-cooldown .unit-card__ability,
-.unit-card__select:hover .unit-card__ability {
+/* Whose. The portrait beside it has already answered this, so the line only
+   confirms it. De-emphasis is carried by size and tracking rather than by
+   value: the muted step lands at 4.5:1 on a card, which is not a quiet label at
+   eleven pixels, it is a squint. Held clear of the state mark on its right. */
+.unit-card--friendly .unit-card__name {
+    padding-right: 76px;
+    font-size: 11px;
     color: var(--toy-text-copy);
+}
+
+/* What pressing the card orders, and the only word on it a player should have
+   to hunt for. The display face, because this is chrome rather than prose. */
+.unit-card--friendly .unit-card__ability {
+    margin-top: 2px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 19px;
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-label);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Recharging, so the name is a fact about the unit rather than an offer. Kept a
+   real step above muted: the count in the disc is what says unavailable, and it
+   says it without relying on the colour. */
+.unit-card--friendly.unit-card--ability-cooldown .unit-card__ability {
+    color: var(--toy-text-copy);
+}
+
+/* Ordered. */
+.unit-card--friendly.unit-card--ability .unit-card__ability {
+    color: var(--toy-primary-copy);
+}
+
+/* A dead unit's card keeps its place so the dock does not reflow mid-round, and
+   says so with a mark laid over the copy rather than a line stacked under it: a
+   card sized for two lines cannot grow a third, and the one that tried was
+   clipped top and bottom. Same treatment the contact strip already gives the
+   same fact. */
+.unit-card--friendly .unit-card__state {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-height: 13px;
+    margin-top: 0;
+    font-size: 11px;
 }
 
 .unit-card__state {
     min-height: 0;
     margin-top: 4px;
-    font-size: 11px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 13px;
     color: var(--toy-danger-copy);
-    letter-spacing: 1px;
+    letter-spacing: var(--toy-track-label);
 }
 
+/* The ability slot is a disc, because every ability in every game of this shape
+   is a disc: round frame, and a number over it while it recharges.
+
+   It sits in the row rather than pinned over a corner of the card, so the card
+   reads left to right as portrait, name, charge, and nothing has to reserve
+   space for anything. Only the dock ever draws it — the contact strip hides its
+   own — so its states below are written unscoped. */
 .unit-card__flip-indicator {
-    position: absolute;
-    right: 8px;
-    bottom: 6px;
-    width: 28px;
-    height: 28px;
+    flex-shrink: 0;
+    align-self: center;
+    width: 38px;
+    height: 38px;
+    margin-right: 12px;
     align-items: center;
     justify-content: center;
-    opacity: 0.68;
+    background-color: var(--toy-inset);
+    border-width: 2px;
+    border-color: var(--toy-edge-strong);
+    border-radius: 50%;
     transition-duration: 0.14s;
-    transition-property: opacity;
+    transition-property: border-color, background-color;
 }
 
+/* The flip glyph went with the mechanic that named it: a card with one face is
+   not turned over, it is pressed. Its node stays on as the charged pip, which is
+   what the disc shows when it has no count to show instead. */
 .unit-card__flip-icon {
     position: absolute;
-    width: 22px;
-    height: 22px;
-    background-image: url("project://database/Assets/UI/Shared/Icons/flip-card.svg");
-    -unity-background-scale-mode: scale-to-fit;
-    -unity-background-image-tint-color: var(--toy-text-muted);
+    width: 9px;
+    height: 9px;
+    background-color: var(--toy-text-copy);
+    border-radius: 50%;
 }
 
 .unit-card__cooldown {
@@ -664,76 +952,85 @@
     right: 0;
     top: 0;
     bottom: 0;
-    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    font-size: 12px;
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 17px;
     -unity-text-align: middle-center;
     color: var(--toy-text);
 }
 
-.unit-card--selected .unit-card__flip-indicator {
-    opacity: 1;
-}
-
 .unit-card__select:hover .unit-card__flip-indicator {
-    opacity: 0.9;
+    border-color: var(--toy-text-copy);
 }
 
-.unit-card--selected .unit-card__flip-icon {
-    -unity-background-image-tint-color: var(--toy-primary-pressed);
+/* Ordered. The disc is the only place the accent is spent at full strength and
+   only ever on the cards whose round is already committed, which is what keeps
+   it meaning "this is the action" rather than "this is a card". */
+.unit-card--ability .unit-card__flip-indicator {
+    background-color: var(--toy-primary);
+    border-color: var(--toy-primary-hover);
 }
 
 .unit-card--ability .unit-card__flip-icon {
-    -unity-background-image-tint-color: var(--toy-primary-copy);
+    background-color: var(--toy-text-on-accent);
 }
 
-.unit-card__flip-indicator--cooldown,
-.unit-card--selected .unit-card__flip-indicator--cooldown {
-    opacity: 0.72;
+/* Recharging. The pip gives way to the rounds still to come, the same number the
+   dial on the unit's own base plate is working through, so the count is legible
+   without the colour and the two surfaces never disagree. */
+.unit-card__flip-indicator--cooldown {
+    background-color: var(--toy-inset);
+    border-color: var(--toy-divider);
 }
 
-.unit-card__flip-indicator--cooldown .unit-card__flip-icon,
-.unit-card--selected .unit-card__flip-indicator--cooldown .unit-card__flip-icon {
-    opacity: 0.22;
-    -unity-background-image-tint-color: var(--toy-text-muted);
+.unit-card__flip-indicator--cooldown .unit-card__flip-icon {
+    display: none;
 }
 
 .unit-card__flip-indicator--cooldown .unit-card__cooldown {
     color: var(--toy-text-muted);
 }
 
+/* A dead unit has no round to spend, so its card drops the disc rather than
+   dimming it. Faded, a charged pip still reads as an ability sitting ready, and
+   the one thing this card must not say is "press me". */
 .unit-card--disabled .unit-card__flip-indicator {
-    opacity: 0.45;
+    display: none;
 }
 
-/* The enemy strip's whole identity is this border, so it carries the team red
-   the enemy units on the board are painted with, not the destructive-action red. */
+/* === ENEMY CONTACT CARDS === */
+
+/* The enemy strip's whole identity is its leading rule, so it carries the team
+   red the enemy units on the board are painted with, not the destructive-action
+   red. */
 .unit-card--enemy {
     min-height: 72px;
     background-color: var(--toy-surface-quiet);
-    border-color: var(--toy-team-enemy);
+    border-color: var(--toy-edge);
+    border-left-color: var(--toy-team-enemy);
 }
 
 /* On a dark card "stronger" means brighter, so the active enemy ring steps up to
    the light copy red rather than down to the deep one. */
 .unit-card--enemy-active {
     border-color: var(--toy-team-enemy-copy);
+    border-left-color: var(--toy-team-enemy-copy);
 }
 
 .unit-card--enemy-eliminated {
     background-color: var(--toy-disabled-surface);
     border-color: var(--toy-disabled-border);
+    border-left-color: var(--toy-text-muted);
 }
 
 .unit-card--enemy .unit-card__select {
     min-width: 0;
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--toy-transparent);
     border-width: 0;
     opacity: 1;
 }
 
 .unit-card--enemy .unit-card__select:disabled {
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--toy-transparent);
     opacity: 1;
 }
 
@@ -746,18 +1043,22 @@
 .unit-card--enemy .unit-card__copy {
     position: relative;
     justify-content: center;
-    padding: 5px 7px;
+    padding: 6px 9px;
 }
 
 .unit-card--enemy .unit-card__name {
-    padding-right: 82px;
-    font-size: 12px;
+    padding-right: 84px;
+    font-size: 14px;
     white-space: nowrap;
 }
 
+.unit-card--enemy .unit-card__health-track {
+    height: 7px;
+}
+
 .unit-card--enemy .unit-card__ability {
-    margin-top: 2px;
-    font-size: 10px;
+    margin-top: 3px;
+    font-size: 12px;
     white-space: normal;
 }
 
@@ -767,10 +1068,8 @@
     right: 0;
     min-height: 13px;
     margin-top: 0;
-    font-size: 10px;
-    -unity-font-style: bold;
+    font-size: 12px;
     color: var(--toy-danger-copy);
-    letter-spacing: 0;
 }
 
 .unit-card--enemy-eliminated .unit-card__name,
@@ -780,7 +1079,7 @@
 }
 
 .unit-card--enemy-eliminated .unit-card__health-fill {
-    background-color: var(--toy-edge);
+    background-color: var(--toy-text-muted);
 }
 
 .unit-card--enemy-eliminated .unit-card__state {
@@ -792,6 +1091,8 @@
     display: none;
 }
 
+/* === OVERLAYS === */
+
 .deployment-overlay {
     position: absolute;
     left: 0;
@@ -801,31 +1102,31 @@
     align-items: center;
     justify-content: center;
     padding: var(--toy-space-xl);
-    background-color: var(--toy-surface);
+    background-color: var(--toy-ground);
 }
 
 .toybox-ui.deployment-overlay .deployment-overlay__content {
-    width: 620px;
+    width: 640px;
     max-width: 92%;
     align-items: center;
     padding: var(--toy-space-xl);
+    border-top-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-primary);
 }
 
 .deployment-overlay__mark {
-    width: 82px;
-    height: 6px;
+    width: 120px;
+    height: 4px;
     margin-bottom: var(--toy-space-lg);
     background-color: var(--toy-primary);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
-    border-radius: var(--toy-radius-sm);
 }
 
 .deployment-overlay__title {
-    font-size: var(--toy-type-title-lg);
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
+    font-size: var(--toy-type-display);
     -unity-text-align: middle-center;
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-display);
 }
 
 .deployment-overlay__status {
@@ -862,48 +1163,104 @@
     white-space: normal;
 }
 
-.toybox-ui.results-overlay .results-panel {
-    width: 620px;
-    align-items: stretch;
+/* The verdict is not a dialog, and it is not a centre-slam either.
+ 
+   Boxing it turned the loudest beat in the game into a notification, so the
+   panel gives up its plate, its border and its accent rule. But a huge
+   exclamation dropped dead-centre over a dimmed match is one specific game's
+   signature, and landing on it is imitation rather than influence. So the
+   debrief is anchored to the left margin instead — the same command-rail idiom
+   the title and character screens are built on — and reads as a block: eyebrow,
+   rule, verdict, then the two things you can do about it. */
+.results-overlay {
+    align-items: flex-start;
+    justify-content: center;
+    padding-left: 104px;
+    padding-right: var(--toy-space-xl);
 }
 
+.toybox-ui.results-overlay .results-panel {
+    width: 900px;
+    max-width: 88%;
+    max-height: 88%;
+    padding: 0;
+    align-items: flex-start;
+    justify-content: center;
+    background-color: var(--toy-transparent);
+    border-width: 0;
+}
+
+.toybox-ui.results-overlay .results-panel:focus {
+    border-width: 0;
+}
+
+/* Capped in pixels, not per cent. The panel is content-sized now, so a
+   percentage cap resolves against a height the content itself is setting: the
+   view ends up shorter than what it holds and grows a scrollbar around three
+   lines of text. */
 .results-scroll {
     min-height: 0;
-    max-height: 320px;
+    max-height: 560px;
+    width: 100%;
 }
 
 .results-scroll .unity-scroll-view__content-container {
+    align-items: flex-start;
     padding-right: var(--toy-space-md);
 }
 
-.results-mark {
-    width: 92px;
-    height: 6px;
-    margin-top: var(--toy-space-sm);
-    margin-bottom: var(--toy-space-md);
-    background-color: var(--toy-primary);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
-    border-radius: var(--toy-radius-sm);
+.toybox-ui.results-overlay .section-label {
+    align-self: flex-start;
+    color: var(--toy-text-muted);
 }
 
+.results-mark {
+    width: 260px;
+    height: 3px;
+    margin-top: var(--toy-space-md);
+    margin-bottom: var(--toy-space-md);
+    background-color: var(--toy-primary);
+}
+
+/* The verdict is the only thing anyone reads on this panel, so it gets the size
+   a scoreboard gives it and nothing else on the sheet competes. */
+/* Big enough to be the moment, not so big it is doing an impression of one.
+   The verdict here is a sentence — "You win!", "Draw — both crews eliminated."
+   — so it has to survive wrapping, which a single screen-filling word does not
+   have to worry about. */
 .results-status {
-    margin-bottom: var(--toy-space-sm);
-    font-size: var(--toy-type-display);
-    -unity-font-style: bold;
-    color: var(--toy-text);
+    margin-bottom: var(--toy-space-md);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
+    font-size: 58px;
+    color: var(--toy-text-copy);
+    letter-spacing: 3px;
+    -unity-text-align: middle-left;
+    text-shadow: 0 4px 16px var(--toy-shadow-stage);
     white-space: normal;
+}
+
+.results-status--victory {
+    color: var(--toy-text);
+}
+
+.results-status--defeat {
+    color: var(--toy-defeat);
 }
 
 .results-actions {
     flex-shrink: 0;
     flex-direction: row;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    margin-top: var(--toy-space-lg);
 }
 
 .results-button {
-    min-width: 170px;
-    margin-left: var(--toy-space-sm);
+    min-width: 220px;
+    min-height: 58px;
+    margin-left: 0;
+    margin-right: var(--toy-space-md);
+    justify-content: center;
+    font-size: var(--toy-type-title);
 }
 
 /* === BATTLE REPORT REVEAL === */
@@ -928,13 +1285,13 @@
 }
 
 .report-step-button {
-    min-width: 118px;
+    min-width: 124px;
+    justify-content: center;
 }
 
 .report-round-label {
     flex-grow: 1;
     font-size: var(--toy-type-body-lg);
-    -unity-font-style: bold;
     -unity-text-align: middle-center;
     color: var(--toy-text);
 }
@@ -963,11 +1320,13 @@
     border-radius: var(--toy-radius-md);
 }
 
+/* The team fills mirror TeamPalette and cannot move, and the red one only just
+   carries white — so the numeral takes the fixed ink rather than --toy-text,
+   which is a shade off white here and drops the enemy badge to 4.0:1. */
 .report-board__badge {
     position: absolute;
     -unity-text-align: middle-center;
-    -unity-font-style: bold;
-    color: var(--toy-text-on-deep);
+    color: var(--toy-text-on-team);
     background-color: var(--toy-team-friendly-deep);
     border-radius: 50%;
     border-width: var(--toy-stroke-thin);
@@ -1013,14 +1372,14 @@
 }
 
 .report-legend__glyph--end {
-    border-radius: 2px;
+    border-radius: 0;
 }
 
 /* Dashed strokes are the board's mark for "this was not the plan"; the swatch has to say the same
    thing, and a two-pixel dashed rule is the closest USS gets to the painted line. */
 .report-legend__glyph--dodge {
     height: 0;
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--toy-transparent);
     border-top-width: 2px;
     border-top-color: var(--toy-text-muted);
     border-left-width: 0;
@@ -1030,16 +1389,15 @@
 }
 
 .report-legend__glyph--ability {
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--toy-transparent);
     border-width: 2px;
     border-color: var(--toy-primary);
     border-radius: 50%;
 }
 
 .report-legend__glyph--dead {
-    background-color: rgba(0, 0, 0, 0);
+    background-color: var(--toy-transparent);
     font-size: var(--toy-type-body);
-    -unity-font-style: bold;
     -unity-text-align: middle-center;
     color: var(--toy-danger-copy);
 }
@@ -1069,9 +1427,8 @@
     height: 20px;
     margin-right: var(--toy-space-sm);
     -unity-text-align: middle-center;
-    -unity-font-style: bold;
     font-size: var(--toy-type-caption);
-    color: var(--toy-text-on-deep);
+    color: var(--toy-text-on-team);
     background-color: var(--toy-team-friendly-deep);
     border-radius: 50%;
 }
@@ -1083,9 +1440,10 @@
 .report-order-row__name {
     width: 92px;
     flex-shrink: 0;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-label);
-    -unity-font-style: bold;
     color: var(--toy-team-friendly-copy);
+    letter-spacing: var(--toy-track-label);
     overflow: hidden;
 }
 
@@ -1124,10 +1482,13 @@
 
 .report-team-heading {
     margin-top: var(--toy-space-sm);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
     color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
 }
+
+/* === BREAKPOINTS === */
 
 /* Below this the board and the order list would each be too narrow to read, so the reveal becomes
    one column and the panel scrolls instead. */
@@ -1187,11 +1548,11 @@
 }
 
 .compact .unit-card__copy {
-    padding: 6px 36px 6px 6px;
+    padding: 6px 42px 6px 9px;
 }
 
 .compact .unit-card__name {
-    font-size: 12px;
+    font-size: 15px;
 }
 
 .compact .unit-card__ability {
@@ -1199,32 +1560,48 @@
 }
 
 .compact .unit-card__state {
-    font-size: 9px;
+    font-size: 10px;
 }
 
 .compact .unit-card--enemy .unit-card__name {
-    padding-right: 76px;
+    padding-right: 78px;
 }
 
 .compact .unit-card--enemy .unit-card__state,
 .compact .unit-card--enemy .unit-card__health-value {
-    font-size: 10px;
+    font-size: 11px;
+}
+
+/* The sizes above were written when both strips shared one hierarchy. An ability
+   card inverts it, so it restates its own here rather than inheriting a 15px
+   kicker over a 10px headline. The copy also stops reserving a column for the
+   disc, which now sits in the row beside it. */
+.compact .unit-card--friendly .unit-card__copy {
+    padding: 6px 9px;
+}
+
+.compact .unit-card--friendly .unit-card__name {
+    padding-right: 68px;
+    font-size: 11px;
+}
+
+.compact .unit-card--friendly .unit-card__ability {
+    font-size: 17px;
 }
 
 .compact .unit-card__flip-indicator {
-    right: 7px;
-    bottom: 5px;
-    width: 26px;
-    height: 26px;
+    width: 34px;
+    height: 34px;
+    margin-right: 9px;
 }
 
 .compact .unit-card__flip-icon {
-    width: 19px;
-    height: 19px;
+    width: 18px;
+    height: 18px;
 }
 
 .compact .unit-card__cooldown {
-    font-size: 12px;
+    font-size: 15px;
 }
 
 .narrow .unit-card-host {
@@ -1299,15 +1676,16 @@
     flex-shrink: 1;
     min-width: 0;
     margin-right: 6px;
-    font-size: 9px;
+    font-size: 10px;
 }
 
 .phone .planning-commit__button {
-    min-width: 88px;
+    min-width: 92px;
     padding-left: 10px;
     padding-right: 10px;
 }
 
+.phone .hud-exit-button,
 .phone .hud-controls-button,
 .phone .hud-settings-button {
     min-height: 44px;
@@ -1327,25 +1705,38 @@
 }
 
 .phone .unit-card {
-    min-height: 112px;
+    min-height: 92px;
 }
 
 .phone .unit-card__select {
     width: 100%;
     min-width: 0;
-    min-height: 104px;
+    min-height: 84px;
 }
 
 .phone .unit-card__copy {
-    padding: 8px 36px 8px 8px;
+    padding: 8px 42px 8px 9px;
 }
 
 .phone .unit-card__name {
-    font-size: 12px;
+    font-size: 15px;
 }
 
 .phone .unit-card__ability {
     font-size: 11px;
+}
+
+.phone .unit-card--friendly .unit-card__copy {
+    padding: 8px 9px;
+}
+
+.phone .unit-card--friendly .unit-card__name {
+    padding-right: 68px;
+    font-size: 11px;
+}
+
+.phone .unit-card--friendly .unit-card__ability {
+    font-size: 17px;
 }
 
 .phone .enemy-unit-cards {
@@ -1369,12 +1760,12 @@
 }
 
 .phone .unit-card--enemy .unit-card__copy {
-    padding: 5px 7px;
+    padding: 5px 8px;
 }
 
 .phone .unit-card--enemy .unit-card__name {
-    padding-right: 76px;
-    font-size: 12px;
+    padding-right: 78px;
+    font-size: 14px;
 }
 
 .phone .unit-card--enemy .unit-card__ability,
@@ -1384,12 +1775,12 @@
 }
 
 .phone .phase-notch .phase-label {
-    font-size: 14px;
+    font-size: 16px;
 }
 
 .phone .phase-notch .timer-label {
     margin-left: 12px;
-    font-size: 16px;
+    font-size: 22px;
 }
 
 .phone .hill-status-readout {
@@ -1437,7 +1828,16 @@
 }
 
 .phone .deployment-overlay__title {
-    font-size: 24px;
+    font-size: 28px;
+}
+
+.phone .results-status {
+    font-size: 52px;
+    letter-spacing: 2px;
+}
+
+.phone .results-overlay {
+    padding-left: var(--toy-space-lg);
 }
 
 .phone .results-actions {
@@ -1447,6 +1847,7 @@
 .phone .results-button {
     width: 100%;
     margin-left: 0;
+    margin-right: 0;
     margin-top: var(--toy-space-sm);
 }
 
@@ -1462,6 +1863,7 @@
     padding-bottom: 3px;
 }
 
+.short .hud-exit-button,
 .short .hud-controls-button,
 .short .hud-settings-button {
     min-height: 44px;
@@ -1469,24 +1871,27 @@
     padding-bottom: 4px;
 }
 
-.short .unit-card-host,
-.short .unit-card {
-    min-height: 96px;
-}
-
+/* The ability cards' own height is already the floor a short viewport wants, so
+   there is nothing left here to take off them. */
 .short .enemy-unit-card-host,
 .short .unit-card--enemy {
     min-height: 72px;
 }
 
 .short .phase-notch .phase-label {
-    font-size: 15px;
-}
-
-.short .phase-notch .timer-label {
     font-size: 17px;
 }
 
+.short .phase-notch .timer-label {
+    font-size: 24px;
+}
+
+.short .results-status {
+    font-size: 68px;
+    letter-spacing: 3px;
+}
+
+.phone.short .hud-exit-button,
 .phone.short .hud-controls-button,
 .phone.short .hud-settings-button {
     min-height: 44px;

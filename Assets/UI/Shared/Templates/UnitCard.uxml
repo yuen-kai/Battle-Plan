@@ -8,6 +8,10 @@
                 <ui:VisualElement name="unit-card-health" class="unit-card__health hidden" picking-mode="Ignore">
                     <ui:VisualElement class="unit-card__health-track" picking-mode="Ignore">
                         <ui:VisualElement name="unit-card-health-fill" class="unit-card__health-fill" picking-mode="Ignore" />
+                        <!-- The segment separators sit above the fill, so the bar is chopped into
+                             fixed chunks the way a health bar in this genre is read: "lost two
+                             blocks", not "lost thirteen percent". -->
+                        <ui:VisualElement class="unit-card__health-ticks" picking-mode="Ignore" />
                     </ui:VisualElement>
                     <ui:Label name="unit-card-health-value" text="HP UNKNOWN" class="unit-card__health-value mono" picking-mode="Ignore" />
                 </ui:VisualElement>

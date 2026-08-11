@@ -7,6 +7,7 @@
         <ui:VisualElement name="hud-flash" class="hud-flash" picking-mode="Ignore" />
 
         <ui:VisualElement name="enemy-status-strip" class="enemy-status-strip">
+            <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
             <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
 
             <ui:VisualElement class="hud-top toybox-ui" picking-mode="Ignore">
@@ -20,16 +21,22 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
+            <!-- The objective banner. Its two angled caps make the plate a trapezoid that narrows
+                 downward, which is what stops a tab hanging onto the board from reading as a
+                 rectangle someone forgot to align. -->
             <ui:VisualElement class="phase-notch toybox-ui" picking-mode="Ignore">
+                <ui:VisualElement class="toy-slant toy-slant--left phase-notch__cap" picking-mode="Ignore" />
                 <ui:VisualElement class="phase-cluster toy-readout" picking-mode="Ignore">
                     <ui:VisualElement class="phase-cluster__mark" picking-mode="Ignore" />
                     <ui:Label name="phase-label" text="Preparing match" class="phase-label" picking-mode="Ignore" />
                     <ui:Label name="timer-label" class="timer-label" picking-mode="Ignore" />
                 </ui:VisualElement>
+                <ui:VisualElement class="toy-slant toy-slant--right phase-notch__cap" picking-mode="Ignore" />
             </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement name="hud-dock" class="hud-dock">
+            <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
             <ui:VisualElement name="lesson-popup" class="lesson-popup toybox-ui hidden" picking-mode="Ignore">
                 <ui:VisualElement class="lesson-popup__card toy-panel" picking-mode="Ignore">
                     <ui:Label name="lesson-popup-label" class="lesson-popup__copy" picking-mode="Ignore" />
@@ -48,6 +55,7 @@
                         <ui:Label name="planning-commit-status" text="READY" class="planning-commit__status" picking-mode="Ignore" />
                         <ui:Button name="lock-in-button" text="Lock in" class="button button--primary planning-commit__button" tooltip="Lock current orders" />
                     </ui:VisualElement>
+                    <ui:Button name="exit-match-button" text="Exit" class="button hud-exit-button hidden" tooltip="Leave and return to the title screen" />
                     <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
                     <ui:Button name="settings-button" text="Settings" class="button hud-settings-button" tooltip="Audio and display settings" />
                 </ui:VisualElement>
@@ -55,6 +63,8 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="deployment-overlay" class="deployment-overlay toybox-ui" focusable="true" tabindex="-1">
+            <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+            <ui:VisualElement class="toy-vignette" picking-mode="Ignore" />
             <ui:VisualElement class="deployment-overlay__content toy-panel" picking-mode="Ignore">
                 <ui:VisualElement class="deployment-overlay__mark" picking-mode="Ignore" />
                 <ui:Label text="Deploying crews" class="deployment-overlay__title title-lg" picking-mode="Ignore" />
@@ -75,11 +85,11 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Select a unit, then choose the highlighted destination or target. Click a unit with no route to switch it to its ability; its card switches back." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Click a unit on the board, then click a highlighted square to set its route. Press that unit's ability card in the dock to spend its round on the ability instead." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Using an ability replaces movement and recharges after its listed full-round cooldown." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="An ability replaces that unit's movement for the round. The dial on the unit's base plate and the disc on its card both count the rounds until it is back." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Lock in" class="control-key" picking-mode="Ignore" />
@@ -143,6 +153,7 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="results-overlay" class="modal-shade results-overlay toybox-ui hidden">
+            <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
             <ui:VisualElement name="results-panel" class="modal results-panel" focusable="true" tabindex="-1">
                 <ui:ScrollView name="results-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="results-scroll" focusable="true" tabindex="0">
                     <ui:Label text="Battle report" class="section-label" picking-mode="Ignore" />

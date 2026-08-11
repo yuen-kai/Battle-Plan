@@ -7,8 +7,8 @@ using UnityEngine;
 // math so they can be pinned down without a scene, a NetworkManager, or Play mode: the planning
 // half trims routes until each finishes somewhere unclaimed, and the execution half picks the cell
 // a unit is set down on when it has to give one up. The parts that genuinely need live units — the
-// client refusing to draw onto a held cell, and the slide that runs once movement and abilities
-// have settled — are runtime acceptance and are intentionally not exercised here.
+// client refusing to draw onto a held cell, and the slide that runs the moment a unit arrives on an
+// occupied cell — are runtime acceptance and are intentionally not exercised here.
 [TestFixture]
 [Category("UnitOverlap")]
 public class UnitOverlapEditModeTests

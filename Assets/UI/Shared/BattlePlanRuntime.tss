@@ -3,18 +3,24 @@
 
 VisualElement {}
 
+/* The dropdown popup is drawn outside the screen's element tree, so none of the
+   component library reaches it. It gets its chrome restated here: the same
+   near-black plate, the same condensed caps, and the same rule that a chosen
+   row inverts to white with dark ink. */
 .unity-base-dropdown {
-    -unity-font-definition: url("project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset");
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     background-color: var(--toy-surface);
     color: var(--toy-text);
     font-size: var(--toy-type-body);
+    letter-spacing: var(--toy-track-label);
 }
 
 .unity-base-dropdown__container-outer {
     background-color: var(--toy-surface);
     border-width: var(--toy-stroke-thin);
-    border-bottom-width: var(--toy-depth-panel);
     border-color: var(--toy-edge);
+    border-top-width: var(--toy-accent-rule);
+    border-top-color: var(--toy-primary);
     border-radius: var(--toy-radius-md);
 }
 
@@ -27,7 +33,7 @@ VisualElement {}
     padding: var(--toy-space-sm) var(--toy-space-md);
     background-color: var(--toy-surface);
     color: var(--toy-text);
-    border-left-width: var(--toy-stroke);
+    border-left-width: var(--toy-accent-rule);
     border-left-color: var(--toy-transparent);
     font-size: var(--toy-type-body);
     transition-duration: var(--toy-motion-fast);
@@ -35,21 +41,21 @@ VisualElement {}
 }
 
 .unity-base-dropdown__item:hover {
-    background-color: var(--toy-surface-hover);
-    color: var(--toy-text);
-    border-left-color: var(--toy-edge);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-left-color: var(--toy-primary);
 }
 
 .unity-base-dropdown__item:active {
-    background-color: var(--toy-surface-pressed);
-    color: var(--toy-text);
-    border-left-color: var(--toy-edge);
+    background-color: var(--toy-select-pressed);
+    color: var(--toy-text-on-deep);
+    border-left-color: var(--toy-primary);
 }
 
 .unity-base-dropdown__item:checked {
     background-color: var(--toy-select);
     color: var(--toy-text-on-deep);
-    border-left-color: var(--toy-edge);
+    border-left-color: var(--toy-primary);
 }
 
 .unity-base-dropdown__item:checked:hover {
@@ -66,7 +72,7 @@ VisualElement {}
 .unity-base-dropdown__item:hover:focus,
 .unity-base-dropdown__item:active:focus,
 .unity-base-dropdown__item:checked:focus {
-    border-left-color: var(--toy-focus);
+    border-left-color: var(--toy-primary);
 }
 
 .unity-base-dropdown__item:disabled,
@@ -97,6 +103,10 @@ VisualElement {}
     color: var(--toy-text-on-deep);
 }
 
+.unity-base-dropdown__item:hover .unity-base-dropdown__label {
+    color: var(--toy-text-on-deep);
+}
+
 .unity-base-dropdown__item:disabled .unity-base-dropdown__label {
     color: var(--toy-text-muted);
 }
@@ -106,7 +116,7 @@ VisualElement {}
 }
 
 .unity-base-dropdown__checkmark {
-    color: var(--toy-select-copy);
+    color: var(--toy-primary);
 }
 
 .unity-base-dropdown__item:checked .unity-base-dropdown__checkmark {

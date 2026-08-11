@@ -1,105 +1,217 @@
 :root {
-    /* Palette and semantic states.
+    /* Palette and semantic states, taken from the board.
 
-       Source palette: #221D23 ground, #5762D5 select, #F18F01 primary,
-       #B3C1C4 copy. The palette's #4F3824 is deliberately absent at full
-       strength: as a card fill it read as a separate component rather than a
-       state, so it survives only as the warm bias in --toy-warm.
+       Every colour below is the arena's own, read out of the materials in
+       Assets/Materials rather than picked to look nice beside them:
 
-       Names describe roles, not hues. An earlier revision named these after
-       their colours (ink, cream, teal, sky), which broke the moment the theme
-       changed: text and outline both wanted dark on a light theme and split
-       apart again on a dark one, and a token called "teal" ended up holding
-       indigo. Role names survive a repaint; colour names do not. */
+         Map_DeckA      #A8B3B8   the deck the game is played on
+         Map_DeckB      #9FAAB0   its alternate tile
+         Map_GridLine   #6E7A80   the line between cells
+         Map_Cover      #46525A   the walls
+         Map_CoverPlate #E8E2D4   the warm bone plate on top of them
+         Map_Void       #5E5346   the table the whole board sits on
+         Map_WallCap    #ADC7D1   the pale cap catching the sky
+         MoveOverlayCell #3085EE  "you can act here"
 
-    /* Ground and surfaces. Elevation is carried by lightness alone; this theme
-       is flat, so nothing here pairs with an offset depth edge.
+       That last one matters more than the rest. The board already has a colour
+       that means a reachable cell, and the interface already needed a colour
+       that means a chosen row. Making them the same one means a player learns
+       the language once instead of twice.
 
-       The ladder used to step by 1.17 from surface to raised, 1.09 to quiet and
-       1.23 from raised to hover — all at or under the threshold where two large
-       areas are reliably told apart, which meant a card did not visibly sit on
-       anything and hovering one produced no feedback a player could name. The
-       steps below are 1.15 / 1.35 / 1.32, measured as WCAG contrast ratios
-       against --toy-surface, which is the one value left unchanged so the
-       theme's overall darkness is unaffected.
+       Four moves, and every value serves one:
 
-       Hue: these used to be purple (B>R>G), which fought a board that is cool
-       blue-grey everywhere except its warm table trim. They are now cool
-       (B>G>R) to match the play surface, so the HUD reads as part of the same
-       cool world the action sits in. Warmth is reserved for the objective
-       (--toy-primary), enemy/danger, and --toy-warm, which echoes the table
-       trim — keeping a hot/cold axis the palette can mean something with. The
-       lightness of every step is preserved, so the contrast ladder above is
-       unchanged (re-measured: 1.16 / 1.40 / 1.98). */
-    --toy-ground: rgb(22, 26, 27);
-    --toy-surface: rgb(29, 34, 35);
-    --toy-surface-raised: rgb(50, 59, 61);
-    --toy-surface-hover: rgb(67, 79, 81);
-    --toy-surface-pressed: rgb(21, 25, 26);
-    --toy-surface-quiet: rgb(40, 46, 48);
-    --toy-inset: rgb(18, 21, 22);
-    --toy-warm: rgb(62, 55, 52);
-    --toy-scrim: rgba(15, 18, 19, 0.88);
-    --toy-panel: rgba(29, 34, 35, 0.97);
+       1. Paper, not plates. Panels are the deck, lightened, and translucent
+          over a lit stage.
+       2. Structure is drawn in line, not in fill — a control is bounded by a
+          grid-line hairline, and it darkens when you touch it.
+       3. One warm accent owns the objective and the next action. It is the only
+          warm thing in the chrome, exactly as the bone plates and the table are
+          the only warm things on an otherwise cool board.
+       4. The chosen thing inverts, to the board's own overlay blue with white
+          ink.
+
+       Names describe roles, not hues, which is what keeps letting this be a
+       change of values: --toy-select has held an indigo, a white plate, a
+       borrowed blue, and now the board's own, and no call site has moved.
+
+       Two things here are NOT free to move. The team pair mirrors
+       TeamPalette.cs, which also paints unit bodies and tracers on the board;
+       the health ramp mirrors TeamPalette's thresholds. Change either here and
+       you must change it there in the same edit. */
+
+    /* Ground and surfaces. The deck, walked up toward white so type can sit on
+       it: --toy-surface is DeckA lightened, --toy-surface-hover is DeckA itself,
+       and --toy-surface-pressed is DeckB. The interface is literally made of
+       the floor.
+
+       Elevation runs light-to-dark on paper: raised is nearer white, and a well
+       is darker than the sheet it is cut into. Measured as WCAG contrast against
+       --toy-surface the ladder steps 1.07 (raised), 1.33 (hover) and 1.09
+       (quiet).
+
+       The whole ladder was re-anchored when --toy-ground moved to #B4C1C5. The
+       old ground was #CED6D9 and the surfaces above it ran up to #F1F4F5, which
+       against the new, darker page read as pure white — the unselected cards on
+       the Join screen glared. Shifting every step by the same delta keeps the
+       ladder's relative structure and the design's "made of the floor" reading
+       intact; raised is still the lightest thing on the page, just no longer
+       white. The wells go darker with it, which is the direction they already
+       ran. */
+    --toy-ground: rgb(180, 193, 197);
+    --toy-surface: rgb(202, 212, 215);
+    --toy-surface-raised: rgb(215, 223, 225);
+    --toy-surface-hover: rgb(142, 158, 164);
+    --toy-surface-pressed: rgb(133, 149, 156);
+    --toy-surface-quiet: rgb(191, 202, 205);
+    /* Wells are recessed, so they run toward the grid line rather than away. */
+    --toy-inset: rgb(165, 179, 183);
+    /* Portrait and thumbnail backing: Map_CoverPlate exactly. The bone plate is
+       the one warm surface on the board, and a cut-out character standing on it
+       reads as standing on cover. */
+    --toy-warm: rgb(232, 226, 212);
+    /* An overlay lightens the game behind it toward the deck rather than dimming
+       it toward black. */
+    --toy-scrim: rgba(180, 193, 197, 0.84);
+    --toy-panel: rgba(202, 212, 215, 0.9);
+    /* For a plate that already sits on a scrim. Stacking a 0.90 panel on a 0.84
+       scrim is opaque twice over and the dialog stops being a layer over the
+       game and becomes a window in front of it. */
+    --toy-panel-sheer: rgba(207, 217, 219, 0.8);
     --toy-transparent: rgba(0, 0, 0, 0);
+    /* The masks are white with their shape in alpha, so each is tinted at the
+       point of use and both themes share the files. The frame falls off to
+       Map_Void — the interface ends where the table the board sits on begins. */
+    --toy-scrim-tint: rgb(191, 203, 206);
+    --toy-vignette-tint: rgb(111, 100, 85);
 
-    /* Line work. One hairline at rest, brighter on hover; no chunky outline.
+    /* Line work. Map_GridLine at low alpha. The board draws a cell boundary with
+       exactly this colour, so a panel edge and a grid edge are the same mark at
+       different scales. --toy-edge clears 2.2:1 on paper and the hover line
+       4.6:1; --toy-divider stays quiet because it separates content rather than
+       bounding a control. */
+    --toy-edge: rgba(110, 122, 128, 0.42);
+    --toy-edge-strong: rgba(70, 82, 90, 0.68);
+    --toy-divider: rgba(110, 122, 128, 0.26);
+    --toy-disabled-surface: rgb(212, 218, 220);
+    --toy-disabled-border: rgba(110, 122, 128, 0.3);
 
-       These were 1.21:1 against a raised card, which on a flat theme meant the
-       only thing separating a control from its background was invisible. The
-       hairline now clears 2.2:1 there and the hover line 3.5:1; together with
-       the real fill step above, a button is identifiable at rest without the
-       theme turning into a wireframe. --toy-divider stays quiet on purpose —
-       it separates content, it does not bound a control. */
-    --toy-edge: rgb(105, 103, 107);
-    --toy-edge-strong: rgb(139, 136, 141);
-    --toy-divider: rgb(69, 67, 70);
-    --toy-disabled-surface: rgb(38, 44, 45);
-    --toy-disabled-border: rgb(95, 93, 96);
+    /* Text. Map_Cover, darkened until it carries at body size — the ink is the
+       walls. De-emphasis walks back up toward the grid line rather than fading
+       toward the paper.
 
-    /* Text. --toy-text-on-accent is the dark counterpart for bright fills. */
-    --toy-text: rgb(214, 219, 221);
-    --toy-text-copy: rgb(179, 193, 196);
-    --toy-text-muted: rgb(148, 160, 163);
-    /* Fills split by luminance, not by role: the primary orange is bright enough
-       to carry dark text, while the indigo and the danger red are mid-tone and
-       need light text instead. */
-    --toy-text-on-accent: rgb(24, 28, 29);
-    --toy-text-on-deep: rgb(245, 247, 252);
-    --toy-text-on-accent-quiet: rgb(230, 233, 250);
-    --toy-text-border: rgba(179, 193, 196, 0.22);
-    --toy-text-wash: rgba(179, 193, 196, 0.1);
+       The muted step is bounded by contrast, not by taste. It labels real
+       content — section headings, stat keys, unit descriptions, the map caption
+       — so it has to clear 4.5:1 on every paper surface a label can land on,
+       and the darkest of those is --toy-inset. At the grid line it managed 2.7
+       there and 3.7 on the sheet, which is not a quiet label, it is an
+       unreadable one. De-emphasis is carried by size, weight and tracking
+       instead; the value only steps far enough to read as a second voice.
+       Measured on --toy-surface: text 12.2, copy 7.3, muted 5.8. */
+    --toy-text: rgb(31, 40, 46);
+    --toy-text-copy: rgb(62, 76, 84);
+    --toy-text-muted: rgb(78, 90, 97);
+    /* Ink for the saturated fills. --toy-text-on-accent rides the orange;
+       --toy-text-on-deep rides the overlay-blue select plate and every other
+       saturated fill; --toy-text-on-danger and --toy-text-on-team ride the two
+       fills that are too light for dark ink and too dark for the theme's own.
 
-    /* Primary: the next decision and the objective. */
+       The last two exist because --toy-text-on-deep flips with the theme, and a
+       red button or a team badge does not: both stay saturated in the HUD, so a
+       token that turns to near-black there puts 3.8:1 ink on a red plate. */
+    --toy-text-on-accent: rgb(28, 18, 2);
+    /* Off-white, not white. The select plate is a large filled area and pure
+       white on it glares; this is as far back toward the HUD's off-white as the
+       plate will carry, at 4.6:1.
+
+       The other two stay pure white and cannot follow. Their fills are lighter
+       and fixed — the team red mirrors TeamPalette and paints units on the
+       board, so it cannot be darkened to make room — and white is already only
+       4.5 on the enemy badge. Both are small marks rather than fields of
+       colour, so they are not what a long match tires the eye with. */
+    --toy-text-on-deep: rgb(232, 236, 238);
+    --toy-text-on-danger: rgb(255, 255, 255);
+    --toy-text-on-team: rgb(255, 255, 255);
+    /* Secondary ink on the select plate, for the line under a chosen option's
+       name. Held near white: the plate below is dark enough to carry it, and
+       stepping it down toward the blue is what made it 2.9:1. */
+    --toy-text-on-accent-quiet: rgb(225, 240, 252);
+    --toy-text-border: rgba(110, 122, 128, 0.42);
+    --toy-text-wash: rgba(70, 82, 90, 0.1);
+    /* The primary button used to be the one place white sat on the orange
+       rather than ink, propped up by --toy-shadow-ink. It measured 2.4:1, and a
+       drop shadow does not make a ratio: it thickens the glyph's edge and
+       leaves the stroke itself the same distance from the fill. This is the
+       loudest, most-pressed control on every screen — Play, Create Match,
+       Confirm, Lock In — so it now takes the same dark ink every other orange
+       mark already used, at 7.6:1, and the shadow comes off with it. */
+    --toy-text-on-primary: rgb(28, 18, 2);
+    --toy-shadow-ink: rgba(10, 7, 2, 0.65);
+    /* Display type over a lit 3D stage. The halo runs the same direction as the
+       paper, so on this theme it is a light bloom holding navy capitals off a
+       dark model rather than a dark one holding white capitals off a bright sky.
+ 
+       Kept well under the dark theme's strength, and for a reason that only
+       shows up on paper: a bloom the same colour as the page does not sit
+       behind small text, it eats it. Anything at label size drops the halo
+       entirely and relies on ink value instead. */
+    --toy-shadow-stage: rgba(255, 255, 255, 0.55);
+
+    /* Primary: the objective and the next decision.
+ 
+       Battle Plan's own Pogo Orange, kept from the previous theme on purpose.
+       The borrowed idea here is structural — one warm hue in an otherwise cool
+       interface, which is what lets a single orange pip read as "look here"
+       from across the screen. Wearing the reference's literal brand orange
+       would have made that borrowing look like a costume instead. */
     --toy-primary: rgb(241, 143, 1);
-    --toy-primary-hover: rgb(255, 165, 40);
-    --toy-primary-pressed: rgb(205, 120, 0);
-    --toy-primary-copy: rgb(246, 170, 68);
-    /* Card state fills. These sat *below* the card they tinted once the surface
-       ladder moved, and even before that they were a 1.01–1.10 change — three
-       separate mechanisms (tint, wash, flare) had each been dialled down to
-       nothing rather than one being deleted and one made to work. They now warm
-       the card by a step you can actually see, and the amber border and label
-       still carry the state. */
-    --toy-primary-tint: rgb(86, 67, 48);
-    --toy-primary-wash: rgb(71, 61, 54);
+    --toy-primary-hover: rgb(255, 167, 40);
+    --toy-primary-pressed: rgb(198, 116, 0);
+    /* The accent as *text* on paper. The fill's own value only reaches 2.2:1
+       against the lightened deck, so the copy variant has to go down rather than
+       up — the opposite direction from the dark theme, where it was lifted.
+       Far enough down to clear 4.5:1 on the whole surface ladder rather than
+       only on the sheet: it also lands on --toy-surface-quiet, where the
+       previous step measured 4.2. */
+    --toy-primary-copy: rgb(135, 76, 0);
+    /* Card state fills: the bone plate warmed a step further toward the accent,
+       under an orange rule and an orange label that carry the actual state. */
+    --toy-primary-tint: rgb(243, 231, 210);
+    --toy-primary-wash: rgb(237, 233, 222);
 
-    /* Select: a chosen mode, unit, or slot. Interaction only — this used to
-       double as the friendly team, which made a selected enemy card and a
-       friendly unit the same colour. Team identity lives in its own pair below. */
-    --toy-select: rgb(87, 98, 213);
-    --toy-select-hover: rgb(74, 84, 192);
-    --toy-select-pressed: rgb(60, 69, 164);
-    --toy-select-copy: rgb(150, 160, 243);
+    /* Select: the board's overlay blue, the colour a reachable cell is painted
+       with. A chosen mode, unit, slot or tab inverts to it with white ink — the
+       loudest state available, and unmistakably different from the orange that
+       means "act on this". Selection is interaction only; team identity has its
+       own pair further down.
 
-    /* Danger: a destructive or failed action. Also formerly the enemy team and
-       the health bar at every level; both of those now have their own tokens,
-       so red here means "this went wrong", not "this is a person". */
-    --toy-danger: rgb(186, 58, 45);
-    --toy-danger-hover: rgb(198, 66, 52);
-    --toy-danger-pressed: rgb(160, 46, 35);
-    --toy-danger-copy: rgb(240, 138, 124);
-    --toy-danger-tint: rgb(66, 32, 30);
+       MoveOverlayCell is #3085EE at alpha 0.5, and the plate used to wear that
+       hex at full strength. The cell never renders there — half-covering the
+       deck lands it near #6C9CD3 — so matching the number was matching
+       something the player has never seen, and it cost the state its ink:
+       white measures 3.7:1 on #3085EE and dark ink 4.1:1, so *neither* legible
+       option cleared AA, and every selected row on every menu carried it. Same
+       hue, three stops down, where white reaches 5.5:1.
+
+       The ramp darkens under the pointer rather than lightening, which is what
+       the surface ladder above already does and what keeps the whole ramp
+       above 4.5:1 instead of only its rest state. */
+    --toy-select: rgb(33, 104, 194);
+    --toy-select-hover: rgb(26, 82, 157);
+    --toy-select-pressed: rgb(23, 73, 140);
+    /* The same blue as *text* on paper, where a filled plate would be the wrong
+       shape of emphasis; stepped down until it carries at label size. */
+    --toy-select-copy: rgb(23, 83, 156);
+
+    /* Danger: a destructive or failed action. Not the enemy team and not the
+       health bar; both of those have their own tokens below. */
+    --toy-danger: rgb(199, 46, 42);
+    /* Lifted only as far as white still clears 4.5:1 on it. The previous step
+       brightened past that and left the hover state of a destructive button as
+       the least readable thing on the screen. */
+    --toy-danger-hover: rgb(206, 53, 50);
+    --toy-danger-pressed: rgb(166, 34, 31);
+    --toy-danger-copy: rgb(171, 34, 30);
+    --toy-danger-tint: rgb(251, 228, 226);
 
     /* Team identity. These mirror TeamPalette.cs exactly and must be changed
        with it — the board and the HUD were six different blues and six
@@ -109,8 +221,14 @@
        screens. Full chroma on purpose — a muted pair was tried and reverted for
        reading washed out on a bright board, and it also lost CIE76 distance
        under colour-vision deficiency (96 against 123) and dropped the enemy
-       card border under 3:1. The -copy variants stay in the same two hues
-       instead of drifting to cyan, and both clear AA on --toy-surface. */
+       card border under 3:1.
+
+       The -copy variants are the pair lifted for the HUD, and they are dark-
+       theme ink only: on the match chrome they measure 5.2 and 6.6, but on
+       paper they fall to 2.9 and 2.3. Nothing on the front end may use them as
+       text. Where the paper theme needs a team colour in type or line work it
+       takes the base or -deep step, which clears AA on the whole surface
+       ladder. */
     --toy-team-friendly: rgb(47, 67, 245);
     --toy-team-friendly-deep: rgb(11, 34, 235);
     --toy-team-friendly-copy: rgb(110, 123, 255);
@@ -119,18 +237,33 @@
     --toy-team-enemy-copy: rgb(255, 107, 122);
 
     /* Health. A ramp, so the bar reports condition and not only quantity.
-       Thresholds are owned by TeamPalette.HealthClassSuffix. */
+       Thresholds and colours are owned by TeamPalette.HealthClassSuffix and
+       mirrored here; the world-space bar over the unit reads the same three.
+ 
+       The bar is drawn in fixed segments rather than as one continuous fill —
+       that idea is borrowed, because "lost two blocks" is a faster read than
+       "lost thirteen percent" — but the colours are this game's, not the
+       reference's flat white. */
     --toy-health-high: rgb(92, 200, 122);
     --toy-health-warning: rgb(241, 143, 1);
     --toy-health-critical: rgb(186, 58, 45);
 
-    /* Focus. Deliberately not an alias of --toy-primary any more: the ring and
-       "your next action" were the same orange, so a focused control and the
-       objective were indistinguishable. A bright neutral belongs to the
-       interface rather than to any game state, and clears 10:1 on every surface
-       in the ladder. Controls on a light fill still override to --toy-text-on-
-       accent, where a light ring would only reach 2:1. */
-    --toy-focus: rgb(234, 241, 244);
+    /* A loss goes cool; a win is simply the brightest white on the screen and
+       has no token of its own.
+ 
+       This was a gold once, then the accent. Both were wrong for the same
+       reason: a warm, oblique exclamation over a dimmed match is one specific
+       game's signature, and reaching for it makes the ending an impression of
+       an ending. Orange stays on the rule above the verdict and on the button
+       under it, where it is doing its ordinary job. */
+    --toy-defeat: rgb(108, 118, 142);
+
+    /* Focus. Deep navy, and deliberately not an alias of --toy-primary: the ring
+       and "your next action" must not be the same colour. It belongs to the
+       interface rather than to any game state and clears 12:1 on every surface
+       in the ladder. Controls on the orange or the blue plate override to
+       --toy-text-on-deep, where a navy ring would disappear into the fill. */
+    --toy-focus: rgb(24, 32, 38);
 
     /* Spacing */
     --toy-space-xs: 4px;
@@ -138,51 +271,69 @@
     --toy-space-md: 12px;
     --toy-space-lg: 20px;
     --toy-space-xl: 32px;
-    --toy-space-control-x: 16px;
-    --toy-space-control-top: 11px;
-    --toy-space-control-bottom: 11px;
-    --toy-space-control-active-top: 11px;
-    --toy-space-control-active-bottom: 11px;
+    --toy-space-control-x: 18px;
+    --toy-space-control-top: 12px;
+    --toy-space-control-bottom: 12px;
+    --toy-space-control-active-top: 12px;
+    --toy-space-control-active-bottom: 12px;
     --toy-space-panel: 24px;
     --toy-space-panel-compact: 18px;
     --toy-space-modal: 28px;
     --toy-space-modal-phone: 20px;
 
-    /* Shape and target sizes */
-    --toy-radius-sm: 6px;
-    --toy-radius-md: 10px;
-    --toy-radius-lg: 14px;
+    /* Shape and target sizes. Every radius is zero. Overwatch's interface has
+       no rounded rectangle anywhere in it: corners are square, and where a
+       shape is not square it is a hexagon, a circle, or a parallelogram cut at
+       an angle. The three radius tokens are kept so the component library can
+       stay declarative and so a future theme can round them again in one edit. */
+    --toy-radius-sm: 0;
+    --toy-radius-md: 0;
+    --toy-radius-lg: 0;
 
-    --toy-target-status: 28px;
+    --toy-target-status: 26px;
     --toy-target-compact: 44px;
     --toy-target: 52px;
     --toy-target-phone: 56px;
-    --toy-icon-size: 24px;
-    --toy-icon-gap: 11px;
-    --toy-scroll-size: 14px;
+    --toy-icon-size: 22px;
+    --toy-icon-gap: 12px;
+    --toy-scroll-size: 10px;
+    /* Width of the angled cap that turns a rectangle into a parallelogram, and
+       of the shoulder a slanted plate needs to keep its label off the bevel. */
+    --toy-slant: 14px;
 
     /* Structural depth. Flat: one hairline everywhere, a two-pixel focus ring,
-       and no offset bottom edge. The depth tokens are kept so the component
-       library can stay declarative, but they no longer step. */
+       no offset bottom edge. --toy-accent-rule is the thick coloured bar an
+       active or important element wears on one edge, which is how Overwatch
+       marks state without filling anything. */
     --toy-stroke-thin: 1px;
-    --toy-stroke: 1px;
+    --toy-stroke: 2px;
     --toy-depth-rest: 1px;
     --toy-depth-pressed: 1px;
     --toy-depth-panel: 1px;
     --toy-depth-modal: 1px;
     --toy-focus-width: 1px;
     --toy-focus-emphasis: 2px;
+    --toy-accent-rule: 3px;
 
-    /* Type scale */
-    --toy-type-display: 38px;
-    --toy-type-title-lg: 28px;
-    --toy-type-title: 20px;
-    --toy-type-body-lg: 16px;
+    /* Type scale. The display family is condensed, so these run larger than the
+       same scale would in a normal-width face; at equal point size condensed
+       caps read about a step smaller. */
+    --toy-type-display: 46px;
+    --toy-type-title-lg: 30px;
+    --toy-type-title: 21px;
+    --toy-type-body-lg: 17px;
     --toy-type-body: 15px;
     --toy-type-label: 13px;
     --toy-type-caption: 12px;
-    --toy-type-mono: 20px;
+    --toy-type-mono: 22px;
+
+    /* Tracking. Overwatch letterspaces every piece of display type; without it
+       condensed caps clot into a single grey mass. Body copy takes almost none. */
+    --toy-track-display: 2px;
+    --toy-track-title: 1.5px;
+    --toy-track-label: 1.6px;
+    --toy-track-body: 0.2px;
 
     /* Interaction timing */
-    --toy-motion-fast: 0.1s;
+    --toy-motion-fast: 0.09s;
 }

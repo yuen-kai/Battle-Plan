@@ -5,10 +5,14 @@
     <ui:Style src="../Shared/TacticalToybox.uss" />
     <ui:Style src="CharacterSelectionToybox.uss" />
     <ui:VisualElement name="screen" class="screen toybox-screen toybox-ui roster-screen">
+        <ui:VisualElement class="toy-vignette" picking-mode="Ignore" />
+        <ui:VisualElement class="toy-scrim-top" picking-mode="Ignore" />
+        <ui:VisualElement class="toy-scrim-bottom" picking-mode="Ignore" />
         <ui:ScrollView mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="screen-frame roster-frame">
             <ui:VisualElement class="roster-header">
-                <ui:VisualElement class="roster-heading toy-panel" picking-mode="Ignore">
-                    <ui:Label text="Assemble your crew" class="title-xl" picking-mode="Ignore" />
+                <ui:VisualElement class="roster-heading" picking-mode="Ignore">
+                    <ui:Label text="Crew select" class="section-label" picking-mode="Ignore" />
+                    <ui:Label text="Assemble your crew" class="title-xl roster-title" picking-mode="Ignore" />
                     <ui:Label name="roster-instruction" text="Choose eligible units. Repeats are allowed. Select a filled slot to remove it." class="label label--muted roster-instruction" picking-mode="Ignore" />
                 </ui:VisualElement>
                 <ui:VisualElement class="match-summary toy-panel">
@@ -31,7 +35,7 @@
             <ui:VisualElement class="roster-model-stage" picking-mode="Ignore" />
 
             <ui:VisualElement class="roster-body">
-                <ui:VisualElement class="unit-library toy-panel">
+                <ui:VisualElement class="unit-library toy-panel toy-panel--keyed">
                     <ui:Label text="All units" class="section-label" picking-mode="Ignore" />
                     <ui:ScrollView name="roster-options" mode="Horizontal" horizontal-scroller-visibility="Auto" vertical-scroller-visibility="Hidden" class="roster-options" />
                 </ui:VisualElement>

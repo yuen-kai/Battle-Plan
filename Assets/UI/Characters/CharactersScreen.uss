@@ -1,85 +1,140 @@
 /* Composition and staging only. Semantic colour, control states, and type sizes come from
    TacticalToyboxTokens.uss through the component library.
 
-   Three columns: the class filter rail, the turntable the roster stands on, and the dossier. The
-   middle column is the only transparent one — it is the stage, and nothing is drawn over it
-   except the carousel's own controls, which sit below where the models stand. */
+   Three columns: the class rail, the turntable the roster stands on, and the dossier. Only the
+   dossier is a plate now. The rail is a run of hairlines over a scrim and the middle column is the
+   stage itself, so the models keep the frame and the chrome reads as light drawn over them rather
+   than furniture standing in front of them.
+
+   The root deliberately does not wear .screen-frame. That class's side padding would inset the rail
+   off the left edge, which is the one thing the rail cannot survive: its backing is a gradient
+   anchored to the edge of the screen, and a gap between the two turns a dissolve into a stripe.
+   Each column carries the padding its own content needs instead. */
 
 .characters-screen {
     background-color: var(--toy-transparent);
 }
 
+/* The cinematic edges. Nothing on this screen except the dossier has a plate under it, so these are
+   the whole reason white type survives a lit stage. The left scrim runs wider than the rail on
+   purpose: ended at the rail's edge it draws a visible seam down the middle of the turntable.
+
+   Scrim over vignette, which is the order the other two stage screens use and the reason this one
+   was the exception. The vignette tint is a dark warm and its alpha peaks in the corners, so laid
+   on top it spent the bottom of the rail undoing the scrim underneath: the unit count sat at
+   2.8:1 in a corner the scrim had already lit to twice that. */
+.characters-screen .characters-scrim {
+    width: 480px;
+}
+
 .characters-layout {
+    flex-grow: 1;
     flex-direction: row;
     align-items: stretch;
-    padding: 30px 44px 28px 44px;
 }
 
 /* Class rail */
 
-.toybox-ui.characters-screen .class-bar {
-    width: 216px;
-    min-width: 216px;
-    padding: var(--toy-space-control-x) var(--toy-space-control-x) var(--toy-space-lg) var(--toy-space-control-x);
+.characters-screen .class-bar {
+    width: 250px;
+    min-width: 250px;
+    padding: 30px 22px 26px 40px;
 }
 
+/* Unity's built-in Button style carries a 3px margin on every side, which floats the back arrow off
+   the rail's own padding and leaves it looking mis-set by a hair. */
 .toybox-ui.characters-screen .characters-back {
+    align-self: flex-start;
     min-height: var(--toy-target-compact);
     margin: 0;
-    padding-left: var(--toy-space-md);
-    padding-right: var(--toy-space-control-x);
-    align-self: flex-start;
 }
 
 .class-bar__title {
-    margin-top: var(--toy-space-md);
-    margin-left: 2px;
+    margin-top: 26px;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 6px var(--toy-scrim);
 }
 
-.toybox-ui.characters-screen .class-bar .divider {
-    margin-top: var(--toy-space-md);
-    margin-bottom: var(--toy-space-md);
-}
-
+/* The leading rule and its shoulder hang in the rail's padding, so a filter's label starts on the
+   same edge as the title above it while the hairline and the selected plate run out past it. */
 .class-filters {
-    flex-grow: 0;
+    margin-left: -12px;
 }
 
-/* Filters read as a stack of switches rather than chips: this is the screen's primary navigation,
-   so each one gets a full-width target and the chosen one carries the selection accent. */
+/* Filters are a stack of switches rather than chips: this is the screen's only navigation, so each
+   one takes the full width of the rail and draws nothing at rest but the hairline under it.
+
+   The transparent 3px leading edge is reserved space. The selected state fills it with orange, and
+   without it here every label in the stack shifts three pixels sideways as selection moves. */
 .class-filter {
     width: 100%;
     min-height: var(--toy-target-compact);
     margin: 0;
-    margin-bottom: 5px;
-    padding: var(--toy-space-sm) var(--toy-space-md);
-    background-color: var(--toy-surface-quiet);
-    color: var(--toy-text-muted);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
+    padding: var(--toy-space-sm) var(--toy-space-md) var(--toy-space-sm) 9px;
+    background-color: var(--toy-transparent);
+    color: var(--toy-text-copy);
+    border-width: 0;
+    border-left-width: var(--toy-accent-rule);
+    border-bottom-width: var(--toy-stroke-thin);
+    border-color: var(--toy-transparent);
+    border-bottom-color: var(--toy-edge);
     border-radius: var(--toy-radius-sm);
-    font-size: var(--toy-type-label);
-    -unity-font-style: bold;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    -unity-font-style: normal;
+    font-size: var(--toy-type-body-lg);
+    letter-spacing: var(--toy-track-label);
     -unity-text-align: middle-left;
     transition-duration: var(--toy-motion-fast);
     transition-property: background-color, border-color, color;
 }
 
+/* The invert, written out because these buttons are built in code without the .button class and so
+   miss the library's copy of it. Ink, plate and border have to move together or the row comes up
+   white with white type on it.
+
+   None of it is scoped to the screen on purpose. The controller marks the chosen filter with
+   button--selected and nothing else, so the library's rules for that class have to keep outranking
+   these — otherwise the orange leading rule that separates "you are here" from "your pointer is
+   here" disappears the moment the pointer crosses the selected row. */
 .class-filter:hover {
-    background-color: var(--toy-surface-hover);
-    border-color: var(--toy-edge-strong);
-    color: var(--toy-text);
+    background-color: var(--toy-select);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select);
+}
+
+.class-filter:active {
+    background-color: var(--toy-select-pressed);
+    color: var(--toy-text-on-deep);
+    border-color: var(--toy-select-pressed);
 }
 
 .class-filter:focus {
-    border-width: var(--toy-focus-emphasis);
+    border-top-width: var(--toy-focus-emphasis);
+    border-right-width: var(--toy-focus-emphasis);
+    border-bottom-width: var(--toy-focus-emphasis);
     border-color: var(--toy-focus);
 }
 
-.toybox-ui.characters-screen .class-bar__count {
+/* A white ring does not exist on a white plate. The leading edge is left out of this so a selected
+   row keeps its orange while the pointer is on it. */
+.class-filter:hover:focus,
+.class-filter:active:focus {
+    border-top-color: var(--toy-text-on-deep);
+    border-right-color: var(--toy-text-on-deep);
+    border-bottom-color: var(--toy-text-on-deep);
+}
+
+/* A count of what the filter left standing, parked at the foot of the rail. It is a readout rather
+   than prose, so it takes the display face and none of the .label sizing. */
+/* Sits at the foot of the rail, where the scrim has nearly run out, so it takes
+   the stage halo rather than relying on the gradient to hold it. */
+.characters-screen .class-bar__count {
     margin-top: auto;
-    padding-top: var(--toy-space-md);
+    padding-top: var(--toy-space-lg);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
+    color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-label);
 }
 
 /* Turntable stage */
@@ -87,27 +142,30 @@
 .carousel-stage {
     flex-grow: 1;
     min-width: 0;
-    margin-left: var(--toy-space-lg);
-    margin-right: var(--toy-space-lg);
     align-items: center;
     justify-content: flex-end;
+    padding-bottom: 34px;
 }
 
-/* Below the disk, never over the models. */
+/* Darkness under the models' feet. It grounds the roster on the disk and gives the controls
+   something to sit against now that they have no plate of their own. */
+.characters-screen .stage-scrim {
+    height: 220px;
+}
+
+/* The strip picks nothing itself. A turntable drag only starts when the pointer lands on the stage,
+   so anything solid stretched between the arrows silently kills the drag across the bottom of the
+   screen — which is exactly where a hand reaches for it. */
 .carousel-controls {
     flex-direction: row;
     align-items: center;
-    padding: 7px 10px;
-    background-color: var(--toy-panel);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
-    border-radius: var(--toy-radius-md);
 }
 
 .toybox-ui.characters-screen .carousel-arrow {
     width: var(--toy-target-compact);
     min-width: var(--toy-target-compact);
-    min-height: 34px;
+    height: var(--toy-target-compact);
+    min-height: var(--toy-target-compact);
     margin: 0;
     padding: 0;
     justify-content: center;
@@ -120,24 +178,26 @@
 .carousel-dots {
     flex-direction: row;
     align-items: center;
-    padding-left: var(--toy-space-md);
-    padding-right: var(--toy-space-md);
+    padding-left: var(--toy-space-lg);
+    padding-right: var(--toy-space-lg);
 }
 
+/* A position in a list, not a row of beads: the focused seat is a long orange bar and the rest are
+   short and cool, which is legible at the distance someone actually sits from this screen. Only the
+   colour is allowed to move — the width is layout, and tweening it re-flows the whole strip. */
 .carousel-dot {
-    width: 7px;
-    height: 7px;
-    margin-left: 5px;
-    margin-right: 5px;
+    width: 16px;
+    height: 5px;
+    margin-left: 4px;
+    margin-right: 4px;
     background-color: var(--toy-text-muted);
-    border-radius: 4px;
     transition-duration: var(--toy-motion-fast);
-    transition-property: background-color, width;
+    transition-property: background-color;
 }
 
 .carousel-dot--current {
-    width: 20px;
-    background-color: var(--toy-select-copy);
+    width: 44px;
+    background-color: var(--toy-primary);
 }
 
 /* Dossier */
@@ -145,7 +205,8 @@
 .toybox-ui.characters-screen .characters-dossier {
     width: 430px;
     min-width: 430px;
-    padding: var(--toy-space-panel-compact) 22px;
+    margin: 30px 40px 30px 0;
+    padding: 26px 24px 22px 24px;
 }
 
 .dossier-scroll {
@@ -169,18 +230,29 @@
     background-color: var(--toy-inset);
 }
 
-/* The class sits above the name as a quiet eyebrow: it is a grouping, not a state, so it stays
-   neutral and lets the accents keep meaning selection. */
+/* Every orange tick in the panel hangs in the padding so the text beside it starts on the same edge
+   as the copy underneath. Left in the flow, the rule and its shoulder indent each heading twelve
+   pixels off the column it introduces, and the eyebrow off the name it belongs to. */
+.characters-dossier .section-label,
+.characters-dossier .dossier-class {
+    margin-left: -12px;
+}
+
+/* Class and weapon on one line: chrome rather than prose, so it takes the display face and the same
+   tick the section headings wear, and stays quiet above the one word on this screen that is not. */
 .dossier-class {
-    margin-bottom: 2px;
+    margin-bottom: 4px;
+    padding-left: 9px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
     color: var(--toy-text-muted);
-    letter-spacing: 1px;
+    letter-spacing: var(--toy-track-label);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
 }
 
 .dossier-name {
-    margin-bottom: 6px;
+    margin-bottom: 8px;
 }
 
 /* The unit description is a one-word joke on most of the roster ("Boing", "Boom"), so it stays a
@@ -195,7 +267,7 @@
 }
 
 .toybox-ui.characters-screen .dossier-playstyle {
-    margin-top: var(--toy-space-sm);
+    margin-top: var(--toy-space-md);
     font-size: var(--toy-type-body);
     color: var(--toy-text-copy);
     white-space: normal;
@@ -214,10 +286,12 @@
 }
 
 .trait-row__key {
-    width: 92px;
-    min-width: 92px;
-    font-size: var(--toy-type-label);
+    width: 96px;
+    min-width: 96px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-caption);
     color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
 }
 
 .trait-scale {
@@ -225,30 +299,40 @@
     align-items: center;
 }
 
-/* Discrete steps rather than a continuous bar: this screen is deciding whether a character looks
+/* Discrete segments rather than a continuous bar: this screen is deciding whether a character looks
    fun, and a bar invites reading a precise value off it that the pips deliberately do not carry.
-   The ramp stays neutral because a trait is a gauge, not a decision the accents should mark. */
+
+   An unlit segment is a dark well with a hairline rather than nothing, so the empty half of a row
+   still has a shape and the five rows stay comparable at a glance. Lit ones are white: the accent
+   is spoken for by state, and a trait is not one. */
 .trait-pip {
-    width: 30px;
-    height: 9px;
-    margin-right: 5px;
+    width: 34px;
+    height: 12px;
+    margin-right: 3px;
     background-color: var(--toy-inset);
     border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
-    border-radius: 3px;
 }
 
 .trait-pip--on {
-    background-color: var(--toy-text-copy);
-    border-color: var(--toy-text-copy);
+    background-color: var(--toy-text);
+    border-color: var(--toy-text);
 }
 
 /* Ability */
 
+/* The signature move takes the one orange rule in the panel, and the block is set in off it so the
+   name and its detail read as something quoted from the unit rather than another dossier row. */
+.ability-block {
+    padding-left: 14px;
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
+}
+
 .ability-block__head {
     flex-direction: row;
     align-items: center;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
 }
 
 .ability-block__name {
@@ -257,22 +341,25 @@
     white-space: normal;
 }
 
-.ability-block__cooldown {
+/* The chip is a Label, and the component's centring only arranges children it does not have. Its
+   own text hangs off the top-left padding until the alignment is stated here. */
+.toybox-ui.characters-screen .ability-block__cooldown {
     flex-shrink: 0;
     margin-left: var(--toy-space-md);
+    -unity-text-align: middle-center;
 }
 
 .ability-block__detail {
-    color: var(--toy-text-copy);
     white-space: normal;
 }
 
-/* Per-unit verdicts. Only the key is tinted, and it borrows the health ramp rather than danger:
-   a weakness is a condition to plan around, not an error the player has made. */
+/* Per-unit verdicts. The keys are set identically now: the palette's warm hue is the accent that
+   means "act on this", and it was carrying "Weaknesses" here, which is neither an action nor an
+   error the player has made. The two words already say which row is which. */
 .verdict-row {
     flex-direction: row;
     align-items: flex-start;
-    margin-bottom: var(--toy-space-sm);
+    margin-bottom: var(--toy-space-md);
 }
 
 .verdict-row--last {
@@ -280,18 +367,12 @@
 }
 
 .verdict-row__key {
-    width: 92px;
-    min-width: 92px;
+    width: 96px;
+    min-width: 96px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
-    -unity-font-style: bold;
-}
-
-.verdict-row__key--good {
-    color: var(--toy-health-high);
-}
-
-.verdict-row__key--bad {
-    color: var(--toy-health-warning);
+    color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
 }
 
 /* A zero basis is what makes the copy wrap. Left on auto the label asks for its full single-line
@@ -305,36 +386,45 @@
     white-space: normal;
 }
 
-/* Breakpoints */
+/* Breakpoints.
 
-.compact .characters-layout {
-    padding: 22px 28px;
+   The breakpoint class goes on the UIDocument's root, not on #screen: every controller does
+   `root = document.rootVisualElement` and then toggles `compact`/`narrow`/`phone`/`short` there,
+   while `characters-screen` sits on the screen element one level down. So these are descendant
+   selectors. Compounding the two — `.compact.characters-screen` — asks for one element carrying
+   both classes, which never exists, and silently kills the whole block.
+
+   They tie with the base rules on specificity and win on order, so this block stays last. */
+
+.compact .characters-screen .characters-scrim {
+    width: 400px;
 }
 
 .compact .characters-screen .class-bar {
-    width: 190px;
-    min-width: 190px;
+    width: 216px;
+    min-width: 216px;
+    padding: 24px 18px 22px 30px;
 }
 
 .compact .characters-screen .characters-dossier {
-    width: 390px;
-    min-width: 390px;
+    width: 392px;
+    min-width: 392px;
+    margin: 24px 30px 24px 0;
 }
 
 .compact .carousel-stage {
-    margin-left: var(--toy-space-md);
-    margin-right: var(--toy-space-md);
+    padding-bottom: 26px;
 }
 
-/* The stage cannot survive three columns on a narrow window, and the dossier is the content. The
-   class rail collapses to icons-free short labels and the turntable gives up its space. */
-.narrow .characters-layout {
-    padding: var(--toy-space-panel-compact);
+/* The stage cannot survive three columns on a narrow window, and the dossier is the content, so the
+   turntable gives up its space entirely and the rail keeps only what its labels need. */
+.narrow .characters-screen .characters-scrim {
+    width: 320px;
 }
 
 .narrow .characters-screen .class-bar {
-    width: 168px;
-    min-width: 168px;
+    width: 200px;
+    min-width: 200px;
 }
 
 .narrow .carousel-stage {
@@ -345,34 +435,70 @@
     flex-grow: 1;
     width: auto;
     min-width: 0;
-    margin-left: var(--toy-space-md);
+    margin-left: var(--toy-space-lg);
+}
+
+.phone .characters-screen .characters-scrim {
+    width: 230px;
 }
 
 .phone .characters-screen .class-bar {
-    width: 132px;
-    min-width: 132px;
-    padding: var(--toy-space-md) var(--toy-space-sm) var(--toy-space-md) var(--toy-space-sm);
+    width: 152px;
+    min-width: 152px;
+    padding: 18px 12px 18px 16px;
+}
+
+.phone .characters-screen .class-bar__title {
+    margin-top: var(--toy-space-lg);
+    font-size: var(--toy-type-title);
+}
+
+.phone .characters-screen .class-filter {
+    padding-right: var(--toy-space-sm);
+    font-size: var(--toy-type-body);
 }
 
 .phone .class-bar__count {
     display: none;
 }
 
+.phone .characters-screen .characters-dossier {
+    margin-right: var(--toy-space-control-x);
+    padding: 18px 16px;
+}
+
+/* Five keys and five pips of a fixed width are the widest thing in the dossier, and they are what
+   pushes the panel past a phone before any of the copy does. */
 .phone .trait-row__key,
 .phone .verdict-row__key {
-    width: 76px;
-    min-width: 76px;
+    width: 78px;
+    min-width: 78px;
 }
 
 .phone .trait-pip {
     width: 22px;
 }
 
-.short .characters-layout {
+.short .characters-screen .class-bar {
     padding-top: var(--toy-space-control-top);
-    padding-bottom: var(--toy-space-control-top);
+    padding-bottom: var(--toy-space-md);
 }
 
-.short .class-bar__title {
-    display: none;
+.short .characters-screen .class-bar__title {
+    margin-top: var(--toy-space-md);
+    margin-bottom: var(--toy-space-md);
+    font-size: var(--toy-type-title);
+}
+
+.short .characters-screen .characters-dossier {
+    margin-top: var(--toy-space-md);
+    margin-bottom: var(--toy-space-md);
+}
+
+.short .carousel-stage {
+    padding-bottom: var(--toy-space-lg);
+}
+
+.short .characters-screen .stage-scrim {
+    height: 150px;
 }

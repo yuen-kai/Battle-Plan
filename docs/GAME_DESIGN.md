@@ -88,8 +88,28 @@ a server-side coroutine started from `OnNetworkSpawn` on the host. Per round:
      `Movement` hands it to `Shooting` — a dive covers at most `diveRange` cells at `diveSpeed`, so
      without that the dodger used to land and open fire while everyone who kept their orders was
      still walking. It stops counting as `moving` first, so the recovery does not hold the round's
-     weapons free for both crews; it is the dodger's to pay. Replicated as `DiveRecoveryState` and
-     drawn as an amber ground gauge that fills as the dodger gets back up.
+     weapons free for both crews; it is the dodger's to pay.
+   - **The recovery can cost the dodger the round's shooting outright.** Because it stops counting
+     as `moving` on landing, the round can order weapons cold (`OrderAllowShooting(false)`) while it
+     is still down. `Movement.transitionToShooting(onlyIfWeaponsStillFree: true)` then calls
+     `Shooting.StandDown()` instead of opening a fresh cycle, so a dodger that comes up late misses
+     the fight rather than emptying a magazine into units already ordered to cease fire. If the
+     round reopens fire (`OrderContinueShooting`, e.g. an ability landing's return-fire window) it
+     is restarted like any other unit that had ceased fire.
+   - Replicated as `DiveRecoveryState` (landing time + duration) and drawn by `DiveRecoveryPulse`:
+     the dodger's **whole body pulses amber** while it is down, and the pulse quickens (1.3 → 3.6 Hz)
+     as it comes back up, so one effect carries both "cannot shoot" and "nearly done". It tints each
+     material slot from that slot's own `_BaseColor` through a `MaterialPropertyBlock` — the route
+     `HitFlash` already takes — so a pulsing unit still reads as its team and its character. Only
+     `_BaseColor` is driven: it round-trips exactly, where writing `_EmissionColor` does not and left
+     the emissive base plate visibly wrong at the bottom of every beat. Renderers on `BattlePlan/*`
+     shaders (ground rings, vision cone, target laser) are excluded — they own their own property
+     blocks and clearing the tint would take their state with them.
+   - **Under-unit ground visuals are placed through `UnitBasePlate.ClearanceAbovePlane`.** A unit
+     does not stand on the board, it stands on its own `BasePuck`/`BasePuckRim` plate (2.015 across,
+     top face 0.1–0.156 above the collider bottom that the board plane is measured from), so a
+     ground quad laid on that plane is depth-buried by the plate. This is why the recovery indicator
+     is on the body at all, and it is what had hidden the Shield Rush streaks and most of its ring.
    - Dev mode: the window waits indefinitely for `DevInput.SubmitDodge()` (queue dives with
      `DevInput.SetDodgePath(team, unit, col,row, ...)`); `DevInput.Dump()` shows
      `phase=dodging` plus who may dive.
@@ -274,7 +294,7 @@ Everything lives in `Assets/Scripts` with **no namespaces** (project convention 
 | `UnitData.cs` | ScriptableObject holding *all* per-unit tunables (combat, movement, ability params). One asset per unit in `Assets/UnitStats/`. |
 | `UnitDatabase.cs` | ScriptableObject list of `UnitData` (`AllUnits.asset`) — roster indices come from here. |
 | `Unit.cs` | Per-unit team presentation plus the server-written ability cooldown counter. A valid post-dodge activation starts the configured cooldown; round-end ticks are authoritative and death/respawn does not reset it. |
-| `Movement.cs` | Server-side coroutine movement along cell paths (+dive variant), rotation, hands off to `Shooting` when done — after the 2s dive recovery if the path was a dodge. |
+| `Movement.cs` | Server-side coroutine movement along cell paths (+dive variant), rotation, hands off to `Shooting` when done — after the 2s dive recovery if the path was a dodge, and only if the round has not gone weapons-cold meanwhile. |
 | `Shooting.cs` | Server-side auto-combat: nearest-enemy acquisition requires authoritative team visibility, then uses a projectile-radius `SphereCast` (Walls + enemy layer, `targetRange`) so a lock is only possible where the real bullet fits; target-lock laser (NetworkVariables replicate laser to clients; a lock **force-reveals the shooter to the victim's team** through fog), firing with spread, reload cycle, `stillShooting` handshake with GameLoop. All setup is in `OnNetworkSpawn` so laser state re-applies after a fog `NetworkShow`. |
 | `Bullet.cs` | Server-side projectile: applies damage + backstab check on enemy collision, despawns on any hit / max range / 8s lifetime. Bullets are always network-visible (a tracer out of fog is an intended "you're being shot from over there" cue). |
 | `Health.cs` | HP + alive tracking as server-written **NetworkVariables** (resync on fog `NetworkShow`) + world-space health bar (billboarded to team camera); health changes also ask `GameLoop` to refresh the opponent's public status card. On death the server deactivates the root one frame after the state flush (keeps tag-based `teamSize` correct), clients deactivate via the `isAlive` callback, and the friendly unit card is disabled. |

@@ -9,6 +9,16 @@ using UnityEngine.UIElements;
 
 public class UIToolkitAssetSmokeTests
 {
+    private const string BodyFontPath = "Assets/Fonts/Jost/Jost-Regular UI SDF.asset";
+    private const string DisplayFontPath =
+        "Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset";
+    private const string DisplayFontSourcePath =
+        "Assets/Fonts/OswaldCaps/OswaldCaps-Regular.ttf";
+    private const string BodyFontReference =
+        "project://database/Assets/Fonts/Jost/Jost-Regular UI SDF.asset";
+    private const string DisplayFontReference =
+        "project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset";
+
     private static readonly object[] ScreenContracts =
     {
         new object[]
@@ -104,6 +114,7 @@ public class UIToolkitAssetSmokeTests
                 "planning-commit",
                 "planning-commit-status",
                 "lock-in-button",
+                "exit-match-button",
                 "controls-button",
                 "controls-overlay",
                 "controls-scroll",
@@ -329,78 +340,136 @@ public class UIToolkitAssetSmokeTests
         );
     }
 
+    /// <summary>
+    /// Both families ship as dynamic SDF font assets and are referenced as assets, never as the
+    /// raw TrueType file: a .ttf reference renders through a second, non-SDF path that ignores
+    /// every size and weight the interface is tuned at.
+    /// </summary>
     [Test]
-    public void SharedStylesUseSdfFontAsset()
+    public void SharedStylesUseSdfFontAssets()
     {
-        const string fontPath = "Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset";
-        const string fontReference =
-            "project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset";
+        string[] fontPaths =
+        {
+            BodyFontPath,
+            DisplayFontPath,
+            "Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset",
+        };
         string[] stylePaths =
         {
             "Assets/UI/Shared/BattlePlan.uss",
         };
 
-        UnityEngine.TextCore.Text.FontAsset fontAsset =
-            AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(fontPath);
-        Assert.That(fontAsset, Is.Not.Null, $"Could not import {fontPath}.");
-        Assert.That(
-            fontAsset.atlasRenderMode,
-            Is.EqualTo(UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA)
-        );
-        Assert.That(
-            fontAsset.atlasPopulationMode,
-            Is.EqualTo(UnityEngine.TextCore.Text.AtlasPopulationMode.Dynamic)
-        );
+        foreach (string fontPath in fontPaths)
+        {
+            UnityEngine.TextCore.Text.FontAsset fontAsset =
+                AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(fontPath);
+            Assert.That(fontAsset, Is.Not.Null, $"Could not import {fontPath}.");
+            Assert.That(
+                fontAsset.atlasRenderMode,
+                Is.EqualTo(UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA)
+            );
+            Assert.That(
+                fontAsset.atlasPopulationMode,
+                Is.EqualTo(UnityEngine.TextCore.Text.AtlasPopulationMode.Dynamic)
+            );
+        }
 
         foreach (string stylePath in stylePaths)
         {
             string source = File.ReadAllText(stylePath);
-            Assert.That(source, Does.Contain(fontReference));
+            Assert.That(source, Does.Contain(BodyFontReference));
+            Assert.That(source, Does.Contain(DisplayFontReference));
             Assert.That(
                 source,
-                Does.Not.Contain("CascadiaCode-VariableFont_wght.ttf"),
-                $"{stylePath} should use the SDF asset instead of the raw font."
+                Does.Not.Contain("Jost-Regular.ttf").And.Not.Contain("OswaldCaps-Regular.ttf"),
+                $"{stylePath} should use the SDF assets instead of the raw fonts."
             );
         }
     }
 
+    /// <summary>
+    /// Two families, split by job. Prose reads in Jost; chrome — titles, controls, labels, figures
+    /// — is set in the condensed caps face. The default has to be the prose one: the gameplay unit
+    /// cards sit outside .toybox-ui scope on purpose and inherit from :root, so a display default
+    /// here would set the whole in-match HUD, including its sentences, in condensed capitals.
+    /// </summary>
     [Test]
-    public void InterfaceTypeDefaultsToRubikAndReservesMonoForFigures()
+    public void InterfaceTypeDefaultsToProseAndReservesTheDisplayFaceForFigures()
     {
         string reset = File.ReadAllText("Assets/UI/Shared/BattlePlan.uss");
-        const string rubik =
-            "project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
 
         int rootStart = reset.IndexOf(":root {");
         Assert.That(rootStart, Is.GreaterThanOrEqualTo(0));
         string rootRule = reset.Substring(rootStart, reset.IndexOf('}', rootStart) - rootStart);
         Assert.That(
             rootRule,
-            Does.Contain(rubik),
-            "Rubik is the interface family. The gameplay cards sit outside .toybox-ui scope, so a "
-                + "monospace default here renders the whole in-match HUD in a coding font."
+            Does.Contain(BodyFontReference),
+            "The reading face is the default; the display face is opted into."
         );
+        Assert.That(rootRule, Does.Not.Contain(DisplayFontReference));
 
         int monoStart = reset.IndexOf(".mono {");
-        Assert.That(monoStart, Is.GreaterThanOrEqualTo(0), "The mono role needs a named class.");
+        Assert.That(monoStart, Is.GreaterThanOrEqualTo(0), "The figures role needs a named class.");
         string monoRule = reset.Substring(monoStart, reset.IndexOf('}', monoStart) - monoStart);
-        Assert.That(monoRule, Does.Contain("CascadiaCode-VariableFont_wght UI SDF.asset"));
+        Assert.That(monoRule, Does.Contain(DisplayFontReference));
 
         string card = File.ReadAllText("Assets/UI/Shared/Templates/UnitCard.uxml");
         Assert.That(
             card,
             Does.Contain("unit-card__health-value mono"),
-            "Health counts need tabular figures so the digits do not jitter as damage lands."
+            "Health counts need even figures so the digits do not jitter as damage lands."
         );
     }
 
+    /// <summary>
+    /// The display face is an all-caps cut: its lowercase codepoints are remapped to the uppercase
+    /// glyphs. That is what lets every heading, button and label in the game render in capitals
+    /// without a ToUpper() in the controllers or a shouted string in a UXML — and it is invisible
+    /// from the USS, so swapping in a stock Oswald would quietly un-capitalise the whole interface
+    /// with nothing else failing.
+    /// </summary>
     [Test]
-    public void TacticalToyboxUsesRubikSdfAndVectorIcons()
+    public void DisplayFaceMapsLowercaseOntoCapitals()
     {
-        const string fontPath = "Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
+        Font source = AssetDatabase.LoadAssetAtPath<Font>(DisplayFontSourcePath);
+        Assert.That(source, Is.Not.Null, $"Could not import {DisplayFontSourcePath}.");
+
+        // Probed on a throwaway clone rather than the shipped asset: the project asset populates
+        // its atlas dynamically, and asking it for glyphs would dirty it from a test run.
+        UnityEngine.TextCore.Text.FontAsset probe =
+            UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(
+                source,
+                32,
+                4,
+                UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA,
+                256,
+                256,
+                UnityEngine.TextCore.Text.AtlasPopulationMode.Dynamic,
+                true
+            );
+        try
+        {
+            Assert.That(probe.TryAddCharacters("aAzZ"), Is.True);
+            Assert.That(
+                probe.characterLookupTable['a'].glyphIndex,
+                Is.EqualTo(probe.characterLookupTable['A'].glyphIndex),
+                "The display cut must draw lowercase with the capital glyph."
+            );
+            Assert.That(
+                probe.characterLookupTable['z'].glyphIndex,
+                Is.EqualTo(probe.characterLookupTable['Z'].glyphIndex)
+            );
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(probe);
+        }
+    }
+
+    [Test]
+    public void TacticalToyboxUsesTheDisplaySdfFontAndVectorIcons()
+    {
         const string stylePath = "Assets/UI/Shared/TacticalToybox.uss";
-        const string fontReference =
-            "project://database/Assets/Fonts/Rubik/Rubik-VariableFont_wght UI SDF.asset";
         string[] iconPaths =
         {
             "Assets/UI/Shared/Icons/play.svg",
@@ -417,11 +486,17 @@ public class UIToolkitAssetSmokeTests
             "Assets/UI/Shared/Icons/bot.svg",
             "Assets/UI/Shared/Icons/fog.svg",
             "Assets/UI/Shared/Icons/check.svg",
+            "Assets/UI/Shared/Icons/hex.svg",
+            "Assets/UI/Shared/Icons/hex-frame.svg",
+            "Assets/UI/Shared/Icons/ring.svg",
+            "Assets/UI/Shared/Icons/slant-left.svg",
+            "Assets/UI/Shared/Icons/slant-right.svg",
+            "Assets/UI/Shared/Icons/chevron-down.svg",
         };
 
         UnityEngine.TextCore.Text.FontAsset fontAsset =
-            AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(fontPath);
-        Assert.That(fontAsset, Is.Not.Null, $"Could not import {fontPath}.");
+            AssetDatabase.LoadAssetAtPath<UnityEngine.TextCore.Text.FontAsset>(DisplayFontPath);
+        Assert.That(fontAsset, Is.Not.Null, $"Could not import {DisplayFontPath}.");
         Assert.That(
             fontAsset.atlasRenderMode,
             Is.EqualTo(UnityEngine.TextCore.LowLevel.GlyphRenderMode.SDFAA)
@@ -432,10 +507,10 @@ public class UIToolkitAssetSmokeTests
         );
 
         string style = File.ReadAllText(stylePath);
-        Assert.That(style, Does.Contain(fontReference));
-        Assert.That(style, Does.Not.Contain("Rubik-VariableFont_wght.ttf"));
+        Assert.That(style, Does.Contain(DisplayFontReference));
+        Assert.That(style, Does.Not.Contain("OswaldCaps-Regular.ttf"));
         string runtimeTheme = File.ReadAllText("Assets/UI/Shared/BattlePlanRuntime.tss");
-        Assert.That(runtimeTheme, Does.Contain(fontReference));
+        Assert.That(runtimeTheme, Does.Contain(DisplayFontReference));
 
         foreach (string iconPath in iconPaths)
         {
@@ -1088,7 +1163,7 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
-    public void UnitCardFlipIndicatorExposesRoundCooldownState()
+    public void AbilityCardChargeDiscExposesRoundCooldownState()
     {
         const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
         VisualTreeAsset card = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(cardPath);
@@ -1098,18 +1173,14 @@ public class UIToolkitAssetSmokeTests
         VisualElement indicator = tree.Q<VisualElement>("unit-card-flip-indicator");
         VisualElement icon = tree.Q<VisualElement>("unit-card-flip-icon");
         Label cooldownLabel = tree.Q<Label>("unit-card-cooldown");
-        Assert.That(
-            indicator,
-            Is.Not.Null,
-            "UnitCard must expose the whole-card mode indicator."
-        );
-        Assert.That(icon, Is.Not.Null, "The mode indicator must expose the flip-card icon.");
-        Assert.That(cooldownLabel, Is.Not.Null, "The mode indicator must expose cooldown rounds.");
+        Assert.That(indicator, Is.Not.Null, "UnitCard must expose the ability charge disc.");
+        Assert.That(icon, Is.Not.Null, "The charge disc must expose its charged pip.");
+        Assert.That(cooldownLabel, Is.Not.Null, "The charge disc must expose cooldown rounds.");
         Assert.That(cooldownLabel.ClassListContains("hidden"), Is.True);
         Assert.That(
             tree.Query<Button>().ToList().Count,
             Is.EqualTo(1),
-            "A friendly unit card must expose one whole-card button."
+            "An ability card must expose one whole-card button."
         );
         Assert.That(
             tree.Q<Button>("unit-card-move"),
@@ -1130,14 +1201,55 @@ public class UIToolkitAssetSmokeTests
         Assert.That(source, Does.Not.Contain("spent this match"));
 
         string styles = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
-        Assert.That(styles, Does.Contain("flip-card.svg"));
         Assert.That(styles, Does.Contain("ability-flare.svg"));
         Assert.That(styles, Does.Contain(".unit-card--ability"));
         Assert.That(
             styles,
-            Does.Contain(".unit-card--selected .unit-card__flip-indicator--cooldown"),
-            "Cooldown styling must override the selected-card accent."
+            Does.Not.Contain("flip-card.svg"),
+            "The charge disc replaced the flip glyph; an ability card has only one face."
         );
+        Assert.That(
+            styles,
+            Does.Contain(".unit-card__flip-indicator--cooldown .unit-card__flip-icon"),
+            "A recharging disc must drop its charged pip so only the round count reads."
+        );
+    }
+
+    /// <summary>
+    /// The dock and the contact strip share one template, so the only thing keeping them from
+    /// reading as the same component at two sizes is that each fully styles itself from its own
+    /// modifier. An ability card leads with the ability; a contact card leads with the unit.
+    /// </summary>
+    [Test]
+    public void AbilityCardLeadsWithTheAbilityAndContactCardLeadsWithTheUnit()
+    {
+        string styles = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
+        string element = File.ReadAllText("Assets/Scripts/Menus/UnitCardElement.cs");
+
+        Assert.That(
+            element,
+            Does.Contain("unit-card--friendly"),
+            "Your own crew's cards must carry their own modifier, not merely lack the enemy one."
+        );
+        Assert.That(styles, Does.Contain(".unit-card--friendly .unit-card__ability"));
+        Assert.That(styles, Does.Contain(".unit-card--friendly .unit-card__name"));
+        Assert.That(styles, Does.Contain(".unit-card--enemy .unit-card__ability"));
+        Assert.That(styles, Does.Contain(".unit-card--enemy .unit-card__name"));
+
+        // Selection and "ability ordered" are separate facts and must not both be the accent, or
+        // the loudest colour on the screen stops answering which orders have been given.
+        int selectedRule = styles.IndexOf(".unit-card--selected {", StringComparison.Ordinal);
+        Assert.That(selectedRule, Is.GreaterThan(-1), "The selected card must still be styled.");
+        string selectedBody = styles.Substring(
+            selectedRule,
+            styles.IndexOf('}', selectedRule) - selectedRule
+        );
+        Assert.That(
+            selectedBody,
+            Does.Not.Contain("--toy-primary"),
+            "Selection must not spend the accent; that belongs to the ordered card."
+        );
+        Assert.That(selectedBody, Does.Contain("--toy-select"));
     }
 
     [Test]
@@ -1153,6 +1265,16 @@ public class UIToolkitAssetSmokeTests
         Assert.That(controller, Does.Contain("TryActivateUnitCard(cardIndex)"));
         Assert.That(planner, Does.Contain("public bool TryActivateUnitCard(int unitIndex)"));
         Assert.That(planner, Does.Contain("plans.TryGetValue(unit"));
+
+        // One press orders the ability. It used to take two, the first spent only on selecting the
+        // unit, so reaching an ability from the dock meant already knowing the card had a back.
+        Assert.That(planner, Does.Contain("TrySetSelectionMode(unit, true)"));
+        Assert.That(card, Does.Contain("Order "));
+        Assert.That(
+            card,
+            Does.Not.Contain("Select again"),
+            "The card names the order a press gives, not how many presses it has taken."
+        );
     }
 
     [Test]

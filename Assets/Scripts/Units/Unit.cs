@@ -25,16 +25,23 @@ public class Unit : NetworkBehaviour
     [HideInInspector]
     public bool selectMovement = true;
 
+    private AbilityStatusRing abilityStatusRing;
+
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
         teamIndex.OnValueChanged += OnTeamIndexChanged;
+        abilityCooldownRoundsRemaining.OnValueChanged += OnAbilityCooldownRoundsChanged;
         RefreshTeamPresentation();
+        // Not animated: the cooldown a unit spawns with, or comes back out of fog with, is state
+        // that was already true before this client could see it, not a recharge to play out.
+        RefreshAbilityStatusRing(animate: false);
     }
 
     public override void OnNetworkDespawn()
     {
         teamIndex.OnValueChanged -= OnTeamIndexChanged;
+        abilityCooldownRoundsRemaining.OnValueChanged -= OnAbilityCooldownRoundsChanged;
         base.OnNetworkDespawn();
     }
 
@@ -137,6 +144,31 @@ public class Unit : NetworkBehaviour
     private void OnTeamIndexChanged(int previousValue, int newValue)
     {
         RefreshTeamPresentation();
+    }
+
+    private void OnAbilityCooldownRoundsChanged(int previousValue, int newValue)
+    {
+        RefreshAbilityStatusRing(animate: true);
+    }
+
+    /// <summary>
+    /// Points the charge dial on this unit's base plate at its cooldown, building it on first use.
+    /// The HUD card carries the same number, but only for units that fit on the card strip and
+    /// only while the player is looking away from the board — this is the copy that is on screen
+    /// whenever the unit it belongs to is.
+    /// </summary>
+    private void RefreshAbilityStatusRing(bool animate)
+    {
+        int configuredRounds = ConfiguredAbilityCooldownRounds;
+        if (configuredRounds <= 0)
+            return;
+
+        if (abilityStatusRing == null)
+            abilityStatusRing = AbilityStatusRing.Create(transform);
+        if (abilityStatusRing == null)
+            return;
+
+        abilityStatusRing.SetCharge(AbilityCooldownRoundsRemaining, configuredRounds, animate);
     }
 
     public void RefreshTeamPresentation()

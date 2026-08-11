@@ -1,0 +1,8 @@
+01-title: wrote Captures/OverwatchPass/01-title.png (ui coverage 74 %)
+02-join: wrote Captures/OverwatchPass/02-join.png (ui coverage 100 %)
+03-roster: wrote Captures/OverwatchPass/03-roster.png (ui coverage 86 %)
+04-characters: wrote Captures/OverwatchPass/04-characters.png (ui coverage 68 %)
+05-hud: wrote Captures/OverwatchPass/05-hud.png (ui coverage 20 %)
+06-results: wrote Captures/OverwatchPass/06-results.png (ui coverage 100 %)
+07-title-settings: wrote Captures/OverwatchPass/07-title-settings.png (ui coverage 100 %)
+done

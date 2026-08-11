@@ -13,7 +13,7 @@ public class TutorialDirector : MonoBehaviour
     public const string DrawRoutePrompt = "Drag your unit to draw a route.";
     public const string MoveCloserPrompt = "Move toward the enemy.";
     public const string LockInPrompt = "Lock in.";
-    public const string UseAbilityPrompt = "Click your unit again to use its ability.";
+    public const string UseAbilityPrompt = "Press your unit's ability card to use it.";
     public const string PickTargetPrompt = "Pick a cell. It hits everything nearby.";
     public const string DodgeNowPrompt = "They aimed at you. Drag your unit clear.";
 
@@ -23,7 +23,7 @@ public class TutorialDirector : MonoBehaviour
     public const string EnemyDodgedLesson =
         "Enemies can dodge your abilities; use them to force advantageous positions.";
     public const string ClosingLesson =
-        "Real matches are five a side. Click a unit's card to select it, then draw its route.";
+        "Real matches are five a side. Drag a unit to draw its route, or press its ability card instead.";
 
     /// <summary>
     /// The script advances on what the player has actually done, never on a round number, so
@@ -98,7 +98,23 @@ public class TutorialDirector : MonoBehaviour
 
         hud.SuppressTimer(true);
         hud.SetFieldedCardCount(TutorialSession.UnitsPerTeam);
+        // The sandbox cannot be won or lost and its clock is hidden, so it never reaches the
+        // results overlay every other match is left from. Without this there is no way out of it
+        // short of closing the game.
+        hud.ShowExitMatch("Exit tutorial", LeaveTutorial);
         hudPrepared = true;
+    }
+
+    /// <summary>
+    /// Leaves partway through. The session is not marked completed — a tutorial walked out of has
+    /// not been taken — and the title screen ends the session on arrival, so nothing here has to
+    /// unwind the sandbox by hand.
+    /// </summary>
+    private static void LeaveTutorial()
+    {
+        GameHUDController.Instance?.SetCoachPrompt(string.Empty);
+        GameHUDController.Instance?.SetLessonPopup(string.Empty);
+        GameLoop.Instance?.ExitToMainMenu();
     }
 
     private void OnPhaseEntered(string phase)

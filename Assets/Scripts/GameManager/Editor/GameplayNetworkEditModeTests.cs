@@ -200,6 +200,34 @@ public class GameplayNetworkEditModeTests
         }
     }
 
+    /// <summary>
+    /// The dial counts up while the cooldown counts down, so the two are complements. Getting this
+    /// backwards is invisible in a screenshot — a full dial and an empty one are both plausible
+    /// pictures — and would tell the player an ability is ready on the exact round it is not.
+    /// </summary>
+    [Test]
+    public void AbilityChargeDial_CountsUpAsTheCooldownCountsDown()
+    {
+        Assert.That(AbilityStatusRing.ChargedSlots(4, 4), Is.Zero, "Just spent, nothing charged.");
+        Assert.That(AbilityStatusRing.ChargedSlots(3, 4), Is.EqualTo(1));
+        Assert.That(AbilityStatusRing.ChargedSlots(1, 4), Is.EqualTo(3));
+        Assert.That(
+            AbilityStatusRing.ChargedSlots(0, 4),
+            Is.EqualTo(4),
+            "A cooldown of zero is the full dial the ready state is drawn from."
+        );
+        Assert.That(
+            AbilityStatusRing.ChargedSlots(9, 2),
+            Is.Zero,
+            "A cooldown longer than the dial empties it rather than running it negative."
+        );
+        Assert.That(
+            AbilityStatusRing.ChargedSlots(0, 0),
+            Is.Zero,
+            "A unit with no ability has no slots to fill."
+        );
+    }
+
     [TestCase(5, 30f)]
     [TestCase(4, 24f)]
     [TestCase(3, 18f)]
@@ -1084,6 +1112,202 @@ public class GameplayNetworkEditModeTests
         }
     }
 
+    [Test]
+    public void AbilityChargeDial_BuildsLocalPlateVisualWithoutColliders()
+    {
+        GameObject unit = new("Ability charge dial test unit");
+        unit.transform.position = Vector3.up;
+        unit.transform.localScale = new Vector3(1.3f, 1.56f, 1.3f);
+        unit.AddComponent<CapsuleCollider>();
+        MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
+        hiddenUnitRenderer.forceRenderingOff = true;
+        try
+        {
+            AbilityStatusRing dial = AbilityStatusRing.Create(unit.transform);
+
+            Assert.That(dial, Is.Not.Null);
+            Assert.That(dial.name, Is.EqualTo(AbilityStatusRing.GameObjectName));
+            Assert.That(
+                Vector3.Distance(dial.transform.lossyScale, Vector3.one),
+                Is.LessThan(0.001f),
+                "The dial cancels the unit's scale so it is the same size on every prefab variant."
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.sharedMaterial.shader.name),
+                Is.All.EqualTo(AbilityStatusRing.ShaderName)
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.forceRenderingOff),
+                Is.All.True,
+                "A dial built for a hidden unit must inherit host fog suppression immediately."
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Collider>(includeInactive: true),
+                Is.Empty,
+                "The local presentation must never affect gameplay physics."
+            );
+            Assert.That(
+                dial.GetComponentsInChildren<Renderer>(includeInactive: true)
+                    .Select(renderer => renderer.shadowCastingMode),
+                Is.All.EqualTo(UnityEngine.Rendering.ShadowCastingMode.Off)
+            );
+            Assert.That(
+                AbilityStatusRing.Create(unit.transform),
+                Is.SameAs(dial),
+                "Every cooldown change reapplies state, so construction must be idempotent."
+            );
+
+            dial.SetCharge(remainingRounds: 4, configuredRounds: 4, animate: false);
+            Assert.That(dial.Slots, Is.EqualTo(4));
+            Assert.That(dial.DisplayedCharge, Is.EqualTo(0f).Within(0.001f));
+            Assert.That(dial.IsReady, Is.False);
+
+            dial.SetCharge(remainingRounds: 0, configuredRounds: 4, animate: false);
+            Assert.That(
+                dial.DisplayedCharge,
+                Is.EqualTo(4f).Within(0.001f),
+                "State that predates this client's view of the unit is adopted, not animated."
+            );
+            Assert.That(dial.IsReady, Is.True);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    /// <summary>
+    /// The dial is engraved into the base plate with a multiply, so a dial that only clears the
+    /// board plane is depth-buried by the very puck it is supposed to be cut into.
+    /// </summary>
+    [Test]
+    public void AbilityChargeDial_TakesTheHigherOfItsPlateAndTheRangeOverlay()
+    {
+        // A plate the depth of the ones the units actually carry. The dial would sit inside it
+        // without the lift, and on top of it the range overlay would still bury the pair, so the
+        // overlay's floor is what decides the height here.
+        GameObject unit = BuildPlatedUnit("Ability charge dial plate test unit", 0.12f);
+        Collider unitCollider = unit.GetComponent<Collider>();
+        float boardPlane = unitCollider.bounds.min.y;
+        float plateTop = boardPlane + 0.12f;
+
+        try
+        {
+            Transform dial = AbilityStatusRing.Create(unit.transform).transform;
+            Assert.That(
+                dial.position.y,
+                Is.GreaterThan(plateTop),
+                "The dial must clear the plate face it is cut into rather than sit inside it."
+            );
+            Assert.That(
+                dial.position.y,
+                Is.EqualTo(boardPlane + 0.245f).Within(0.001f),
+                "A plate this shallow leaves the range overlay as the binding floor."
+            );
+            Assert.That(
+                dial.GetChild(0).rotation.eulerAngles.x,
+                Is.EqualTo(90f).Within(0.001f),
+                "The dial lies flat on the plate."
+            );
+
+            // The dial is built the instant a unit spawns, on the same frame the unit is placed,
+            // and a collider's bounds lag a transform that moved this frame where a renderer's do
+            // not. Consulting the plate alone is what keeps the two from disagreeing, so the dial
+            // has to land in the same place with the collider gone entirely.
+            Object.DestroyImmediate(unitCollider);
+            Object.DestroyImmediate(dial.gameObject);
+            Transform plateOnly = AbilityStatusRing.Create(unit.transform).transform;
+            Assert.That(
+                plateOnly.position.y,
+                Is.EqualTo(boardPlane + 0.245f).Within(0.001f),
+                "Placement must read the base plate and nothing else."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+
+        // Give a unit a plate tall enough to stand above the overlay and the plate wins again, so
+        // the lift is a floor rather than a fixed height every dial is pinned to.
+        GameObject stilted = BuildPlatedUnit("Ability charge dial tall plate unit", 0.4f);
+        float stiltedBoard = stilted.GetComponent<Collider>().bounds.min.y;
+        try
+        {
+            Assert.That(
+                AbilityStatusRing.Create(stilted.transform).transform.position.y,
+                Is.EqualTo(stiltedBoard + 0.4f + 0.035f).Within(0.001f),
+                "A plate that already clears the overlay keeps the dial engraved in its face."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(stilted);
+        }
+    }
+
+    /// <summary>
+    /// A unit carrying a base plate of the given thickness, resting on the board plane its collider
+    /// defines.
+    /// </summary>
+    private static GameObject BuildPlatedUnit(string name, float plateThickness)
+    {
+        GameObject unit = new(name);
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+
+        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plate.name = UnitBasePlate.NamePrefix;
+        plate.transform.SetParent(unit.transform, worldPositionStays: false);
+        plate.transform.localScale = new Vector3(1.75f, plateThickness, 1.75f);
+        plate.transform.position = new Vector3(
+            0f,
+            unit.GetComponent<Collider>().bounds.min.y + plateThickness * 0.5f,
+            0f
+        );
+        return unit;
+    }
+
+    [Test]
+    public void GroundVisuals_MeasureBasePlateClearanceFromTheUnitOrigin()
+    {
+        GameObject unit = new("Origin clearance test unit");
+        unit.transform.position = new Vector3(0f, 3f, 0f);
+
+        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plate.name = UnitBasePlate.NamePrefix;
+        plate.transform.SetParent(unit.transform, worldPositionStays: false);
+        plate.transform.localScale = new Vector3(1.75f, 0.1f, 1.75f);
+        plate.transform.localPosition = new Vector3(0f, -1.2f, 0f);
+
+        try
+        {
+            Assert.That(
+                UnitBasePlate.ClearanceAboveOrigin(unit.transform, 0.035f),
+                Is.EqualTo(-1.2f + 0.05f + 0.035f).Within(0.001f),
+                "A plate below the origin puts the clearance below it too."
+            );
+
+            Object.DestroyImmediate(plate);
+            Assert.That(
+                UnitBasePlate.ClearanceAboveOrigin(unit.transform, 0.035f),
+                Is.EqualTo(0.035f).Within(0.001f),
+                "Without a plate or a collider the offset is all there is to go on."
+            );
+            Assert.That(
+                UnitBasePlate.ClearanceAboveOrigin(null, 0.035f),
+                Is.EqualTo(0.035f).Within(0.001f),
+                "A missing unit must not throw on a purely presentational lookup."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
     // === DODGE RECOVERY ===
 
     [Test]
@@ -1129,66 +1353,242 @@ public class GameplayNetworkEditModeTests
         );
     }
 
+    /// <summary>
+    /// Shield Rush's ring was being drawn inside the base plate the unit stands on, where depth
+    /// testing hid it and every one of its streaks. Every unit prefab carries such a plate, so a
+    /// ground effect that only clears the board plane is invisible in every real match.
+    /// </summary>
     [Test]
-    public void DodgeRecoveryIndicator_BuildsLocalGroundGaugeWithoutColliders()
+    public void GroundVisuals_ClearTheBasePlateTheUnitStandsOn()
     {
-        GameObject unit = new("Dodge recovery indicator test unit");
+        GameObject unit = new("Base plate clearance test unit");
         unit.transform.position = Vector3.up;
         unit.AddComponent<CapsuleCollider>();
-        MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
-        hiddenUnitRenderer.forceRenderingOff = true;
+
+        GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        plate.name = UnitBasePlate.NamePrefix + "Rim";
+        plate.transform.SetParent(unit.transform, worldPositionStays: false);
+        plate.transform.localScale = new Vector3(2f, 0.2f, 2f);
+        Collider unitCollider = unit.GetComponent<Collider>();
+        plate.transform.position = new Vector3(0f, unitCollider.bounds.min.y + 0.1f, 0f);
+        float plateTop = plate.GetComponent<Renderer>().bounds.max.y;
+        float boardPlane = unitCollider.bounds.min.y;
+
         try
         {
-            DiveRecoveryIndicatorVisual visual = DiveRecoveryIndicatorVisual.Create(unit.transform);
-
-            Assert.That(visual, Is.Not.Null);
-            Assert.That(visual.name, Is.EqualTo(DiveRecoveryIndicatorVisual.GameObjectName));
-            Assert.That(visual.IsVisible, Is.False, "The indicator starts dormant.");
-            Collider unitCollider = unit.GetComponent<Collider>();
             Assert.That(
-                visual.transform.position.y,
-                Is.EqualTo(unitCollider.bounds.min.y + 0.08f).Within(0.001f),
-                "The gauge stays just above the unit's floor contact rather than obscuring it."
-            );
-            Assert.That(
-                visual.GetComponentsInChildren<Renderer>(includeInactive: true).Length,
-                Is.EqualTo(2),
-                "A recovered-at outline and the ring growing to meet it make up the indicator."
-            );
-            Assert.That(
-                visual
-                    .GetComponentsInChildren<Renderer>(includeInactive: true)
-                    .Select(renderer => renderer.forceRenderingOff),
-                Is.All.True,
-                "A lazily-created indicator must inherit host fog suppression before activation."
-            );
-            Assert.That(
-                visual.GetComponentsInChildren<Collider>(includeInactive: true),
-                Is.Empty,
-                "The local presentation must never affect gameplay physics."
-            );
-            Assert.That(
-                visual.GetComponentsInChildren<Light>(includeInactive: true),
-                Is.Empty,
-                "The indicator must not add gameplay-scene lighting cost."
-            );
-            Assert.That(
-                visual
-                    .GetComponentsInChildren<Renderer>(includeInactive: true)
-                    .Select(renderer => renderer.sharedMaterial.shader.name),
-                Is.All.EqualTo("BattlePlan/GroundGlow")
+                UnitBasePlate.ClearanceAbovePlane(unit.transform, 0.08f),
+                Is.EqualTo(plateTop - boardPlane + 0.08f).Within(0.001f),
+                "Clearance is measured from the plate's top face, not the board plane."
             );
 
-            visual.SetForceRenderingOff(false);
-            visual.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
-            Assert.That(visual.IsVisible, Is.True, "A landed dodger shows its recovery.");
-            visual.SetRecovery(default);
-            Assert.That(visual.IsVisible, Is.False, "Standing back up clears the gauge.");
+            Transform visual = SpeedBoostIndicatorVisual.Create(unit.transform).transform;
+            Assert.That(
+                visual.position.y,
+                Is.EqualTo(plateTop + 0.08f).Within(0.001f),
+                "The ring must sit above the plate, not inside it where depth buries it."
+            );
+            Assert.That(
+                visual.position.y,
+                Is.GreaterThan(boardPlane + 0.08f),
+                "The ring must be lifted clear of the bare board plane."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    /// <summary>
+    /// The ability dial has to survive a shown range. Every unit's base plate tops out below the
+    /// range overlay, whose tile is opaque and writes depth, so a dial that only cleared its own
+    /// plate vanished outright the moment a player asked where a unit could go — the one moment
+    /// the cooldown is being read. Measured against the overlay prefab rather than a copied
+    /// number, so moving the tile fails here instead of in a match.
+    /// </summary>
+    [Test]
+    public void AbilityDial_ClearsTheRangeOverlayThatPavesTheCellUnderIt()
+    {
+        float overlayTop = RangeOverlayTop();
+
+        // The deepest plate any unit prefab carries, so the test binds the clearance to the worst
+        // real case rather than to a plate invented to pass it.
+        GameObject unit = BuildPlatedUnit("Ability dial clearance test unit", 0.125f);
+        float boardPlane = unit.GetComponent<Collider>().bounds.min.y;
+
+        try
+        {
+            AbilityStatusRing ring = AbilityStatusRing.Create(unit.transform);
+            Assert.That(ring, Is.Not.Null, "The dial's shader must be present in the project.");
+            Assert.That(
+                ring.transform.position.y,
+                Is.GreaterThan(boardPlane + overlayTop),
+                "A dial at or under the range overlay fails the depth test against its opaque "
+                    + "tile and is hidden completely, not merely dimmed."
+            );
+
+            Shader dial = Shader.Find(AbilityStatusRing.ShaderName);
+            Assert.That(dial, Is.Not.Null);
+            Assert.That(
+                dial.renderQueue,
+                Is.GreaterThan(3000),
+                "The overlay's highlight quad is a translucent full-cell wash at 3000. Drawn "
+                    + "after the dial it repaints the charge in its own colour."
+            );
+            Assert.That(
+                dial.renderQueue,
+                Is.LessThan(3030),
+                "Smoke, the vision cone and the explosion juice still have to cover a dial; the "
+                    + "readout wins against the floor, not against what legitimately hides a unit."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    /// <summary>
+    /// Top of the range overlay's stack in the prefab's own frame, plus the height GridSystem lays
+    /// it at: the tile plane and the highlight quad riding above it.
+    /// </summary>
+    private static float RangeOverlayTop()
+    {
+        const string overlayPath = "Assets/Prefabs/Visuals/MoveOverlayCell.prefab";
+        GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(overlayPath);
+        Assert.That(prefab, Is.Not.Null, $"Could not import {overlayPath}.");
+
+        // Instantiated and measured in world space rather than read off localPosition: the tile's
+        // parts are laid out in the root's own scaled frame, where the highlight's 0.1 is 0.027 of
+        // a world unit.
+        GameObject tile = Object.Instantiate(prefab);
+        try
+        {
+            tile.transform.position = new Vector3(0f, GridSystem.RangeOverlayHeight, 0f);
+            float top = GridSystem.RangeOverlayHeight;
+            foreach (Renderer part in tile.GetComponentsInChildren<Renderer>(true))
+                top = Mathf.Max(top, part.bounds.max.y);
+            return top;
+        }
+        finally
+        {
+            Object.DestroyImmediate(tile);
+        }
+    }
+
+    [Test]
+    public void GroundVisuals_FallBackToTheBoardPlaneWithoutABasePlate()
+    {
+        GameObject unit = new("Plateless clearance test unit");
+        unit.transform.position = Vector3.up;
+        unit.AddComponent<CapsuleCollider>();
+        try
+        {
+            Assert.That(
+                UnitBasePlate.ClearanceAbovePlane(unit.transform, 0.08f),
+                Is.EqualTo(0.08f).Within(0.001f)
+            );
+            Assert.That(
+                UnitBasePlate.ClearanceAbovePlane(null, 0.08f),
+                Is.EqualTo(0.08f).Within(0.001f),
+                "A missing unit must not throw on a purely presentational lookup."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    [Test]
+    public void DodgeRecoveryPulse_TintsTheCharacterAndRestoresItOnStandingUp()
+    {
+        GameObject unit = new("Dodge recovery pulse test unit");
+        GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        body.transform.SetParent(unit.transform, worldPositionStays: false);
+        Renderer bodyRenderer = body.GetComponent<Renderer>();
+        try
+        {
+            DiveRecoveryPulse pulse = DiveRecoveryPulse.Attach(unit);
+            Assert.That(pulse, Is.Not.Null);
+            Assert.That(pulse.IsPulsing, Is.False, "A unit on its feet is not pulsing.");
+            Assert.That(
+                DiveRecoveryPulse.Attach(unit),
+                Is.SameAs(pulse),
+                "Repeated state application must reuse the one driver on the unit."
+            );
+
+            pulse.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
+            Assert.That(pulse.IsPulsing, Is.True);
+            Assert.That(
+                bodyRenderer.HasPropertyBlock(),
+                Is.True,
+                "The pulse opens lit, on the frame the dodger hits the floor."
+            );
+
+            // Read per material slot, not per renderer: the body mesh carries several materials
+            // and each one is tinted from its own colour rather than the renderer's first.
+            MaterialPropertyBlock lit = new();
+            bodyRenderer.GetPropertyBlock(lit, 0);
+            Color tinted = lit.GetColor("_BaseColor");
+            Color untouched = bodyRenderer.sharedMaterial.GetColor("_BaseColor");
+            Assert.That(
+                tinted,
+                Is.Not.EqualTo(untouched),
+                "The body has to actually change colour for the pulse to read."
+            );
+            Assert.That(
+                tinted.r,
+                Is.GreaterThan(tinted.b),
+                "Recovery is amber, which must stay distinct from a white hit flash."
+            );
+
+            pulse.SetRecovery(default);
+            Assert.That(pulse.IsPulsing, Is.False);
+            Assert.That(
+                bodyRenderer.HasPropertyBlock(),
+                Is.False,
+                "Standing back up must hand the character's own materials back untouched."
+            );
+        }
+        finally
+        {
+            Object.DestroyImmediate(unit);
+        }
+    }
+
+    [Test]
+    public void DodgeRecoveryPulse_LeavesTheUnitsOwnEffectRenderersAlone()
+    {
+        GameObject unit = new("Dodge recovery pulse effect-exclusion test unit");
+        GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        body.transform.SetParent(unit.transform, worldPositionStays: false);
+
+        // Ground rings, the vision cone and the target laser drive their own property blocks on
+        // BattlePlan/* shaders; tinting them would recolour them and clearing would wipe them.
+        GameObject effect = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        effect.transform.SetParent(unit.transform, worldPositionStays: false);
+        Renderer effectRenderer = effect.GetComponent<Renderer>();
+        effectRenderer.sharedMaterial = new Material(Shader.Find("BattlePlan/GroundGlow"));
+        LineRenderer laser = unit.AddComponent<LineRenderer>();
+
+        try
+        {
+            Assert.That(
+                DiveRecoveryPulse.IsCharacterRenderer(body.GetComponent<Renderer>()),
+                Is.True
+            );
+            Assert.That(DiveRecoveryPulse.IsCharacterRenderer(effectRenderer), Is.False);
+            Assert.That(DiveRecoveryPulse.IsCharacterRenderer(laser), Is.False);
+
+            DiveRecoveryPulse pulse = DiveRecoveryPulse.Attach(unit);
+            pulse.SetRecovery(new DiveRecoveryState(0d, GameLoop.DodgeRecoverySeconds));
 
             Assert.That(
-                DiveRecoveryIndicatorVisual.Create(unit.transform),
-                Is.SameAs(visual),
-                "Repeated state application must reuse the runtime-local visual."
+                effectRenderer.HasPropertyBlock(),
+                Is.False,
+                "A body tint must not reach the effects parked on the unit."
             );
         }
         finally
@@ -2084,6 +2484,12 @@ public class GameplayNetworkEditModeTests
 
             card.SetPlanningState(true, true);
             VisualElement root = host.Q<VisualElement>("unit-card-0-root");
+            Assert.That(
+                root.ClassListContains("unit-card--friendly"),
+                Is.True,
+                "An ability card styles itself from its own modifier, not from lacking the enemy one."
+            );
+            Assert.That(root.ClassListContains("unit-card--enemy"), Is.False);
             Assert.That(root.ClassListContains("unit-card--ability"), Is.True);
             Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Smoke Screen"));
             Assert.That(

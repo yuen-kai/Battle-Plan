@@ -570,6 +570,8 @@ public class PlanMovement : MonoBehaviour
     /// clicks pick a target square inside the displayed range. Directional abilities use one of
     /// the eight adjacent cells as a direction anchor; self-targeted abilities need no square.
     /// The square is stored as the plan's second element: (true, [startCell, targetSquare]).
+    /// Clicks that land on one of your own units are read as picking that unit instead; the
+    /// square it stands on is still a square, and still aimable.
     /// </summary>
     void AbilitySelection()
     {
@@ -582,6 +584,35 @@ public class PlanMovement : MonoBehaviour
         if (selectedUnit == null || unitData == null)
         {
             ShowInvalidTargetFeedback(AbilityTargetValidationReason.AbilityUnavailable);
+            return;
+        }
+
+        // Pointing at a unit asks for that unit; pointing at the board names a square. What the
+        // pointer is actually over decides which, so a team-mate standing inside an ability's
+        // range can be given its orders without the click reading as an aim, while the ground it
+        // stands on stays aimable — smoke underfoot is one of the Commander's better plays.
+        //
+        // Picking a unit and drawing its route is one press in movement mode, and aiming is no
+        // reason for it to be two. The press on a team-mate goes straight to the route drag, which
+        // finds and takes the unit itself and leaves the gesture live, so the press that moves the
+        // selection off this unit is already laying the next one's route.
+        GameObject pointedUnit = Mouse.GetFriendlyUnitUnderMouse();
+        if (
+            pointedUnit != null
+            && pointedUnit != selectedUnit
+            && PathSelection.Instance?.TryStartPath() == true
+        )
+        {
+            return;
+        }
+
+        if (pointedUnit != null && TrySelectPlanningUnit(pointedUnit))
+        {
+            // The press landed on the unit that was aiming, which has just turned itself back to
+            // movement. It gets a drag too, so that press draws a route rather than only deciding
+            // what the next press will do.
+            if (plans.TryGetValue(selectedUnit, out (bool, List<Vector3>) picked) && !picked.Item1)
+                PathSelection.Instance?.BeginRouteDrag();
             return;
         }
 
@@ -1105,6 +1136,37 @@ public class PlanMovement : MonoBehaviour
         return TrySetSelectionMode(unit, true);
     }
 
+    /// <summary>
+    /// Resolves a click that landed on one of your own units rather than on the board. Pointing at
+    /// a unit asks for that unit: another unit takes over the selection, and the unit already
+    /// holding it turns over to its other order. The dock reaches the same two states from the
+    /// ability's side, so a player who never discovers this gesture is not locked out of anything.
+    /// Returns true when the click was spent on the selection and must not also be read as naming
+    /// a square.
+    /// </summary>
+    public bool TrySelectPlanningUnit(GameObject unit)
+    {
+        // teamCharacters is the set that may be given orders, which during a dodge window is only
+        // the alerted units — the rest of the team is on the board but is not taking any.
+        if (!CanEditPlan || unit == null || !teamCharacters.Contains(unit))
+            return false;
+        if (!IsPlanningUnitAvailable(unit))
+            return false;
+
+        if (unit != selectedUnit)
+        {
+            SwitchToUnit(unit);
+            return selectedUnit == unit;
+        }
+
+        bool abilityMode = plans.TryGetValue(unit, out (bool, List<Vector3>) plan) && plan.Item1;
+        return abilityMode
+            ? TrySetSelectionMode(unit, false)
+            // Turning the other way has rules of its own — no abilities in a dodge, and a drawn
+            // route is given up before it is replaced — and they are kept in one place.
+            : TrySwitchToAbilityPlan(unit);
+    }
+
     private static bool IsPlanningUnitAvailable(GameObject unit)
     {
         if (unit == null || !unit.activeInHierarchy)
@@ -1310,6 +1372,19 @@ public class PlanMovement : MonoBehaviour
         SelectUnit(unitIndex);
     }
 
+    /// <summary>
+    /// Presses a unit's ability card. The card is the ability, so one press orders it: the unit is
+    /// taken over if it was not the one being edited, and its round is spent on the ability instead
+    /// of on movement. Pressing the card of a unit already set to its ability puts that unit back
+    /// on movement.
+    /// </summary>
+    /// <remarks>
+    /// This used to take two presses, the first only selecting the unit, because the card was a
+    /// roster entry that happened to have an ability on its back. A player who wanted an ability
+    /// had to know the card turned over. Selecting a unit to move it is what the board is for —
+    /// <see cref="TrySelectPlanningUnit"/> handles the click that lands on one — so the dock is
+    /// free to be the abilities and nothing else.
+    /// </remarks>
     public bool TryActivateUnitCard(int unitIndex)
     {
         if (
@@ -1324,15 +1399,36 @@ public class PlanMovement : MonoBehaviour
         if (!IsPlanningUnitAvailable(unit))
             return false;
 
-        if (selectedUnit != unit)
-        {
-            SwitchToUnit(unit);
-            return selectedUnit == unit;
-        }
-
         bool abilityMode =
             plans.TryGetValue(unit, out (bool, List<Vector3>) plan) && plan.Item1;
-        return TrySetSelectionMode(unit, !abilityMode);
+        if (abilityMode)
+            return TrySetSelectionMode(unit, false);
+
+        bool hadRoute = (plan.Item2?.Count ?? 0) > 1;
+
+        // Picked up first, and deliberately before the attempt rather than after it. A press on a
+        // unit whose ability is still recharging is worth something even though it cannot order
+        // anything — that unit is now the one taking a route — and selecting afterwards would wipe
+        // the very message explaining why the ability did not fire.
+        if (selectedUnit != unit)
+            SwitchToUnit(unit);
+
+        if (!TrySetSelectionMode(unit, true))
+            return false;
+
+        // The two orders are exclusive, so arming the ability throws the route away. The press
+        // named which one the player wants, but a route that vanishes without a word reads as the
+        // card having eaten it, so the swap is said out loud.
+        if (hadRoute)
+        {
+            string abilityName =
+                unit.GetComponent<Movement>()?.unitData?.abilityName ?? "This ability";
+            GameHUDController.Instance?.SetTargetFeedback(
+                $"{abilityName} replaces this unit's route.",
+                false
+            );
+        }
+        return true;
     }
 
     public void SelectUnit(int unitIndex)

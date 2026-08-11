@@ -70,6 +70,7 @@ public class GameHUDController : MonoBehaviour
     private BattleReport activeReport;
     private int reportRoundIndex;
     private int reportLocalTeamIndex;
+    private Button exitMatchButton;
     private Button controlsButton;
     private VisualElement controlsOverlay;
     private VisualElement controlsPanel;
@@ -85,6 +86,7 @@ public class GameHUDController : MonoBehaviour
     private Label rejoinNoticeStatus;
     private Action playAgainAction;
     private Action mainMenuAction;
+    private Action exitMatchAction;
     private Coroutine flashCoroutine;
     private Coroutine rejoinNoticeCoroutine;
     private bool callbacksRegistered;
@@ -156,6 +158,7 @@ public class GameHUDController : MonoBehaviour
         Array.Clear(enemyCards, 0, enemyCards.Length);
         playAgainAction = null;
         mainMenuAction = null;
+        exitMatchAction = null;
         activeOverlay = null;
 
         if (Instance == this)
@@ -202,6 +205,7 @@ public class GameHUDController : MonoBehaviour
         planningCommit = root.Q<VisualElement>("planning-commit");
         planningCommitStatus = root.Q<Label>("planning-commit-status");
         lockInButton = root.Q<Button>("lock-in-button");
+        exitMatchButton = root.Q<Button>("exit-match-button");
         controlsButton = root.Q<Button>("controls-button");
         controlsOverlay = root.Q<VisualElement>("controls-overlay");
         controlsPanel = controlsOverlay?.Q<VisualElement>(className: "controls-panel");
@@ -239,6 +243,8 @@ public class GameHUDController : MonoBehaviour
         if (reportNextButton != null)
             reportNextButton.clicked += OnReportNextClicked;
         resultsPanel?.RegisterCallback<KeyDownEvent>(OnResultsKeyDown);
+        if (exitMatchButton != null)
+            exitMatchButton.clicked += OnExitMatchClicked;
         if (controlsButton != null)
             controlsButton.clicked += ShowControlsOverlay;
         if (controlsCloseButton != null)
@@ -279,6 +285,8 @@ public class GameHUDController : MonoBehaviour
         if (reportNextButton != null)
             reportNextButton.clicked -= OnReportNextClicked;
         resultsPanel?.UnregisterCallback<KeyDownEvent>(OnResultsKeyDown);
+        if (exitMatchButton != null)
+            exitMatchButton.clicked -= OnExitMatchClicked;
         if (controlsButton != null)
             controlsButton.clicked -= ShowControlsOverlay;
         if (controlsCloseButton != null)
@@ -772,15 +780,25 @@ public class GameHUDController : MonoBehaviour
     )
     {
         ShowResults(result.GetStatusForTeam(localTeamIndex), onPlayAgain, onMainMenu);
+        SetVerdictTone(result, localTeamIndex);
     }
 
     public void ShowResults(string status, Action onPlayAgain, Action onMainMenu)
     {
         if (resultsStatus != null)
             resultsStatus.text = status ?? "Match complete";
+        // Neutral until a typed result says otherwise. The string overload is the tutorial and the
+        // dev harness, neither of which won anything.
+        resultsStatus?.RemoveFromClassList("results-status--victory");
+        resultsStatus?.RemoveFromClassList("results-status--defeat");
 
         playAgainAction = onPlayAgain;
         mainMenuAction = onMainMenu;
+        // The round is over, so nothing may still be offering to commit orders for it. The planning
+        // cluster is normally retired when planning ends, but a match can also finish from a
+        // forfeit or a disconnect mid-phase, and a live "Lock in" behind a result reads as a HUD
+        // that has not noticed the game stopped.
+        HidePlanningCommit();
         SetResultButtonsEnabled(true, true);
         CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
@@ -788,6 +806,24 @@ public class GameHUDController : MonoBehaviour
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);
+    }
+
+    /// <summary>
+    /// Colours the verdict. A draw and the tutorial's own ending stay neutral for the same reason
+    /// the copy does: nobody won, and a gold headline over "Draw" would say otherwise.
+    /// </summary>
+    private void SetVerdictTone(MatchResult result, int localTeamIndex)
+    {
+        if (resultsStatus == null)
+            return;
+
+        bool decided =
+            result.IsValid
+            && result.HasWinner
+            && result.Reason != MatchResultReason.TutorialComplete;
+        bool won = decided && result.WinningTeamIndex == localTeamIndex;
+        resultsStatus.EnableInClassList("results-status--victory", won);
+        resultsStatus.EnableInClassList("results-status--defeat", decided && !won);
     }
 
     // === BATTLE REPORT REVEAL ===
@@ -1096,6 +1132,44 @@ public class GameHUDController : MonoBehaviour
     {
         Action action = mainMenuAction;
         SetResultButtonsEnabled(false, false);
+        action?.Invoke();
+    }
+
+    /// <summary>
+    /// Puts a way out in the dock's action row, for the modes that have no other one.
+    ///
+    /// <para>
+    /// An ordinary match is left from the results overlay, which only exists once somebody has
+    /// won. The tutorial has no opponent that can win and no clock — its planning window is ten
+    /// minutes and the HUD hides the countdown — so a player who wants to stop partway through has
+    /// nothing to press. This is that button, and it is asked for rather than always present so
+    /// the two modes that do have an ending are not given a second, quieter way to quit mid-round.
+    /// </para>
+    /// </summary>
+    public void ShowExitMatch(string label, Action onExit)
+    {
+        exitMatchAction = onExit;
+        if (exitMatchButton == null)
+            return;
+
+        if (!string.IsNullOrEmpty(label))
+            exitMatchButton.text = label;
+        exitMatchButton.SetEnabled(true);
+        exitMatchButton.RemoveFromClassList("hidden");
+    }
+
+    public void HideExitMatch()
+    {
+        exitMatchAction = null;
+        exitMatchButton?.AddToClassList("hidden");
+    }
+
+    private void OnExitMatchClicked()
+    {
+        Action action = exitMatchAction;
+        // The button is leaving with the scene either way; disabling it stops a second press
+        // landing during the shutdown the first one starts.
+        exitMatchButton?.SetEnabled(false);
         action?.Invoke();
     }
 

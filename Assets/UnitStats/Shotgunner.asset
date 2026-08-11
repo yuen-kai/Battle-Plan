@@ -29,8 +29,8 @@ MonoBehaviour:
   moveSpeed: 1
   diveSpeed: 4
   rotationSpeed: 360
-  blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
-  redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
+  blueBulletPrefab: {fileID: 3702423415996770277, guid: 3fffebdd015dd480b93a5e67f2e646b6, type: 3}
+  redBulletPrefab: {fileID: 5620557307623549959, guid: a51a57840134b4a64a3d9d519b3325f3, type: 3}
   timeBetweenShots: 0.01
   magazineSize: 10
   reloadTime: 2

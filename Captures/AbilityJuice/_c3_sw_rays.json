@@ -1,0 +1,280 @@
+[
+ {
+  "label": "r2 impact f17",
+  "frame": 17,
+  "origin": [
+   553.6,
+   498.9
+  ],
+  "rays": 360,
+  "rays_with_front": 360,
+  "vent_rays": 0,
+  "vent_pct": 0.0,
+  "mean_r": 277.3,
+  "std_r": 34.5,
+  "std_pct": 12.46,
+  "min_r": 163.0,
+  "max_r": 314.0,
+  "p10_r": 227.0,
+  "p90_r": 306.0,
+  "range_pct": 54.5,
+  "std_pct_with_vents": 12.5,
+  "floor_p95": 191.2,
+  "rim_cov_L200": 328,
+  "rim_cov_pct_L200": 91.1,
+  "rim_w_L200": [
+   23.2,
+   5.0,
+   39.0,
+   7.8
+  ],
+  "rim_cov_L210": 328,
+  "rim_cov_pct_L210": 91.1,
+  "rim_w_L210": [
+   18.9,
+   5.0,
+   25.0,
+   5.0
+  ],
+  "rim_cov_L220": 328,
+  "rim_cov_pct_L220": 91.1,
+  "rim_w_L220": [
+   17.5,
+   5.0,
+   21.0,
+   4.2
+  ],
+  "hot_arcs": 1,
+  "hot_arc_lengths": [
+   328
+  ],
+  "px_L200": 26264,
+  "sat_at_L200": {
+   "max": 0.286,
+   "p99": 0.255,
+   "p95": 0.236,
+   "mean": 0.062,
+   "n_over_045": 0,
+   "pct_over_045": 0.0
+  },
+  "sat_effect": {
+   "mean": 0.084,
+   "p95": 0.236,
+   "max": 0.662
+  },
+  "plate_sat_same_region": 0.107
+ },
+ {
+  "label": "r3 f15",
+  "frame": 15,
+  "origin": [
+   545.2,
+   430.1
+  ],
+  "rays": 360,
+  "rays_with_front": 360,
+  "vent_rays": 0,
+  "vent_pct": 0.0,
+  "mean_r": 248.6,
+  "std_r": 57.7,
+  "std_pct": 23.22,
+  "min_r": 88.0,
+  "max_r": 386.0,
+  "p10_r": 171.0,
+  "p90_r": 333.1,
+  "range_pct": 119.9,
+  "std_pct_with_vents": 23.2,
+  "floor_p95": 191.2,
+  "rim_cov_L200": 214,
+  "rim_cov_pct_L200": 59.4,
+  "rim_w_L200": [
+   10.0,
+   1.0,
+   35.0,
+   35.0
+  ],
+  "rim_cov_L210": 209,
+  "rim_cov_pct_L210": 58.1,
+  "rim_w_L210": [
+   6.9,
+   1.0,
+   25.0,
+   25.0
+  ],
+  "rim_cov_L220": 194,
+  "rim_cov_pct_L220": 53.9,
+  "rim_w_L220": [
+   4.5,
+   1.0,
+   18.0,
+   18.0
+  ],
+  "hot_arcs": 6,
+  "hot_arc_lengths": [
+   115,
+   38,
+   26,
+   18,
+   10,
+   2
+  ],
+  "px_L200": 9628,
+  "sat_at_L200": {
+   "max": 0.869,
+   "p99": 0.842,
+   "p95": 0.794,
+   "mean": 0.24,
+   "n_over_045": 1579,
+   "pct_over_045": 16.4
+  },
+  "sat_effect": {
+   "mean": 0.183,
+   "p95": 0.651,
+   "max": 0.869
+  },
+  "plate_sat_same_region": 0.104
+ },
+ {
+  "label": "r3 f17",
+  "frame": 17,
+  "origin": [
+   543.8,
+   435.9
+  ],
+  "rays": 360,
+  "rays_with_front": 360,
+  "vent_rays": 0,
+  "vent_pct": 0.0,
+  "mean_r": 252.4,
+  "std_r": 56.0,
+  "std_pct": 22.18,
+  "min_r": 108.0,
+  "max_r": 383.0,
+  "p10_r": 176.9,
+  "p90_r": 331.1,
+  "range_pct": 108.9,
+  "std_pct_with_vents": 22.2,
+  "floor_p95": 191.2,
+  "rim_cov_L200": 211,
+  "rim_cov_pct_L200": 58.6,
+  "rim_w_L200": [
+   9.9,
+   1.0,
+   33.0,
+   33.0
+  ],
+  "rim_cov_L210": 204,
+  "rim_cov_pct_L210": 56.7,
+  "rim_w_L210": [
+   6.9,
+   1.0,
+   26.0,
+   26.0
+  ],
+  "rim_cov_L220": 191,
+  "rim_cov_pct_L220": 53.1,
+  "rim_w_L220": [
+   4.5,
+   1.0,
+   13.0,
+   13.0
+  ],
+  "hot_arcs": 5,
+  "hot_arc_lengths": [
+   113,
+   38,
+   27,
+   16,
+   10
+  ],
+  "px_L200": 9607,
+  "sat_at_L200": {
+   "max": 0.903,
+   "p99": 0.838,
+   "p95": 0.798,
+   "mean": 0.239,
+   "n_over_045": 1574,
+   "pct_over_045": 16.38
+  },
+  "sat_effect": {
+   "mean": 0.175,
+   "p95": 0.642,
+   "max": 0.903
+  },
+  "plate_sat_same_region": 0.103
+ },
+ {
+  "label": "r3 f19",
+  "frame": 19,
+  "origin": [
+   545.2,
+   445.3
+  ],
+  "rays": 360,
+  "rays_with_front": 360,
+  "vent_rays": 0,
+  "vent_pct": 0.0,
+  "mean_r": 264.4,
+  "std_r": 45.5,
+  "std_pct": 17.22,
+  "min_r": 185.0,
+  "max_r": 378.0,
+  "p10_r": 205.0,
+  "p90_r": 329.0,
+  "range_pct": 73.0,
+  "std_pct_with_vents": 17.2,
+  "floor_p95": 191.2,
+  "rim_cov_L200": 183,
+  "rim_cov_pct_L200": 50.8,
+  "rim_w_L200": [
+   5.2,
+   1.0,
+   17.0,
+   17.0
+  ],
+  "rim_cov_L210": 149,
+  "rim_cov_pct_L210": 41.4,
+  "rim_w_L210": [
+   3.2,
+   1.0,
+   13.0,
+   13.0
+  ],
+  "rim_cov_L220": 115,
+  "rim_cov_pct_L220": 31.9,
+  "rim_w_L220": [
+   2.3,
+   1.0,
+   6.0,
+   6.0
+  ],
+  "hot_arcs": 12,
+  "hot_arc_lengths": [
+   49,
+   43,
+   17,
+   17,
+   6,
+   6,
+   4,
+   3,
+   1,
+   1
+  ],
+  "px_L200": 4661,
+  "sat_at_L200": {
+   "max": 0.585,
+   "p99": 0.425,
+   "p95": 0.281,
+   "mean": 0.119,
+   "n_over_045": 32,
+   "pct_over_045": 0.69
+  },
+  "sat_effect": {
+   "mean": 0.151,
+   "p95": 0.552,
+   "max": 0.821
+  },
+  "plate_sat_same_region": 0.103
+ }
+]

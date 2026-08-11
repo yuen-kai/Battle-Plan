@@ -104,6 +104,9 @@ order and cancels that unit’s own planned ability.
 - A dodger pays a **two-second recovery** where it lands before it can shoot, and stops counting as
 moving first, so the recovery does not extend the round’s shared weapons-free window. This is the
 dodge’s standing cost: the dive itself is short enough that answering an ability used to be free.
+- If the round stops authorising new shooting cycles while the dodger is still down, it **stands
+down for the round instead of shooting late**. A dodge therefore risks the unit's whole shooting
+turn, not just a delay, and can never fire into a field that has already ceased fire.
 - Pogo, Shield Rush, and Smoke have **no dodge response range, by design**. A dodge answers an
 ability that strikes a cell; these three reposition or deny rather than strike. **Pogo is a
 standing ruling, not an open question:** the jump is a plan-time commitment that is self-balancing

@@ -1,3 +1,8 @@
+/* Match setup, laid out as a play panel: one translucent slab carrying the whole
+   decision on the left, one big picture on the right, and the action that leaves
+   this screen sitting at the foot of the slab where it lands in the same place on
+   both tabs. */
+
 .join-screen {
     background-color: var(--toy-ground);
 }
@@ -8,73 +13,187 @@
     padding: 34px 42px;
 }
 
+/* Deliberately under half the width. The picture is the other half of the
+   composition rather than a thumbnail beside a form, and a workbench wide enough
+   to hold two mode tiles is already wide enough to hold everything else. */
 .join-workbench {
-    width: 64%;
-    max-width: 980px;
-    min-width: 660px;
+    width: 52%;
+    max-width: 760px;
+    min-width: 560px;
 }
+
+/* ------------------------------------------------------------------ header */
 
 .join-header {
     min-height: 70px;
     flex-direction: row;
     align-items: center;
-    margin-bottom: 14px;
+    margin-bottom: var(--toy-space-md);
 }
 
 .join-back-button {
-    width: 112px;
-    min-width: 112px;
-    margin-right: var(--toy-space-panel-compact);
+    width: 108px;
+    min-width: 108px;
+    margin-right: var(--toy-space-lg);
 }
 
-.join-back-label,
-.join-tab__label {
-    -unity-font-style: bold;
-    color: var(--toy-text);
-}
-
-.button--selected .join-tab__label {
-    color: var(--toy-text-on-deep);
+.join-back-label {
+    font-size: var(--toy-type-label);
+    color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-label);
 }
 
 .join-heading {
     flex-grow: 1;
+    min-width: 0;
+}
+
+/* The eyebrow borrows the section tick rather than inventing a breadcrumb: this
+   screen is one step of a flow, and the tick is the mark that says so everywhere
+   else in the interface. */
+.toybox-ui.join-screen .join-eyebrow {
+    margin-bottom: var(--toy-space-xs);
+}
+
+/* The only full-bleed line on the screen. Without it the title floats above the
+   slab with nothing tying the two together. */
+.join-rule {
+    height: var(--toy-stroke-thin);
+    margin-bottom: var(--toy-space-lg);
+    background-color: var(--toy-edge);
+}
+
+/* ----------------------------------------------------------------- console */
+
+/* One slab, not a stack of cards. The tab strip and the options share a single
+   plate; a bordered panel nested inside a bordered workbench read as a box
+   inside a box, and doubled every hairline down the middle of the screen. */
+.join-console {
+    flex-grow: 1;
+    min-height: 0;
+    background-color: var(--toy-panel);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
 }
 
 .join-tabs {
-    width: 100%;
-    max-width: 520px;
     flex-direction: row;
-    margin-bottom: 14px;
 }
 
-/* Same split as the title screen's action row: two 50% tabs plus the gap and
-   Unity's built-in Button side margin overflow the tab strip. */
-.join-tab {
+/* Tabs rather than two buttons: nothing at rest but a rail across the bottom of
+   the strip, which the chosen tab lights orange.
+
+   Stating a rest background here costs this file every other state. The rule
+   ties .button:hover on specificity and this sheet loads last, so hover, press,
+   focus and disabled all have to be written out again below — drop any one of
+   them and the tab silently loses that state. The rail is three pixels at rest
+   as well as selected so lighting it does not move the label. */
+.toybox-ui.join-screen .join-tab {
     width: 0;
     min-width: 0;
     flex-grow: 1;
     flex-basis: 0;
-    margin-left: 0;
-    margin-right: 6px;
+    min-height: 58px;
+    margin: 0;
+    justify-content: center;
+    background-color: var(--toy-transparent);
+    border-color: var(--toy-transparent);
+    border-bottom-width: var(--toy-accent-rule);
+    border-bottom-color: var(--toy-edge);
 }
 
-.join-tab--last {
-    margin-right: 0;
-    margin-left: 6px;
+.toybox-ui.join-screen .join-tab--last {
+    border-left-color: var(--toy-divider);
 }
+
+.toybox-ui.join-screen .join-tab:hover {
+    background-color: var(--toy-select);
+    border-color: var(--toy-select);
+}
+
+.toybox-ui.join-screen .join-tab:active {
+    background-color: var(--toy-select-pressed);
+    border-color: var(--toy-select-pressed);
+}
+
+.toybox-ui.join-screen .join-tab:focus {
+    border-color: var(--toy-focus);
+}
+
+/* A white ring on the white plate is not a ring. */
+.toybox-ui.join-screen .join-tab:hover:focus {
+    border-color: var(--toy-text-on-deep);
+}
+
+/* The chosen tab is the shared invert with its accent moved to the bottom edge,
+   which is what makes a strip read as tabs. The library's leading rule is pushed
+   back to a hairline so the plate does not wear two accents at once. */
+.toybox-ui.join-screen .join-tab.button--selected,
+.toybox-ui.join-screen .join-tab.button--selected:hover {
+    background-color: var(--toy-select);
+    border-color: var(--toy-select);
+    border-left-width: var(--toy-stroke-thin);
+    border-bottom-width: var(--toy-accent-rule);
+    border-bottom-color: var(--toy-primary);
+}
+
+.toybox-ui.join-screen .join-tab.button--selected:focus {
+    background-color: var(--toy-select-pressed);
+    border-color: var(--toy-text-on-deep);
+    border-left-width: var(--toy-focus-emphasis);
+    border-bottom-width: var(--toy-accent-rule);
+    border-bottom-color: var(--toy-primary);
+}
+
+/* Hosting disables the strip. An unchosen tab stays transparent rather than
+   taking the library's grey plate, which beside a white one would read as a
+   third state instead of an unavailable one. */
+.toybox-ui.join-screen .join-tab:disabled,
+.toybox-ui.join-screen .join-tab:disabled:hover {
+    background-color: var(--toy-transparent);
+    border-color: var(--toy-transparent);
+    border-bottom-width: var(--toy-accent-rule);
+    border-bottom-color: var(--toy-disabled-border);
+}
+
+/* The chosen tab gives up its plate while disabled: the muted label the library
+   hands every disabled control only clears AA on a dark fill. */
+.toybox-ui.join-screen .join-tab.button--selected:disabled,
+.toybox-ui.join-screen .join-tab.button--selected:disabled:hover {
+    background-color: var(--toy-disabled-surface);
+    border-color: var(--toy-disabled-border);
+    border-bottom-width: var(--toy-accent-rule);
+    border-bottom-color: var(--toy-primary);
+}
+
+.join-tab__label {
+    font-size: var(--toy-type-body-lg);
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-label);
+}
+
+/* ----------------------------------------------------------------- content */
 
 .join-content {
     flex-grow: 1;
     min-height: 0;
 }
 
+/* The plate has no padding of its own so the tab strip can run edge to edge;
+   the inset the options need lives on the scrolling content instead. */
 .join-content .unity-scroll-view__content-container {
     width: 100%;
     flex-grow: 1;
+    padding: var(--toy-space-panel);
 }
 
-.join-content .unity-scroller--horizontal {
+/* Both the scroller and the container it sits in, matched as descendants rather
+   than direct children — the ScrollView nests them, so a child combinator misses
+   and leaves an unskinned strip along the foot of the plate that reads as a
+   rendering bug. */
+.join-content .unity-scroller--horizontal,
+.join-content .unity-scroll-view__horizontal-scroller {
     display: none;
 }
 
@@ -83,8 +202,19 @@
     background-color: var(--toy-inset);
 }
 
+/* Grows so the action at the foot of the panel has free space to be pushed
+   into. When the options outgrow the viewport there is none, the auto margin
+   collapses, and the button flows with everything else.
+
+   It must not shrink, though. A scroll view sizes its content container to the
+   viewport, and a shrinkable panel inside one absorbs the overflow by squeezing
+   its own rows instead of letting the view scroll: the tiles keep their
+   min-height, overflow the row that no longer fits them, and the next section
+   heading lands on top of a tile's description. Refusing to shrink is what
+   turns that into a scrollbar. */
 .join-panel {
-    width: 100%;
+    flex-grow: 1;
+    flex-shrink: 0;
     justify-content: flex-start;
 }
 
@@ -92,37 +222,78 @@
     margin-top: var(--toy-space-lg);
 }
 
-.mode-row {
-    flex-direction: row;
-    margin-bottom: 2px;
+.join-section-label--first {
+    margin-top: 0;
 }
 
-.toybox-ui.join-screen .mode-option {
+/* ------------------------------------------------------------------- tiles */
+
+.mode-row,
+.opponent-row {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-bottom: var(--toy-space-xs);
+}
+
+/* Mode tiles: icon top left, name in the caps face, one line of copy under it.
+   Colour is left entirely to the shared library so hover, selection, focus and
+   disabled keep working — this rule ties .button--selected on specificity and
+   would beat it.
+
+   The leading edge is already three pixels wide at rest, which is the width the
+   library's selected rule wants; otherwise choosing a tile widens its border and
+   nudges everything inside it two pixels sideways. */
+.toybox-ui.join-screen .mode-option,
+.toybox-ui.join-screen .opponent-option {
     width: 0;
     min-width: 0;
     flex-grow: 1;
     flex-basis: 0;
-    min-height: 92px;
     margin-top: 0;
     margin-right: var(--toy-space-sm);
     margin-bottom: 0;
     margin-left: 0;
-    align-items: center;
-    padding: var(--toy-space-md);
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 16px;
+    border-left-width: var(--toy-accent-rule);
     white-space: normal;
 }
 
-.toybox-ui.join-screen .mode-option--last {
+/* Sized past the content rather than to it. A tile whose min-height is the exact
+   sum of its parts spills the description a pixel below the plate, where on a
+   selected tile it is dark ink on dark chrome and simply vanishes; overflow is
+   clipped for the same reason, so a longer board name can never paint outside
+   the plate it belongs to. */
+.toybox-ui.join-screen .mode-option {
+    min-height: 152px;
+    overflow: hidden;
+}
+
+.toybox-ui.join-screen .opponent-option {
+    min-height: 136px;
+    overflow: hidden;
+}
+
+.toybox-ui.join-screen .mode-option--last,
+.toybox-ui.join-screen .opponent-option--last {
     margin-right: 0;
 }
 
-.mode-option__icon {
+/* Twice the library's icon, because the library sizes icons to sit beside a
+   label in a row and these sit above two lines of it. */
+.toybox-ui.join-screen .mode-option__icon,
+.toybox-ui.join-screen .opponent-option__icon {
     width: 30px;
     min-width: 30px;
     height: 30px;
+    margin-right: 0;
+    margin-bottom: var(--toy-space-md);
 }
 
 .option-copy {
+    width: 100%;
     flex-grow: 1;
     min-width: 0;
 }
@@ -132,230 +303,314 @@
     -unity-text-align: middle-left;
 }
 
+/* No bold: OswaldCaps ships one weight, and asking for a second synthesises it
+   by thickening strokes that are already condensed into a grey block. */
 .mode-option__name,
 .opponent-option__name {
-    font-size: var(--toy-type-body);
-    -unity-font-style: bold;
+    font-size: var(--toy-type-title);
     color: var(--toy-text);
+    letter-spacing: var(--toy-track-title);
     white-space: normal;
 }
 
+/* The description is a sentence, so it leaves the caps face. */
 .mode-option__detail,
 .opponent-option__detail {
-    margin-top: 3px;
+    margin-top: 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/Jost/Jost-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
     color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-body);
     white-space: normal;
 }
 
-.button--selected .mode-option__detail,
-.button--selected .opponent-option__detail {
+/* Both light fills take the quiet ink rather than the full dark one. The library
+   flips every label to --toy-text-on-deep on an inverted plate, which lands the
+   name and its description on the same value and flattens the tile. */
+.toybox-ui.join-screen .mode-option:hover .mode-option__detail,
+.toybox-ui.join-screen .mode-option.button--selected .mode-option__detail,
+.toybox-ui.join-screen .opponent-option:hover .opponent-option__detail,
+.toybox-ui.join-screen .opponent-option.button--selected .opponent-option__detail {
     color: var(--toy-text-on-accent-quiet);
 }
 
-.button--selected .mode-option__name,
-.button--selected .opponent-option__name {
-    color: var(--toy-text-on-deep);
-}
+/* ------------------------------------------------------------------- chips */
 
-.mode-option:disabled .mode-option__name {
-    color: var(--toy-text-muted);
-}
-
-.mode-option:disabled .toy-icon {
-    opacity: 0.48;
-}
-
-/* Boards are chips rather than the two-up mode cards: the catalog grows, and a name plus one
-   shared caption line stays readable where five description cards would not. */
+/* Boards are chips rather than the two-up mode tiles: the catalog grows, and a
+   name plus one shared caption line stays readable where five description cards
+   would not. */
 .map-row {
     flex-direction: row;
     flex-wrap: wrap;
-    margin-bottom: 2px;
+    margin-bottom: var(--toy-space-xs);
 }
 
+/* Same permanent leading edge as the tiles, and here it also keeps the wrap row
+   from reflowing every time a different board is chosen. */
 .toybox-ui.join-screen .map-option {
     width: auto;
     min-width: 0;
-    min-height: 0;
+    min-height: 34px;
     margin-top: 0;
     margin-right: var(--toy-space-sm);
     margin-bottom: var(--toy-space-sm);
     margin-left: 0;
-    padding-top: 6px;
-    padding-right: var(--toy-space-md);
-    padding-bottom: 6px;
-    padding-left: var(--toy-space-md);
-    font-size: var(--toy-type-caption);
+    padding: 6px 14px;
+    align-items: center;
+    justify-content: center;
+    border-left-width: var(--toy-accent-rule);
+    font-size: var(--toy-type-label);
+    letter-spacing: var(--toy-track-label);
     white-space: nowrap;
 }
 
-.map-caption-line {
+/* Carries .label as well, which sets a body size at two classes, so the caption
+   has to be asked for at three or it comes out the same size as the chips. */
+.toybox-ui.join-screen .map-caption-line {
     margin-top: 0;
     margin-bottom: var(--toy-space-sm);
     font-size: var(--toy-type-caption);
 }
 
-.opponent-row {
-    flex-direction: row;
-    margin-bottom: 2px;
-}
+/* ------------------------------------------------------------------ strips */
 
-.toybox-ui.join-screen .opponent-option {
-    width: 210px;
-    min-height: 72px;
-    margin-right: var(--toy-space-control-top);
-    align-items: center;
-    padding-left: 14px;
-}
-
-.local-multiplayer-row {
+/* Fog and the dev endpoint are settings, not choices, so they get a hairlined
+   strip instead of a tile — same brighter top edge as the slab, so they read as
+   lit from the same direction. */
+.option-strip {
     margin-top: var(--toy-space-md);
-    margin-bottom: var(--toy-space-sm);
-    padding: var(--toy-space-md) 14px;
-    background-color: var(--toy-surface-quiet);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-primary);
-    border-radius: var(--toy-radius-md);
-}
-
-.join-screen .toggle {
-    min-height: var(--toy-target-compact);
-}
-
-.local-multiplayer-toggle {
-    margin-bottom: 2px;
-}
-
-.local-multiplayer-detail {
-    padding-left: 35px;
-    font-size: var(--toy-type-caption);
-    white-space: normal;
-}
-
-.fog-row {
-    margin-top: 14px;
-    margin-bottom: var(--toy-space-xs);
     padding: var(--toy-space-md) 14px;
     flex-direction: row;
     align-items: center;
     background-color: var(--toy-surface-quiet);
     border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-divider);
-    border-radius: var(--toy-radius-md);
+    border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
 }
 
-.fog-icon {
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
+/* The dev row wears the accent on one edge rather than an outline all the way
+   round: a box drawn in orange reads as an error, and orange is spoken for. */
+.local-multiplayer-row {
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
+}
+
+.toybox-ui.join-screen .option-strip__icon {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
     margin-right: var(--toy-space-md);
 }
 
-.fog-copy {
+.option-strip__copy {
     flex-grow: 1;
+    min-width: 0;
 }
 
-.fog-toggle {
-    margin-bottom: 0;
+.option-strip .toggle {
+    min-height: 32px;
 }
 
-.fog-detail {
+/* Indented past the checkmark and the gap after it (22 plus 12) so the explainer
+   starts under the toggle's own label rather than under its box. */
+.toybox-ui.join-screen .option-strip__detail {
+    padding-left: 34px;
     font-size: var(--toy-type-caption);
     white-space: normal;
 }
 
-.create-action {
-    width: 280px;
-    margin-top: 6px;
-    justify-content: center;
+/* ------------------------------------------------------------------ action */
+
+/* Pushed to the foot of the slab, so it is in the same place on both tabs and
+   the plate does not end in an expanse of empty translucency. The cancel that
+   replaces it has to be pinned the same way or the control jumps to the top of
+   the panel the moment a connection starts. */
+.toybox-ui.join-screen .create-action,
+.toybox-ui.join-screen .join-cancel {
+    margin-top: auto;
 }
 
+.toybox-ui.join-screen .create-action {
+    min-height: 58px;
+    margin-bottom: 0;
+    justify-content: center;
+    font-size: var(--toy-type-title);
+    letter-spacing: var(--toy-track-title);
+    -unity-text-align: middle-center;
+}
+
+.toybox-ui.join-screen .relay-cancel,
+.toybox-ui.join-screen .join-cancel {
+    justify-content: center;
+    -unity-text-align: middle-center;
+}
+
+.toybox-ui.join-screen .relay-cancel {
+    margin-top: var(--toy-space-sm);
+    margin-bottom: 0;
+}
+
+/* --------------------------------------------------------------- relay code */
+
 .relay-code-panel {
-    margin-top: var(--toy-space-panel-compact);
+    margin-top: var(--toy-space-md);
     padding: var(--toy-space-md) 14px;
     background-color: var(--toy-surface-quiet);
     border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-divider);
-    border-radius: var(--toy-radius-md);
+    border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
 }
 
-/* Trailing letter-spacing pads the right edge, so the box is cut narrower there. */
+/* This gets read out over voice, so it is set like a callsign: caps face, wide
+   tracking, white, in a dark well with the accent on its leading edge. The well
+   keeps its height while the allocation is still in flight, otherwise the panel
+   jumps the moment the string arrives. Local hosting puts an address in here
+   instead, which is why it stretches rather than hugging six characters. */
 .relay-code {
-    align-self: flex-start;
-    margin-top: var(--toy-space-xs);
+    min-height: 74px;
+    margin-top: var(--toy-space-sm);
     margin-bottom: var(--toy-space-md);
-    padding: 6px 10px 6px 15px;
+    padding: 8px 16px 8px 18px;
     background-color: var(--toy-inset);
     border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-select-pressed);
-    border-radius: 9px;
-    -unity-font-definition: url("project://database/Assets/Fonts/CascadiaCode-VariableFont_wght UI SDF.asset");
-    font-size: 34px;
-    -unity-font-style: bold;
+    border-color: var(--toy-edge);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 44px;
     color: var(--toy-text);
-    letter-spacing: 5px;
+    letter-spacing: 6px;
+    -unity-text-align: middle-left;
 }
 
 .relay-status {
     min-height: 20px;
-    margin-bottom: 6px;
+    margin-bottom: var(--toy-space-sm);
     white-space: normal;
 }
 
-.relay-cancel,
-.join-cancel {
-    width: 280px;
-    margin-top: var(--toy-space-sm);
+/* ---------------------------------------------------------------- join code */
+
+.toybox-ui.join-screen .join-code-hint {
+    margin-bottom: var(--toy-space-sm);
+    font-size: var(--toy-type-caption);
+    white-space: normal;
 }
 
-.join-code-input {
-    max-width: 430px;
+/* The field is the far end of the same datum as the host's well, so it is set
+   the same way: one player reads the code out, the other types it in. Nothing
+   here may touch --unity-cursor-color — the controller blinks the caret by
+   toggling text-field--caret-hidden, which sets it at this same specificity. */
+.toybox-ui.join-screen .join-code-input > .unity-base-text-field__input {
+    min-height: 74px;
+    padding: 8px 16px;
+    font-size: 34px;
+    letter-spacing: 6px;
 }
+
+/* ------------------------------------------------------------------- stage */
 
 .join-stage {
     flex-grow: 1;
-    min-width: 300px;
+    min-width: 320px;
     justify-content: center;
-    margin-left: 32px;
+    margin-left: var(--toy-space-xl);
 }
 
+/* A hairline and then the cinematic edges, rather than a frame. The 4px/9px
+   bevel this replaces made the art a photograph on a mantelpiece; nothing else
+   on the screen is edged like that.
+
+   Fitted, not cropped, on a dark plate. The column this sits in swings between
+   portrait and letterbox as the window moves, and the art is composed edge to
+   edge — both figures touch the frame — so cropping to fill takes a head off at
+   the ends of that range. What is left over reads as plate rather than as bars,
+   because the wash and the vignette darken the art into the same value. */
 .join-stage__picture {
     width: 100%;
-    max-width: 620px;
-    height: 420px;
+    height: 520px;
+    max-height: 100%;
+    background-color: var(--toy-inset);
     background-image: url("project://database/Assets/Images/JoinToyboxStage.png");
-    -unity-background-scale-mode: scale-and-crop;
-    border-width: 4px;
-    border-bottom-width: 9px;
+    -unity-background-scale-mode: scale-to-fit;
+    border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
-    border-radius: 16px;
+    border-top-color: var(--toy-edge-strong);
 }
 
+/* Nearly gone, and it has to be.
+ 
+   This was a heavy cool tint because the art's warm pink backdrop was the
+   brightest thing on a near-black screen and fought the hairlines for
+   attention. On paper the opposite is true: the page is already a warm
+   off-white, the art agrees with it, and the same veil at the old strength —
+   now a white one — simply bleached the picture. What is left is a whisper that
+   keeps the plate and the art in the same family. */
+.join-stage__wash {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: var(--toy-panel);
+    opacity: 0.08;
+}
+
+/* The shared scrim is a bottom-anchored strip with no height of its own; it is
+   sized wherever it is used. */
+.join-stage__scrim {
+    height: 42%;
+    opacity: 0.7;
+}
+
+/* The shared vignette is tuned to darken a stage into near-black chrome. Over a
+   picture on paper it only has to seat the art in the page, so it runs at
+   roughly half strength — at full it reads as fog on the glass. */
+.toybox-ui.join-screen .join-stage__picture .toy-vignette {
+    opacity: 0.55;
+}
+
+/* ------------------------------------------------------------- breakpoints */
+
 .compact .join-layout {
-    padding: 26px;
+    padding: 26px 30px;
 }
 
 .compact .join-workbench {
-    width: 68%;
-    min-width: 600px;
+    width: 56%;
+    min-width: 520px;
+}
+
+/* Restated rather than inherited from the reset: the Toybox .title-xl outranks
+   the reset's .compact .title-xl, so shrinking the display size has to happen in
+   a sheet that loads after both. */
+.compact .join-title {
+    font-size: var(--toy-type-title-lg);
 }
 
 .compact .join-stage {
-    min-width: 240px;
-    margin-left: 22px;
+    min-width: 260px;
+    margin-left: var(--toy-space-lg);
 }
 
 .compact .join-stage__picture {
-    height: 340px;
+    height: 400px;
+}
+
+/* Every breakpoint override of a tile or the action keeps the same three-class
+   weight as the rule it replaces, so which one applies is decided by the order
+   they appear in here and not by how many classes each happens to name. */
+.compact .join-screen .mode-option {
+    min-height: 138px;
 }
 
 .narrow .join-layout {
-    padding: 24px;
+    padding: 22px 24px;
 }
 
 .narrow .join-workbench {
     width: 100%;
+    max-width: none;
     min-width: 0;
 }
 
@@ -368,12 +623,14 @@
 }
 
 .phone .join-header {
-    align-items: flex-start;
+    min-height: 0;
+    margin-bottom: var(--toy-space-sm);
 }
 
 .phone .join-screen .join-back-button {
-    width: 54px;
-    min-width: 54px;
+    width: 52px;
+    min-width: 52px;
+    margin-right: var(--toy-space-md);
     padding-left: 11px;
     padding-right: var(--toy-space-sm);
 }
@@ -382,8 +639,12 @@
     display: none;
 }
 
-.phone .join-tabs {
-    max-width: none;
+.phone .join-title {
+    font-size: var(--toy-type-title-lg);
+}
+
+.phone .join-content .unity-scroll-view__content-container {
+    padding: var(--toy-space-panel-compact);
 }
 
 .phone .mode-row,
@@ -395,49 +656,86 @@
 .phone .join-screen .opponent-option {
     width: 100%;
     min-width: 0;
+    min-height: 122px;
     flex-grow: 0;
     flex-basis: auto;
-    min-height: 68px;
     margin-right: 0;
     margin-bottom: var(--toy-space-sm);
 }
 
-.phone .create-action,
-.phone .relay-cancel,
-.phone .join-cancel {
-    width: 100%;
+.phone .join-screen .map-option {
+    min-height: var(--toy-target-compact);
+}
+
+.phone .option-strip .toggle {
+    min-height: var(--toy-target-compact);
+}
+
+.phone .relay-code {
+    min-height: 62px;
+    font-size: 32px;
+    letter-spacing: 4px;
+}
+
+.phone .join-screen .join-code-input > .unity-base-text-field__input {
+    min-height: 62px;
+    font-size: 26px;
+    letter-spacing: 4px;
 }
 
 .short .join-layout {
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding-top: 14px;
+    padding-bottom: 14px;
 }
 
 .short .join-header {
-    min-height: 54px;
-    margin-bottom: 6px;
-}
-
-.short .join-tabs {
+    min-height: 56px;
     margin-bottom: var(--toy-space-sm);
 }
 
+.short .join-title {
+    font-size: var(--toy-type-title-lg);
+}
+
+.short .join-rule {
+    margin-bottom: var(--toy-space-md);
+}
+
 .short .join-section-label {
-    margin-top: var(--toy-space-control-top);
+    margin-top: var(--toy-space-md);
 }
 
 .short .join-screen .mode-option {
-    min-height: 68px;
+    min-height: 96px;
 }
 
+.short .join-screen .opponent-option {
+    min-height: 88px;
+}
+
+/* The descriptions are the first thing to go: every one of them repeats
+   something the name already says, and the controls have to stay reachable. */
 .short .mode-option__detail,
 .short .opponent-option__detail,
-.short .fog-detail {
+.short .option-strip__detail {
     display: none;
 }
 
-.short .fog-row {
+.short .option-strip {
     margin-top: var(--toy-space-sm);
     padding-top: 6px;
     padding-bottom: 6px;
+}
+
+.short .relay-code {
+    min-height: 60px;
+    font-size: 34px;
+}
+
+.short .join-screen .create-action {
+    min-height: var(--toy-target);
+}
+
+.short .join-stage__picture {
+    height: 360px;
 }

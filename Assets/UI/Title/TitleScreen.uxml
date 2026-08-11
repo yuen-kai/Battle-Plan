@@ -4,45 +4,45 @@
     <ui:Style src="../Shared/Settings.uss" />
     <ui:Style src="TitleScreen.uss" />
     <ui:VisualElement name="screen" class="screen toybox-screen toybox-ui title-screen">
-        <ui:VisualElement class="screen-frame title-layout">
-            <ui:VisualElement class="title-board toy-panel">
-                <ui:Label name="game-logo" text="Battle Plan" class="title-wordmark" picking-mode="Ignore" />
-                <ui:VisualElement class="plan-path title-plan-path" picking-mode="Ignore">
-                    <ui:VisualElement class="plan-path__start" />
-                    <ui:VisualElement class="plan-path__line" />
-                    <ui:VisualElement class="plan-path__stop" />
+        <ui:VisualElement class="toy-vignette" picking-mode="Ignore" />
+        <ui:VisualElement class="toy-scrim-left title-scrim" picking-mode="Ignore" />
+        <ui:VisualElement class="title-layout">
+            <ui:VisualElement class="title-rail">
+                <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+                <ui:VisualElement class="title-masthead" picking-mode="Ignore">
+                    <ui:Label text="Simultaneous-turn tactics" class="section-label title-eyebrow" picking-mode="Ignore" />
+                    <ui:Label name="game-logo" text="Battle Plan" class="title-wordmark" picking-mode="Ignore" />
+                    <ui:VisualElement class="plan-path title-plan-path" picking-mode="Ignore">
+                        <ui:VisualElement class="plan-path__start" />
+                        <ui:VisualElement class="plan-path__line" />
+                        <ui:VisualElement class="plan-path__stop" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement class="title-actions">
                     <ui:Button name="play-button" class="button button--primary title-action title-play">
                         <ui:VisualElement class="toy-icon toy-icon--play" picking-mode="Ignore" />
                         <ui:Label text="Play" class="toy-button__label title-action__label" picking-mode="Ignore" />
                     </ui:Button>
-                    <ui:Button name="tutorial-button" class="button title-action">
+                    <ui:Button name="tutorial-button" class="button title-action title-action--ghost">
                         <ui:VisualElement class="toy-icon toy-icon--flag" picking-mode="Ignore" />
                         <ui:Label text="Tutorial" class="toy-button__label title-action__label" picking-mode="Ignore" />
                     </ui:Button>
-                    <ui:Button name="characters-button" class="button title-action">
+                    <ui:Button name="characters-button" class="button title-action title-action--ghost">
                         <ui:VisualElement class="toy-icon toy-icon--player" picking-mode="Ignore" />
                         <ui:Label text="Characters" class="toy-button__label title-action__label" picking-mode="Ignore" />
                     </ui:Button>
-                    <ui:VisualElement class="title-action-row">
-                        <ui:Button name="controls-button" class="button title-action title-action--half">
-                            <ui:VisualElement class="toy-icon toy-icon--controls" picking-mode="Ignore" />
-                            <ui:Label text="Controls" class="toy-button__label title-action__label" picking-mode="Ignore" />
-                        </ui:Button>
-                        <ui:Button name="settings-button" class="button title-action title-action--half title-action--row-last">
-                            <ui:VisualElement class="toy-icon toy-icon--settings" picking-mode="Ignore" />
-                            <ui:Label text="Settings" class="toy-button__label title-action__label" picking-mode="Ignore" />
-                        </ui:Button>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="title-rule" picking-mode="Ignore" />
-                    <ui:VisualElement class="title-action-row title-action-row--quiet">
-                        <ui:Button name="credits-button" class="title-quiet-action">
-                            <ui:VisualElement class="toy-icon toy-icon--credits toy-icon--sm" picking-mode="Ignore" />
-                            <ui:Label text="Credits" class="title-quiet-action__label" picking-mode="Ignore" />
-                        </ui:Button>
-                        <ui:Button name="quit-button" text="Quit" class="title-quiet-action title-quiet-action--last" />
-                    </ui:VisualElement>
+                    <ui:Button name="controls-button" class="button title-action title-action--ghost">
+                        <ui:VisualElement class="toy-icon toy-icon--controls" picking-mode="Ignore" />
+                        <ui:Label text="Controls" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Button name="settings-button" class="button title-action title-action--ghost">
+                        <ui:VisualElement class="toy-icon toy-icon--settings" picking-mode="Ignore" />
+                        <ui:Label text="Settings" class="toy-button__label title-action__label" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+                <ui:VisualElement class="title-footer">
+                    <ui:Button name="credits-button" text="Credits" class="title-quiet-action" />
+                    <ui:Button name="quit-button" text="Quit" class="title-quiet-action" />
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:VisualElement class="title-model-stage" picking-mode="Ignore" />
@@ -92,7 +92,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Select a unit. Click it again with no route drawn to switch to its ability; its card switches back to movement." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Click a unit, then a highlighted square to set its route. Press its ability card to spend the round on the ability instead." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
@@ -135,7 +135,7 @@
                     <ui:Label text="Yuen Kai" class="title-md credit-name" picking-mode="Ignore" />
                     <ui:Label text="Programming and game design" class="label label--muted credit-role" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:VisualElement class="credit-row" picking-mode="Ignore">
+                <ui:VisualElement class="credit-row credit-row--last" picking-mode="Ignore">
                     <ui:Label text="Logan Suite" class="title-md credit-name" picking-mode="Ignore" />
                     <ui:Label text="3D art, animation, music, and code" class="label label--muted credit-role" picking-mode="Ignore" />
                 </ui:VisualElement>

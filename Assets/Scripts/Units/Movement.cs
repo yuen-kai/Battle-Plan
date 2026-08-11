@@ -80,8 +80,7 @@ public class Movement : NetworkBehaviour
     private TimedMoveSpeedBoost temporaryMoveSpeedBoost;
     private SpeedBoostIndicatorVisual speedBoostIndicator;
     private bool speedBoostIndicatorCreationAttempted;
-    private DiveRecoveryIndicatorVisual diveRecoveryIndicator;
-    private bool diveRecoveryIndicatorCreationAttempted;
+    private DiveRecoveryPulse diveRecoveryPulse;
 
     // NetworkVariable (not ClientRpc) so a unit revealed by fog midway through the boost
     // reconstructs the current presentation state. Gameplay speed remains server-only above.
@@ -182,12 +181,22 @@ public class Movement : NetworkBehaviour
         moveListRoutine = StartCoroutine(MoveToCells(cells, dive));
     }
 
-    public void transitionToShooting()
+    public void transitionToShooting(bool onlyIfWeaponsStillFree = false)
     {
         PauseMovement();
         moving = false;
 
-        transform.GetComponent<Shooting>().StartShooting();
+        Shooting shooting = transform.GetComponent<Shooting>();
+        // A dodger stops counting as moving the moment it lands, so the round can order weapons
+        // cold while it is still on the floor. Coming up after that means it missed the fight,
+        // rather than earning a late magazine fired at units that have already ceased fire.
+        if (onlyIfWeaponsStillFree && !shooting.allowShooting)
+        {
+            shooting.StandDown();
+            return;
+        }
+
+        shooting.StartShooting();
     }
 
     // MOVEMENT
@@ -211,7 +220,7 @@ public class Movement : NetworkBehaviour
             yield return RecoverFromDive();
         }
 
-        transitionToShooting();
+        transitionToShooting(onlyIfWeaponsStillFree: dive);
     }
 
     /// <summary>
@@ -333,18 +342,11 @@ public class Movement : NetworkBehaviour
         if (state.Active && !IsClient)
             return;
 
-        if (
-            state.Active
-            && diveRecoveryIndicator == null
-            && !diveRecoveryIndicatorCreationAttempted
-        )
-        {
-            diveRecoveryIndicatorCreationAttempted = true;
-            diveRecoveryIndicator = DiveRecoveryIndicatorVisual.Create(transform);
-        }
+        if (state.Active && diveRecoveryPulse == null)
+            diveRecoveryPulse = DiveRecoveryPulse.Attach(gameObject);
 
-        if (diveRecoveryIndicator != null)
-            diveRecoveryIndicator.SetRecovery(state);
+        if (diveRecoveryPulse != null)
+            diveRecoveryPulse.SetRecovery(state);
     }
 
     // HELPER
@@ -404,6 +406,111 @@ public struct DiveRecoveryState : INetworkSerializable, System.IEquatable<DiveRe
     public override int GetHashCode()
     {
         return System.HashCode.Combine(Active, StartServerTime, Duration);
+    }
+}
+
+/// <summary>
+/// Where a ground effect drawn under a unit has to sit to be seen at all. A unit does not stand on
+/// the board — it stands on its own base plate, whose top face is above the collider bottom that
+/// the board plane is measured from — so a quad laid on that plane is depth-buried by the very
+/// plate the unit is standing on. Every floor visual clears the plate through this.
+/// </summary>
+public static class UnitBasePlate
+{
+    public const string NamePrefix = "BasePuck";
+
+    /// <summary>
+    /// Height above a unit's board plane that clears its base plate by <paramref name="groundOffset"/>,
+    /// falling back to the bare offset for anything built without a plate.
+    /// </summary>
+    public static float ClearanceAbovePlane(Transform unitTransform, float groundOffset)
+    {
+        Collider unitCollider =
+            unitTransform != null ? unitTransform.GetComponent<Collider>() : null;
+        if (unitCollider == null)
+            return groundOffset;
+
+        float bottom = unitCollider.bounds.min.y;
+        float plateTop = bottom;
+        foreach (Renderer part in unitTransform.GetComponentsInChildren<Renderer>(true))
+        {
+            if (!part.gameObject.name.StartsWith(NamePrefix, System.StringComparison.Ordinal))
+                continue;
+            plateTop = Mathf.Max(plateTop, part.bounds.max.y);
+        }
+
+        return plateTop - bottom + groundOffset;
+    }
+
+    /// <summary>
+    /// The same clearance measured from the unit's own origin instead of its board plane, for
+    /// anything that has to place itself on the frame the unit was positioned.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ClearanceAbovePlane"/> answers from the board plane, so a caller parenting to the
+    /// unit has to subtract the collider's half height to get back to the origin — reading the
+    /// collider twice and the plate's renderer once. A collider's bounds lag a transform that moved
+    /// this frame and a renderer's do not, so on exactly the frame a unit spawns or teleports those
+    /// two readings disagree and the visual lands a whole unit height out. This reads the plate
+    /// only, which is never stale.
+    /// </remarks>
+    public static float ClearanceAboveOrigin(Transform unitTransform, float groundOffset)
+    {
+        if (unitTransform == null)
+            return groundOffset;
+
+        float originY = unitTransform.position.y;
+        bool foundPlate = false;
+        float plateTop = originY;
+        foreach (Renderer part in unitTransform.GetComponentsInChildren<Renderer>(true))
+        {
+            if (!part.gameObject.name.StartsWith(NamePrefix, System.StringComparison.Ordinal))
+                continue;
+            plateTop = foundPlate ? Mathf.Max(plateTop, part.bounds.max.y) : part.bounds.max.y;
+            foundPlate = true;
+        }
+
+        if (foundPlate)
+            return plateTop - originY + groundOffset;
+
+        Collider unitCollider = unitTransform.GetComponent<Collider>();
+        return (unitCollider != null ? unitCollider.bounds.min.y - originY : 0f) + groundOffset;
+    }
+
+    /// <summary>
+    /// Height above a unit's own origin that clears the board itself by
+    /// <paramref name="groundOffset"/>, for a visual that has to sit at a fixed height over the
+    /// deck rather than hug whatever plate its unit happens to have.
+    /// </summary>
+    /// <remarks>
+    /// The plate's underside is the board plane: the puck's rim rests on the deck, so its lowest
+    /// renderer bound is the collider's bottom. It is read from the renderers anyway, for the
+    /// reason given on <see cref="ClearanceAboveOrigin"/> — a collider's bounds lag a transform
+    /// that moved this frame and a renderer's do not.
+    /// </remarks>
+    public static float BoardClearanceAboveOrigin(Transform unitTransform, float groundOffset)
+    {
+        if (unitTransform == null)
+            return groundOffset;
+
+        float originY = unitTransform.position.y;
+        bool foundPlate = false;
+        float plateBottom = originY;
+        foreach (Renderer part in unitTransform.GetComponentsInChildren<Renderer>(true))
+        {
+            if (!part.gameObject.name.StartsWith(NamePrefix, System.StringComparison.Ordinal))
+                continue;
+            plateBottom = foundPlate
+                ? Mathf.Min(plateBottom, part.bounds.min.y)
+                : part.bounds.min.y;
+            foundPlate = true;
+        }
+
+        if (foundPlate)
+            return plateBottom - originY + groundOffset;
+
+        Collider unitCollider = unitTransform.GetComponent<Collider>();
+        return (unitCollider != null ? unitCollider.bounds.min.y - originY : 0f) + groundOffset;
     }
 }
 
@@ -586,7 +693,10 @@ public sealed class SpeedBoostIndicatorVisual : MonoBehaviour
             unitCollider != null ? unitCollider.bounds.extents.y : GroundOffset;
         transform.localPosition = new Vector3(
             0f,
-            (-worldDownToGround + GroundOffset) / parentScaleY,
+            (
+                -worldDownToGround
+                + UnitBasePlate.ClearanceAbovePlane(unitTransform, GroundOffset)
+            ) / parentScaleY,
             0f
         );
         transform.localRotation = Quaternion.identity;
@@ -700,278 +810,5 @@ public sealed class SpeedBoostIndicatorVisual : MonoBehaviour
             properties.SetFloat(IntensityId, Mathf.Lerp(0.12f, 0.92f, fade));
             streakRenderers[index].SetPropertyBlock(properties);
         }
-    }
-}
-
-/// <summary>
-/// Local-only dive-recovery presentation. A dim amber outline marks where the dodger will be back
-/// on its feet, and a brighter ring grows out from under it to meet that outline exactly as the
-/// recovery ends. The pair is deliberately a filling gauge rather than an alarm: nothing has been
-/// done to this unit, it is picking itself up off the floor, and both commanders need to be able
-/// to see how much of that is left. Amber keeps it apart from the teal Shield Rush ring, which is
-/// the only other thing drawn under a unit's feet.
-/// </summary>
-public sealed class DiveRecoveryIndicatorVisual : MonoBehaviour
-{
-    public const string GameObjectName = "DiveRecoveryIndicator";
-
-    private const float GroundOffset = 0.08f;
-    private const float RecoveredDiameter = 1.9f;
-    private const float StartingDiameter = 0.35f;
-
-    private static readonly Color RecoveryColor = new(1.3f, 0.66f, 0.16f, 0.75f);
-    private static readonly int GlowColorId = Shader.PropertyToID("_GlowColor");
-    private static readonly int RingWidthId = Shader.PropertyToID("_RingWidth");
-    private static readonly int EdgeSoftnessId = Shader.PropertyToID("_EdgeSoftness");
-    private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
-    private static readonly int PulseSpeedId = Shader.PropertyToID("_PulseSpeed");
-    private static readonly int PulseAmountId = Shader.PropertyToID("_PulseAmount");
-
-    private Material visualMaterial;
-    private Mesh groundQuadMesh;
-    private Renderer targetRenderer;
-    private Transform gauge;
-    private Renderer gaugeRenderer;
-    private MaterialPropertyBlock gaugeProperties;
-    private DiveRecoveryState recovery;
-
-    public bool IsVisible => gameObject.activeSelf;
-
-    public static DiveRecoveryIndicatorVisual Create(Transform unitTransform)
-    {
-        if (unitTransform == null)
-            return null;
-
-        Transform existing = unitTransform.Find(GameObjectName);
-        if (
-            existing != null
-            && existing.TryGetComponent(out DiveRecoveryIndicatorVisual existingVisual)
-        )
-        {
-            return existingVisual;
-        }
-
-        bool forceRenderingOff = false;
-        foreach (Renderer unitRenderer in unitTransform.GetComponentsInChildren<Renderer>(true))
-        {
-            if (unitRenderer.forceRenderingOff)
-            {
-                forceRenderingOff = true;
-                break;
-            }
-        }
-
-        Shader glowShader = Shader.Find("BattlePlan/GroundGlow");
-        if (glowShader == null)
-        {
-            Debug.LogWarning(
-                "[DiveRecoveryIndicatorVisual] BattlePlan/GroundGlow shader not found; "
-                    + "dodge recovery indicator disabled."
-            );
-            return null;
-        }
-
-        GameObject indicatorObject = new(GameObjectName);
-        indicatorObject.layer = unitTransform.gameObject.layer;
-        indicatorObject.SetActive(false);
-        indicatorObject.transform.SetParent(unitTransform, worldPositionStays: false);
-
-        DiveRecoveryIndicatorVisual visual =
-            indicatorObject.AddComponent<DiveRecoveryIndicatorVisual>();
-        visual.Build(unitTransform, glowShader);
-        // Host fog cannot NetworkHide server-owned objects, so GameLoop suppresses their existing
-        // renderers locally. Inherit that state before activation to avoid a one-frame information
-        // leak when this visual is created while an enemy is hidden.
-        visual.SetForceRenderingOff(forceRenderingOff);
-        return visual;
-    }
-
-    public void SetRecovery(DiveRecoveryState state)
-    {
-        recovery = state;
-        if (gameObject.activeSelf != state.Active)
-            gameObject.SetActive(state.Active);
-        if (state.Active)
-            DrawProgress();
-    }
-
-    public void SetForceRenderingOff(bool forceRenderingOff)
-    {
-        if (targetRenderer != null)
-            targetRenderer.forceRenderingOff = forceRenderingOff;
-        if (gaugeRenderer != null)
-            gaugeRenderer.forceRenderingOff = forceRenderingOff;
-    }
-
-    private void Update()
-    {
-        if (recovery.Active)
-            DrawProgress();
-    }
-
-    private void OnDestroy()
-    {
-        DestroyRuntimeObject(visualMaterial);
-        DestroyRuntimeObject(groundQuadMesh);
-    }
-
-    private void DrawProgress()
-    {
-        NetworkManager manager = NetworkManager.Singleton;
-        float progress = manager != null ? recovery.ProgressAt(manager.ServerTime.Time) : 0f;
-
-        float diameter = Mathf.Lerp(StartingDiameter, RecoveredDiameter, progress);
-        gauge.localScale = new Vector3(diameter, diameter, 1f);
-
-        // The ring thins as it widens so the gauge keeps a constant amount of light on the floor
-        // instead of swelling into a second, brighter marker than the outline it is chasing.
-        gaugeProperties.SetFloat(RingWidthId, Mathf.Lerp(0.55f, 0.16f, progress));
-        gaugeProperties.SetFloat(IntensityId, Mathf.Lerp(0.75f, 1.6f, progress));
-        gaugeRenderer.SetPropertyBlock(gaugeProperties);
-    }
-
-    private void Build(Transform unitTransform, Shader glowShader)
-    {
-        PositionAtUnitFeet(unitTransform);
-        groundQuadMesh = CreateGroundQuadMesh();
-
-        visualMaterial = new Material(glowShader)
-        {
-            name = "Dodge Recovery (Runtime)",
-            hideFlags = HideFlags.DontSave,
-            enableInstancing = true,
-        };
-
-        targetRenderer = CreateGroundQuad(
-            "RecoveryTarget",
-            Vector3.zero,
-            new Vector3(RecoveredDiameter, RecoveredDiameter, 1f)
-        );
-        MaterialPropertyBlock targetProperties = new();
-        SetProperties(
-            targetProperties,
-            ringWidth: 0.1f,
-            edgeSoftness: 0.2f,
-            intensity: 0.45f,
-            pulseSpeed: 0f,
-            pulseAmount: 0f
-        );
-        targetRenderer.SetPropertyBlock(targetProperties);
-
-        gaugeRenderer = CreateGroundQuad(
-            "RecoveryGauge",
-            new Vector3(0f, 0.012f, 0f),
-            new Vector3(StartingDiameter, StartingDiameter, 1f)
-        );
-        gauge = gaugeRenderer.transform;
-        gaugeProperties = new MaterialPropertyBlock();
-        SetProperties(
-            gaugeProperties,
-            ringWidth: 0.55f,
-            edgeSoftness: 0.28f,
-            intensity: 0.75f,
-            pulseSpeed: 0f,
-            pulseAmount: 0f
-        );
-        gaugeRenderer.SetPropertyBlock(gaugeProperties);
-    }
-
-    private void PositionAtUnitFeet(Transform unitTransform)
-    {
-        Vector3 parentScale = unitTransform.lossyScale;
-        float parentScaleX = Mathf.Max(Mathf.Abs(parentScale.x), 0.001f);
-        float parentScaleY = Mathf.Max(Mathf.Abs(parentScale.y), 0.001f);
-        float parentScaleZ = Mathf.Max(Mathf.Abs(parentScale.z), 0.001f);
-
-        Collider unitCollider = unitTransform.GetComponent<Collider>();
-        float worldDownToGround =
-            unitCollider != null ? unitCollider.bounds.extents.y : GroundOffset;
-        transform.localPosition = new Vector3(
-            0f,
-            (-worldDownToGround + GroundOffset) / parentScaleY,
-            0f
-        );
-        transform.localRotation = Quaternion.identity;
-        transform.localScale = new Vector3(
-            1f / parentScaleX,
-            1f / parentScaleY,
-            1f / parentScaleZ
-        );
-    }
-
-    private Renderer CreateGroundQuad(string objectName, Vector3 position, Vector3 scale)
-    {
-        GameObject quad = new(objectName);
-        quad.layer = gameObject.layer;
-        quad.transform.SetParent(transform, worldPositionStays: false);
-        quad.transform.localPosition = position;
-        quad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        quad.transform.localScale = scale;
-
-        MeshFilter meshFilter = quad.AddComponent<MeshFilter>();
-        meshFilter.sharedMesh = groundQuadMesh;
-        MeshRenderer quadRenderer = quad.AddComponent<MeshRenderer>();
-        quadRenderer.sharedMaterial = visualMaterial;
-        quadRenderer.shadowCastingMode =
-            UnityEngine.Rendering.ShadowCastingMode.Off;
-        quadRenderer.receiveShadows = false;
-        quadRenderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
-        quadRenderer.reflectionProbeUsage =
-            UnityEngine.Rendering.ReflectionProbeUsage.Off;
-        return quadRenderer;
-    }
-
-    private static Mesh CreateGroundQuadMesh()
-    {
-        Mesh mesh = new()
-        {
-            name = "Dodge Recovery Quad (Runtime)",
-            hideFlags = HideFlags.DontSave,
-            vertices = new[]
-            {
-                new Vector3(-0.5f, -0.5f, 0f),
-                new Vector3(0.5f, -0.5f, 0f),
-                new Vector3(-0.5f, 0.5f, 0f),
-                new Vector3(0.5f, 0.5f, 0f),
-            },
-            uv = new[]
-            {
-                new Vector2(0f, 0f),
-                new Vector2(1f, 0f),
-                new Vector2(0f, 1f),
-                new Vector2(1f, 1f),
-            },
-            triangles = new[] { 0, 2, 1, 2, 3, 1 },
-        };
-        mesh.RecalculateBounds();
-        return mesh;
-    }
-
-    private static void DestroyRuntimeObject(Object runtimeObject)
-    {
-        if (runtimeObject == null)
-            return;
-
-        if (Application.isPlaying)
-            Destroy(runtimeObject);
-        else
-            DestroyImmediate(runtimeObject);
-    }
-
-    private static void SetProperties(
-        MaterialPropertyBlock properties,
-        float ringWidth,
-        float edgeSoftness,
-        float intensity,
-        float pulseSpeed,
-        float pulseAmount
-    )
-    {
-        properties.SetColor(GlowColorId, RecoveryColor);
-        properties.SetFloat(RingWidthId, ringWidth);
-        properties.SetFloat(EdgeSoftnessId, edgeSoftness);
-        properties.SetFloat(IntensityId, intensity);
-        properties.SetFloat(PulseSpeedId, pulseSpeed);
-        properties.SetFloat(PulseAmountId, pulseAmount);
     }
 }

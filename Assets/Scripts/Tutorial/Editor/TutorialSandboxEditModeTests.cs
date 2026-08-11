@@ -189,13 +189,17 @@ public class TutorialSandboxEditModeTests
             "A line is either the instruction on the dock or a lesson on the card, never both."
         );
 
-        // The closing line is the only place the card is named, because a lone unit is selected for
-        // the student and the gesture does not matter until they field a full crew.
+        // The card is named twice and only twice: where the student is asked to press it, and in
+        // the closing line that generalises the dock to a full crew. It used to be named once,
+        // because an ability was reached by clicking the unit a second time and the card was a
+        // detail that could wait for real matches. Pressing the card is now the way an ability is
+        // ordered, so it is the lesson rather than the footnote.
+        Assert.That(TutorialDirector.UseAbilityPrompt, Does.Contain("card"));
         Assert.That(TutorialDirector.ClosingLesson, Does.Contain("card"));
         Assert.That(
             copy.Count(line => line.Contains("card")),
-            Is.EqualTo(1),
-            "Only the closing lesson should talk about unit cards."
+            Is.EqualTo(2),
+            "Only the ability prompt and the closing lesson should talk about ability cards."
         );
     }
 

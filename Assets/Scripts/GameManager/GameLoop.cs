@@ -284,8 +284,8 @@ public class GameLoop : NetworkBehaviour
 
     // === UNIT OVERLAP (server-only round state) ===
     // No two units share a cell. Allied orders are pulled apart before execution, but the two
-    // commanders plan blind to each other, so the round can still end with an enemy standing where
-    // one of your units stopped; whoever walked in is shoved aside once everything has settled.
+    // commanders plan blind to each other, so a unit still walks into an enemy standing where it
+    // meant to stop; whoever arrives second is shoved aside the moment it gets there.
 
     // How far a unit may be shoved. Two or three cells still reads as being knocked aside; further
     // than that and the shove would move a unit more than its own orders did.
@@ -297,6 +297,23 @@ public class GameLoop : NetworkBehaviour
 
     private bool resolvingOverlaps;
 
+    // Units part-way through a shove, and the cell each of them is being put on. Shoves play out
+    // alongside the rest of the round instead of one after another, so their destinations stay
+    // spoken for until the slide lands.
+    private readonly Dictionary<GameObject, Vector2Int> unitsBeingShoved = new();
+
+    // The cell each unit has stood on without interruption. This is what settles a meeting: the
+    // unit that was already there keeps the cell, the one that walked in gives way.
+    private readonly Dictionary<GameObject, Vector2Int> heldCells = new();
+
+    // Where each unit still under movement orders is going to stop. Nobody is shoved onto one of
+    // these, or arriving would cost a unit the cell its own orders earned it.
+    private readonly Dictionary<GameObject, Vector2Int> plannedEndCells = new();
+
+    // Units stuck on a contested cell with nowhere free to be put. Reported once each, rather than
+    // on every frame spent retrying them.
+    private readonly HashSet<GameObject> unitsWithNowhereToGo = new();
+
     // Server-authored round state. Smoke never enters wallLayout, physics, or pathing.
     private readonly HashSet<Vector2Int> activeSmokeCells = new();
     private bool acceptingSmokeRegistrations;
@@ -305,6 +322,8 @@ public class GameLoop : NetworkBehaviour
     private readonly HashSet<Vector2Int> clientSmokeCells = new();
     private readonly List<GameObject> clientTelegraphs = new();
     private GameObject clientSmokeVisualRoot;
+    private SmokeScreenVisual clientSmokeVisual;
+    private Coroutine clientSmokeVisionCoroutine;
 
     public UnitDatabase allUnits;
 
@@ -794,6 +813,7 @@ public class GameLoop : NetworkBehaviour
         forceRevealUntil.Clear();
         forceRevealToTeamUntil.Clear();
         StopClientFog();
+        StopClientSmokeVision();
         ClearKingOfTheHillOverlay();
         unitSpawnTransforms.Clear();
         ClearActiveSmokeCells(notifyClients: false);
@@ -1350,6 +1370,7 @@ public class GameLoop : NetworkBehaviour
             planningDeadline = 0d;
             devEndPlanningNow = false;
             resolvingOverlaps = false;
+            unitsBeingShoved.Clear();
             returnFireWindowUntil = 0f;
             currentPhase = "planning";
 
@@ -1529,7 +1550,7 @@ public class GameLoop : NetworkBehaviour
                 StartCoroutine(RunAbility(activation.unit, activation.square, activation.data));
             }
 
-            StartCoroutine(ResolveUnitOverlaps(cellsBeforeExecution));
+            StartCoroutine(ResolveUnitOverlaps(paths, cellsBeforeExecution));
 
             while (
                 !matchEnded
@@ -1730,11 +1751,17 @@ public class GameLoop : NetworkBehaviour
         foreach (Vector3 cellWorldPosition in cellWorldPositions)
             clientSmokeCells.Add(GridSystem.ConvertToGridCoords(cellWorldPosition));
 
-        clientSmokeVisualRoot = SmokeScreenVisual
-            .Create(transform, cellWorldPositions, cellSize)
-            .gameObject;
+        clientSmokeVisual = SmokeScreenVisual.Create(transform, cellWorldPositions, cellSize);
+        clientSmokeVisualRoot = clientSmokeVisual.gameObject;
 
+        // Seeded now and kept current after: with fog on by the fog loop, with fog off by the
+        // smoke's own. This used to hand the screen all nine of its own cells whenever fog was
+        // off, which left it thinned for the whole round in every fogless match — the screen only
+        // ever looked like glass. Fog being off does not mean everything is seen; it means the
+        // dark tiles are not drawn. Which cells the crew can see into is still a real question,
+        // and the smoke still answers to it because the smoke is what is blocking the look.
         RefreshClientFogForSmokeChange();
+        StartClientSmokeVision();
     }
 
     [ClientRpc]
@@ -1748,6 +1775,8 @@ public class GameLoop : NetworkBehaviour
     {
         clientSmokeCells.Clear();
 
+        StopClientSmokeVision();
+        clientSmokeVisual = null;
         if (clientSmokeVisualRoot != null)
         {
             // The visual owns its runtime materials and releases them with the object.
@@ -1759,10 +1788,65 @@ public class GameLoop : NetworkBehaviour
 
     private void RefreshClientFogForSmokeChange()
     {
-        if (!IsClient || !IsSpawned || !FogOfWarEnabled || fogOverlayTiles.Count == 0)
+        if (!IsClient || !IsSpawned)
             return;
 
-        UpdateClientFogOverlay();
+        if (FogOfWarEnabled && fogOverlayTiles.Count > 0)
+        {
+            UpdateClientFogOverlay();
+            return;
+        }
+
+        // No overlay to redraw, but the screen still wants to know which of its cells the crew can
+        // see into, so it is asked directly.
+        if (TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells))
+            RefreshSmokeSeenCells(visibleCells);
+    }
+
+    private void RefreshSmokeSeenCells(HashSet<Vector2Int> visibleCells)
+    {
+        if (clientSmokeVisual != null)
+            clientSmokeVisual.SetSeenCells(visibleCells);
+    }
+
+    /// <summary>
+    /// Keeps the screen's seen cells current in a match with no fog.
+    ///
+    /// <para>
+    /// With fog on the client fog loop already recomputes vision every tick and hands it over, so
+    /// this would be doing the work twice. With fog off that loop never starts — there are no dark
+    /// tiles to maintain — and without this the screen would be told its cells once when the
+    /// canister landed and never again, so it would not reopen as the crew walked into sight of
+    /// it. Runs only while a screen is actually standing.
+    /// </para>
+    /// </summary>
+    private void StartClientSmokeVision()
+    {
+        if (!IsClient || FogOfWarEnabled || clientSmokeVisionCoroutine != null)
+            return;
+
+        clientSmokeVisionCoroutine = StartCoroutine(ClientSmokeVisionLoop());
+    }
+
+    private IEnumerator ClientSmokeVisionLoop()
+    {
+        while (IsClient && IsSpawned && clientSmokeVisual != null && !FogOfWarEnabled)
+        {
+            if (TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells))
+                RefreshSmokeSeenCells(visibleCells);
+            yield return new WaitForSeconds(FogUpdateIntervalSeconds);
+        }
+
+        clientSmokeVisionCoroutine = null;
+    }
+
+    private void StopClientSmokeVision()
+    {
+        if (clientSmokeVisionCoroutine == null)
+            return;
+
+        StopCoroutine(clientSmokeVisionCoroutine);
+        clientSmokeVisionCoroutine = null;
     }
 
     /// <summary>
@@ -3024,9 +3108,16 @@ public class GameLoop : NetworkBehaviour
         if (IsClient)
         {
             if (newValue)
+            {
                 StartClientFog();
+                // The fog loop recomputes vision anyway, so the smoke's own would be duplicate work.
+                StopClientSmokeVision();
+            }
             else
+            {
                 StopClientFog();
+                StartClientSmokeVision();
+            }
         }
     }
 
@@ -3707,14 +3798,26 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
-    private void UpdateClientFogOverlay()
+    /// <summary>
+    /// The cells the local crew can see: their vision ranges, cut by walls and by the smoke's own
+    /// occlusion. Returns false when there is no local team to compute for.
+    ///
+    /// <para>
+    /// Pulled out of the fog overlay because the smoke needs the same answer in matches that have
+    /// no fog. Smoke is a separate occluder from fog of war — it stops a shot whether or not fog
+    /// is on — so which of its cells you can see into is a real question in a fogless match too,
+    /// and the screen has to be able to ask it without the dark tiles existing.
+    /// </para>
+    /// </summary>
+    private bool TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells)
     {
+        visibleCells = null;
         if (NetworkManager.Singleton?.SpawnManager == null)
-            return;
+            return false;
 
         int localTeamIndex = LocalTeamIndex;
         if (localTeamIndex < 0)
-            return;
+            return false;
         List<(Vector2Int cell, int range)> viewers = new();
 
         foreach (NetworkObject netObj in NetworkManager.Singleton.SpawnManager.SpawnedObjectsList)
@@ -3744,10 +3847,19 @@ public class GameLoop : NetworkBehaviour
             );
         }
 
-        HashSet<Vector2Int> visibleCells = GridSystem.ComputeVisibleCells(
-            viewers,
-            clientSmokeCells
-        );
+        visibleCells = GridSystem.ComputeVisibleCells(viewers, clientSmokeCells);
+        return true;
+    }
+
+    private void UpdateClientFogOverlay()
+    {
+        if (!TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells))
+            return;
+
+        // The cloud thins over the cells this same set says the crew can see into. Feeding it from
+        // here rather than letting it work its own vision out is the point: the smoke and the dark
+        // tiles are then two drawings of one answer and cannot drift apart.
+        RefreshSmokeSeenCells(visibleCells);
 
         foreach (var tile in fogOverlayTiles)
         {
@@ -3923,7 +4035,12 @@ public class GameLoop : NetworkBehaviour
         NetworkManager.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
     }
 
-    void ExitToMainMenu()
+    /// <summary>
+    /// Tears the match down and goes back to the title. Public because the results overlay is not
+    /// the only thing that needs it: the tutorial offers the same exit from the dock, since it has
+    /// no result screen to reach.
+    /// </summary>
+    public void ExitToMainMenu()
     {
         GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
         ReconnectSession.Clear();
@@ -4970,7 +5087,7 @@ public class GameLoop : NetworkBehaviour
 
                 // A unit with no orders, or one spending the round on an ability, never marches
                 // anywhere: ExecuteMoves keeps casters on their own cell, and the repositioning a
-                // rush or a jump does is settled afterwards by the overlap pass. Either way the
+                // rush or a jump does is settled by the overlap pass when it lands. Either way the
                 // cell it is standing on is held against every route.
                 if (
                     !paths.TryGetValue(unit, out (bool, List<Vector3>) plan)
@@ -5477,8 +5594,8 @@ public class GameLoop : NetworkBehaviour
     }
 
     /// <summary>
-    /// The cell every living unit is standing on. Taken before execution so the overlap pass can
-    /// tell who walked into a contested cell apart from whoever was already there.
+    /// The cell every living unit is standing on. Taken before execution so the overlap pass knows
+    /// what each unit held when the round started and which way to give ground when shoved.
     /// </summary>
     private static Dictionary<GameObject, Vector2Int> CaptureUnitCells()
     {
@@ -5489,69 +5606,139 @@ public class GameLoop : NetworkBehaviour
     }
 
     /// <summary>
-    /// Two units may not finish the round on the same cell. Allied orders are pulled apart before
-    /// execution, but the two commanders plan blind to each other and a rush or a jump sets its
-    /// caster down wherever it lands, so a round can still end with units stacked. Once nothing is
-    /// moving any more, whoever arrived on a contested cell is slid off it.
+    /// Two units may not stand on the same cell. Allied orders are pulled apart before execution,
+    /// but the two commanders plan blind to each other and a rush or a jump sets its caster down
+    /// wherever it lands, so units still meet on a cell part-way through a round. Every meeting is
+    /// settled as it happens — the unit that arrives on an occupied cell is shoved off it there and
+    /// then, while the rest of the board is still moving — rather than the whole board being tidied
+    /// up after everything has stopped.
     /// </summary>
-    IEnumerator ResolveUnitOverlaps(Dictionary<GameObject, Vector2Int> cellsBeforeExecution)
+    IEnumerator ResolveUnitOverlaps(
+        PathsDict paths,
+        Dictionary<GameObject, Vector2Int> cellsBeforeExecution
+    )
     {
         resolvingOverlaps = true;
 
-        // Rushes and jumps reposition their caster from inside their own coroutine, so a unit's
-        // cell is only final once movement AND every ability have finished.
-        while (!matchEnded && (CheckStillMoving() || runningAbilities > 0))
-            yield return null;
+        // Everyone starts the round holding the cell they set out from. An entry is dropped as soon
+        // as its unit is standing somewhere else, so holding a cell always means having been on it
+        // since before the other unit turned up.
+        heldCells.Clear();
+        foreach (var startingCell in cellsBeforeExecution)
+            heldCells[startingCell.Key] = startingCell.Value;
 
-        if (!matchEnded)
+        CapturePlannedEndCells(paths);
+        unitsWithNowhereToGo.Clear();
+
+        while (!matchEnded)
         {
-            yield return StartCoroutine(
-                SlideUnitsToCells(BuildOverlapDisplacements(cellsBeforeExecution))
+            List<(GameObject unit, Vector2Int cell)> displacements = BuildOverlapDisplacements(
+                cellsBeforeExecution
             );
+            if (displacements.Count > 0)
+            {
+                StartCoroutine(ShoveUnitsAside(displacements));
+            }
+            // Abilities are watched as well as movement: a rush holds its caster in place for the
+            // length of the shield after setting it down, and a jump can land long after the last
+            // walker stopped.
+            else if (!CheckStillMoving() && runningAbilities == 0 && unitsBeingShoved.Count == 0)
+            {
+                break;
+            }
+
+            yield return null;
         }
 
         resolvingOverlaps = false;
     }
 
     /// <summary>
-    /// Who has to give up the cell they are standing on, and where each of them goes. A unit that
-    /// never left the cell this round keeps it; anyone who walked, rushed or landed on top of it
-    /// is moved off. When nobody was standing there first, every contender is moved off and the
-    /// cell is left empty for the rest of the round, so racing an enemy to a cell is not something
-    /// either side can win by virtue of being sorted first. Cells are resolved bottom to top and
-    /// contenders in team then roster order, so the pass gives the same answer every time it runs.
+    /// Where each unit under movement orders is going to stop. Casters are left out: a rush or a
+    /// jump counts as in transit for as long as it is carrying its caster, and where it comes down
+    /// is the ability's business rather than a route's.
+    /// </summary>
+    private void CapturePlannedEndCells(PathsDict paths)
+    {
+        plannedEndCells.Clear();
+        if (paths == null)
+            return;
+
+        foreach (var plan in paths)
+        {
+            (bool isAbility, List<Vector3> route) = plan.Value;
+            if (plan.Key == null || isAbility || route == null || route.Count < 2)
+                continue;
+
+            plannedEndCells[plan.Key] = GridSystem.ConvertToGridCoords(route[route.Count - 1]);
+        }
+    }
+
+    /// <summary>
+    /// Whether a unit is still on its way somewhere. Walking, a rush and a jump all raise the same
+    /// flag while they carry their unit, and a unit part-way through a shove is on its way too, so
+    /// none of them counts as standing on whichever cell it happens to be over right now.
+    /// </summary>
+    private bool IsUnitInTransit(GameObject unit)
+    {
+        if (unitsBeingShoved.ContainsKey(unit))
+            return true;
+
+        Movement movement = unit.GetComponent<Movement>();
+        return movement != null && movement.moving;
+    }
+
+    /// <summary>
+    /// Who has to give up the cell they are standing on right now, and where each of them goes. The
+    /// unit that has been on the cell since before the other one arrived keeps it; whoever walked,
+    /// rushed or landed on top of it is moved off. When both got there on the same frame nobody was
+    /// there first, so every contender is moved off and the cell is left empty — racing an enemy to
+    /// a cell is not something either side can win by virtue of being sorted first. Units still in
+    /// transit are not standing anywhere yet: they are neither shoved nor shoved into. Cells are
+    /// resolved bottom to top and contenders in team then roster order, so the pass gives the same
+    /// answer every time it runs.
     /// </summary>
     private List<(GameObject unit, Vector2Int cell)> BuildOverlapDisplacements(
         IReadOnlyDictionary<GameObject, Vector2Int> cellsBeforeExecution
     )
     {
         Dictionary<Vector2Int, List<GameObject>> occupants = new();
-        HashSet<Vector2Int> claimed = new();
+        List<Vector2Int> contestedCells = new();
+        HashSet<Vector2Int> claimed = new(unitsBeingShoved.Values);
         foreach (GameObject unit in EnumerateLivingUnits())
         {
             Vector2Int cell = GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+            claimed.Add(cell);
+
+            // Standing anywhere other than the cell on record means the unit has left it, and it
+            // has to come to a stop somewhere before it holds a cell again.
+            if (heldCells.TryGetValue(unit, out Vector2Int held) && held != cell)
+                heldCells.Remove(unit);
+
+            if (IsUnitInTransit(unit))
+            {
+                if (plannedEndCells.TryGetValue(unit, out Vector2Int walkingTo))
+                    claimed.Add(walkingTo);
+                continue;
+            }
+
             if (!occupants.TryGetValue(cell, out List<GameObject> sharing))
                 occupants[cell] = sharing = new List<GameObject>();
 
             sharing.Add(unit);
-            claimed.Add(cell);
+            if (sharing.Count == 2)
+                contestedCells.Add(cell);
         }
 
         List<(GameObject unit, Vector2Int cell)> displacements = new();
-        foreach (
-            Vector2Int cell in occupants
-                .Where(entry => entry.Value.Count > 1)
-                .Select(entry => entry.Key)
-                .OrderBy(contested => contested.y)
-                .ThenBy(contested => contested.x)
-                .ToList()
-        )
+        HashSet<GameObject> movedOn = new();
+        HashSet<GameObject> stuck = new();
+        contestedCells.Sort(GridSystem.CompareCellsRowMajor);
+        foreach (Vector2Int cell in contestedCells)
         {
             List<GameObject> sharing = occupants[cell];
             GameObject holder = sharing.FirstOrDefault(candidate =>
-                cellsBeforeExecution != null
-                && cellsBeforeExecution.TryGetValue(candidate, out Vector2Int cellBefore)
-                && cellBefore == cell
+                heldCells.TryGetValue(candidate, out Vector2Int heldCell) && heldCell == cell
             );
 
             foreach (GameObject unit in sharing)
@@ -5580,18 +5767,71 @@ public class GameLoop : NetworkBehaviour
                     )
                 )
                 {
-                    Debug.LogWarning(
-                        $"[GameLoop] {unit.name} shares cell ({cell.x},{cell.y}) and has no free "
-                            + $"cell within {MaxDisplacementSteps} steps; it stays where it is."
-                    );
+                    // Reported once, then left standing on the contested cell and reconsidered
+                    // every frame: a body in the way now may well have walked on before the round
+                    // is over.
+                    stuck.Add(unit);
+                    if (unitsWithNowhereToGo.Add(unit))
+                    {
+                        Debug.LogWarning(
+                            $"[GameLoop] {unit.name} shares cell ({cell.x},{cell.y}) and has no "
+                                + $"free cell within {MaxDisplacementSteps} steps; it stays where "
+                                + "it is for now."
+                        );
+                    }
                     continue;
                 }
 
                 claimed.Add(destination);
+                movedOn.Add(unit);
                 displacements.Add((unit, destination));
             }
         }
+
+        // Whoever is left standing where they are now holds that cell against the next arrival. A
+        // unit that lost its cell but had nowhere to go is not one of them: it is still trespassing
+        // on someone else's square.
+        foreach (var entry in occupants)
+        {
+            foreach (GameObject unit in entry.Value)
+            {
+                if (!movedOn.Contains(unit) && !stuck.Contains(unit))
+                    heldCells[unit] = entry.Key;
+            }
+        }
+
+        // Anyone who got clear, or whose cell stopped being contested, comes off the list, so a
+        // pile-up later in the round is reported afresh rather than swallowed by an older one.
+        unitsWithNowhereToGo.IntersectWith(stuck);
+
         return displacements;
+    }
+
+    /// <summary>
+    /// Slides a batch of units off the cells they lost, alongside whatever else the round is still
+    /// doing. Booking their destinations for the length of the slide is what lets a second meeting
+    /// be settled while the first one is still being played out.
+    /// </summary>
+    IEnumerator ShoveUnitsAside(List<(GameObject unit, Vector2Int cell)> displacements)
+    {
+        foreach (var (unit, cell) in displacements)
+        {
+            if (unit != null)
+                unitsBeingShoved[unit] = cell;
+        }
+
+        yield return StartCoroutine(SlideUnitsToCells(displacements));
+
+        // A unit set down by a shove holds where it was put, the same as one that walked there. The
+        // cell was kept clear for the whole slide, so nothing can have taken it in the meantime.
+        foreach (var (unit, cell) in displacements)
+        {
+            if (unit == null)
+                continue;
+
+            unitsBeingShoved.Remove(unit);
+            heldCells[unit] = cell;
+        }
     }
 
     /// <summary>

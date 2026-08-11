@@ -11,100 +11,112 @@
                         <ui:Label text="Title" class="toy-button__label join-back-label" picking-mode="Ignore" />
                     </ui:Button>
                     <ui:VisualElement class="join-heading" picking-mode="Ignore">
-                        <ui:Label text="Set up a match" class="title-xl" />
+                        <ui:Label text="Match setup" class="section-label join-eyebrow" />
+                        <ui:Label text="Set up a match" class="title-xl join-title" />
                     </ui:VisualElement>
                 </ui:VisualElement>
+                <ui:VisualElement class="join-rule" picking-mode="Ignore" />
 
-                <ui:VisualElement class="join-tabs">
-                    <ui:Button name="show-create-button" class="button button--selected join-tab">
-                        <ui:VisualElement class="toy-icon toy-icon--create" picking-mode="Ignore" />
-                        <ui:Label text="Create" class="toy-button__label join-tab__label" picking-mode="Ignore" />
-                    </ui:Button>
-                    <ui:Button name="show-join-button" class="button join-tab join-tab--last">
-                        <ui:VisualElement class="toy-icon toy-icon--join" picking-mode="Ignore" />
-                        <ui:Label text="Join" class="toy-button__label join-tab__label" picking-mode="Ignore" />
-                    </ui:Button>
-                </ui:VisualElement>
+                <ui:VisualElement class="join-console">
+                    <ui:VisualElement class="join-tabs">
+                        <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+                        <ui:Button name="show-create-button" class="button button--selected join-tab">
+                            <ui:VisualElement class="toy-icon toy-icon--create" picking-mode="Ignore" />
+                            <ui:Label text="Create" class="toy-button__label join-tab__label" picking-mode="Ignore" />
+                        </ui:Button>
+                        <ui:Button name="show-join-button" class="button join-tab join-tab--last">
+                            <ui:VisualElement class="toy-icon toy-icon--join" picking-mode="Ignore" />
+                            <ui:Label text="Join" class="toy-button__label join-tab__label" picking-mode="Ignore" />
+                        </ui:Button>
+                    </ui:VisualElement>
 
-                <ui:ScrollView mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="join-content">
-                    <ui:VisualElement name="create-panel" class="toy-panel join-panel">
-                        <ui:Label text="How should this match play?" class="title-lg" picking-mode="Ignore" />
-                        <ui:Label text="Mode" class="section-label join-section-label" picking-mode="Ignore" />
-                        <ui:VisualElement class="mode-row">
-                            <ui:Button name="elimination-button" class="button button--selected mode-option">
-                                <ui:VisualElement class="toy-icon toy-icon--elimination mode-option__icon" picking-mode="Ignore" />
-                                <ui:VisualElement class="option-copy" picking-mode="Ignore">
-                                    <ui:Label text="Elimination" class="toy-button__label mode-option__name" />
-                                    <ui:Label text="Knock out the other crew." class="toy-button__label mode-option__detail" />
+                    <ui:ScrollView mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="join-content">
+                        <ui:VisualElement name="create-panel" class="join-panel">
+                            <ui:Label text="Mode" class="section-label join-section-label join-section-label--first" picking-mode="Ignore" />
+                            <ui:VisualElement class="mode-row">
+                                <ui:Button name="elimination-button" class="button button--selected mode-option">
+                                    <ui:VisualElement class="toy-icon toy-icon--elimination mode-option__icon" picking-mode="Ignore" />
+                                    <ui:VisualElement class="option-copy" picking-mode="Ignore">
+                                        <ui:Label text="Elimination" class="toy-button__label mode-option__name" />
+                                        <ui:Label text="Knock out the other crew." class="toy-button__label mode-option__detail" />
+                                    </ui:VisualElement>
+                                </ui:Button>
+                                <ui:Button name="king-button" class="button mode-option mode-option--last">
+                                    <ui:VisualElement class="toy-icon toy-icon--hill mode-option__icon" picking-mode="Ignore" />
+                                    <ui:VisualElement class="option-copy" picking-mode="Ignore">
+                                        <ui:Label text="King of the Hill" class="toy-button__label mode-option__name" />
+                                        <ui:Label text="Hold the middle." class="toy-button__label mode-option__detail" />
+                                    </ui:VisualElement>
+                                </ui:Button>
+                            </ui:VisualElement>
+
+                            <ui:Label text="Board" class="section-label join-section-label" picking-mode="Ignore" />
+                            <ui:VisualElement name="map-row" class="map-row" />
+                            <ui:Label name="map-caption" class="label label--muted map-caption-line" picking-mode="Ignore" />
+
+                            <ui:Label text="Opponent" class="section-label join-section-label" picking-mode="Ignore" />
+                            <ui:VisualElement class="opponent-row">
+                                <ui:Button name="player-opponent-button" class="button button--selected opponent-option">
+                                    <ui:VisualElement class="toy-icon toy-icon--player opponent-option__icon" picking-mode="Ignore" />
+                                    <ui:VisualElement class="option-copy" picking-mode="Ignore">
+                                        <ui:Label text="Player" class="toy-button__label opponent-option__name" />
+                                        <ui:Label text="Play someone over Relay." class="toy-button__label opponent-option__detail" />
+                                    </ui:VisualElement>
+                                </ui:Button>
+                                <ui:Button name="ai-opponent-button" class="button opponent-option opponent-option--last">
+                                    <ui:VisualElement class="toy-icon toy-icon--bot opponent-option__icon" picking-mode="Ignore" />
+                                    <ui:VisualElement class="option-copy" picking-mode="Ignore">
+                                        <ui:Label text="AI" class="toy-button__label opponent-option__name" />
+                                        <ui:Label text="Play the bot offline." class="toy-button__label opponent-option__detail" />
+                                    </ui:VisualElement>
+                                </ui:Button>
+                            </ui:VisualElement>
+
+                            <ui:VisualElement class="option-strip fog-row">
+                                <ui:VisualElement class="toy-icon toy-icon--fog option-strip__icon" picking-mode="Ignore" />
+                                <ui:VisualElement class="option-strip__copy fog-copy">
+                                    <ui:Toggle name="fog-toggle" text="Fog of war" value="true" class="toggle fog-toggle" />
+                                    <ui:Label text="Hide enemies outside your vision." class="label label--muted option-strip__detail fog-detail" picking-mode="Ignore" />
                                 </ui:VisualElement>
-                            </ui:Button>
-                            <ui:Button name="king-button" class="button mode-option mode-option--last">
-                                <ui:VisualElement class="toy-icon toy-icon--hill mode-option__icon" picking-mode="Ignore" />
-                                <ui:VisualElement class="option-copy" picking-mode="Ignore">
-                                    <ui:Label text="King of the Hill" class="toy-button__label mode-option__name" />
-                                    <ui:Label text="Hold the middle." class="toy-button__label mode-option__detail" />
+                            </ui:VisualElement>
+
+                            <ui:VisualElement name="local-multiplayer-row" class="option-strip local-multiplayer-row hidden">
+                                <ui:VisualElement class="toy-icon toy-icon--join option-strip__icon" picking-mode="Ignore" />
+                                <ui:VisualElement class="option-strip__copy">
+                                    <ui:Toggle name="local-multiplayer-toggle" text="Local multiplayer (dev)" value="false" enabled="false" class="toggle local-multiplayer-toggle" />
+                                    <ui:Label text="Connect MPPM Player 2 at 127.0.0.1:7777." class="label label--muted option-strip__detail local-multiplayer-detail" picking-mode="Ignore" />
                                 </ui:VisualElement>
-                            </ui:Button>
-                        </ui:VisualElement>
+                            </ui:VisualElement>
 
-                        <ui:Label text="Board" class="section-label join-section-label" picking-mode="Ignore" />
-                        <ui:VisualElement name="map-row" class="map-row" />
-                        <ui:Label name="map-caption" class="label label--muted map-caption-line" picking-mode="Ignore" />
+                            <ui:Label name="create-error-label" class="label status-line" />
+                            <ui:Button name="create-match-button" text="Create online match" class="button button--primary create-action" />
 
-                        <ui:Label text="Opponent" class="section-label join-section-label" picking-mode="Ignore" />
-                        <ui:VisualElement class="opponent-row">
-                            <ui:Button name="player-opponent-button" class="button button--selected opponent-option">
-                                <ui:VisualElement class="toy-icon toy-icon--player" picking-mode="Ignore" />
-                                <ui:VisualElement class="option-copy" picking-mode="Ignore">
-                                    <ui:Label text="Player" class="toy-button__label opponent-option__name" />
-                                    <ui:Label text="Online" class="toy-button__label opponent-option__detail" />
-                                </ui:VisualElement>
-                            </ui:Button>
-                            <ui:Button name="ai-opponent-button" class="button opponent-option">
-                                <ui:VisualElement class="toy-icon toy-icon--bot" picking-mode="Ignore" />
-                                <ui:VisualElement class="option-copy" picking-mode="Ignore">
-                                    <ui:Label text="AI" class="toy-button__label opponent-option__name" />
-                                    <ui:Label text="Local" class="toy-button__label opponent-option__detail" />
-                                </ui:VisualElement>
-                            </ui:Button>
-                        </ui:VisualElement>
-
-                        <ui:VisualElement name="local-multiplayer-row" class="local-multiplayer-row hidden">
-                            <ui:Toggle name="local-multiplayer-toggle" text="Local multiplayer (dev)" value="false" enabled="false" class="toggle local-multiplayer-toggle" />
-                            <ui:Label text="Connect MPPM Player 2 at 127.0.0.1:7777." class="label label--muted local-multiplayer-detail" picking-mode="Ignore" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="fog-row">
-                            <ui:VisualElement class="toy-icon toy-icon--fog fog-icon" picking-mode="Ignore" />
-                            <ui:VisualElement class="fog-copy">
-                                <ui:Toggle name="fog-toggle" text="Fog of war" value="true" class="toggle fog-toggle" />
-                                <ui:Label text="Hide enemies outside your vision." class="label label--muted fog-detail" picking-mode="Ignore" />
+                            <ui:VisualElement name="relay-code-panel" class="relay-code-panel hidden">
+                                <ui:Label name="connection-code-heading" text="Relay code" class="section-label" picking-mode="Ignore" />
+                                <ui:Label name="relay-code-label" class="relay-code" />
+                                <ui:Label name="relay-status-label" class="label label--muted relay-status" />
+                                <ui:Button name="cancel-host-button" text="Cancel" class="button relay-cancel hidden" />
                             </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:Label name="create-error-label" class="label status-line" />
-                        <ui:Button name="create-match-button" text="Create online match" class="button button--primary create-action" />
 
-                        <ui:VisualElement name="relay-code-panel" class="relay-code-panel hidden">
-                            <ui:Label name="connection-code-heading" text="Relay code" class="section-label" picking-mode="Ignore" />
-                            <ui:Label name="relay-code-label" class="relay-code" />
-                            <ui:Label name="relay-status-label" class="label label--muted relay-status" />
-                            <ui:Button name="cancel-host-button" text="Cancel" class="button relay-cancel hidden" />
+                        <ui:VisualElement name="join-panel" class="join-panel hidden">
+                            <ui:Label text="Relay code" class="section-label join-section-label join-section-label--first" picking-mode="Ignore" />
+                            <ui:Label text="Ask the host for the code their match is showing." class="label label--muted join-code-hint" picking-mode="Ignore" />
+                            <ui:TextField name="join-code-input" class="text-field join-code-input" />
+                            <ui:Label name="join-status-label" class="label status-line" />
+                            <ui:Button name="join-match-button" text="Join match" class="button button--primary create-action" />
+                            <ui:Button name="cancel-join-button" text="Cancel" class="button join-cancel hidden" />
                         </ui:VisualElement>
-                    </ui:VisualElement>
-
-                    <ui:VisualElement name="join-panel" class="toy-panel join-panel hidden">
-                        <ui:Label text="Join a friend" class="title-lg" picking-mode="Ignore" />
-                        <ui:Label text="Relay code" class="section-label join-section-label" picking-mode="Ignore" />
-                        <ui:TextField name="join-code-input" class="text-field join-code-input" />
-                        <ui:Label name="join-status-label" class="label status-line" />
-                        <ui:Button name="join-match-button" text="Join match" class="button button--primary create-action" />
-                        <ui:Button name="cancel-join-button" text="Cancel" class="button join-cancel hidden" />
-                    </ui:VisualElement>
-                </ui:ScrollView>
+                    </ui:ScrollView>
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <ui:VisualElement class="join-stage" picking-mode="Ignore">
-                <ui:VisualElement class="join-stage__picture" />
+                <ui:VisualElement class="join-stage__picture" picking-mode="Ignore">
+                    <ui:VisualElement class="join-stage__wash" picking-mode="Ignore" />
+                    <ui:VisualElement class="toy-vignette" picking-mode="Ignore" />
+                    <ui:VisualElement class="toy-scrim-bottom join-stage__scrim" picking-mode="Ignore" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

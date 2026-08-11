@@ -173,6 +173,18 @@ public class Shooting : NetworkBehaviour
         shootingCoroutine = StartCoroutine(InitiateShooting());
     }
 
+    /// <summary>
+    /// End this unit's turn without firing, releasing the round's wait on it. A dodger that is
+    /// still picking itself up when the round stops authorising new shooting cycles has missed the
+    /// fight; opening one here would empty a magazine into units already ordered to cease fire.
+    /// </summary>
+    public void StandDown()
+    {
+        PauseShooting();
+        allowShooting = false;
+        stillShooting = false;
+    }
+
     public void ContinueShooting()
     {
         allowShooting = true; //reallow shooting
