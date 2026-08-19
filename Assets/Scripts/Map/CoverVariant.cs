@@ -20,6 +20,15 @@ public class CoverVariant : MonoBehaviour
     [Tooltip("Variant index used for each folded wall group, in the order listed in the builder.")]
     public int forcedVariant = -1;
 
+#if UNITY_EDITOR
+    /// <summary>
+    /// DEV: forces one silhouette on every wall, for capture. The container and stack variants
+    /// carry deep grooves in a dark slate body; up close they are depot detail, but at the board
+    /// scale a trailer shoots from they collapse into black slots that read as a broken texture.
+    /// </summary>
+    public static int devForcedVariant = -1;
+#endif
+
     private void OnEnable() => Apply();
 
     private void OnValidate() => Apply();
@@ -35,6 +44,10 @@ public class CoverVariant : MonoBehaviour
         int column = Mathf.RoundToInt(transform.position.x / GameLoop.cellSize);
         int row = Mathf.RoundToInt(transform.position.z / GameLoop.cellSize);
         int chosen = forcedVariant >= 0 ? forcedVariant : VariantForCell(column, row);
+#if UNITY_EDITOR
+        if (devForcedVariant >= 0)
+            chosen = devForcedVariant;
+#endif
         Quaternion facing = Quaternion.Euler(0f, YawForCell(column, row), 0f);
 
         for (int i = 0; i < variants.Length; i++)

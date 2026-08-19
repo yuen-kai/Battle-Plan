@@ -443,9 +443,13 @@ public sealed class SmokeScreenVisual : MonoBehaviour
 
     private void Pose(float age)
     {
-        Camera viewCamera = GameLoop.Instance != null ? GameLoop.Instance.TeamCamera : null;
-        if (viewCamera == null)
-            viewCamera = Camera.main;
+        // Whoever is actually looking at the board, which is not always the board camera. Both
+        // halves of this bank depend on it: the masses are turned to face it, and VeilPush walks
+        // one mass per cell along its view axis. Aimed at a camera that is not the one rendering,
+        // the masses come out as ellipses and the veil lands somewhere other than in front of the
+        // unit it is meant to cover, which shows every mass's own outline through the ones in
+        // front of it.
+        Camera viewCamera = GameLoop.ViewCamera;
         if (viewCamera == null)
             return;
 

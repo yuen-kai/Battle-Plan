@@ -74,3 +74,18 @@ crashlytics-build.properties
 # Agent-generated visual artifacts
 /Assets/Screenshots/
 /Assets/Screenshots.meta
+
+# macOS Finder metadata
+.DS_Store
+
+# Python tooling caches (Tools/trailer, etc.)
+__pycache__/
+*.pyc
+
+# Trailer capture output (rendered frames/video, can get very large),
+# except the finished trailer videos themselves
+/Captures/*
+!/Captures/Trailer/
+/Captures/Trailer/*
+!/Captures/Trailer/BattlePlan_Characters_Scored.mp4
+!/Captures/Trailer/BattlePlan_Gameplay_Scored.mp4

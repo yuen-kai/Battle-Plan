@@ -91,6 +91,29 @@ public class Health : NetworkBehaviour
         StartCoroutine(DeactivateOnServerNextFrame());
     }
 
+#if UNITY_EDITOR
+    // Staging a wounded unit is a drop in HP like any other, so it would otherwise throw a damage
+    // number and a hit reaction on the first frame of a shot that has not started yet.
+    private bool devSuppressImpact;
+
+    /// <summary>
+    /// Dev-only: sets current HP directly so a capture rig can stage a wounded unit.
+    /// <para>
+    /// This deliberately bypasses <see cref="TakeDamage"/>. Reaching a low HP the honest way would
+    /// mean killing and respawning between staged shots, and a kill runs round-end arbitration —
+    /// wiping a crew to set up a shot would end the match the rig is filming inside. It clamps
+    /// above zero so it can never be the thing that kills a unit; only real damage does that.
+    /// </para>
+    /// </summary>
+    public void DevSetHealth(float value)
+    {
+        if (!IsServer || !isAlive.Value)
+            return;
+        devSuppressImpact = true;
+        currentHealth.Value = Mathf.Clamp(value, 1f, MaxHealth);
+    }
+#endif
+
     /// <summary>
     /// Server-only revival for respawn-enabled modes. Restores health and transient
     /// movement/shooting state without resetting the unit's ability cooldown.
@@ -136,6 +159,14 @@ public class Health : NetworkBehaviour
     private void OnHealthChanged(float previousValue, float newValue)
     {
         UpdateHealthFill(newValue);
+
+#if UNITY_EDITOR
+        if (devSuppressImpact)
+        {
+            devSuppressImpact = false;
+            return;
+        }
+#endif
 
         // Impact frame on every peer; NetworkVariable callbacks also fire after fog NetworkShow
         // resync, but only react to an actual decrease.

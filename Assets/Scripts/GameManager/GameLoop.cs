@@ -383,7 +383,26 @@ public class GameLoop : NetworkBehaviour
     private GameObject wallPrefab;
     public static HashSet<Vector2Int> wallLayout => MapCatalog.Active.Walls;
 
-    private List<Vector2Int[]> spawns = CreateSpawnLayout(devMode);
+    private List<Vector2Int[]> spawns = CreateSpawnLayout(UseDevSpawnLayout());
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// DEV: keep the production deployment even in dev mode. The dev layout starts the crews
+    /// almost on top of each other so a tester reaches contact immediately, which is the wrong
+    /// opening to film — units begin the match overlapping and the first casualty lands about a
+    /// second in. Set before the Game scene loads; the layout is chosen as the loop is built.
+    /// </summary>
+    public static bool devUseProductionSpawns;
+#endif
+
+    private static bool UseDevSpawnLayout()
+    {
+#if UNITY_EDITOR
+        if (devUseProductionSpawns)
+            return false;
+#endif
+        return devMode;
+    }
 
     /// <summary>
     /// Units actually fielded per team this match. Rosters are always the configured crew length
@@ -585,6 +604,38 @@ public class GameLoop : NetworkBehaviour
     public GameObject teamCameraParent;
     public Camera TeamCamera;
 
+#if UNITY_EDITOR
+    /// <summary>
+    /// DEV: the camera that camera-facing effects should turn to, when something other than the
+    /// board camera is doing the looking. Only the trailer rig sets it, and only while filming.
+    /// </summary>
+    public static Camera devViewCameraOverride;
+#endif
+
+    /// <summary>
+    /// The camera an effect should face and measure depth along — the board camera, normally.
+    /// <para>
+    /// Billboarded effects used to resolve this for themselves, which was fine until something
+    /// other than the board camera was pointed at the board. A bank of camera-facing quads aimed
+    /// at a camera that is not the one recording is tilted with respect to the lens, so its round
+    /// masses project as ellipses, and any depth trick measured along the wrong view axis puts
+    /// them in the wrong order front to back. That is a smoke screen rendering as a pile of
+    /// translucent eggs instead of one cloud.
+    /// </para>
+    /// </summary>
+    public static Camera ViewCamera
+    {
+        get
+        {
+#if UNITY_EDITOR
+            if (devViewCameraOverride != null)
+                return devViewCameraOverride;
+#endif
+            Camera board = Instance != null ? Instance.TeamCamera : null;
+            return board != null ? board : Camera.main;
+        }
+    }
+
     private readonly HashSet<ulong> playAgain = new();
     private bool matchEnded;
     private bool disconnectRecoveryStarted;
@@ -744,7 +795,7 @@ public class GameLoop : NetworkBehaviour
         // The field initializer ran before the replicated options arrived, so a client would have
         // built its deployment from whatever board it last had selected locally. Rebuild now that
         // the server's map is known.
-        spawns = CreateSpawnLayout(devMode);
+        spawns = CreateSpawnLayout(UseDevSpawnLayout());
 
         if (
             IsServer
@@ -1739,6 +1790,15 @@ public class GameLoop : NetworkBehaviour
         ClientRpcParams clientRpcParams = default
     )
     {
+        ShowSmokeScreenLocal(cellWorldPositions);
+    }
+
+    /// <summary>
+    /// Stands a screen up on this peer: the cells it covers, the visual over them, and the vision
+    /// bookkeeping that decides how much of it you can see through.
+    /// </summary>
+    private void ShowSmokeScreenLocal(Vector3[] cellWorldPositions)
+    {
         ClearSmokeScreenVisualsLocal();
         if (!IsClient)
             return;
@@ -1763,6 +1823,29 @@ public class GameLoop : NetworkBehaviour
         RefreshClientFogForSmokeChange();
         StartClientSmokeVision();
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// DEV: stands a screen up outside the round loop, through the same path a real one takes.
+    /// <para>
+    /// Tooling that deploys smoke by calling <see cref="SmokeScreenVisual.Create"/> itself gets a
+    /// cloud that is never told which of its cells the crew can see into, so every mass stays at
+    /// its unseen alpha and the bank is opaque for its whole life. That is not what a screen looks
+    /// like to the player who threw it — he is standing next to it with a clear look into most of
+    /// it, and those cells are drawn as a wash. Going through here instead registers the smoked
+    /// cells, seeds the seen set and starts the vision loop, so the picture is the shipping one.
+    /// </para>
+    /// </summary>
+    public void DevShowSmokeScreen(Vector3[] cellWorldPositions) =>
+        ShowSmokeScreenLocal(cellWorldPositions);
+
+    /// <summary>DEV: takes a screen stood up by <see cref="DevShowSmokeScreen"/> back down.</summary>
+    public void DevHideSmokeScreen()
+    {
+        ClearSmokeScreenVisualsLocal();
+        RefreshClientFogForSmokeChange();
+    }
+#endif
 
     [ClientRpc]
     private void HideSmokeScreenClientRpc()
