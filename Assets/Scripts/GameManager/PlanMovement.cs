@@ -750,7 +750,7 @@ public class PlanMovement : MonoBehaviour
     // the outlines it is drawn among to avoid swamping them.
     private const float AbilityDiscAlphaScale = 0.55f;
 
-    private readonly List<Vector3> abilityPathPoints = new();
+    private static readonly List<Vector3> abilityPathPoints = new();
 
     /// <summary>
     /// The colour a unit's ability plan draws in. This is the same per-roster-slot colour its
@@ -812,14 +812,36 @@ public class PlanMovement : MonoBehaviour
         Vector3 square,
         UnitData unitData,
         bool selected
+    ) =>
+        BuildAbilityPreview(
+            planVisualsFolder != null ? planVisualsFolder.transform : null,
+            unit,
+            start,
+            square,
+            unitData,
+            GetRosterSlot(unit),
+            selected
+        );
+
+    /// <summary>
+    /// The board half of <see cref="BuildAbilityIndicator"/>, with the planning screen's own state
+    /// handed in rather than read off this component. Tooling that has to put a plan on the board
+    /// without a planning screen behind it draws the shipping telegraph through here instead of a
+    /// lookalike built to match it.
+    /// </summary>
+    public static GameObject BuildAbilityPreview(
+        Transform parent,
+        GameObject unit,
+        Vector3 start,
+        Vector3 square,
+        UnitData unitData,
+        int rosterSlot,
+        bool selected
     )
     {
-        GameObject host = new($"AbilityPlan_{GetRosterSlot(unit)}");
-        host.transform.SetParent(
-            planVisualsFolder != null ? planVisualsFolder.transform : null,
-            false
-        );
-        Color color = GetAbilityPreviewColor(GetRosterSlot(unit), selected);
+        GameObject host = new($"AbilityPlan_{rosterSlot}");
+        host.transform.SetParent(parent, false);
+        Color color = GetAbilityPreviewColor(rosterSlot, selected);
 
         // Ask before the directional branch below rewrites `square` into a resolved destination:
         // an ability is handed the square the player actually picked and works out for itself
@@ -911,7 +933,7 @@ public class PlanMovement : MonoBehaviour
     /// Abilities that reach their target without travelling report nothing and draw nothing, so no
     /// new ability needs this method changed to be previewed.
     /// </summary>
-    void ShowAbilityPathPreview(
+    static void ShowAbilityPathPreview(
         GameObject host,
         GameObject unit,
         Vector3 selectedSquare,
@@ -936,7 +958,7 @@ public class PlanMovement : MonoBehaviour
             .Show(abilityPathPoints, kind, color);
     }
 
-    void CreateSquareFootprintIndicator(
+    static void CreateSquareFootprintIndicator(
         GameObject host,
         Vector3 square,
         int radius,
