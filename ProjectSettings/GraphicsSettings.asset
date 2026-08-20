@@ -39,6 +39,30 @@ GraphicsSettings:
   - {fileID: 4800000, guid: 426485b6f0434e0d884ccdb3180a4bd8, type: 3}
   - {fileID: 4800000, guid: 45d1d4d029c9d401b9c3bd5aed743a27, type: 3}
   - {fileID: 4800000, guid: 7ef9c5416be304d1d971fef5bf9f8e16, type: 3}
+  - {fileID: 4800000, guid: a5988f1cdee3c47bc9382d7a7b13ea37, type: 3}
+  - {fileID: 4800000, guid: 70977644d74e7433892aabdbb0eee8a1, type: 3}
+  - {fileID: 4800000, guid: 315d83feb2af4833a9545558523142b8, type: 3}
+  - {fileID: 4800000, guid: 04232d184ed254c4d8477250d308ffff, type: 3}
+  - {fileID: 4800000, guid: 15ed8b40d6a241999e7fa26cecfdf324, type: 3}
+  - {fileID: 4800000, guid: b34e2469631334e57b91cb08076f2315, type: 3}
+  - {fileID: 4800000, guid: bbe5de0d684f34111be79987cacdf59d, type: 3}
+  - {fileID: 4800000, guid: 0f2c460c636344cd4986837b1d1af587, type: 3}
+  - {fileID: 4800000, guid: 57abd652bc8014fd3b4409a1a2f28b85, type: 3}
+  - {fileID: 4800000, guid: 739bedaca42c543f4b0fa00b7f0c4902, type: 3}
+  - {fileID: 4800000, guid: 491a6f83101e043d493f271396150d3f, type: 3}
+  - {fileID: 4800000, guid: f093c22b859084e58978546b62ad033c, type: 3}
+  - {fileID: 4800000, guid: 59a08e2adc3804f0f829302f5d14c501, type: 3}
+  - {fileID: 4800000, guid: 7e5b56856c9d440c79f7c220362497b2, type: 3}
+  - {fileID: 4800000, guid: ac77683a970e24b938b70d19e8e43711, type: 3}
+  - {fileID: 4800000, guid: 979a302d8160c498381a36aa03a7efc5, type: 3}
+  - {fileID: 4800000, guid: 0b9213004b2984606a7cafed199354b2, type: 3}
+  - {fileID: 4800000, guid: f2bbc9e88f0d1495a9d22f1485b90351, type: 3}
+  - {fileID: 4800000, guid: d838800f5a366441dbd85eec937d2d49, type: 3}
+  - {fileID: 4800000, guid: 3c7f6b81a4d24e6b9c1f0d5a72e8b413, type: 3}
+  - {fileID: 4800000, guid: 0c5b0e4c4ce5a4857ada3f40edd66af7, type: 3}
+  - {fileID: 4800000, guid: 9a41e2c07f5b4d3ea6820b94cd17f5d8, type: 3}
+  - {fileID: 4800000, guid: 61a72d57a2e564c1daf860af03f8adc8, type: 3}
+  - {fileID: 4800000, guid: 86c58bd39467b485c9d7a331b583624e, type: 3}
   m_PreloadedShaders: []
   m_PreloadShadersBatchTimeLimit: -1
   m_SpritesDefaultMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
