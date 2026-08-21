@@ -37,7 +37,7 @@ public sealed class AbilityStatusRing : MonoBehaviour
     //
     // A move or ability range paves the cells it covers with MoveOverlayCell, whose plane is opaque
     // and writes depth at y 0.2, with a translucent highlight over it at 0.227. Every unit's base
-    // plate tops out under that — 0.156, and only 0.1 on the Shotgunner — so a dial that sits on
+    // plate tops out under that — 0.156, and only 0.1 on the Ramrod — so a dial that sits on
     // the plate is depth-rejected outright the moment a range is shown, which is the one moment a
     // player is deciding what to spend the round on. Above both, the dial survives; the difference
     // from the plate is under a tenth of a unit and does not read as float at the board's camera.

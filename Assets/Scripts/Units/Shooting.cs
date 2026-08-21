@@ -11,9 +11,70 @@ using UnityEngine;
 /// </summary>
 public class Shooting : NetworkBehaviour
 {
+    /// <summary>
+    /// A temporary fire-rate multiplier, server-only, structurally identical to
+    /// <see cref="Movement.TimedMoveSpeedBoost"/> — same TrySet/GetMultiplier/IsActive/Clear shape —
+    /// but kept as its own type here rather than reused directly, since "effective speed" doesn't
+    /// read naturally against a per-shot delay: a higher multiplier divides the delay rather than
+    /// scaling it (see <see cref="GetEffectiveDelay"/>).
+    /// </summary>
+    public struct TimedFireRateBoost
+    {
+        private float multiplier;
+        private float startsAt;
+        private float expiresAt;
+
+        public bool TrySet(float requestedMultiplier, float duration, float startsAt)
+        {
+            if (
+                requestedMultiplier <= 1f
+                || duration <= 0f
+                || float.IsNaN(requestedMultiplier)
+                || float.IsInfinity(requestedMultiplier)
+                || float.IsNaN(duration)
+                || float.IsInfinity(duration)
+                || float.IsNaN(startsAt)
+                || float.IsInfinity(startsAt)
+            )
+            {
+                return false;
+            }
+
+            multiplier = requestedMultiplier;
+            this.startsAt = startsAt;
+            expiresAt = startsAt + duration;
+            return true;
+        }
+
+        public float GetMultiplier(float atTime)
+        {
+            return atTime >= startsAt && atTime < expiresAt ? multiplier : 1f;
+        }
+
+        public bool IsActive(float atTime)
+        {
+            return GetMultiplier(atTime) > 1f;
+        }
+
+        /// <summary>A higher multiplier fires faster, so it divides the delay rather than scaling it.</summary>
+        public float GetEffectiveDelay(float baseDelay, float atTime)
+        {
+            return Mathf.Max(0f, baseDelay) / GetMultiplier(atTime);
+        }
+
+        public void Clear()
+        {
+            multiplier = 1f;
+            startsAt = float.PositiveInfinity;
+            expiresAt = float.NegativeInfinity;
+        }
+    }
+
     public UnitData unitData;
 
     private string enemyTeam;
+
+    private TimedFireRateBoost temporaryFireRateBoost;
 
     private TargetLaserVisual targetLaser;
 
@@ -58,6 +119,8 @@ public class Shooting : NetworkBehaviour
         GameLoop.OrderContinueShooting += ContinueShooting;
         // enemyTeam is resolved lazily (ResolveEnemyTeam): at spawn time GameLoop has not yet
         // assigned this unit's team tag (tags are set right after NetworkHelper.Spawn returns).
+
+        temporaryFireRateBoost.Clear();
     }
 
     public override void OnNetworkDespawn()
@@ -157,6 +220,25 @@ public class Shooting : NetworkBehaviour
         );
     }
 
+    /// <summary>
+    /// Server-only, mirrors <see cref="Movement.TryApplyTemporaryMoveSpeedBoost"/>: a multiplier
+    /// above 1 for a fixed wall-clock window starting at <paramref name="startsAt"/>. Composes with
+    /// the fire-rate warm-up ramp by dividing whatever ramp-adjusted delay <c>InitiateShooting</c>
+    /// would otherwise use, rather than the two interacting in some other, unspecified way.
+    /// </summary>
+    public bool TryApplyTemporaryFireRateBoost(float multiplier, float duration, float startsAt)
+    {
+        if (!IsServer)
+            return false;
+
+        return temporaryFireRateBoost.TrySet(multiplier, duration, startsAt);
+    }
+
+    public void ClearTemporaryFireRateBoost()
+    {
+        temporaryFireRateBoost.Clear();
+    }
+
     public void PauseShooting()
     {
         if (shootingCoroutine != null)
@@ -167,8 +249,21 @@ public class Shooting : NetworkBehaviour
         stillShooting = true;
     }
 
+    /// <summary>
+    /// Dev-only, persistent cease-fire. Unlike <see cref="StandDown"/> — which the round loop undoes
+    /// on its next <c>OrderStillShooting</c>/<c>OrderContinueShooting</c> broadcast — this survives
+    /// every broadcast until it is cleared, so a sandbox target dummy stays inert across rounds and
+    /// through the return-fire window instead of shooting back.
+    /// </summary>
+    public bool holdFire;
+
     public void StartShooting()
     {
+        if (holdFire)
+        {
+            StandDown();
+            return;
+        }
         PauseShooting();
         shootingCoroutine = StartCoroutine(InitiateShooting());
     }
@@ -187,6 +282,12 @@ public class Shooting : NetworkBehaviour
 
     public void ContinueShooting()
     {
+        if (holdFire)
+        {
+            StandDown();
+            return;
+        }
+
         allowShooting = true; //reallow shooting
         if (stillShooting == false) //restart shooting if not already shooting
         {
@@ -268,7 +369,16 @@ public class Shooting : NetworkBehaviour
                 ); // Track target
                 FireBullet();
 
-                yield return new WaitForSeconds(unitData.timeBetweenShots);
+                int shotsFiredThisBurst = unitData.magazineSize - currentAmmo;
+                float shotDelay = ComputeRampedShotDelay(
+                    shotsFiredThisBurst,
+                    unitData.fireRateRampShots,
+                    unitData.fireRateRampStartDelay,
+                    unitData.timeBetweenShots
+                );
+                shotDelay = temporaryFireRateBoost.GetEffectiveDelay(shotDelay, Time.time);
+
+                yield return new WaitForSeconds(shotDelay);
             }
 
             if (allowShooting)
@@ -292,6 +402,27 @@ public class Shooting : NetworkBehaviour
         stillShooting = false;
     }
 
+    /// <summary>
+    /// Pure interpolation for the fire-rate warm-up ramp: 0 shots fired this burst starts at
+    /// <paramref name="rampStartDelay"/> and reaches <paramref name="floorDelay"/> once
+    /// <paramref name="shotsFiredThisBurst"/> reaches <paramref name="rampShots"/>.
+    /// <paramref name="rampShots"/> &lt;= 0 disables the ramp entirely (today's constant-delay
+    /// behavior for every existing unit).
+    /// </summary>
+    public static float ComputeRampedShotDelay(
+        int shotsFiredThisBurst,
+        int rampShots,
+        float rampStartDelay,
+        float floorDelay
+    )
+    {
+        if (rampShots <= 0)
+            return floorDelay;
+
+        float progress = Mathf.Clamp01((float)shotsFiredThisBurst / rampShots);
+        return Mathf.Lerp(rampStartDelay, floorDelay, progress);
+    }
+
     public void FireBullet(
         float spread = -1,
         float bulletSpeed = -1,
@@ -299,7 +430,11 @@ public class Shooting : NetworkBehaviour
         float backstabMultiplier = -1,
         float range = -1,
         float backstabAngle = -1,
-        GameObject bulletPrefab = null
+        GameObject bulletPrefab = null,
+        bool? explodesOnImpact = null,
+        float aoeRadius = -1,
+        bool? pierces = null,
+        System.Action<GameObject> onHit = null
     )
     {
         spread = spread == -1 ? unitData.bulletSpread : spread;
@@ -310,6 +445,9 @@ public class Shooting : NetworkBehaviour
         range = range == -1 ? unitData.bulletRange : range;
         backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
         bulletPrefab = bulletPrefab ?? ResolveBulletPrefab();
+        bool resolvedExplodesOnImpact = explodesOnImpact ?? unitData.bulletExplodesOnImpact;
+        float resolvedAoeRadius = aoeRadius == -1 ? unitData.bulletAoeRadius : aoeRadius;
+        bool resolvedPierces = pierces ?? unitData.bulletPierces;
 
         // Fire bullet with spread
         Vector3 baseDirection = transform.forward;
@@ -327,7 +465,11 @@ public class Shooting : NetworkBehaviour
                 backstabMultiplier,
                 range,
                 backstabAngle,
-                authoritative: true
+                authoritative: true,
+                explodesOnImpact: resolvedExplodesOnImpact,
+                aoeRadius: resolvedAoeRadius,
+                pierces: resolvedPierces,
+                onHit: onHit
             )
         );
 
@@ -354,6 +496,10 @@ public class Shooting : NetworkBehaviour
         if (IsServer)
             return; // the authoritative copy is already in flight
 
+        // AoE/onHit are damage-side concerns (authoritative-only) and explodesOnImpact makes no
+        // visual difference here either way: whatever collision this tracer hits already destroys
+        // it, with or without the flag. Only pierces changes what the tracer looks like, so it
+        // reads off unitData directly the same way this tracer already does for everything else.
         CreateBullet(
             ResolveBulletPrefab(),
             origin,
@@ -363,7 +509,8 @@ public class Shooting : NetworkBehaviour
             unitData.backstabMultiplier,
             unitData.bulletRange,
             unitData.backstabAngle,
-            authoritative: false
+            authoritative: false,
+            pierces: unitData.bulletPierces
         );
     }
 
@@ -376,7 +523,11 @@ public class Shooting : NetworkBehaviour
         float backstabMultiplier,
         float range,
         float backstabAngle,
-        bool authoritative
+        bool authoritative,
+        bool explodesOnImpact = false,
+        float aoeRadius = 0f,
+        bool pierces = false,
+        System.Action<GameObject> onHit = null
     )
     {
         GameObject bullet = Instantiate(bulletPrefab, origin, Quaternion.LookRotation(direction));
@@ -389,7 +540,11 @@ public class Shooting : NetworkBehaviour
                 range * GameLoop.cellSize,
                 backstabAngle,
                 ResolveEnemyTeam(),
-                authoritative
+                authoritative,
+                explodesOnImpact,
+                aoeRadius * GameLoop.cellSize,
+                pierces,
+                onHit
             );
         return bullet;
     }

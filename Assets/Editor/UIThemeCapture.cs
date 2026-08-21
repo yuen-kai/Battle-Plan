@@ -388,7 +388,7 @@ public static class UIThemeCapture
     private static readonly string[] UnitNames =
     {
         "Soldier",
-        "Shotgunner",
+        "Ramrod",
         "Sniper",
         "Pogo Rider",
         "Commander",

@@ -314,7 +314,27 @@ public class GameLoop : NetworkBehaviour
     // on every frame spent retrying them.
     private readonly HashSet<GameObject> unitsWithNowhereToGo = new();
 
-    // Server-authored round state. Smoke never enters wallLayout, physics, or pathing.
+    // Server-authored round state. Smoke never enters wallLayout, physics, or pathing. Each
+    // deployment is one canister's landing footprint with its own rounds-remaining countdown, so
+    // overlapping throws from different rounds expire independently; activeSmokeCells is the
+    // flattened union of every currently-active deployment's cells, rebuilt whenever a deployment
+    // is added or culled so existing readers (IsSmokeCellActive, DoesCellSegmentCrossActiveSmoke,
+    // ActiveSmokeCells, etc.) never need to know the set is backed by the split.
+    private const int SmokeDeploymentRounds = 2;
+
+    private sealed class SmokeDeployment
+    {
+        public readonly HashSet<Vector2Int> Cells;
+        public int RoundsRemaining;
+
+        public SmokeDeployment(HashSet<Vector2Int> cells, int roundsRemaining)
+        {
+            Cells = cells;
+            RoundsRemaining = roundsRemaining;
+        }
+    }
+
+    private readonly List<SmokeDeployment> smokeDeployments = new();
     private readonly HashSet<Vector2Int> activeSmokeCells = new();
     private bool acceptingSmokeRegistrations;
 
@@ -324,6 +344,16 @@ public class GameLoop : NetworkBehaviour
     private GameObject clientSmokeVisualRoot;
     private SmokeScreenVisual clientSmokeVisual;
     private Coroutine clientSmokeVisionCoroutine;
+
+    // Permanent wall destruction. Non-null once this peer has cloned the active map into its own
+    // match-scoped copy so a destroyed wall never mutates the canonical MapCatalog singleton.
+    // Built independently on the server and on each client, since MapCatalog.Active is per-peer.
+    private MapDefinition wallDestructionMap;
+
+    // Cell -> the physical wall instance placed there this match, scanned once from CoverVariant
+    // components in the scene rather than tracked at spawn time. Rebuilt every match because
+    // NetworkHelper.CleanupAllNetworkObjects destroys the previous match's walls between rematches.
+    private readonly Dictionary<Vector2Int, GameObject> wallInstancesByCell = new();
 
     public UnitDatabase allUnits;
 
@@ -393,6 +423,7 @@ public class GameLoop : NetworkBehaviour
     /// second in. Set before the Game scene loads; the layout is chosen as the loop is built.
     /// </summary>
     public static bool devUseProductionSpawns;
+
 #endif
 
     private static bool UseDevSpawnLayout()
@@ -406,16 +437,20 @@ public class GameLoop : NetworkBehaviour
 
     /// <summary>
     /// Units actually fielded per team this match. Rosters are always the configured crew length
-    /// so validation and <see cref="ConfigureTeam"/> stay untouched; the tutorial sandbox simply
-    /// spawns fewer of them.
+    /// so validation and <see cref="ConfigureTeam"/> stay untouched; the tutorial and character
+    /// sandboxes simply spawn fewer of them.
     /// </summary>
     public static int UnitsPerTeamThisMatch =>
-        TutorialSession.IsActive ? TutorialSession.UnitsPerTeam : RosterRules.UnitsPerPlayer;
+        TutorialSession.IsActive ? TutorialSession.UnitsPerTeam
+        : SandboxSession.IsActive ? SandboxSession.UnitsPerTeam
+        : RosterRules.UnitsPerPlayer;
 
     private static List<Vector2Int[]> CreateSpawnLayout(bool useDevLayout)
     {
         if (TutorialSession.IsActive)
             return TutorialSession.CreateSpawnLayout();
+        if (SandboxSession.IsActive)
+            return SandboxSession.CreateSpawnLayout();
 
         List<Vector2Int[]> layout = new(TeamCount);
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
@@ -575,6 +610,7 @@ public class GameLoop : NetworkBehaviour
     > unitSpawnTransforms = new();
     private BotPlayer botPlayer;
     private TutorialDirector tutorialDirector;
+    private SandboxDirector sandboxDirector;
     private int roundNumber;
     private bool planningChangesOpen;
     private double planningDeadline;
@@ -771,8 +807,10 @@ public class GameLoop : NetworkBehaviour
         rejoinHoldDeadline = 0d;
         pendingRejoinRestores.Clear();
         GameHUDController.Instance?.HideRejoinNotice();
+        smokeDeployments.Clear();
         activeSmokeCells.Clear();
         ClearSmokeScreenVisualsLocal();
+        ClearWallDestructionState();
 
         if (IsServer)
         {
@@ -813,6 +851,10 @@ public class GameLoop : NetworkBehaviour
         // opponent server-side and drives the coaching prompts on the same client.
         if (TutorialSession.IsActive && tutorialDirector == null)
             tutorialDirector = gameObject.AddComponent<TutorialDirector>();
+
+        // Same arrangement for the character sandbox, which is also loopback-host-only.
+        if (SandboxSession.IsActive && sandboxDirector == null)
+            sandboxDirector = gameObject.AddComponent<SandboxDirector>();
 
         GameHUDController.Instance?.SetMatchSummary(replicatedMatchOptions.Value);
         RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
@@ -868,6 +910,7 @@ public class GameLoop : NetworkBehaviour
         ClearKingOfTheHillOverlay();
         unitSpawnTransforms.Clear();
         ClearActiveSmokeCells(notifyClients: false);
+        ClearWallDestructionState();
 
         if (Instance == this)
             Instance = null;
@@ -895,6 +938,7 @@ public class GameLoop : NetworkBehaviour
     public static void ResetMatchState()
     {
         Instance?.ClearActiveSmokeCells();
+        Instance?.ClearWallDestructionState();
         allTeamUnitObjects.Clear();
         teamParticipants.Clear();
         teamRosters.Clear();
@@ -1411,7 +1455,7 @@ public class GameLoop : NetworkBehaviour
                     yield break;
             }
 
-            ClearActiveSmokeCells();
+            AdvanceSmokeDeploymentsForRoundBoundary();
             roundNumber++;
             dodgeAlertedTeamsThisRound.Clear();
             submittedTeamPaths.Clear();
@@ -1435,9 +1479,11 @@ public class GameLoop : NetworkBehaviour
                 .Range(0, TeamCount)
                 .Max(teamIndex => GetTeamUnits(teamIndex).Count(IsLivingUnit));
             // The tutorial is paced by the student, not a clock: the window is long enough to read
-            // a prompt in and the HUD hides the countdown, so the round ends when they lock in.
-            float timerLength = TutorialSession.IsActive
-                ? TutorialSession.PlanningSeconds
+            // a prompt in and the HUD hides the countdown, so the round ends when they lock in. The
+            // character sandbox is paced by the designer inspecting a kit, for the same reason.
+            float timerLength =
+                TutorialSession.IsActive ? TutorialSession.PlanningSeconds
+                : SandboxSession.IsActive ? SandboxSession.PlanningSeconds
                 : GetPlanningDurationSeconds(largestLivingTeamSize);
             double startTime = NetworkManager.Singleton.ServerTime.Time;
             double endTime = startTime + timerLength;
@@ -1617,14 +1663,19 @@ public class GameLoop : NetworkBehaviour
                 //If moving continues during this time restart checkStillMoving
                 if (CheckStillMoving() || IsReturnFireWindowOpen)
                 {
-                    OrderContinueShooting();
+                    // Null-safe like its sibling at the top of planning: every Shooting unsubscribes
+                    // on despawn, so a teardown mid-execution (a match shutting down, a sandbox
+                    // restarting, the last units dying together) empties these delegates. Invoking
+                    // one bare threw a NullReferenceException that killed this coroutine, stranding
+                    // the round mid-execution instead of letting it wind down.
+                    OrderContinueShooting?.Invoke();
                     while (CheckStillMoving() || IsReturnFireWindowOpen)
                     {
                         yield return null;
                     }
                     yield return null; // Wait a bit before stopping shooting
                 }
-                OrderAllowShooting(false);
+                OrderAllowShooting?.Invoke(false);
 
                 yield return null;
             }
@@ -1688,10 +1739,29 @@ public class GameLoop : NetworkBehaviour
             return false;
         }
 
-        foreach (Vector2Int cell in GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius))
-        {
-            activeSmokeCells.Add(cell);
-        }
+        RegisterSmokeFootprintLocal(center);
+        return true;
+    }
+
+    /// <summary>
+    /// Mutates this peer's own smoke deployments: adds a new deployment covering the footprint,
+    /// rebuilds the flattened active-cells union, and pushes the same whole-set-replace update to
+    /// fog and clients that registration always has. Split out from
+    /// <see cref="TryRegisterSmokeFootprint"/> the same way <c>ApplyWallDestructionLocal</c> is
+    /// split from <c>TryDestroyWallCell</c>, so this core mutation can be exercised directly
+    /// without needing IsServer true on a spawned NetworkBehaviour.
+    /// </summary>
+    private void RegisterSmokeFootprintLocal(Vector2Int center)
+    {
+        smokeDeployments.Add(
+            new SmokeDeployment(
+                new HashSet<Vector2Int>(
+                    GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
+                ),
+                SmokeDeploymentRounds
+            )
+        );
+        RebuildActiveSmokeCellsFromDeployments();
 
         RefreshServerFogForSmokeChange();
         if (IsSpawned && NetworkManager != null && NetworkManager.IsListening)
@@ -1704,7 +1774,74 @@ public class GameLoop : NetworkBehaviour
                     .ToArray()
             );
         }
-        return true;
+    }
+
+    private void RebuildActiveSmokeCellsFromDeployments()
+    {
+        activeSmokeCells.Clear();
+        foreach (SmokeDeployment deployment in smokeDeployments)
+            activeSmokeCells.UnionWith(deployment.Cells);
+    }
+
+    /// <summary>
+    /// Round-boundary tick for smoke: a deployment lasts the round it's thrown in plus one full
+    /// additional round, so this decrements every live deployment's counter and drops whichever
+    /// reach zero — unlike <see cref="ClearActiveSmokeCells"/>, which the four match-lifecycle
+    /// call sites use for an unconditional full clear. Overlapping deployments from different
+    /// throws are independent: one expiring never refreshes or merges into another, it just stops
+    /// contributing its own cells to the union.
+    /// </summary>
+    private void AdvanceSmokeDeploymentsForRoundBoundary()
+    {
+        bool anyExpired = false;
+        for (int i = smokeDeployments.Count - 1; i >= 0; i--)
+        {
+            if (--smokeDeployments[i].RoundsRemaining <= 0)
+            {
+                smokeDeployments.RemoveAt(i);
+                anyExpired = true;
+            }
+        }
+
+        if (!anyExpired)
+            return;
+
+        HashSet<Vector2Int> previousCells = new(activeSmokeCells);
+        RebuildActiveSmokeCellsFromDeployments();
+        if (previousCells.SetEquals(activeSmokeCells))
+            return;
+
+        RefreshServerFogForSmokeChange();
+
+        bool canNotifyClients =
+            IsServer
+            && IsSpawned
+            && NetworkManager != null
+            && NetworkManager.IsListening
+            && !NetworkManager.ShutdownInProgress;
+
+        if (activeSmokeCells.Count == 0)
+        {
+            if (canNotifyClients)
+                HideSmokeScreenClientRpc();
+            else
+            {
+                ClearSmokeScreenVisualsLocal();
+                RefreshClientFogForSmokeChange();
+            }
+            return;
+        }
+
+        Vector3[] cellWorldPositions = activeSmokeCells
+            .OrderBy(cell => cell.y)
+            .ThenBy(cell => cell.x)
+            .Select(gridCoordToWorld)
+            .ToArray();
+
+        if (canNotifyClients)
+            ShowSmokeScreenClientRpc(cellWorldPositions);
+        else
+            ShowSmokeScreenLocal(cellWorldPositions);
     }
 
     /// <summary>
@@ -1764,6 +1901,7 @@ public class GameLoop : NetworkBehaviour
     {
         acceptingSmokeRegistrations = false;
         bool hadActiveSmoke = activeSmokeCells.Count > 0;
+        smokeDeployments.Clear();
         activeSmokeCells.Clear();
         if (hadActiveSmoke)
             RefreshServerFogForSmokeChange();
@@ -1782,6 +1920,111 @@ public class GameLoop : NetworkBehaviour
             ClearSmokeScreenVisualsLocal();
             RefreshClientFogForSmokeChange();
         }
+    }
+
+    /// <summary>
+    /// Server-only seam for an ability that permanently destroys a wall cell for the rest of the
+    /// match. The first call this match clones the active map (<see cref="MapDefinition.Scratch"/>)
+    /// and points MapCatalog at the clone, so every subsequent removal mutates a private copy and
+    /// the canonical MapCatalog singleton is never touched. The next match's OnNetworkSpawn re-runs
+    /// MatchOptions.SetCurrent, which re-resolves MapCatalog.Active back to that pristine singleton,
+    /// so nothing here needs to reset it back.
+    /// <para>
+    /// Deliberately not gated to a round phase: unlike smoke or a return-fire window, a destroyed
+    /// wall has no reason to ever come back, so whichever phase the caller's ability actually
+    /// resolves in is fine.
+    /// </para>
+    /// </summary>
+    public bool TryDestroyWallCell(Vector2Int cell)
+    {
+        if (!IsServer || matchEnded || !wallLayout.Contains(cell))
+            return false;
+
+        ApplyWallDestructionLocal(cell);
+
+        if (IsSpawned && NetworkManager != null && NetworkManager.IsListening)
+            DestroyWallCellClientRpc(cell);
+
+        return true;
+    }
+
+    [ClientRpc]
+    private void DestroyWallCellClientRpc(Vector2Int cell)
+    {
+        // The host already applied this synchronously through TryDestroyWallCell; only a
+        // dedicated client needs the RPC to catch up its own local MapCatalog.Active and scene.
+        if (IsServer)
+            return;
+
+        ApplyWallDestructionLocal(cell);
+    }
+
+    /// <summary>
+    /// Mutates this peer's own view of the board: the private map clone loses the cell, the
+    /// physical instance is deactivated, and fog is marked dirty so a newly opened sightline gets
+    /// recomputed. Runs identically whether it was reached from the server's own call or from a
+    /// client catching up via <see cref="DestroyWallCellClientRpc"/>; setting serverFogDirty here on
+    /// a client is inert since only the server's fog pass ever reads it.
+    /// </summary>
+    private void ApplyWallDestructionLocal(Vector2Int cell)
+    {
+        EnsureWallDestructionMap().Walls.Remove(cell);
+        EnsureWallInstanceRegistry();
+        if (
+            wallInstancesByCell.TryGetValue(cell, out GameObject wallInstance)
+            && wallInstance != null
+        )
+        {
+            wallInstance.SetActive(false);
+        }
+        serverFogDirty = true;
+    }
+
+    private MapDefinition EnsureWallDestructionMap()
+    {
+        if (wallDestructionMap == null)
+        {
+            MapDefinition active = MapCatalog.Active;
+            wallDestructionMap = MapDefinition.Scratch(
+                new HashSet<Vector2Int>(active.Walls),
+                active.HillCells,
+                active.HostDeploymentColumns,
+                active.Id
+            );
+            MapCatalog.SetActive(wallDestructionMap);
+        }
+        return wallDestructionMap;
+    }
+
+    /// <summary>
+    /// Cell -> physical wall instance, scanned once per match. There is no spawn-time registry to
+    /// read instead, so this derives each wall's cell from its own transform the same way
+    /// CoverVariant already does when it picks a silhouette.
+    /// </summary>
+    private void EnsureWallInstanceRegistry()
+    {
+        if (wallInstancesByCell.Count > 0)
+            return;
+
+        foreach (
+            CoverVariant coverVariant in FindObjectsByType<CoverVariant>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            )
+        )
+        {
+            Vector2Int cell = new(
+                Mathf.RoundToInt(coverVariant.transform.position.x / cellSize),
+                Mathf.RoundToInt(coverVariant.transform.position.z / cellSize)
+            );
+            wallInstancesByCell[cell] = coverVariant.gameObject;
+        }
+    }
+
+    private void ClearWallDestructionState()
+    {
+        wallDestructionMap = null;
+        wallInstancesByCell.Clear();
     }
 
     [ClientRpc]
@@ -2303,8 +2546,9 @@ public class GameLoop : NetworkBehaviour
             int mostAlerted = dodgeAlerted.Values.Max(set => set.Count);
             // Three seconds is no time at all to read a first prompt and answer it, so the tutorial
             // window is effectively open-ended; the client closes it the moment a dive is drawn.
-            float window = TutorialSession.IsActive
-                ? TutorialSession.PlanningSeconds
+            float window =
+                TutorialSession.IsActive ? TutorialSession.PlanningSeconds
+                : SandboxSession.IsActive ? SandboxSession.PlanningSeconds
                 : activations.Max(entry => entry.data.timeDivePerUnit) * mostAlerted;
             double endTime = NetworkManager.Singleton.ServerTime.Time + window;
             dodgeWindowEndTime = endTime;
@@ -4100,6 +4344,7 @@ public class GameLoop : NetworkBehaviour
         }
 
         bool replayTutorial = tutorialDirector != null;
+        bool replaySandbox = sandboxDirector != null;
         ResetMatchState();
         NetworkHelper.CleanupAllNetworkObjects();
 
@@ -4115,6 +4360,23 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        // Same for the character sandbox: killing the dummy ends the match, and "play again" there
+        // means another go at the same character rather than a crew-selection screen. The session
+        // keeps whichever character and dummy the sandbox window last chose.
+        if (replaySandbox)
+        {
+            SandboxSession.Begin(SandboxSession.TestUnitIndex, SandboxSession.DummyUnitIndex);
+            MatchOptions.SetCurrent(SandboxSession.BuildMatchOptions());
+            ConfigureTeam(
+                HostTeamIndex,
+                NetworkManager.ServerClientId,
+                SandboxSession.BuildHostRoster()
+            );
+            ConfigureTeam(OpponentTeamIndex, BotParticipantId, SandboxSession.BuildOpponentRoster());
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
         NetworkManager.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
     }
 
@@ -4125,6 +4387,10 @@ public class GameLoop : NetworkBehaviour
     /// </summary>
     public void ExitToMainMenu()
     {
+        // Whatever happens after this is an ordinary match, so the character sandbox closes here
+        // rather than leaking its one-a-side crew size into it. (The tutorial closes itself in
+        // EndMatch instead, because it always reaches a result; the sandbox is exited by hand.)
+        SandboxSession.End();
         GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
         ReconnectSession.Clear();
         NetworkManager networkManager = NetworkManager.Singleton;
@@ -5469,8 +5735,21 @@ public class GameLoop : NetworkBehaviour
 
                 // Start movement with either the actual path or empty list.
                 // Dodge dives run at diveSpeed instead of moveSpeed.
-                unit.GetComponent<Movement>()
-                    .StartMovement(movementPath, diveUnitsThisRound.Contains(unit));
+                bool isDiving = diveUnitsThisRound.Contains(unit);
+                Movement movement = unit.GetComponent<Movement>();
+                movement.StartMovement(movementPath, isDiving);
+
+                // A "shoot while moving" unit fires alongside its move instead of waiting for it to
+                // finish (Movement.MoveToCells skips its own end-of-move restart for exactly this
+                // case). Never for a dive: the dodge recovery window exists specifically so a fast
+                // reposition can't also be a free early shot, and this flag must not undercut that
+                // for any unit that dodges.
+                if (!isDiving && movement.unitData != null && movement.unitData.canShootWhileMoving)
+                {
+                    Shooting shooting = unit.GetComponent<Shooting>();
+                    if (shooting != null)
+                        shooting.StartShooting();
+                }
             }
         }
         diveUnitsThisRound.Clear();
@@ -5888,6 +6167,23 @@ public class GameLoop : NetworkBehaviour
         unitsWithNowhereToGo.IntersectWith(stuck);
 
         return displacements;
+    }
+
+    /// <summary>
+    /// Lets a knockback outside the overlap pass (see AbilityKnockback) book a destination the same
+    /// way ShoveUnitsAside does for its own shoves, so the round's completion wait does not
+    /// conclude while that slide is still animating.
+    /// </summary>
+    public void RegisterUnitBeingShoved(GameObject unit, Vector2Int cell)
+    {
+        if (unit != null)
+            unitsBeingShoved[unit] = cell;
+    }
+
+    public void UnregisterUnitBeingShoved(GameObject unit)
+    {
+        if (unit != null)
+            unitsBeingShoved.Remove(unit);
     }
 
     /// <summary>

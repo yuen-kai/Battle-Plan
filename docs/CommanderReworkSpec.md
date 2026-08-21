@@ -15,6 +15,16 @@ field more than one Commander. This is intended and is not treated as a balance 
 original spec assumed three distinct units per crew; wherever that assumption appears below, five
 with repeats is the current rule.
 
+**Duration update (August 20, 2026):** Smoke Screen's cloud now persists for **two rounds** instead
+of one. A deployment stays active through the rest of the round it's thrown in and all of the
+following round, clearing only at that following round's boundary — "lasts two rounds" means the
+round it's thrown in plus one full additional round. Overlapping deployments (from the same or
+different Commanders, thrown in the same or different rounds) are independent: each expires on its
+own two-round clock with no merging or refreshing. This is purely about the cloud's active duration
+and is **unrelated to and unaffected by** the two-round `abilityCooldownRounds` recast cooldown on
+`Commander.asset` (§10). Historical references to single-round/end-of-round persistence are
+superseded by §§3, 4, 9, 13 (scenarios 9 and 12), and 14.
+
 ## 0. Why this exists (evidence)
 
 Pre-rework baseline, verified against source when this spec was written:
@@ -79,8 +89,12 @@ Fixed behavior (requirements):
   wall segment perpendicular to the caster→target line — see §14.)
 - **Occlusion rule:** while active, the smoked cells **block shot line-of-sight that passes through
   them** for both teams (see §9). It does **not** block movement.
-- **Duration:** bounded to the round's execution/combat window; smoke clears at end of round. It must
-  **not** persist across rounds or create a permanent safe zone. Exact seconds are tunable (§12).
+- **Duration:** a deployment lasts the round it's thrown in plus one full additional round — active
+  through the rest of the round it lands in and all of the next round, clearing at that next round's
+  boundary (see the August 20, 2026 duration update above; this superseded the original single-round
+  rule). It must still eventually clear and must **not** create a *permanent* safe zone. Overlapping
+  deployments thrown in different rounds expire independently, each on its own two-round clock. Exact
+  seconds within the combat window are tunable (§12).
 - **Range/radius/duration are tunables**, not fixed rules (§12). What is fixed: single committed target,
   cell-quantized area, symmetric shot-LoS blocking, movement not blocked, non-persistent.
 
@@ -105,8 +119,10 @@ Server-authoritative, deterministic order within a round:
    same moment. Registration is open for the whole execution window rather than one synchronous
    pre-movement batch, because each Commander's screen now deploys on its own canister's impact.
 6. Auto-combat resolves (units acquire nearest enemy with clear LoS and fire).
-7. Smoke is removed at end of round; `Ability.ResetForRespawn()` clears any transient smoke state on
-   respawn without restoring the use count.
+7. Smoke persists past the round it's thrown in: it stays active through the rest of that round and
+   all of the following round, and is culled only at the following round's boundary (August 20, 2026
+   duration update; this supersedes the original end-of-round clear). `Ability.ResetForRespawn()`
+   clears any transient smoke state on respawn without restoring the use count.
 
 Determinism requirement: given identical committed plans and seed, Smoke placement, occlusion, and the
 resulting shots/damage must be identical regardless of `Time.timeScale`, framerate, or allies' path
@@ -174,11 +190,13 @@ Shooting and damage already gate on a line-of-sight physics query against the **
   walls.
 
 So Smoke can be realized by introducing a **temporary occluder that the existing shot-LoS test treats as
-blocking** for the round (e.g., transient collider(s) on the same layer the raycasts already query, or
-an equivalent addition to the shared LoS test) and removing it at end of round — **without permanently
-mutating map geometry** (`GameLoop.wallLayout`) and without changing pathfinding
-(`GridSystem.FindPath`). Engineering owns the exact structure; the requirement is only that "a shot line
-crossing an active smoke cell fails the same LoS check that walls fail."
+blocking** for as long as its deployment remains active — the round it's thrown in plus one full
+additional round, per the August 20, 2026 duration update (e.g., transient collider(s) on the same
+layer the raycasts already query, or an equivalent addition to the shared LoS test) — and removing it
+once that window elapses — **without permanently mutating map geometry** (`GameLoop.wallLayout`) and
+without changing pathfinding (`GridSystem.FindPath`). Engineering owns the exact structure; the
+requirement is only that "a shot line crossing an active smoke cell fails the same LoS check that walls
+fail."
 
 ## 10. Two-round cooldown
 
@@ -251,15 +269,19 @@ edit-mode tests; no reliance on human feel.
 8. **Cooldown:** Commander uses Smoke in R1 → its card shows **ready in 2 rounds**; it is unavailable
    in R2 and R3, then ready in R4. If eliminated in KOTH, it remains dead while the cooldown still
    advances at ordinary round boundaries.
-9. **Non-persistent:** smoke is gone at the start of the next round's combat (no lingering occluder,
-   no residual collider on the `Walls`-queried LoS).
+9. **Bounded persistence, not permanent:** a deployment thrown in round N is still active through
+   round N+1's combat, then is gone by the start of round N+2's combat (no lingering occluder, no
+   residual collider on the `Walls`-queried LoS) — see the August 20, 2026 duration update; this
+   supersedes the original "gone at the start of the next round" scenario.
 10. **Draw non-regression:** a simultaneous full-team wipe still resolves as an explicit draw
     (`GetWinnerTeamIndex` null → draw copy), unaffected by Smoke.
 11. **Bot determinism:** a scripted bot fielding the Commander (test roster) places Smoke to protect a
     threatened ally, at most once per round, using only fog/last-known info, and produces identical
     placement given the same seed.
-12. **Stacking is legal:** overlapping screens from multiple Commanders in one round resolve without
-    residue — each cloud registers on its own canister impact and all clear at end of round.
+12. **Stacking is legal, and independent:** overlapping screens from multiple Commanders — including
+    ones thrown in different rounds — resolve without residue. Each cloud registers on its own
+    canister impact and expires on its own two-round clock independent of any other deployment's
+    schedule (August 20, 2026 duration update); none linger indefinitely.
 
 ## 14. Balance guardrails
 
@@ -268,8 +290,10 @@ Commanders and stagger several Smoke Screens in a round. That is an accepted, sy
 every screen blocks both teams, costs its caster's round and self-exposure, and clears at end of
 round, so stacking buys area denial by giving up damage. No per-unit repeat cap is planned.
 
-- **No permanent safe zone:** duration is bounded to the round and each Commander carries its own
-  two-round cooldown, so even a stacked crew cannot hold a lane indefinitely.
+- **No permanent safe zone:** each deployment's duration is bounded to two rounds — the round it's
+  thrown in plus one full additional round (August 20, 2026 duration update) — and each Commander
+  separately carries its own two-round recast cooldown (§10; unrelated to and unaffected by the
+  duration change), so even a stacked crew cannot hold a lane indefinitely.
 - **Symmetry enforced:** never ship an enemy-only occlusion; it must block both teams equally. This
   is what keeps stacking self-limiting — a smoke-heavy crew blinds itself just as much.
 - **Parity, not oppression:** no roster's side-adjusted win rate should exceed ~60% or fall below
@@ -316,9 +340,10 @@ round, so stacking buys area denial by giving up damage. No per-unit repeat cap 
 The gate that kept the Commander unavailable has been lifted. What it required, and what satisfies it:
 
 - [x] **Server implementation:** authoritative `Smoke` `Ability` that commits at plan time, applies
-      symmetric shot-LoS occlusion for the round via the shared LoS mechanism, resolves with no
-      mid-execution replanning, starts its two-round cooldown only after dodge, and clears at end
-      of round (§§2–4, 9, 10).
+      symmetric shot-LoS occlusion for as long as its deployment remains active via the shared LoS
+      mechanism, resolves with no mid-execution replanning, starts its two-round recast cooldown
+      only after dodge, and clears once its own two-round persistence window elapses (§§2–4, 9, 10;
+      duration per the August 20, 2026 update above).
 - [x] **VFX / telegraph:** public area telegraph at execution start, `SmokeCanister.prefab` arcing to
       the committed cell, and a fog-correct smoke volume distinct from walls and fog (§5).
 - [x] **Bot evaluator:** `BotPlayer.TryChooseSmokeCenter` / `ScoreSmokeCenter` — fog-bounded candidate
@@ -327,9 +352,11 @@ The gate that kept the Commander unavailable has been lifted. What it required, 
 - [x] **UI contract:** the Commander is roster-eligible, `abilityName` reads "Smoke Screen", and
       authoritative cooldown copy is wired (§16).
 - [x] **Tests pass:** `SmokeScreenEditModeTests` covers footprint, LoS block and symmetry, and the
-      Commander asset/prefab/canister wiring; `GameplayNetworkEditModeTests` and
-      `CombatBalanceEditModeTests` cover roster/catalog contracts, cooldowns, and draw
-      non-regression; `AbilityPathPreviewEditModeTests` covers the planning preview.
+      Commander asset/prefab/canister wiring; `SmokePersistenceEditModeTests` covers the two-round
+      persistence and independent-expiry bookkeeping added by the August 20, 2026 duration update;
+      `GameplayNetworkEditModeTests` and `CombatBalanceEditModeTests` cover roster/catalog
+      contracts, cooldowns, and draw non-regression; `AbilityPathPreviewEditModeTests` covers the
+      planning preview.
 
 Remaining Commander work is tuning, not gating: the §14 parity band still wants win-rate evidence
 from real matches, which depends on match telemetry rather than on anything in this spec.

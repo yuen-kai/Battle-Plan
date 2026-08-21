@@ -103,7 +103,7 @@ public static class TrailerStudio
 
         /// <summary>
         /// Keeps this unit's weapon cold for the whole beat. Walking a unit in arms it, so a
-        /// victim staged that way will fight back and can win — which is how the Shotgunner died
+        /// victim staged that way will fight back and can win — which is how the Ramrod died
         /// in his own hero shot. Victims that only need to be hit hold fire.
         /// </summary>
         public bool HoldsFire;
@@ -354,7 +354,7 @@ public static class TrailerStudio
         new()
         {
             Team = Friendly,
-            Unit = "Shotgunner",
+            Unit = "Ramrod",
             Start = new Vector2Int(10, 0),
             Drawn = true,
             // The short order in the plan. A turn where every unit is sent the same distance is a
@@ -428,7 +428,7 @@ public static class TrailerStudio
         new()
         {
             Team = Enemy,
-            Unit = "Shotgunner",
+            Unit = "Ramrod",
             Start = new Vector2Int(4, 9),
             Route = new[]
             {
@@ -607,7 +607,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(1, 2),
                     Route = new[]
                     {
@@ -664,7 +664,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(1, 2),
                     Walk = new[]
                     {
@@ -699,7 +699,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Enemy,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(12, 4),
                     Walk = new[] { new Vector2Int(11, 4), new Vector2Int(10, 4) },
                     WalkAt = 0.15f,
@@ -720,7 +720,7 @@ public static class TrailerStudio
         // filled with deck rather than the void past the board edge.
         Portrait("p-sniper", "Sniper", 7, 4, 2.7f, 2.3f, -12f, 5f),
         Portrait("p-pogo", "PogoRider", 6, 5, 2.65f, 2.25f, 10f, -6f),
-        Portrait("p-shotgunner", "Shotgunner", 8, 4, 2.6f, 2.2f, -9f, 7f),
+        Portrait("p-shotgunner", "Ramrod", 8, 4, 2.6f, 2.2f, -9f, 7f),
         Portrait("p-soldier", "Soldier", 7, 5, 2.65f, 2.25f, 8f, -5f),
         Portrait("p-commander", "Commander", 6, 4, 2.6f, 2.2f, -7f, 8f),
 
@@ -809,7 +809,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(3, 5),
                     Walk = new[] { new Vector2Int(4, 5) },
                     WalkAt = 0.05f,
@@ -863,7 +863,7 @@ public static class TrailerStudio
             {
                 At(Friendly, "Soldier", 4, 4),
                 At(Enemy, "Soldier", 9, 5, 0.5f),
-                At(Enemy, "Shotgunner", 10, 4, 0.5f),
+                At(Enemy, "Ramrod", 10, 4, 0.5f),
                 At(Enemy, "PogoRider", 8, 4, 0.5f),
             },
             Caster = 0,
@@ -889,7 +889,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(4, 6),
                     Walk = new[]
                     {
@@ -990,7 +990,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(3, 0),
                     Face = new Vector2(3f, 9f),
                     // Directional: the cell picked names a heading, and the rush resolves to the
@@ -1041,7 +1041,7 @@ public static class TrailerStudio
                 At(Enemy, "PogoRider", 1, 9),
                 At(Enemy, "Soldier", 4, 8),
                 At(Enemy, "Sniper", 7, 9),
-                At(Enemy, "Shotgunner", 10, 8),
+                At(Enemy, "Ramrod", 10, 8),
                 At(Enemy, "Commander", 13, 9),
             },
             FromLook = new Vector2(7f, 4.5f),
@@ -1063,7 +1063,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(3, 0),
                     Route = new[]
                     {
@@ -1123,7 +1123,7 @@ public static class TrailerStudio
                 At(Enemy, "PogoRider", 1, 9),
                 At(Enemy, "Soldier", 4, 8),
                 At(Enemy, "Sniper", 7, 9),
-                At(Enemy, "Shotgunner", 10, 8),
+                At(Enemy, "Ramrod", 10, 8),
                 At(Enemy, "Commander", 13, 9),
             },
             FromLook = new Vector2(7f, 4.5f),
@@ -1237,7 +1237,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Enemy,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(10, 4),
                     Walk = new[] { new Vector2Int(9, 4) },
                     WalkAt = 0.05f,
@@ -1279,7 +1279,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(9, 2),
                     Walk = new[] { new Vector2Int(10, 2) },
                     WalkAt = 0.05f,
@@ -1392,7 +1392,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(12, 2),
                     Walk = new[]
                     {
@@ -1516,7 +1516,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(5, 2),
                     Walk = new[] { new Vector2Int(6, 2) },
                     WalkAt = 0.05f,
@@ -1550,7 +1550,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Enemy,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(10, 2),
                     Walk = new[] { new Vector2Int(9, 2) },
                     WalkAt = 0.05f,
@@ -1624,7 +1624,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Friendly,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(6, 2),
                         Walk = new[] { new Vector2Int(6, 3) },
                         WalkAt = 0.05f,
@@ -1658,7 +1658,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Enemy,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(8, 2),
                         Walk = new[] { new Vector2Int(8, 3) },
                         WalkAt = 0.05f,
@@ -1694,7 +1694,7 @@ public static class TrailerStudio
                 // up. Thrown by the crew we are watching, standing right next to it, every cell is
                 // seen and the bank films as a haze you can barely find. Thrown at them it is the
                 // wall it is supposed to be — and it opens, cell by cell, exactly as the
-                // Shotgunner pushes into it, because a sightline that ends in smoke is not blocked
+                // Ramrod pushes into it, because a sightline that ends in smoke is not blocked
                 // by it. That is the mechanic doing the work no staging could fake.
                 Name = "m-bastion",
                 Seconds = 4.4f,
@@ -1711,7 +1711,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Friendly,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(8, 9),
                         Walk = new[]
                         {
@@ -1734,7 +1734,7 @@ public static class TrailerStudio
                     // unit parked next to the bank sees the cell it is standing beside and thins
                     // it; two of them on the doorstep thinned the whole screen to a haze. From
                     // over here the crew has no look into it at all, so it stands as the wall it
-                    // is and opens one cell at a time under the Shotgunner as he walks in.
+                    // is and opens one cell at a time under the Ramrod as he walks in.
                     new Actor
                     {
                         Team = Friendly,
@@ -1809,7 +1809,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Friendly,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(1, 4),
                         Walk = new[] { new Vector2Int(1, 5) },
                         WalkAt = 0.05f,
@@ -1817,7 +1817,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Enemy,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(1, 7),
                         Walk = new[] { new Vector2Int(1, 6) },
                         WalkAt = 0.05f,

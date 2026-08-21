@@ -96,6 +96,59 @@ public sealed class BotKnowledge
 }
 
 /// <summary>
+/// DEV: opt-in "hold position" override so specific bot-controlled units — or, registered before
+/// their GameObjects even exist, an entire bot team — never plan a move or an ability and never
+/// queue a dodge dive, regardless of what TryChooseAbility/BuildMovementPath would otherwise choose.
+/// Built for the Character Sandbox tool (see <c>CharacterSandbox.cs</c>) so a designated enemy can
+/// serve as a reliable stationary target dummy across an unbounded number of rounds.
+///
+/// Freezing only touches planning/dodge DECISIONS. Health, damage application, on-hit reactions,
+/// and death all still run through the normal Health/Unit pipeline untouched — a frozen unit still
+/// takes damage and can die exactly like any other unit; it simply never chooses to move, attack, or
+/// evade on its own.
+///
+/// The team-level flag exists alongside the per-unit set because a per-GameObject freeze can only be
+/// registered once a unit's GameObject exists (after it spawns), which is a frame after BotPlayer
+/// plans the very first round of a freshly started match — too late to guarantee round 1 is inert.
+/// Setting the team flag before the match even starts (before StartHost()) has no such race.
+/// </summary>
+public static class BotFrozenUnits
+{
+    private static readonly HashSet<GameObject> frozenUnits = new();
+    private static readonly HashSet<int> frozenTeams = new();
+
+    public static void SetFrozen(GameObject unit, bool isFrozen)
+    {
+        if (unit == null)
+            return;
+        if (isFrozen)
+            frozenUnits.Add(unit);
+        else
+            frozenUnits.Remove(unit);
+    }
+
+    public static void SetTeamFrozen(int teamIndex, bool isFrozen)
+    {
+        if (isFrozen)
+            frozenTeams.Add(teamIndex);
+        else
+            frozenTeams.Remove(teamIndex);
+    }
+
+    public static bool IsFrozen(GameObject unit, int teamIndex)
+    {
+        return (unit != null && frozenUnits.Contains(unit)) || frozenTeams.Contains(teamIndex);
+    }
+
+    /// <summary>Clears every override. Call between unrelated dev sessions to avoid stale state.</summary>
+    public static void ClearAll()
+    {
+        frozenUnits.Clear();
+        frozenTeams.Clear();
+    }
+}
+
+/// <summary>
 /// Server-only deterministic opponent. Planning consumes only the bot's fog observation and
 /// its own last-known memory. Dodge planning consumes public ability telegraphs, never the
 /// opponent's submitted movement plans.
@@ -140,8 +193,13 @@ public sealed class BotPlayer
         GameObject abilityUnit = null;
         Vector2Int abilityTarget = default;
         bool abilityNeedsTarget = false;
+        // Frozen units never volunteer for the round's single ability slot, so a sandbox target
+        // dummy can never spend it out from under a unit that is actually free to act.
+        GameObject[] abilityCandidateUnits = botUnits
+            .Where(unit => !BotFrozenUnits.IsFrozen(unit, TeamIndex))
+            .ToArray();
         TryChooseAbility(
-            botUnits,
+            abilityCandidateUnits,
             roundNumber,
             out abilityUnit,
             out abilityTarget,
@@ -160,6 +218,15 @@ public sealed class BotPlayer
         foreach (GameObject unit in botUnits)
         {
             Vector3 startWorld = GridSystem.GetNearestGridCell(unit);
+            if (BotFrozenUnits.IsFrozen(unit, TeamIndex))
+            {
+                // Frozen means it never moves and never spends the ability slot; whether it shoots
+                // back is a separate question this does not answer, so nothing here touches
+                // Shooting. The character sandbox drives that from SandboxDirector, where it can be
+                // toggled both ways instead of latching a cease-fire on for the rest of the match.
+                plans[unit] = (false, new List<Vector3> { startWorld });
+                continue;
+            }
             if (unit == abilityUnit)
             {
                 plans[unit] = abilityNeedsTarget
@@ -248,7 +315,14 @@ public sealed class BotPlayer
         occupied.UnionWith(visibleEnemyCells);
         List<Vector2Int> knownEnemies = knowledge.GetTargetCells();
 
-        foreach (GameObject unit in alertedUnits.Where(IsLiving).OrderBy(GetStableUnitId))
+        // Frozen units decline every dodge window too — a target dummy that dove clear of a hit
+        // would defeat the point of standing still for the test unit's ability to land on it.
+        foreach (
+            GameObject unit in alertedUnits
+                .Where(IsLiving)
+                .Where(unit => !BotFrozenUnits.IsFrozen(unit, TeamIndex))
+                .OrderBy(GetStableUnitId)
+        )
         {
             Vector2Int start = GetCell(unit);
             occupied.Remove(start);

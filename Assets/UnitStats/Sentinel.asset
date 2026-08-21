@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: Sentinel
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitModel: {fileID: 4136433947033533029, guid: 8c9ef994100e54981bf6d8515bb370c1, type: 3}
+  unitName: Sentinel
+  unitClass: 4
+  unitDescription: Plants a shield and holds the line, daring the enemy to push through
+    it.
+  playStyle: Anchors a position behind a raised shield instead of chasing kills.
+  weaponName: Sidearm pistol
+  strengths: Holds a chokepoint, denies a lane of fire on demand.
+  weaknesses: Low weapon damage, and the shield only helps while stationary.
+  unitSprite: {fileID: 21300000, guid: 7b7799d66a5c641d9acb6d2cc60bfa94, type: 3}
+  unavailableForRoster: 0
+  abilityName: Shield Wall
+  abilityDescription: Raise a shield in place, blocking shots from the front for
+    a few seconds.
+  abilitySprite: {fileID: 21300000, guid: 7b7799d66a5c641d9acb6d2cc60bfa94, type: 3}
+  moveDist: 3
+  moveSpeed: 1
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
+  timeBetweenShots: 0.25
+  magazineSize: 6
+  reloadTime: 1.8
+  bulletSpread: 4
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  canShootWhileMoving: 0
+  bulletSpeed: 3
+  targetRange: 4
+  bulletRange: 6
+  damage: 7
+  backstabMultiplier: 1
+  backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 0
+  findTargetTime: 0
+  targetLockDuration: 0
+  aimRotationSpeed: 270
+  visionRange: 6
+  maxHealth: 140
+  abilityCardSprite: {fileID: 21300000, guid: 7b7799d66a5c641d9acb6d2cc60bfa94, type: 3}
+  selectAbilitySquare: 1
+  abilitySquareRange: 1
+  selectAbilityDirection: 1
+  abilityFixedDistance: 1
+  abilityRadius: 0
+  selectTime: 4
+  responseRange: 0
+  responseDistLine: 0
+  timeDivePerUnit: 3
+  diveRange: 2
+  abilityCooldownRounds: 2

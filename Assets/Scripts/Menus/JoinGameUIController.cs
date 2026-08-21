@@ -103,16 +103,14 @@ public class JoinGameUIController : MonoBehaviour
         CacheTransportDefaults();
         RegisterCallbacks();
         ConfigureInitialState();
-        if (!TryStartTutorialMatch())
+        if (!TryStartTutorialMatch() && !TryStartSandboxMatch())
             ShowPanel(PanelState.Create, true);
     }
 
     /// <summary>
     /// The tutorial is launched from the title screen but still needs this scene's NetworkManager,
     /// so it passes through here and creates its loopback host without the player touching the
-    /// lobby. The setup chrome is hidden for the second that takes, leaving the screen's own
-    /// backdrop, so the match-setup screen never flashes up on the way to the board.
-    /// <see cref="NetworkHandler"/> then skips character selection.
+    /// lobby. <see cref="NetworkHandler"/> then skips character selection.
     /// </summary>
     private bool TryStartTutorialMatch()
     {
@@ -128,6 +126,39 @@ public class JoinGameUIController : MonoBehaviour
             return false;
         }
 
+        TutorialSession.HostStartRequested = true;
+        StartDirectHostMatch(TutorialSession.BuildMatchOptions(), () => TutorialSession.IsActive);
+        return true;
+    }
+
+    /// <summary>
+    /// The character sandbox is launched from the Editor and routes through here for exactly the
+    /// same reason the tutorial does: it needs this scene's NetworkManager, and it has already
+    /// picked both crews itself.
+    /// </summary>
+    private bool TryStartSandboxMatch()
+    {
+        if (!SandboxSession.IsActive)
+            return false;
+
+        if (SandboxSession.HostStartRequested)
+        {
+            SandboxSession.End();
+            return false;
+        }
+
+        SandboxSession.HostStartRequested = true;
+        StartDirectHostMatch(SandboxSession.BuildMatchOptions(), () => SandboxSession.IsActive);
+        return true;
+    }
+
+    /// <summary>
+    /// Creates a loopback host for a session that brings its own match options and crews. The setup
+    /// chrome is hidden for the second that takes, leaving the screen's own backdrop, so the
+    /// match-setup screen never flashes up on the way to the board.
+    /// </summary>
+    private void StartDirectHostMatch(MatchOptions options, System.Func<bool> stillWanted)
+    {
         VisualElement screen = root.Q<VisualElement>("screen");
         if (screen != null)
         {
@@ -135,18 +166,16 @@ public class JoinGameUIController : MonoBehaviour
                 child.AddToClassList("hidden");
         }
 
-        TutorialSession.HostStartRequested = true;
-        pendingOptions = TutorialSession.BuildMatchOptions();
+        pendingOptions = options;
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
 
         // Deferred a frame: this runs from OnEnable, which is not ordered against the scene's
         // NetworkManager waking up, and CreateMatch needs the singleton.
         root.schedule.Execute(() =>
         {
-            if (isActiveAndEnabled && TutorialSession.IsActive)
+            if (isActiveAndEnabled && stillWanted())
                 CreateMatch();
         });
-        return true;
     }
 
     private void OnDisable()

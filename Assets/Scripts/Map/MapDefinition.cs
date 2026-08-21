@@ -72,17 +72,20 @@ public sealed class MapDefinition
 
     /// <summary>
     /// An off-catalog board built from an explicit wall set, for tests and tools that need to
-    /// isolate behaviour against geometry no shipped map has. It borrows the fallback's id, so it
-    /// is never something a peer can select or a lobby can list.
+    /// isolate behaviour against geometry no shipped map has. It borrows the fallback's id by
+    /// default, so it is never something a peer can select or a lobby can list. A caller mid-match
+    /// (e.g. cloning the live board to make a wall destructible) can pass the real id through so
+    /// anything that later keys off it still names the map actually being played.
     /// </summary>
     public static MapDefinition Scratch(
         IEnumerable<Vector2Int> walls,
         HashSet<Vector2Int> hillCells = null,
-        Vector2Int? hostDeploymentColumns = null
+        Vector2Int? hostDeploymentColumns = null,
+        MapId id = MapId.Concourse
     )
     {
         return new MapDefinition(
-            MapId.Concourse,
+            id,
             "Scratch board",
             "Ad-hoc geometry",
             new HashSet<Vector2Int>(walls ?? System.Array.Empty<Vector2Int>()),

@@ -929,7 +929,7 @@ public class PlanMovement : MonoBehaviour
 
     /// <summary>
     /// Draws the route the ability itself will travel, from points the ability samples off its own
-    /// execution maths — the Shotgunner's rush, the Soldier's grenade arc, the Pogo Rider's jump.
+    /// execution maths — the Ramrod's rush, the Soldier's grenade arc, the Pogo Rider's jump.
     /// Abilities that reach their target without travelling report nothing and draw nothing, so no
     /// new ability needs this method changed to be previewed.
     /// </summary>
@@ -1581,13 +1581,19 @@ public class PlanMovement : MonoBehaviour
                 : (planningRangeOverride != -1 ? planningRangeOverride : unitData.moveDist);
         if (abilityMode && unitData.selectAbilityDirection)
             DisplayAbilityDirections();
+        else if (abilityMode && !unitData.selectAbilitySquare)
+        {
+            // A self-cast ability has nothing to aim — no target square exists to highlight, so
+            // drawing one (even a single own-cell marker) falsely invites a click that
+            // ValidateAbilityTarget only rejects as TargetNotRequired.
+            Destroy(moveOverlay);
+            moveOverlay = null;
+        }
         else
             // The same overlay prefab draws both faces of the card, so the mode has to pick the
             // tint here — otherwise "where I can walk" and "where I can aim" are the same colour.
             DisplayMoveRange(
-                abilityMode
-                    ? (unitData.selectAbilitySquare ? unitData.abilitySquareRange : 0)
-                    : movementRange,
+                abilityMode ? unitData.abilitySquareRange : movementRange,
                 abilityMode ? TeamPalette.AbilityRange : TeamPalette.MoveRange,
                 !abilityMode || unitData.CanTargetOwnCell
             );

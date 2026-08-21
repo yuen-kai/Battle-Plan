@@ -18,6 +18,11 @@ public class Bullet : MonoBehaviour
     public float range = 50f;
     public string enemyTeam = "RedTeam";
 
+    // Opt-in, off by default so the five existing units stay single-target hitscan-on-contact.
+    public bool explodesOnImpact = false;
+    public float aoeRadius = 0f;
+    public bool pierces = false;
+
     // How the shot is painted for whoever is watching it: own team first, enemy second, the same
     // order Unit uses for its team indicators.
     public List<Material> teamMaterials;
@@ -32,6 +37,16 @@ public class Bullet : MonoBehaviour
     /// and stops on the same geometry, purely so the shot is visible.
     /// </summary>
     private bool isAuthoritative;
+
+    /// <summary>Reported to on every confirmed hit (after backstab is folded in), authoritative
+    /// copy only. Settable at spawn time for a future consecutive-hit-streak component to subscribe
+    /// to; unset by default so existing bullets report to nobody.</summary>
+    private System.Action<GameObject> onHit;
+
+    // Guards a piercing bullet from re-damaging the same collider on a re-entrant collision, and
+    // (for an exploding bullet) keeps the direct hit and the splash from double-counting the same
+    // target.
+    private readonly HashSet<GameObject> hitTargets = new();
 
     public static int ActiveServerBulletCount => activeServerBullets.Count;
 
@@ -63,7 +78,11 @@ public class Bullet : MonoBehaviour
         float shotRange,
         float shotBackstabAngle,
         string damageableTeam,
-        bool authoritative
+        bool authoritative,
+        bool shotExplodesOnImpact = false,
+        float shotAoeRadius = 0f,
+        bool shotPierces = false,
+        System.Action<GameObject> shotOnHit = null
     )
     {
         damage = shotDamage;
@@ -72,6 +91,10 @@ public class Bullet : MonoBehaviour
         backstabAngle = shotBackstabAngle;
         enemyTeam = damageableTeam;
         isAuthoritative = authoritative;
+        explodesOnImpact = shotExplodesOnImpact;
+        aoeRadius = shotAoeRadius;
+        pierces = shotPierces;
+        onHit = shotOnHit;
         startPosition = transform.position;
 
         Rigidbody body = GetComponent<Rigidbody>();
@@ -127,17 +150,101 @@ public class Bullet : MonoBehaviour
     private void OnCollisionEnter(Collision other) // built-in function
     {
         GameObject hitObject = other.gameObject;
-        if (
-            isAuthoritative
-            && hitObject.CompareTag(enemyTeam)
-            && !IsPathBlockedBySmoke(hitObject.transform.position)
-        )
+
+        if (explodesOnImpact)
         {
-            float finalDamage = !CheckBackstab(hitObject) ? damage : damage * backstabMultiplier;
-            hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
+            if (isAuthoritative)
+            {
+                Vector3 impactPosition = other.GetContact(0).point;
+                if (
+                    hitObject.CompareTag(enemyTeam)
+                    && !IsPathBlockedBySmoke(hitObject.transform.position)
+                    && hitTargets.Add(hitObject)
+                )
+                {
+                    ApplyDirectHitDamage(hitObject);
+                }
+                ResolveAreaImpact(impactPosition);
+            }
+            Destroy(gameObject);
+            return;
+        }
+
+        bool isEnemy = hitObject.CompareTag(enemyTeam);
+        if (isEnemy)
+        {
+            if (
+                isAuthoritative
+                && !IsPathBlockedBySmoke(hitObject.transform.position)
+                && hitTargets.Add(hitObject)
+            )
+            {
+                ApplyDirectHitDamage(hitObject);
+            }
+
+            // A piercing bullet keeps flying through anything it can already damage; it only stops
+            // on a wall (the tag check above fails) or when range/lifetime expires in Update().
+            if (pierces)
+                return;
         }
 
         Destroy(gameObject);
+    }
+
+    private void ApplyDirectHitDamage(GameObject hitObject)
+    {
+        float finalDamage = !CheckBackstab(hitObject) ? damage : damage * backstabMultiplier;
+        hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
+        onHit?.Invoke(hitObject);
+    }
+
+    /// <summary>
+    /// Splash on top of the direct hit, mirroring Grenade.ExplodeGrenade: every other enemy within
+    /// <see cref="aoeRadius"/> of the impact with a clear line back to it takes flat damage (no
+    /// backstab — there is no single "behind" for an explosion). The directly hit target is
+    /// skipped here since <see cref="ApplyDirectHitDamage"/> already paid it out above.
+    /// </summary>
+    private void ResolveAreaImpact(Vector3 impactPosition)
+    {
+        if (aoeRadius <= 0f || IsPathBlockedBySmoke(impactPosition))
+            return;
+
+        // Units move by Transform during execution; sync before the overlap query so a completed
+        // move is evaluated at its current position even when no physics tick ran this frame.
+        Physics.SyncTransforms();
+
+        Collider[] enemiesInRange = Physics.OverlapSphere(
+            impactPosition,
+            aoeRadius,
+            LayerMask.GetMask(enemyTeam)
+        );
+
+        foreach (Collider enemyCollider in enemiesInRange)
+        {
+            GameObject enemyObject = enemyCollider.gameObject;
+            if (!hitTargets.Add(enemyObject))
+                continue;
+
+            Vector3 directionToEnemy = (enemyObject.transform.position - impactPosition).normalized;
+            float distanceToEnemy = Vector3.Distance(impactPosition, enemyObject.transform.position);
+            if (
+                Physics.Raycast(
+                    impactPosition,
+                    directionToEnemy,
+                    out RaycastHit hit,
+                    distanceToEnemy,
+                    LayerMask.GetMask("Walls", enemyTeam)
+                )
+                && hit.collider.gameObject != enemyObject
+            )
+            {
+                // Something else was in the way before the ray reached this candidate.
+                continue;
+            }
+
+            enemyObject.GetComponent<Health>()?.TakeDamage(damage);
+            onHit?.Invoke(enemyObject);
+        }
     }
 
     private bool IsPathBlockedBySmoke(Vector3 destination)

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -9,6 +10,12 @@ public class Unit : NetworkBehaviour
     private readonly NetworkVariable<int> teamIndex = new(-1);
     private readonly NetworkVariable<int> rosterSlot = new(-1);
     private readonly NetworkVariable<int> abilityCooldownRoundsRemaining = new(0);
+
+    // One replicated write per stun rather than a per-frame countdown, the same trade Movement's
+    // DiveRecoveryState makes: the indicator's fill is a pure function of elapsed server time, so
+    // every peer draws the right point in it from the moment it learns about it, fog reveals
+    // midway through included.
+    private readonly NetworkVariable<StunState> stunState = new();
 
     public int TeamIndex => teamIndex.Value;
     public int RosterSlot => rosterSlot.Value;
@@ -22,10 +29,20 @@ public class Unit : NetworkBehaviour
         && GameLoop.Instance.LocalTeamIndex >= 0
         && TeamIndex == GameLoop.Instance.LocalTeamIndex;
 
+    /// <summary>True for the short, wall-clock window a knockback or similar hit has interrupted
+    /// this unit for. Not round-based: it is meant to resolve inside the same round's execution
+    /// window it was applied in.</summary>
+    public bool IsStunned => IsStunnedAt(stunState.Value, CurrentServerTime);
+
     [HideInInspector]
     public bool selectMovement = true;
 
     private AbilityStatusRing abilityStatusRing;
+    private StunPulse stunPulse;
+    private Coroutine stunCoroutine;
+
+    private double CurrentServerTime =>
+        NetworkManager != null ? NetworkManager.ServerTime.Time : 0.0;
 
     public override void OnNetworkSpawn()
     {
@@ -36,12 +53,16 @@ public class Unit : NetworkBehaviour
         // Not animated: the cooldown a unit spawns with, or comes back out of fog with, is state
         // that was already true before this client could see it, not a recharge to play out.
         RefreshAbilityStatusRing(animate: false);
+
+        stunState.OnValueChanged += OnStunStateChanged;
+        RefreshStunPresentation(stunState.Value);
     }
 
     public override void OnNetworkDespawn()
     {
         teamIndex.OnValueChanged -= OnTeamIndexChanged;
         abilityCooldownRoundsRemaining.OnValueChanged -= OnAbilityCooldownRoundsChanged;
+        stunState.OnValueChanged -= OnStunStateChanged;
         base.OnNetworkDespawn();
     }
 
@@ -76,6 +97,60 @@ public class Unit : NetworkBehaviour
         }
 
         rosterSlot.Value = value;
+    }
+
+    /// <summary>
+    /// Hard-interrupts this unit the way it already interrupts itself for a shield rush, a pogo
+    /// jump or an area lock — movement paused, weapons stood down — then hands it back at the end
+    /// of a short, wall-clock window instead of a round boundary. A second call mid-window
+    /// restarts the timer rather than stacking a second recovery behind the first.
+    /// </summary>
+    public void ApplyStun(float duration)
+    {
+        if (!IsServer || duration <= 0f)
+            return;
+
+        Movement movement = GetComponent<Movement>();
+        Shooting shooting = GetComponent<Shooting>();
+        if (movement == null || shooting == null)
+            return;
+
+        movement.PauseMovement();
+        movement.moving = false;
+        shooting.StandDown();
+
+        if (stunCoroutine != null)
+            StopCoroutine(stunCoroutine);
+
+        stunState.Value = new StunState(NetworkManager.ServerTime.Time, duration);
+
+        // Guarded so this stays callable from an edit-mode test that forces IsServer without a
+        // running player loop; coroutines are otherwise only ever started in a live match.
+        if (Application.isPlaying)
+            stunCoroutine = StartCoroutine(ResumeAfterStun(duration));
+    }
+
+    private IEnumerator ResumeAfterStun(float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        stunCoroutine = null;
+        ClearStun();
+    }
+
+    private void ClearStun()
+    {
+        if (IsServer && stunState.Value.Active)
+            stunState.Value = default;
+
+        // Mirrors how a dodger picks back up after its dive recovery: whatever the unit would
+        // normally be doing resumes rather than staying stood down.
+        GetComponent<Movement>()?.transitionToShooting();
+    }
+
+    /// <summary>Whether <paramref name="state"/> is still an active stun at <paramref name="serverTime"/>.</summary>
+    public static bool IsStunnedAt(StunState state, double serverTime)
+    {
+        return state.Active && state.ProgressAt(serverTime) < 1f;
     }
 
     public bool TryStartAbilityCooldown()
@@ -171,6 +246,20 @@ public class Unit : NetworkBehaviour
         abilityStatusRing.SetCharge(AbilityCooldownRoundsRemaining, configuredRounds, animate);
     }
 
+    private void OnStunStateChanged(StunState previousValue, StunState newValue)
+    {
+        RefreshStunPresentation(newValue);
+    }
+
+    private void RefreshStunPresentation(StunState state)
+    {
+        if (state.Active && stunPulse == null)
+            stunPulse = StunPulse.Attach(gameObject);
+
+        if (stunPulse != null)
+            stunPulse.SetStun(state);
+    }
+
     public void RefreshTeamPresentation()
     {
         SetTeamIndicators();
@@ -241,5 +330,56 @@ public class Unit : NetworkBehaviour
     private UnitData GetUnitData()
     {
         return GetComponent<Shooting>()?.unitData ?? GetComponent<Movement>()?.unitData;
+    }
+}
+
+/// <summary>
+/// A stun as replicated: when it landed on the server clock and how long it holds. Mirrors
+/// Movement's DiveRecoveryState — the indicator's fill is a pure function of elapsed time, so this
+/// is written once per stun instead of every frame, and a peer that fog reveals midway through
+/// still draws the right point in it.
+/// </summary>
+public struct StunState : INetworkSerializable, System.IEquatable<StunState>
+{
+    public bool Active;
+    public double StartServerTime;
+    public float Duration;
+
+    public StunState(double startServerTime, float duration)
+    {
+        Active = true;
+        StartServerTime = startServerTime;
+        Duration = Mathf.Max(0.0001f, duration);
+    }
+
+    /// <summary>Stun position, 0 the instant it lands through 1 once it has worn off.</summary>
+    public float ProgressAt(double serverTime)
+    {
+        return Mathf.Clamp01((float)((serverTime - StartServerTime) / Duration));
+    }
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref Active);
+        serializer.SerializeValue(ref StartServerTime);
+        serializer.SerializeValue(ref Duration);
+    }
+
+    public bool Equals(StunState other)
+    {
+        return Active == other.Active
+            && StartServerTime.Equals(other.StartServerTime)
+            && Duration.Equals(other.Duration);
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is StunState other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return System.HashCode.Combine(Active, StartServerTime, Duration);
     }
 }

@@ -661,7 +661,7 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void ShieldFootprint_WidensByOneGridCellPerSide()
     {
-        const string prefabPath = "Assets/Prefabs/Units/Shotgunner.prefab";
+        const string prefabPath = "Assets/Prefabs/Units/Ramrod.prefab";
         GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
         Assert.That(prefab, Is.Not.Null, $"Could not load {prefabPath}.");
         Assert.That(Shield.ShieldWidthIncreaseCellsPerSide, Is.EqualTo(1));
@@ -670,7 +670,7 @@ public class GameplayNetworkEditModeTests
         try
         {
             Transform shield = instance.transform.Find("Shield");
-            Assert.That(shield, Is.Not.Null, "Shotgunner prefab must keep its Shield child.");
+            Assert.That(shield, Is.Not.Null, "Ramrod prefab must keep its Shield child.");
             BoxCollider shieldCollider = shield.GetComponent<BoxCollider>();
             Assert.That(
                 shieldCollider,
@@ -722,16 +722,16 @@ public class GameplayNetworkEditModeTests
         string enemyBulletPath
     )
     {
-        const string shotgunnerPrefabPath = "Assets/Prefabs/Units/Shotgunner.prefab";
+        const string ramrodPrefabPath = "Assets/Prefabs/Units/Ramrod.prefab";
         GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-            shotgunnerPrefabPath
+            ramrodPrefabPath
         );
         GameObject friendlyBulletPrefab =
             UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(friendlyBulletPath);
         GameObject enemyBulletPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
             enemyBulletPath
         );
-        Assert.That(prefab, Is.Not.Null, $"Could not load {shotgunnerPrefabPath}.");
+        Assert.That(prefab, Is.Not.Null, $"Could not load {ramrodPrefabPath}.");
         Assert.That(friendlyBulletPrefab, Is.Not.Null, $"Could not load {friendlyBulletPath}.");
         Assert.That(enemyBulletPrefab, Is.Not.Null, $"Could not load {enemyBulletPath}.");
 
@@ -747,7 +747,7 @@ public class GameplayNetworkEditModeTests
 
             GameLoop.SetGroupLayer(instance, teamLayer);
             Transform shield = instance.transform.Find("Shield");
-            Assert.That(shield, Is.Not.Null, "Shotgunner must keep its Shield child.");
+            Assert.That(shield, Is.Not.Null, "Ramrod must keep its Shield child.");
             BoxCollider shieldCollider = shield.GetComponent<BoxCollider>();
             Assert.That(shieldCollider, Is.Not.Null);
             Assert.That(shieldCollider.enabled, Is.True);
@@ -784,7 +784,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 unitTargetingMask & (1 << instance.layer),
                 Is.Not.Zero,
-                "The Shotgunner body behind its own shield must remain targetable."
+                "The Ramrod body behind its own shield must remain targetable."
             );
             Assert.That(
                 boardSelectionMask & shieldLayerBit,
@@ -2181,7 +2181,7 @@ public class GameplayNetworkEditModeTests
         {
             "Commander",
             "PogoRider",
-            "Shotgunner",
+            "Ramrod",
             "Sniper",
             "Soldier",
         };

@@ -16,7 +16,7 @@ public class CombatBalanceEditModeTests
     {
         AssertStats("Commander", damage: 8, magazineSize: 5, maxHealth: 120);
         AssertStats("PogoRider", damage: 12, magazineSize: 3, maxHealth: 120);
-        AssertStats("Shotgunner", damage: 8, magazineSize: 10, maxHealth: 160);
+        AssertStats("Ramrod", damage: 8, magazineSize: 10, maxHealth: 160);
         AssertStats("Sniper", damage: 50, magazineSize: 1, maxHealth: 80);
         AssertStats("Soldier", damage: 10, magazineSize: 5, maxHealth: 120);
 
@@ -33,7 +33,7 @@ public class CombatBalanceEditModeTests
     public void UnitAssets_UseStrengthBasedAbilityCooldowns()
     {
         Assert.That(LoadUnit("PogoRider").abilityCooldownRounds, Is.EqualTo(2));
-        Assert.That(LoadUnit("Shotgunner").abilityCooldownRounds, Is.EqualTo(2));
+        Assert.That(LoadUnit("Ramrod").abilityCooldownRounds, Is.EqualTo(2));
         Assert.That(LoadUnit("Commander").abilityCooldownRounds, Is.EqualTo(2));
         Assert.That(LoadUnit("Soldier").abilityCooldownRounds, Is.EqualTo(3));
         Assert.That(LoadUnit("Sniper").abilityCooldownRounds, Is.EqualTo(4));
@@ -113,7 +113,7 @@ public class CombatBalanceEditModeTests
     {
         UnitData commander = LoadUnit("Commander");
         UnitData pogo = LoadUnit("PogoRider");
-        UnitData shotgunner = LoadUnit("Shotgunner");
+        UnitData ramrod = LoadUnit("Ramrod");
         UnitData sniper = LoadUnit("Sniper");
         UnitData soldier = LoadUnit("Soldier");
 
@@ -149,11 +149,11 @@ public class CombatBalanceEditModeTests
                 )
             ),
             (
-                "Shotgunner point-blank",
+                "Ramrod point-blank",
                 AllowanceAdjustedMagazineEquivalents(
                     StandardHealth,
-                    shotgunner.damage,
-                    shotgunner.magazineSize,
+                    ramrod.damage,
+                    ramrod.magazineSize,
                     0.6f
                 )
             ),
@@ -198,7 +198,7 @@ public class CombatBalanceEditModeTests
     {
         UnitData commander = LoadUnit("Commander");
         UnitData pogo = LoadUnit("PogoRider");
-        UnitData shotgunner = LoadUnit("Shotgunner");
+        UnitData ramrod = LoadUnit("Ramrod");
         UnitData sniper = LoadUnit("Sniper");
         UnitData soldier = LoadUnit("Soldier");
 
@@ -211,7 +211,7 @@ public class CombatBalanceEditModeTests
             7,
             "Pogo backstab"
         );
-        AssertHitBreakpoints(shotgunner.damage, 10, 15, 20, "Shotgunner");
+        AssertHitBreakpoints(ramrod.damage, 10, 15, 20, "Ramrod");
         AssertHitBreakpoints(sniper.damage, 2, 3, 4, "Sniper");
         AssertHitBreakpoints(soldier.damage, 8, 12, 16, "Soldier");
     }
@@ -235,7 +235,7 @@ public class CombatBalanceEditModeTests
 
     private static UnitData[] RosterUnits()
     {
-        return new[] { "Commander", "PogoRider", "Shotgunner", "Sniper", "Soldier" }
+        return new[] { "Commander", "PogoRider", "Ramrod", "Sniper", "Soldier" }
             .Select(LoadUnit)
             .ToArray();
     }

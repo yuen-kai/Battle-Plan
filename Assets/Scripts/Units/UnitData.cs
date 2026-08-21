@@ -97,6 +97,19 @@ public class UnitData : ScriptableObject
     [Tooltip("Bullet spread angle in degrees (one side of center)")]
     public float bulletSpread = 3f;
 
+    [Tooltip(
+        "Shots into a fresh magazine before the fire-rate ramp reaches timeBetweenShots. 0 disables the ramp (constant timeBetweenShots from the first shot, today's behavior)."
+    )]
+    public int fireRateRampShots = 0;
+
+    [Tooltip(
+        "Delay before the second shot of a fresh magazine when fireRateRampShots > 0; unused otherwise."
+    )]
+    public float fireRateRampStartDelay = 0f;
+
+    [Tooltip("Unit may fire immediately while moving instead of waiting for movement to finish")]
+    public bool canShootWhileMoving = false;
+
     [Header("=== COMBAT PARAMETERS ===")]
     [Tooltip("Bullet travel speed in cells per second")]
     public float bulletSpeed = 3f;
@@ -115,6 +128,15 @@ public class UnitData : ScriptableObject
 
     [Tooltip("Minimum angle in degrees from forward direction to consider a backstab")]
     public float backstabAngle = 90f;
+
+    [Tooltip("Bullet explodes in a radius on impact (enemy or wall) instead of single-target only")]
+    public bool bulletExplodesOnImpact = false;
+
+    [Tooltip("Splash radius in cells when bulletExplodesOnImpact is set")]
+    public float bulletAoeRadius = 0f;
+
+    [Tooltip("Bullet keeps flying through enemies instead of stopping on the first one hit")]
+    public bool bulletPierces = false;
 
     [Header("=== TARGETING PARAMETERS ===")]
     [Tooltip("DISABLED: Time to find and acquire a target")]

@@ -204,24 +204,24 @@ public class AbilityPathPreviewEditModeTests
     }
 
     [Test]
-    public void ShotgunnerRush_PreviewsTheWholeRunWhenTheLaneIsClear()
+    public void RamrodRush_PreviewsTheWholeRunWhenTheLaneIsClear()
     {
-        UnitData shotgunner = LoadUnit("Shotgunner");
-        Assert.That(shotgunner.abilityFixedDistance, Is.GreaterThan(0));
+        UnitData ramrod = LoadUnit("Ramrod");
+        Assert.That(ramrod.abilityFixedDistance, Is.GreaterThan(0));
 
         WithWalls(
             System.Array.Empty<Vector2Int>(),
             () =>
             {
-                GameObject caster = SpawnAt(shotgunner, new Vector2Int(3, 3));
+                GameObject caster = SpawnAt(ramrod, new Vector2Int(3, 3));
                 try
                 {
-                    Shield shield = caster.GetComponent<Shield>();
-                    Assert.That(shield, Is.Not.Null, "The Shotgunner prefab must retain its Shield.");
+                    DashRush dashRush = caster.GetComponent<DashRush>();
+                    Assert.That(dashRush, Is.Not.Null, "The Ramrod prefab must carry DashRush.");
 
                     // The player picks a neighbouring cell to name a direction, not a destination.
                     Assert.That(
-                        shield.BuildPlannedPath(Square(new Vector2Int(4, 3)), shotgunner, points),
+                        dashRush.BuildPlannedPath(Square(new Vector2Int(4, 3)), ramrod, points),
                         Is.EqualTo(AbilityPathKind.Ground)
                     );
                     Assert.That(points.Count, Is.EqualTo(2));
@@ -232,7 +232,7 @@ public class AbilityPathPreviewEditModeTests
                     Assert.That(
                         Vector3.Distance(
                             points[1],
-                            Square(new Vector2Int(3 + shotgunner.abilityFixedDistance, 3))
+                            Square(new Vector2Int(3 + ramrod.abilityFixedDistance, 3))
                         ),
                         Is.LessThan(Tolerance)
                     );
@@ -246,20 +246,20 @@ public class AbilityPathPreviewEditModeTests
     }
 
     [Test]
-    public void ShotgunnerRush_PreviewStopsAtTheWallThatWillStopTheRush()
+    public void RamrodRush_PreviewStopsAtTheWallThatWillStopTheRush()
     {
-        UnitData shotgunner = LoadUnit("Shotgunner");
+        UnitData ramrod = LoadUnit("Ramrod");
 
         WithWalls(
             new[] { new Vector2Int(5, 3) },
             () =>
             {
-                GameObject caster = SpawnAt(shotgunner, new Vector2Int(3, 3));
+                GameObject caster = SpawnAt(ramrod, new Vector2Int(3, 3));
                 try
                 {
-                    Shield shield = caster.GetComponent<Shield>();
+                    DashRush dashRush = caster.GetComponent<DashRush>();
                     Assert.That(
-                        shield.BuildPlannedPath(Square(new Vector2Int(4, 3)), shotgunner, points),
+                        dashRush.BuildPlannedPath(Square(new Vector2Int(4, 3)), ramrod, points),
                         Is.EqualTo(AbilityPathKind.Ground)
                     );
 
@@ -270,7 +270,7 @@ public class AbilityPathPreviewEditModeTests
                     );
                     Assert.That(
                         Vector3.Distance(points[0], points[1]),
-                        Is.LessThan(shotgunner.abilityFixedDistance * GameLoop.cellSize)
+                        Is.LessThan(ramrod.abilityFixedDistance * GameLoop.cellSize)
                     );
                 }
                 finally
@@ -282,16 +282,16 @@ public class AbilityPathPreviewEditModeTests
     }
 
     [Test]
-    public void ShotgunnerRush_DrawsNothingUntilADirectionIsPicked()
+    public void RamrodRush_DrawsNothingUntilADirectionIsPicked()
     {
-        UnitData shotgunner = LoadUnit("Shotgunner");
-        GameObject caster = SpawnAt(shotgunner, new Vector2Int(3, 3));
+        UnitData ramrod = LoadUnit("Ramrod");
+        GameObject caster = SpawnAt(ramrod, new Vector2Int(3, 3));
         try
         {
-            Shield shield = caster.GetComponent<Shield>();
+            DashRush dashRush = caster.GetComponent<DashRush>();
 
             Assert.That(
-                shield.BuildPlannedPath(Square(new Vector2Int(9, 3)), shotgunner, points),
+                dashRush.BuildPlannedPath(Square(new Vector2Int(9, 3)), ramrod, points),
                 Is.EqualTo(AbilityPathKind.None)
             );
             Assert.That(points, Is.Empty);
