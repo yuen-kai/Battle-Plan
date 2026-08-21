@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: Breach
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitModel: {fileID: 4136433947033533029, guid: ce0dac10fa2864896a4f3745b8fda5c9, type: 3}
+  unitName: Breach
+  unitClass: 0
+  unitDescription: Fires ordnance too heavy to duck behind cover from -- the wall
+    it's hiding behind won't be there long either.
+  playStyle: Clears entrenched positions rather than chasing kills in the open.
+  weaponName: Rocket launcher
+  strengths: High area damage, and its ability tears down cover for good.
+  weaknesses: Slow-moving shots are easy to walk out of, and it's not built for a
+    fight up close.
+  unitSprite: {fileID: 21300000, guid: ee7e46638319345bdb00bf860d26d37f, type: 3}
+  unavailableForRoster: 0
+  abilityName: Bunker Buster
+  abilityDescription: Fires a heavy rocket flat down a chosen line for area damage,
+    permanently destroying any wall it hits.
+  abilitySprite: {fileID: 21300000, guid: f8eca8ca6753144969b6b1a661c6e20a, type: 3}
+  moveDist: 2
+  moveSpeed: 0.85
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
+  timeBetweenShots: 2
+  magazineSize: 4
+  reloadTime: 3
+  bulletSpread: 6
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  canShootWhileMoving: 0
+  bulletSpeed: 1.3
+  targetRange: 6
+  bulletRange: 6.5
+  damage: 11
+  backstabMultiplier: 1
+  backstabAngle: 90
+  bulletExplodesOnImpact: 1
+  bulletAoeRadius: 1
+  bulletPierces: 0
+  findTargetTime: 0
+  targetLockDuration: 0
+  aimRotationSpeed: 250
+  visionRange: 5
+  maxHealth: 150
+  abilityCardSprite: {fileID: 21300000, guid: f8eca8ca6753144969b6b1a661c6e20a, type: 3}
+  selectAbilitySquare: 1
+  abilitySquareRange: 99
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
+  abilityRadius: 1.5
+  selectTime: 4
+  responseRange: 1.6
+  responseDistLine: 1
+  timeDivePerUnit: 3
+  diveRange: 2
+  abilityCooldownRounds: 2

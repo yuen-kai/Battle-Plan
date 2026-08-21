@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -157,6 +158,89 @@ public class CharacterSandboxEditModeTests
             Assert.That(team.Length, Is.EqualTo(SandboxSession.UnitsPerTeam));
         Assert.That(layout[GameLoop.HostTeamIndex][0], Is.EqualTo(SandboxSession.PlayerSpawn));
         Assert.That(layout[GameLoop.OpponentTeamIndex][0], Is.EqualTo(SandboxSession.EnemySpawn));
+    }
+
+    [Test]
+    public void EveryExtraSpawnCellIsLegalAndDistinct()
+    {
+        // The crowd cells are hardcoded, so nothing but a test stops one from being placed inside a
+        // wall or on top of another unit's cell after a map edit.
+        List<Vector2Int> all = new() { SandboxSession.PlayerSpawn };
+        all.AddRange(SandboxSession.EnemySpawns);
+        all.AddRange(SandboxSession.AllySpawns);
+
+        foreach (Vector2Int cell in all)
+        {
+            Assert.That(GridSystem.IsCellInBounds(cell), Is.True, $"{cell} is off the board.");
+            Assert.That(GameLoop.wallLayout, Has.No.Member(cell), $"{cell} is inside a wall.");
+        }
+        Assert.That(all, Is.Unique, "Two units would be spawned on the same cell.");
+    }
+
+    [Test]
+    public void EveryCrowdCellIsCloseEnoughForARadiusAbilityToReachIt()
+    {
+        // The whole point of fielding a crowd is to exercise an ability that reaches several units
+        // at once, so every extra body has to sit inside a typical ability radius (3 cells) of the
+        // character under test. A cell further out would make a working ability look broken.
+        const float TypicalAbilityRadiusCells = 3f;
+        List<Vector2Int> crowd = new();
+        crowd.AddRange(SandboxSession.EnemySpawns);
+        crowd.AddRange(SandboxSession.AllySpawns);
+
+        foreach (Vector2Int cell in crowd)
+        {
+            float distance = Vector2.Distance(cell, SandboxSession.PlayerSpawn);
+            Assert.That(
+                distance,
+                Is.LessThanOrEqualTo(TypicalAbilityRadiusCells + 0.001f),
+                $"{cell} is {distance:0.00} cells away — outside a 3-cell ability radius."
+            );
+        }
+    }
+
+    [Test]
+    public void CreateSpawnLayout_SizesEachSideIndependently()
+    {
+        SandboxSession.Begin(
+            0,
+            CharacterSandbox.DefaultDummyUnitIndex,
+            enemyCount: SandboxSession.MaxEnemyCount,
+            allyCount: 3
+        );
+
+        var layout = SandboxSession.CreateSpawnLayout();
+
+        Assert.That(
+            layout[GameLoop.OpponentTeamIndex].Length,
+            Is.EqualTo(SandboxSession.MaxEnemyCount)
+        );
+        Assert.That(layout[GameLoop.HostTeamIndex].Length, Is.EqualTo(3));
+        // The character under test always stands on its own documented cell, whoever joins it.
+        Assert.That(layout[GameLoop.HostTeamIndex][0], Is.EqualTo(SandboxSession.PlayerSpawn));
+        Assert.That(
+            GameLoop.UnitsForTeamThisMatch(GameLoop.OpponentTeamIndex),
+            Is.EqualTo(SandboxSession.MaxEnemyCount)
+        );
+        Assert.That(GameLoop.UnitsForTeamThisMatch(GameLoop.HostTeamIndex), Is.EqualTo(3));
+    }
+
+    [Test]
+    public void CrowdCountsAreClampedAndResetWhenTheSessionEnds()
+    {
+        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 99, allyCount: 99);
+        Assert.That(SandboxSession.EnemyCount, Is.EqualTo(SandboxSession.MaxEnemyCount));
+        Assert.That(SandboxSession.AllyCount, Is.EqualTo(SandboxSession.MaxAllyCount));
+
+        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 0, allyCount: -5);
+        Assert.That(SandboxSession.EnemyCount, Is.EqualTo(1));
+        Assert.That(SandboxSession.AllyCount, Is.EqualTo(1));
+
+        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 4, allyCount: 2);
+        SandboxSession.End();
+        // A leaked crowd size would field the wrong board in every later sandbox launch.
+        Assert.That(SandboxSession.EnemyCount, Is.EqualTo(1));
+        Assert.That(SandboxSession.AllyCount, Is.EqualTo(1));
     }
 
     [Test]

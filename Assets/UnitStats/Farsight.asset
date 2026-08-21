@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: Farsight
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitModel: {fileID: 4136433947033533029, guid: b945cd863cdcb4cc784ea3acb2e38220, type: 3}
+  unitName: Farsight
+  unitClass: 0
+  unitDescription: Every arrow flies straight through whatever it hits, and the ability
+    fans three of them out at once.
+  playStyle: Lines enemies up rather than picking a single target.
+  weaponName: Piercing bow
+  strengths: Punishes anyone standing in a line, and its ability triples that threat
+    at once.
+  weaknesses: No area denial up close, and both the weapon and the ability are blocked
+    by a wall.
+  unitSprite: {fileID: 21300000, guid: 5fd614d15d21e48d59e6ec4daf675b83, type: 3}
+  unavailableForRoster: 0
+  abilityName: Triple Volley
+  abilityDescription: Fires three piercing arrows in a horizontal fan down a chosen
+    direction.
+  abilitySprite: {fileID: 21300000, guid: 1fd9e6f430e884da09409ce3bcf01d69, type: 3}
+  moveDist: 3
+  moveSpeed: 1
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: e31c26fba9e0943d393d15b904a54086, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: 10f032be216824c84a74cefc2ed89dd8, type: 3}
+  timeBetweenShots: 0.7
+  magazineSize: 4
+  reloadTime: 2.2
+  bulletSpread: 3
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  canShootWhileMoving: 0
+  bulletSpeed: 4.5
+  targetRange: 6
+  bulletRange: 7
+  damage: 10
+  backstabMultiplier: 1
+  backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 1
+  findTargetTime: 0
+  targetLockDuration: 0
+  aimRotationSpeed: 300
+  visionRange: 6
+  maxHealth: 100
+  abilityCardSprite: {fileID: 21300000, guid: 1fd9e6f430e884da09409ce3bcf01d69, type: 3}
+  selectAbilitySquare: 1
+  abilitySquareRange: 1
+  selectAbilityDirection: 1
+  abilityFixedDistance: 1
+  abilityRadius: 0
+  selectTime: 4
+  responseRange: 2.5
+  responseDistLine: 0
+  timeDivePerUnit: 3
+  diveRange: 2
+  abilityCooldownRounds: 2

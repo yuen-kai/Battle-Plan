@@ -211,8 +211,17 @@ public class ShootingExtensionsEditModeTests
         }
     }
 
+    // Units that are supposed to carry each opt-in trait, now that real characters use them —
+    // updated as each one ships. Anyone NOT named here must still default off, so this stays a
+    // regression guard against a trait leaking onto a unit that never asked for it, rather than
+    // the "nobody opts in yet" blanket check this test started as.
+    private static readonly string[] UnitsWithFireRateRamp = { "Salvo" };
+    private static readonly string[] UnitsThatShootWhileMoving = { "Outrider" };
+    private static readonly string[] UnitsWithExplodingBullets = { "Breach" };
+    private static readonly string[] UnitsWithPiercingBullets = { "Farsight" };
+
     [Test]
-    public void AllRosterUnits_StillDefaultToNoneOfTheNewOptInBehavior()
+    public void AllRosterUnits_OnlyCarryTheNewOptInBehaviorTheyAreSupposedTo()
     {
         UnitDatabase catalog = AssetDatabase.LoadAssetAtPath<UnitDatabase>(UnitCatalogPath);
         Assert.That(catalog, Is.Not.Null, $"Could not load {UnitCatalogPath}.");
@@ -221,15 +230,34 @@ public class ShootingExtensionsEditModeTests
         foreach (UnitData unit in catalog.units)
         {
             Assert.That(unit, Is.Not.Null);
+
+            bool expectsFireRateRamp = System.Array.IndexOf(UnitsWithFireRateRamp, unit.unitName) >= 0;
             Assert.That(
-                unit.fireRateRampShots,
-                Is.EqualTo(0),
-                $"{unit.unitName} must keep a constant fire rate until a machine gunner opts in."
+                unit.fireRateRampShots > 0,
+                Is.EqualTo(expectsFireRateRamp),
+                $"{unit.unitName} must keep a constant fire rate unless it is a machine gunner that opts in."
             );
-            Assert.That(unit.canShootWhileMoving, Is.False, $"{unit.unitName}");
-            Assert.That(unit.bulletExplodesOnImpact, Is.False, $"{unit.unitName}");
-            Assert.That(unit.bulletAoeRadius, Is.EqualTo(0f), $"{unit.unitName}");
-            Assert.That(unit.bulletPierces, Is.False, $"{unit.unitName}");
+
+            bool expectsShootWhileMoving =
+                System.Array.IndexOf(UnitsThatShootWhileMoving, unit.unitName) >= 0;
+            Assert.That(unit.canShootWhileMoving, Is.EqualTo(expectsShootWhileMoving), $"{unit.unitName}");
+
+            bool expectsExplodingBullets =
+                System.Array.IndexOf(UnitsWithExplodingBullets, unit.unitName) >= 0;
+            Assert.That(
+                unit.bulletExplodesOnImpact,
+                Is.EqualTo(expectsExplodingBullets),
+                $"{unit.unitName}"
+            );
+            Assert.That(
+                unit.bulletAoeRadius > 0f,
+                Is.EqualTo(expectsExplodingBullets),
+                $"{unit.unitName}"
+            );
+
+            bool expectsPiercingBullets =
+                System.Array.IndexOf(UnitsWithPiercingBullets, unit.unitName) >= 0;
+            Assert.That(unit.bulletPierces, Is.EqualTo(expectsPiercingBullets), $"{unit.unitName}");
         }
     }
 }

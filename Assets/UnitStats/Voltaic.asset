@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: Voltaic
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitModel: {fileID: 4136433947033533029, guid: d9531fe0c4dee4f06a8cd91267292128, type: 3}
+  unitName: Voltaic
+  unitClass: 2
+  unitDescription: Strikes one target with a quick bolt, then calls down a wider
+    arc that catches everyone nearby at once.
+  playStyle: Trades single-target pressure for a burst that punishes a clustered
+    team.
+  weaponName: Charge pistol
+  strengths: Its ability can lock down a whole group at once.
+  weaknesses: Basic attack alone is unremarkable, and the ability doesn't reach through
+    walls.
+  unitSprite: {fileID: 21300000, guid: 767a37d8dbea2492e818cc982103863f, type: 3}
+  unavailableForRoster: 0
+  abilityName: Chain Surge
+  abilityDescription: Zaps up to five nearby enemies at once for solid damage and
+    a brief stun.
+  abilitySprite: {fileID: 21300000, guid: 904893c1ebb1243e39d59553a42f4126, type: 3}
+  moveDist: 3
+  moveSpeed: 1
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: bbf5f51a5e20c4c2aa808325815169d2, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: f0c21c0c02c1b44d3987a5d056c5e96b, type: 3}
+  timeBetweenShots: 0.6
+  magazineSize: 6
+  reloadTime: 2
+  bulletSpread: 4
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  canShootWhileMoving: 0
+  bulletSpeed: 4
+  targetRange: 5
+  bulletRange: 6
+  damage: 8
+  backstabMultiplier: 1
+  backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 0
+  findTargetTime: 0
+  targetLockDuration: 0
+  aimRotationSpeed: 320
+  visionRange: 5
+  maxHealth: 110
+  abilityCardSprite: {fileID: 21300000, guid: 904893c1ebb1243e39d59553a42f4126, type: 3}
+  selectAbilitySquare: 0
+  abilitySquareRange: 1
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
+  abilityRadius: 3
+  selectTime: 4
+  responseRange: 4.5
+  responseDistLine: 0
+  timeDivePerUnit: 3
+  diveRange: 2
+  abilityCooldownRounds: 2

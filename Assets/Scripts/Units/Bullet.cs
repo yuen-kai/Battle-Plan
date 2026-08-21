@@ -23,6 +23,16 @@ public class Bullet : MonoBehaviour
     public float aoeRadius = 0f;
     public bool pierces = false;
 
+    /// <summary>
+    /// The velocity this shot was launched with, kept so a piercing round can be put back on its
+    /// original course after a collision. A bullet carries a real, non-trigger collider and a
+    /// Rigidbody, so Unity has already resolved the impact by the time
+    /// <see cref="OnCollisionEnter"/> runs: simply declining to destroy the bullet leaves it
+    /// deflected or stopped dead against the body it was supposed to pass through. Restoring this
+    /// is what actually makes piercing work.
+    /// </summary>
+    private Vector3 launchVelocity;
+
     // How the shot is painted for whoever is watching it: own team first, enemy second, the same
     // order Unit uses for its team indicators.
     public List<Material> teamMaterials;
@@ -96,6 +106,7 @@ public class Bullet : MonoBehaviour
         pierces = shotPierces;
         onHit = shotOnHit;
         startPosition = transform.position;
+        launchVelocity = velocity;
 
         Rigidbody body = GetComponent<Rigidbody>();
         if (body != null)
@@ -153,9 +164,12 @@ public class Bullet : MonoBehaviour
 
         if (explodesOnImpact)
         {
+            Vector3 impactPosition = other.contactCount > 0
+                ? other.GetContact(0).point
+                : transform.position;
+
             if (isAuthoritative)
             {
-                Vector3 impactPosition = other.GetContact(0).point;
                 if (
                     hitObject.CompareTag(enemyTeam)
                     && !IsPathBlockedBySmoke(hitObject.transform.position)
@@ -166,6 +180,15 @@ public class Bullet : MonoBehaviour
                 }
                 ResolveAreaImpact(impactPosition);
             }
+
+            // Outside the authoritative guard on purpose: damage is the server's business, but the
+            // blast has to be SEEN by everyone. Each peer already has its own copy of this bullet
+            // (the server's authoritative one, or the tracer from FireBulletClientRpc), so each can
+            // play its own explosion locally with no extra RPC. Without this, an exploding round
+            // dealt splash damage completely invisibly -- the designer's note that the rocket
+            // launcher's basic attack "should explode" was about exactly this missing read.
+            PlayImpactExplosion(impactPosition);
+
             Destroy(gameObject);
             return;
         }
@@ -185,10 +208,64 @@ public class Bullet : MonoBehaviour
             // A piercing bullet keeps flying through anything it can already damage; it only stops
             // on a wall (the tag check above fails) or when range/lifetime expires in Update().
             if (pierces)
+            {
+                KeepFlyingThrough(other);
                 return;
+            }
         }
 
         Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// Puts a piercing round back on the course it was launched on after passing through a body.
+    /// <para>
+    /// Returning early from <see cref="OnCollisionEnter"/> is not on its own enough to pierce
+    /// anything. The collider is a real, non-trigger collider on a Rigidbody, so the physics step
+    /// has already resolved the impact before this method is reached — the shot arrives here already
+    /// deflected off its line, and often stopped against the body entirely, which is exactly what a
+    /// pierce is supposed to not do. Two things are needed: the impulse has to be undone by
+    /// restoring the launch velocity, and this collider pair has to be excluded from further
+    /// collisions so the bullet does not immediately collide with the same body again while it is
+    /// still inside it (which would re-apply the impulse every frame of the overlap and stall the
+    /// round mid-target).
+    /// </para>
+    /// </summary>
+    private void KeepFlyingThrough(Collision other)
+    {
+        Collider ownCollider = GetComponent<Collider>();
+        if (ownCollider != null && other.collider != null)
+            Physics.IgnoreCollision(ownCollider, other.collider);
+
+        Rigidbody body = GetComponent<Rigidbody>();
+        if (body != null)
+            body.linearVelocity = launchVelocity;
+    }
+
+    /// <summary>
+    /// The visible half of an exploding round, played locally on whichever peer owns this copy.
+    /// Sized from <see cref="aoeRadius"/> (already in world units by the time it reaches this class)
+    /// so the flash a player sees matches the area that was actually damaged, rather than being a
+    /// decorative puff at an arbitrary scale. Deliberately smaller and shorter than a Grenade's
+    /// detonation: this is a basic attack that fires repeatedly, so it must not read as loud as a
+    /// once-per-few-rounds ability.
+    /// </summary>
+    private void PlayImpactExplosion(Vector3 impactPosition)
+    {
+        if (aoeRadius <= 0f)
+            return;
+
+        Color blast = new(1f, 0.42f, 0.1f);
+        ImpactCore.Spawn(impactPosition, AbilityJuice.Hot(blast, 1.6f), aoeRadius * 0.5f, 1f);
+        ImpactShockwave.Spawn(
+            impactPosition,
+            blast,
+            aoeRadius,
+            0.32f,
+            withLightPop: false,
+            groundDust: 0.45f
+        );
+        DebrisBurst.Spawn(impactPosition, blast, aoeRadius * 0.5f, 8);
     }
 
     private void ApplyDirectHitDamage(GameObject hitObject)

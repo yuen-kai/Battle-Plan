@@ -24,6 +24,8 @@ public static class CharacterSandbox
     private const string TestUnitKey = "BattlePlan.CharacterSandbox.TestUnit";
     private const string DummyUnitKey = "BattlePlan.CharacterSandbox.DummyUnit";
     private const string DummyFightsBackKey = "BattlePlan.CharacterSandbox.DummyFightsBack";
+    private const string EnemyCountKey = "BattlePlan.CharacterSandbox.EnemyCount";
+    private const string AllyCountKey = "BattlePlan.CharacterSandbox.AllyCount";
 
     /// <summary>The bot crew's default: a plain mid-range rifle Soldier, no surprises.</summary>
     public const int DefaultDummyUnitIndex = 4;
@@ -32,11 +34,19 @@ public static class CharacterSandbox
     /// Starts (or restarts) the sandbox with the given crews. Safe to call while a match — including
     /// a previous sandbox run — is already going; that match is torn down first.
     /// </summary>
-    public static void Launch(int testUnitIndex, int dummyUnitIndex, bool dummyFightsBack)
+    public static void Launch(
+        int testUnitIndex,
+        int dummyUnitIndex,
+        bool dummyFightsBack,
+        int enemyCount = 1,
+        int allyCount = 1
+    )
     {
         UnityEditor.SessionState.SetInt(TestUnitKey, testUnitIndex);
         UnityEditor.SessionState.SetInt(DummyUnitKey, dummyUnitIndex);
         UnityEditor.SessionState.SetBool(DummyFightsBackKey, dummyFightsBack);
+        UnityEditor.SessionState.SetInt(EnemyCountKey, enemyCount);
+        UnityEditor.SessionState.SetInt(AllyCountKey, allyCount);
 
         if (Application.isPlaying)
         {
@@ -79,7 +89,9 @@ public static class CharacterSandbox
     {
         SandboxSession.Begin(
             UnityEditor.SessionState.GetInt(TestUnitKey, 0),
-            UnityEditor.SessionState.GetInt(DummyUnitKey, DefaultDummyUnitIndex)
+            UnityEditor.SessionState.GetInt(DummyUnitKey, DefaultDummyUnitIndex),
+            UnityEditor.SessionState.GetInt(EnemyCountKey, 1),
+            UnityEditor.SessionState.GetInt(AllyCountKey, 1)
         );
         SandboxSession.DummyFightsBack = UnityEditor.SessionState.GetBool(
             DummyFightsBackKey,

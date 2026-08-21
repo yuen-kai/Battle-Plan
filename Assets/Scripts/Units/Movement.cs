@@ -72,6 +72,37 @@ public class Movement : NetworkBehaviour
     /// <summary>True while a dodger is picking itself up and cannot shoot.</summary>
     public bool IsRecoveringFromDive => diveRecovery.Value.Active;
 
+    /// <summary>
+    /// Set for a single round when an ally's ability lends this unit the run-and-gun trait (see
+    /// Outrider's). Kept as runtime state on the component rather than written into
+    /// <see cref="unitData"/>, because UnitData is a shared ScriptableObject asset — mutating it
+    /// would permanently turn every copy of that character, in every future match, into a
+    /// run-and-gunner.
+    /// </summary>
+    private bool shootWhileMovingGrantedThisRound;
+
+    /// <summary>
+    /// Whether this unit may fire during its move: either it always can (its own
+    /// <c>UnitData.canShootWhileMoving</c>) or it was lent the trait for this round. Every decision
+    /// site reads this rather than the raw UnitData flag, so a granted unit and a natural one behave
+    /// identically.
+    /// </summary>
+    public bool CanShootWhileMoving =>
+        (unitData != null && unitData.canShootWhileMoving) || shootWhileMovingGrantedThisRound;
+
+    /// <summary>Server-only. Lends this unit the run-and-gun trait until <see cref="ClearShootWhileMovingGrant"/>.</summary>
+    public void GrantShootWhileMovingForThisRound()
+    {
+        if (IsServer)
+            shootWhileMovingGrantedThisRound = true;
+    }
+
+    /// <summary>Drops any lent run-and-gun trait. Called for every unit at each round boundary.</summary>
+    public void ClearShootWhileMovingGrant()
+    {
+        shootWhileMovingGrantedThisRound = false;
+    }
+
     private Coroutine moveListRoutine;
     private Coroutine moveRoutine;
     private Coroutine rotateRoutine;
@@ -227,7 +258,7 @@ public class Movement : NetworkBehaviour
         // this flag: the dodge recovery cost is exactly what stops a fast dive from being a free
         // "reposition and immediately open fire," and that must hold for every unit that can dodge,
         // not just the ones without this flag.
-        if (!dive && unitData != null && unitData.canShootWhileMoving)
+        if (!dive && CanShootWhileMoving)
         {
             PauseMovement();
             moving = false;

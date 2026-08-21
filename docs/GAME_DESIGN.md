@@ -205,11 +205,18 @@ now uses Smoke Screen.
 
 Source of truth: `Assets/UnitStats/*.asset` (ScriptableObjects of `UnitData`), collected in
 `Assets/UnitStats/AllUnits.asset` (`UnitDatabase`). **Roster index order matters** (character
-select and TESTING auto-assign use it): **0 = Commander, 1 = PogoRider, 2 = Shotgunner,
-3 = Sniper, 4 = Soldier**. The active TESTING rosters contain all five units in scenario-specific
-orders; the configured roster size comes only from `RosterRules.UnitsPerPlayer`.
+select and TESTING auto-assign use it): **0 = Commander, 1 = PogoRider, 2 = Ramrod (renamed from
+Shotgunner), 3 = Sniper, 4 = Soldier, 5 = Sentinel, 6 = Salvo, 7 = Breach, 8 = Voltaic,
+9 = Farsight, 10 = Blitz, 11 = Outrider** — see `Overview.md`'s roster table for the current full
+set and `docs/design/DesignerVerbatim.md` for the direction behind the additions. The active
+TESTING rosters contain all five original units in scenario-specific orders; the configured roster
+size comes only from `RosterRules.UnitsPerPlayer`.
 
-| Stat | Commander | PogoRider | Shotgunner | Sniper | Soldier |
+The stat table below predates the Ramrod rework and the Sentinel/Salvo/Breach/Voltaic additions;
+it documents the original five's balance math and has not been recomputed for the newer units —
+treat it as historical for those five rather than a current roster-wide reference.
+
+| Stat | Commander | PogoRider | Ramrod (formerly Shotgunner) | Sniper | Soldier |
 |---|---|---|---|---|---|
 | Role (pitch) | Support | Mobility/flanker | Initiator/tank | Area control | All-rounder |
 | **Damage/bullet** | **8** | **12** | **8** (per pellet) | **50** | **10** |

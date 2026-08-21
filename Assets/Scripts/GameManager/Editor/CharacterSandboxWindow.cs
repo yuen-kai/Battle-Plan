@@ -23,6 +23,8 @@ public class CharacterSandboxWindow : EditorWindow
     private Vector2 scroll;
     private int dummyUnitIndex = CharacterSandbox.DefaultDummyUnitIndex;
     private bool dummyFightsBack;
+    private int enemyCount = 1;
+    private int allyCount = 1;
 
     [MenuItem("Battle Plan/Character Sandbox")]
     public static void Open()
@@ -112,8 +114,65 @@ public class CharacterSandboxWindow : EditorWindow
             // Which unit the dummy is gets decided before the board is built, so changing it
             // mid-match means restarting with the same character under test.
             if (CharacterSandbox.IsRunning)
-                CharacterSandbox.Launch(SandboxSession.TestUnitIndex, picked, dummyFightsBack);
+                CharacterSandbox.Launch(
+                    SandboxSession.TestUnitIndex,
+                    picked,
+                    dummyFightsBack,
+                    enemyCount,
+                    allyCount
+                );
         }
+
+        int liveEnemyCount = CharacterSandbox.IsRunning ? SandboxSession.EnemyCount : enemyCount;
+        int pickedCount = EditorGUILayout.IntSlider(
+            "How many",
+            Mathf.Clamp(liveEnemyCount, 1, SandboxSession.MaxEnemyCount),
+            1,
+            SandboxSession.MaxEnemyCount
+        );
+        if (pickedCount != liveEnemyCount)
+        {
+            enemyCount = pickedCount;
+            // Crew size is fixed when the board is built, so this also needs a restart.
+            if (CharacterSandbox.IsRunning)
+                CharacterSandbox.Launch(
+                    SandboxSession.TestUnitIndex,
+                    dummyUnitIndex,
+                    dummyFightsBack,
+                    pickedCount,
+                    allyCount
+                );
+        }
+        EditorGUILayout.LabelField(
+            " ",
+            "More than one is for abilities that hit several enemies at once.",
+            EditorStyles.miniLabel
+        );
+
+        int liveAllyCount = CharacterSandbox.IsRunning ? SandboxSession.AllyCount : allyCount;
+        int pickedAllies = EditorGUILayout.IntSlider(
+            "Teammates",
+            Mathf.Clamp(liveAllyCount, 1, SandboxSession.MaxAllyCount),
+            1,
+            SandboxSession.MaxAllyCount
+        );
+        if (pickedAllies != liveAllyCount)
+        {
+            allyCount = pickedAllies;
+            if (CharacterSandbox.IsRunning)
+                CharacterSandbox.Launch(
+                    SandboxSession.TestUnitIndex,
+                    dummyUnitIndex,
+                    dummyFightsBack,
+                    enemyCount,
+                    pickedAllies
+                );
+        }
+        EditorGUILayout.LabelField(
+            " ",
+            "Counts the character under test. More is for abilities that buff nearby allies.",
+            EditorStyles.miniLabel
+        );
 
         bool liveFightsBack = CharacterSandbox.IsRunning
             ? SandboxSession.DummyFightsBack
@@ -183,7 +242,9 @@ public class CharacterSandboxWindow : EditorWindow
                         CharacterSandbox.IsRunning ? SandboxSession.DummyUnitIndex : dummyUnitIndex,
                         CharacterSandbox.IsRunning
                             ? SandboxSession.DummyFightsBack
-                            : dummyFightsBack
+                            : dummyFightsBack,
+                        CharacterSandbox.IsRunning ? SandboxSession.EnemyCount : enemyCount,
+                        CharacterSandbox.IsRunning ? SandboxSession.AllyCount : allyCount
                     );
                 }
             }

@@ -445,6 +445,35 @@ public class GameLoop : NetworkBehaviour
         : SandboxSession.IsActive ? SandboxSession.UnitsPerTeam
         : RosterRules.UnitsPerPlayer;
 
+    /// <summary>
+    /// How many units a specific team fields. Identical to <see cref="UnitsPerTeamThisMatch"/> for
+    /// every real match — both crews are the same size — but the character sandbox deliberately
+    /// fields an uneven board: one character under test against as many dummies as the ability being
+    /// exercised needs to be judged against.
+    /// </summary>
+    public static int UnitsForTeamThisMatch(int teamIndex)
+    {
+        return SandboxSession.IsActive
+            ? SandboxSession.UnitsForTeam(teamIndex)
+            : UnitsPerTeamThisMatch;
+    }
+
+    /// <summary>
+    /// Drops any run-and-gun trait lent out by an ability (see <c>RunAndGun</c>). Called at every
+    /// round boundary, which is what makes such a grant last exactly the round it was cast in.
+    /// </summary>
+    private static void ClearShootWhileMovingGrants()
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            foreach (GameObject unit in GetTeamUnits(teamIndex))
+            {
+                if (unit != null)
+                    unit.GetComponent<Movement>()?.ClearShootWhileMovingGrant();
+            }
+        }
+    }
+
     private static List<Vector2Int[]> CreateSpawnLayout(bool useDevLayout)
     {
         if (TutorialSession.IsActive)
@@ -1156,7 +1185,10 @@ public class GameLoop : NetworkBehaviour
             }
         }
 
-        SetFieldedCardCountClientRpc(UnitsPerTeamThisMatch);
+        // The card strip shows the LOCAL player's own crew, so it is sized from the host team rather
+        // than from the match-wide figure — in the character sandbox the two differ, and sizing it
+        // from the enemy's dummy count would leave the tester staring at empty slots.
+        SetFieldedCardCountClientRpc(UnitsForTeamThisMatch(HostTeamIndex));
 
         // Setup teams by explicit logical index.
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
@@ -1191,7 +1223,7 @@ public class GameLoop : NetworkBehaviour
                 $"Team {teamIndex} has an invalid roster ({rosterValidation.Reason})."
             );
         }
-        int fieldedCount = Mathf.Min(teamUnits.Length, UnitsPerTeamThisMatch);
+        int fieldedCount = Mathf.Min(teamUnits.Length, UnitsForTeamThisMatch(teamIndex));
         if (spawnPositions == null || spawnPositions.Count < fieldedCount)
         {
             throw new System.InvalidOperationException(
@@ -1467,6 +1499,7 @@ public class GameLoop : NetworkBehaviour
             resolvingOverlaps = false;
             unitsBeingShoved.Clear();
             returnFireWindowUntil = 0f;
+            ClearShootWhileMovingGrants();
             currentPhase = "planning";
 
             // Fast-forward the whole simulation (movement/shooting/physics) in dev mode.
@@ -1537,6 +1570,17 @@ public class GameLoop : NetworkBehaviour
                     && !IsHoldingForRejoin
                     && NetworkManager.Singleton != null
                     && NetworkManager.Singleton.ServerTime.Time < endTime + 1
+                    // devMode is read once, above, to pick which of these two branches runs — so a
+                    // match that STARTED outside dev mode was stuck here for the whole planning
+                    // window even after an agent turned dev mode on, because flipping the flag
+                    // could not move execution into the branch that watches it. That is not
+                    // hypothetical: the character sandbox routes through the join screen, which
+                    // clears devMode on its way past (JoinGameUIController.CreateMatch), so every
+                    // scripted sandbox run sat out the full 600-second sandbox planning window
+                    // before resolving anything. Bailing out here hands the round to the code below,
+                    // which already merges devSubmittedPaths when devMode is on, and every
+                    // subsequent round takes the dev branch properly.
+                    && !devMode
                 )
                 {
                     double now = NetworkManager.Singleton.ServerTime.Time;
@@ -5744,7 +5788,7 @@ public class GameLoop : NetworkBehaviour
                 // case). Never for a dive: the dodge recovery window exists specifically so a fast
                 // reposition can't also be a free early shot, and this flag must not undercut that
                 // for any unit that dodges.
-                if (!isDiving && movement.unitData != null && movement.unitData.canShootWhileMoving)
+                if (!isDiving && movement.CanShootWhileMoving)
                 {
                     Shooting shooting = unit.GetComponent<Shooting>();
                     if (shooting != null)

@@ -24,6 +24,59 @@ public static class SandboxSession
     public const int UnitsPerTeam = 1;
 
     /// <summary>
+    /// How many dummies the enemy side fields. One is the default — the plain "does this kit hurt a
+    /// target" case — but an ability that reaches several enemies at once cannot be judged against a
+    /// single one: Voltaic's Chain Surge caps at five targets, and with one dummy on the board four
+    /// fifths of the ability is invisible. Set per launch from the Character Sandbox window.
+    /// </summary>
+    public static int EnemyCount { get; private set; } = 1;
+
+    /// <summary>The most dummies the enemy side can field, bounded by the roster it is built from.</summary>
+    public static int MaxEnemyCount => EnemySpawns.Length;
+
+    /// <summary>
+    /// Where the dummies stand, in the order they are fielded. All within three cells of
+    /// <see cref="PlayerSpawn"/> so a radius ability centred on the character under test actually
+    /// covers them — a cluster placed further out would make a capped multi-target ability look
+    /// broken rather than tested. Verified against Concourse (clear of walls, in bounds, distinct)
+    /// by CharacterSandboxEditModeTests.
+    /// </summary>
+    public static readonly Vector2Int[] EnemySpawns =
+    {
+        new(7, 6),
+        new(7, 5),
+        new(6, 5),
+        new(8, 5),
+        new(6, 4),
+    };
+
+    /// <summary>
+    /// How many units the player's own side fields, including the character under test. One is the
+    /// default. More exists for the same reason <see cref="EnemyCount"/> does, pointed the other way:
+    /// an ability that acts on ALLIES cannot be judged with nobody to act on — Outrider's Run And Gun
+    /// lends its trait to nearby teammates, and with a lone unit on the board the entire ability is a
+    /// no-op.
+    /// </summary>
+    public static int AllyCount { get; private set; } = 1;
+
+    /// <summary>The most units the player's side can field.</summary>
+    public static int MaxAllyCount => AllySpawns.Length + 1;
+
+    /// <summary>
+    /// Where the extra teammates stand, after <see cref="PlayerSpawn"/>. All within three cells of
+    /// the character under test so an ally-radius ability actually covers them, clear of walls, and
+    /// distinct from every <see cref="EnemySpawns"/> cell. Verified by
+    /// CharacterSandboxEditModeTests.
+    /// </summary>
+    public static readonly Vector2Int[] AllySpawns =
+    {
+        new(6, 3),
+        new(8, 3),
+        new(7, 4),
+        new(8, 4),
+    };
+
+    /// <summary>
     /// Long enough that planning never expires while the designer is reading the board or lining up
     /// an ability by hand. Matches the tutorial's reasoning, and the same value keeps the dodge
     /// window open too.
@@ -37,7 +90,9 @@ public static class SandboxSession
     /// sight, so a kit's damage output is visible from round one.
     /// </summary>
     public static readonly Vector2Int PlayerSpawn = new(7, 3);
-    public static readonly Vector2Int EnemySpawn = new(7, 6);
+    /// <summary>The first dummy's cell. Derived from <see cref="EnemySpawns"/> so the single-dummy
+    /// case and the crowd case can never disagree about where the front one stands.</summary>
+    public static Vector2Int EnemySpawn => EnemySpawns[0];
 
     /// <summary>Wall cells flanking the two spawns, surfaced by the sandbox window so the designer
     /// knows where the cover is without counting rows.</summary>
@@ -67,12 +122,19 @@ public static class SandboxSession
     /// </summary>
     public static bool HostStartRequested { get; set; }
 
-    public static void Begin(int testUnitIndex, int dummyUnitIndex)
+    public static void Begin(
+        int testUnitIndex,
+        int dummyUnitIndex,
+        int enemyCount = 1,
+        int allyCount = 1
+    )
     {
         IsActive = true;
         HostStartRequested = false;
         TestUnitIndex = Mathf.Max(0, testUnitIndex);
         DummyUnitIndex = Mathf.Max(0, dummyUnitIndex);
+        EnemyCount = Mathf.Clamp(enemyCount, 1, MaxEnemyCount);
+        AllyCount = Mathf.Clamp(allyCount, 1, MaxAllyCount);
 
         // The dummy is frozen at the team level rather than per unit, because a per-GameObject
         // freeze cannot be registered until the unit exists — a frame after the bot plans the
@@ -84,7 +146,20 @@ public static class SandboxSession
     {
         IsActive = false;
         HostStartRequested = false;
+        EnemyCount = 1;
+        AllyCount = 1;
         BotFrozenUnits.ClearAll();
+    }
+
+    /// <summary>
+    /// How many units the given team fields. The two sides are sized independently here, unlike a
+    /// normal match, so a kit can be put in front of however many bodies it needs to be judged
+    /// against — several enemies for a multi-target ability, or several teammates for one that buffs
+    /// them.
+    /// </summary>
+    public static int UnitsForTeam(int teamIndex)
+    {
+        return teamIndex == GameLoop.OpponentTeamIndex ? EnemyCount : AllyCount;
     }
 
     /// <summary>
@@ -110,7 +185,24 @@ public static class SandboxSession
     {
         List<Vector2Int[]> layout = new(GameLoop.TeamCount);
         for (int teamIndex = 0; teamIndex < GameLoop.TeamCount; teamIndex++)
-            layout.Add(new[] { teamIndex == GameLoop.HostTeamIndex ? PlayerSpawn : EnemySpawn });
+        {
+            if (teamIndex == GameLoop.HostTeamIndex)
+            {
+                // The character under test always stands on PlayerSpawn; any extra teammates fill
+                // AllySpawns in order behind it.
+                int allies = Mathf.Clamp(AllyCount, 1, MaxAllyCount);
+                Vector2Int[] friendly = new Vector2Int[allies];
+                friendly[0] = PlayerSpawn;
+                for (int i = 1; i < allies; i++)
+                    friendly[i] = AllySpawns[i - 1];
+                layout.Add(friendly);
+                continue;
+            }
+
+            Vector2Int[] enemies = new Vector2Int[Mathf.Clamp(EnemyCount, 1, MaxEnemyCount)];
+            System.Array.Copy(EnemySpawns, enemies, enemies.Length);
+            layout.Add(enemies);
+        }
         return layout;
     }
 }

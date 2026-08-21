@@ -783,18 +783,39 @@ public class PlanMovement : MonoBehaviour
         {
             GameObject unit = entry.Key;
             (bool abilityMode, List<Vector3> plan) = entry.Value;
-            if (!abilityMode || plan == null || plan.Count < 2 || !IsPlanningUnitAvailable(unit))
+            if (!abilityMode || plan == null || plan.Count < 1 || !IsPlanningUnitAvailable(unit))
                 continue;
 
             Movement movement = unit.GetComponent<Movement>();
             UnitData unitData = movement != null ? movement.unitData : null;
-            if (unitData == null || !unitData.selectAbilitySquare)
+            if (unitData == null)
                 continue;
+
+            // A self-cast ability names no square, so its plan is just [start] — which used to be
+            // filtered out here twice over (plan.Count < 2, and the selectAbilitySquare check), so
+            // an ability centred on its own caster drew nothing at all during planning. It still has
+            // a footprint worth showing whenever it has a radius: the player needs to see how far a
+            // self-centred zap or an ally buff actually reaches before committing to it.
+            bool selfCast = !unitData.selectAbilitySquare;
+            if (selfCast)
+            {
+                if (unitData.abilityRadius <= 0f)
+                    continue; // nothing to draw: a self-only effect has no area to outline
+            }
+            else if (plan.Count < 2)
+            {
+                continue; // a square-targeted ability has no target yet
+            }
+
+            // Mirrors GameLoop's own square resolution for an activation
+            // (!selectAbilitySquare || plan.Count < 2 ? plan[0] : plan[^1]) so the disc previewed
+            // during planning is centred exactly where the ability will actually resolve.
+            Vector3 square = selfCast || plan.Count < 2 ? plan[0] : plan[^1];
 
             abilityVisuals[unit] = BuildAbilityIndicator(
                 unit,
                 plan[0],
-                plan[1],
+                square,
                 unitData,
                 unit == HighlightedUnit
             );

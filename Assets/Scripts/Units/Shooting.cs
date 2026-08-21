@@ -486,6 +486,66 @@ public class Shooting : NetworkBehaviour
     }
 
     /// <summary>
+    /// Fires one shot at an explicit world-space direction instead of <c>transform.forward</c> plus
+    /// random spread — built for a multi-shot cone (e.g. three arrows fired at slightly diverging
+    /// angles in one chosen direction) where every shot's exact heading matters and none of them
+    /// should be a random draw. Otherwise identical to <see cref="FireBullet"/>: same team
+    /// resolution, same client tracer, same ammo accounting, so a caller can freely mix calls to
+    /// both within one burst.
+    /// </summary>
+    public void FireBulletInDirection(
+        Vector3 direction,
+        float bulletSpeed = -1,
+        float damage = -1,
+        float backstabMultiplier = -1,
+        float range = -1,
+        float backstabAngle = -1,
+        GameObject bulletPrefab = null,
+        bool? pierces = null,
+        System.Action<GameObject> onHit = null
+    )
+    {
+        if (direction.sqrMagnitude <= Mathf.Epsilon)
+            return;
+        direction.Normalize();
+
+        bulletSpeed = bulletSpeed == -1 ? unitData.bulletSpeed : bulletSpeed;
+        damage = damage == -1 ? unitData.damage : damage;
+        backstabMultiplier =
+            backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
+        range = range == -1 ? unitData.bulletRange : range;
+        backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
+        bulletPrefab = bulletPrefab ?? ResolveBulletPrefab();
+        bool resolvedPierces = pierces ?? unitData.bulletPierces;
+
+        Vector3 origin = transform.position;
+        bullets.Add(
+            CreateBullet(
+                bulletPrefab,
+                origin,
+                direction,
+                bulletSpeed,
+                damage,
+                backstabMultiplier,
+                range,
+                backstabAngle,
+                authoritative: true,
+                pierces: resolvedPierces,
+                onHit: onHit
+            )
+        );
+
+        FireBulletClientRpc(origin, direction, bulletSpeed);
+
+        currentAmmo--;
+
+        if (GetComponent<AnimationHandler>() != null)
+        {
+            GetComponent<AnimationHandler>().TriggerAnimation("Shoot");
+        }
+    }
+
+    /// <summary>
     /// Draws the tracer on every other peer. Object-scoped, so a shot from a unit this client
     /// cannot see stays invisible to it, which is what fog already implies but network-spawned
     /// bullets never honoured.
@@ -496,10 +556,11 @@ public class Shooting : NetworkBehaviour
         if (IsServer)
             return; // the authoritative copy is already in flight
 
-        // AoE/onHit are damage-side concerns (authoritative-only) and explodesOnImpact makes no
-        // visual difference here either way: whatever collision this tracer hits already destroys
-        // it, with or without the flag. Only pierces changes what the tracer looks like, so it
-        // reads off unitData directly the same way this tracer already does for everything else.
+        // onHit stays server-side (it feeds damage-side traits like the hit-streak passive), but
+        // explodesOnImpact and aoeRadius are NOT purely damage-side any more: Bullet now plays a
+        // local explosion whenever it detonates, sized from aoeRadius. Withholding them here would
+        // leave the blast visible only on the host. Damage is still authoritative-only regardless —
+        // the tracer is created with authoritative: false, which is what gates it.
         CreateBullet(
             ResolveBulletPrefab(),
             origin,
@@ -510,6 +571,8 @@ public class Shooting : NetworkBehaviour
             unitData.bulletRange,
             unitData.backstabAngle,
             authoritative: false,
+            explodesOnImpact: unitData.bulletExplodesOnImpact,
+            aoeRadius: unitData.bulletAoeRadius,
             pierces: unitData.bulletPierces
         );
     }

@@ -54,3 +54,27 @@ A: Shoots while moving (Recommended)
 
 Q: For the 'aggressive jump' damage-dealer — you hedged with 'maybe an agile/damage-dealer shotgunner.' Lock in shotgun as its weapon? (Yes, shotgun / No, different weapon / Your call)
 A: Yes, shotgun
+
+## 2026-08-21
+
+and have proper visuals
+
+and rocket launcher ability should be a horizontal rocket (no arch)
+
+fire rate and ability speed should be tuned down for all the new characters. Piercing bullets dont work. Bullets should be destroyed if they hit a wall. Rocket launcher ability should have ability selection like that of the sniper (whole board, rocket range is determined seperately)
+
+rocket luancher's basic attack should explode. its ability should be less big and less damaging
+
+breach's ability should have a set range (unless interrupted by an enemy or wall). lets say this range should be 8 for now
+
+I said slow all fire rate and ability time for all the new characters. also lower the magazine sizes. the total damage should be comparable to the original 5 characters. there should be a ability recovery time before the unit can shoot.
+
+abiility recovery is specific to each ability. just before you stop the ability, you just have it wait for some time
+
+ability recovery only for the new characters (such as rocket launcher)
+
+for the voltaic sandbox, have more enemies in range (to test out the ability)
+
+although voltaic ability does not have square selection, it should have ability radius (similar to how grenade has the blast radius) shown centered on the unit
+
+remove zealot from the game. outrider should not have an ability

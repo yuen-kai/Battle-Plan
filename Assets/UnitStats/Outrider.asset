@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: Outrider
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitModel: {fileID: 4136433947033533029, guid: c95aab5892e4b48f8982d62b77098d2c, type: 3}
+  unitName: Outrider
+  unitClass: 3
+  unitDescription: Never stops moving, and never stops firing while it does.
+  playStyle: Keeps shooting through every move instead of stopping to aim first.
+  weaponName: Assault rifle
+  strengths: Uniquely keeps up pressure while relocating; its ability adds a burst
+    of fire rate on top.
+  weaknesses: Nothing about it hits especially hard on its own.
+  unitSprite: {fileID: 21300000, guid: b4f6b91e383e443a99dca0cfcf67158a, type: 3}
+  unavailableForRoster: 0
+  abilityName: Run And Gun
+  abilityDescription: Nearby allies fire while they move for the rest of this round,
+    the way Outrider always does.
+  abilitySprite: {fileID: 21300000, guid: d2a334363622949c3a7213d7dbb352cd, type: 3}
+  moveDist: 4
+  moveSpeed: 1.3
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
+  timeBetweenShots: 0.6
+  magazineSize: 5
+  reloadTime: 2
+  bulletSpread: 5
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  canShootWhileMoving: 1
+  bulletSpeed: 3.5
+  targetRange: 5
+  bulletRange: 6
+  damage: 8
+  backstabMultiplier: 1
+  backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 0
+  findTargetTime: 0
+  targetLockDuration: 0
+  aimRotationSpeed: 340
+  visionRange: 5
+  maxHealth: 105
+  abilityCardSprite: {fileID: 21300000, guid: d2a334363622949c3a7213d7dbb352cd, type: 3}
+  selectAbilitySquare: 0
+  abilitySquareRange: 1
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
+  abilityRadius: 3
+  selectTime: 4
+  responseRange: 0
+  responseDistLine: 0
+  timeDivePerUnit: 3
+  diveRange: 2
+  abilityCooldownRounds: 2
