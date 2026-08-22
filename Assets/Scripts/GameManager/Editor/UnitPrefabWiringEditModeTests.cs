@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
+using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
@@ -177,12 +178,8 @@ public class UnitPrefabWiringEditModeTests
         );
     }
 
-    /// <summary>
-    /// The ability component on the prefab has to match the kit the asset advertises, for the same
-    /// class of reason: a duplicated prefab arrives with the original's Ability subclass attached.
-    /// </summary>
     [Test]
-    public void EveryUnitPrefab_CarriesExactlyOneAbilityComponent()
+    public void UnitPrefabAbilityCount_MatchesItsAdvertisedKit()
     {
         UnitDatabase catalog = LoadCatalog();
 
@@ -192,12 +189,58 @@ public class UnitPrefabWiringEditModeTests
                 continue;
 
             Ability[] abilities = unit.unitModel.GetComponentsInChildren<Ability>(true);
+            int expectedCount = string.IsNullOrWhiteSpace(unit.abilityName) ? 0 : 1;
             Assert.That(
                 abilities.Length,
-                Is.EqualTo(1),
-                $"{unit.unitModel.name} carries {abilities.Length} Ability components; GameLoop"
-                    + ".RunAbility resolves the ability with a single GetComponent<Ability>(), so a "
-                    + "second one would be silently ignored."
+                Is.EqualTo(expectedCount),
+                $"{unit.unitModel.name} advertises '{unit.abilityName}' but carries "
+                    + $"{abilities.Length} Ability components."
+            );
+        }
+    }
+
+    [Test]
+    public void UnitsWithoutAbilitiesHaveNeutralAbilityConfiguration()
+    {
+        UnitDatabase catalog = LoadCatalog();
+
+        foreach (UnitData unit in catalog.units)
+        {
+            if (unit == null || !string.IsNullOrWhiteSpace(unit.abilityName))
+                continue;
+
+            Assert.That(unit.abilitySprite, Is.Null, $"{unit.name} has an unused ability sprite.");
+            Assert.That(unit.abilityCardSprite, Is.Null, $"{unit.name} has an unused ability card.");
+            Assert.That(unit.abilitySquareRange, Is.Zero, $"{unit.name} has stale ability range.");
+            Assert.That(unit.abilityRadius, Is.Zero, $"{unit.name} has stale ability radius.");
+            Assert.That(unit.abilityCooldownRounds, Is.Zero, $"{unit.name} has stale cooldown.");
+        }
+    }
+
+    [Test]
+    public void UnitPrefabNetworkHashes_AreNonzeroAndUnique()
+    {
+        UnitDatabase catalog = LoadCatalog();
+        HashSet<uint> hashes = new();
+
+        foreach (UnitData unit in catalog.units)
+        {
+            if (unit == null || unit.unitModel == null)
+                continue;
+
+            NetworkObject networkObject = unit.unitModel.GetComponent<NetworkObject>();
+            Assert.That(networkObject, Is.Not.Null, $"{unit.unitModel.name} has no NetworkObject.");
+
+            SerializedProperty hashProperty = new SerializedObject(networkObject).FindProperty(
+                "GlobalObjectIdHash"
+            );
+            Assert.That(hashProperty, Is.Not.Null);
+            uint hash = hashProperty.uintValue;
+            Assert.That(hash, Is.Not.Zero, $"{unit.unitModel.name} has an invalid network hash.");
+            Assert.That(
+                hashes.Add(hash),
+                Is.True,
+                $"{unit.unitModel.name} duplicates network hash {hash}."
             );
         }
     }

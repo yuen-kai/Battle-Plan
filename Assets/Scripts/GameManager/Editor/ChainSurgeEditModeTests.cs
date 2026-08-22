@@ -5,12 +5,6 @@ using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
-// ChainSurge's ExecuteAbility coroutine has no yield inside it beyond the IsServer guard, so unlike
-// DashRush or SuppressingFire there is no coroutine machinery to work around here -- but the same
-// two seams those suites pull out for direct testing exist on ChainSurge for the same reason:
-// ResolveTargets (the overlap-then-line-of-sight-then-cap query) and ApplyZap (the damage/stun
-// application) are both public precisely so target selection and its effects can be exercised
-// without a running NetworkManager driving the coroutine itself.
 [TestFixture]
 [Category("ChainSurge")]
 public class ChainSurgeEditModeTests
@@ -27,10 +21,6 @@ public class ChainSurgeEditModeTests
     [SetUp]
     public void SetUp()
     {
-        // Gives NetworkManager.Singleton a safe, never-started instance so NetworkManager.ServerTime
-        // (read inside Unit.ApplyStun and Unit.IsStunned, via NetworkBehaviour.NetworkManager's
-        // fallback to NetworkManager.Singleton) resolves to a default NetworkTime instead of
-        // throwing -- mirrors StunEditModeTests' and SuppressingFireEditModeTests' own setup.
         networkManagerHost = new GameObject("ChainSurgeEditModeTestsNetworkManager");
         NetworkManager manager = networkManagerHost.AddComponent<NetworkManager>();
         SetSingleton(manager);
@@ -85,11 +75,6 @@ public class ChainSurgeEditModeTests
         Assert.That(damage.floatValue, Is.EqualTo(45f).Within(Tolerance));
     }
 
-    // Seven distinct directions from a caster, no two parallel, so a ray to the farthest of them
-    // never happens to pass through a nearer one's own collider -- that self-occlusion is exactly
-    // how a real cast should behave (an enemy standing behind another blocks the one behind it, the
-    // same as Grenade's blast), but it would wrongly explain away a miss in a test built to isolate
-    // the five-target cap on its own.
     private static readonly Vector3[] SevenDistinctDirections =
     {
         new Vector3(1f, 0f, 0f),
@@ -107,9 +92,6 @@ public class ChainSurgeEditModeTests
         Vector3 casterPosition = new(1000f, 0f, 1000f);
         ChainSurge chainSurge = CreateCaster(casterPosition);
 
-        // Seven enemies, each one cell farther than the last but each out along its own direction
-        // -- well within a ten-cell radius, so range alone never explains a miss, and no two ever
-        // stand on the same ray so nobody blocks anybody else's line of sight either.
         List<GameObject> enemies = new();
         for (int index = 1; index <= SevenDistinctDirections.Length; index++)
         {
@@ -145,9 +127,6 @@ public class ChainSurgeEditModeTests
     [Test]
     public void ResolveTargets_DoesNotHitAnEnemyBehindAWallButStillHitsAClearOne()
     {
-        // Contrast with Salvo's ability elsewhere in this batch, which deliberately fires through
-        // walls: a lightning bolt is not a special case like that one and must be blocked exactly
-        // the way Grenade's own blast already is.
         Vector3 casterPosition = new(2000f, 0f, 2000f);
         ChainSurge chainSurge = CreateCaster(casterPosition);
 
@@ -178,6 +157,67 @@ public class ChainSurgeEditModeTests
             Contains.Item(clearEnemy),
             "An enemy with a clear line of sight must still be reachable."
         );
+    }
+
+    [Test]
+    public void ResolveTargets_IncludesTheDisplayedRadiusBoundaryRegardlessOfColliderHeight()
+    {
+        Vector3 casterPosition = new(3000f, 0f, 3000f);
+        ChainSurge chainSurge = CreateCaster(casterPosition);
+        GameObject boundaryEnemy = CreateEnemyCollider(
+            casterPosition + new Vector3(3f * GameLoop.cellSize, 1f, 0f)
+        );
+
+        Physics.SyncTransforms();
+
+        Assert.That(
+            chainSurge.ResolveTargets(casterPosition, radiusCells: 3f),
+            Contains.Item(boundaryEnemy)
+        );
+    }
+
+    [Test]
+    public void ResolveTargets_EnemiesDoNotBlockArcsToEachOther()
+    {
+        Vector3 casterPosition = new(3500f, 0f, 3500f);
+        ChainSurge chainSurge = CreateCaster(casterPosition);
+        GameObject nearEnemy = CreateEnemyCollider(
+            casterPosition + Vector3.forward * GameLoop.cellSize
+        );
+        GameObject farEnemy = CreateEnemyCollider(
+            casterPosition + Vector3.forward * 3f * GameLoop.cellSize
+        );
+
+        Physics.SyncTransforms();
+
+        List<GameObject> targets = chainSurge.ResolveTargets(casterPosition, radiusCells: 3f);
+        Assert.That(targets, Contains.Item(nearEnemy));
+        Assert.That(targets, Contains.Item(farEnemy));
+    }
+
+    [Test]
+    public void ResolveTargets_ReturnsOneUnitForMultipleChildColliders()
+    {
+        Vector3 casterPosition = new(4000f, 0f, 4000f);
+        ChainSurge chainSurge = CreateCaster(casterPosition);
+        GameObject enemy = new("ChainSurgeMultiColliderEnemy");
+        spawnedObjects.Add(enemy);
+        enemy.transform.position = casterPosition + Vector3.right * GameLoop.cellSize;
+        enemy.AddComponent<Unit>();
+
+        int teamLayer = LayerMask.NameToLayer(RedTeamLayer);
+        for (int index = 0; index < 2; index++)
+        {
+            GameObject colliderObject = new($"Collider{index}") { layer = teamLayer };
+            colliderObject.transform.SetParent(enemy.transform, false);
+            colliderObject.transform.localPosition = Vector3.up * index * 0.25f;
+            colliderObject.AddComponent<SphereCollider>();
+        }
+
+        Physics.SyncTransforms();
+
+        List<GameObject> targets = chainSurge.ResolveTargets(casterPosition, radiusCells: 3f);
+        Assert.That(targets, Is.EqualTo(new[] { enemy }));
     }
 
     [Test]

@@ -98,14 +98,17 @@ public class UnitData : ScriptableObject
     public float bulletSpread = 3f;
 
     [Tooltip(
-        "Shots into a fresh magazine before the fire-rate ramp reaches timeBetweenShots. 0 disables the ramp (constant timeBetweenShots from the first shot, today's behavior)."
+        "Shots in an uninterrupted firing run before the cadence reaches timeBetweenShots. 0 disables the ramp."
     )]
     public int fireRateRampShots = 0;
 
     [Tooltip(
-        "Delay before the second shot of a fresh magazine when fireRateRampShots > 0; unused otherwise."
+        "Delay after the first shot of a firing run when fireRateRampShots > 0; unused otherwise."
     )]
     public float fireRateRampStartDelay = 0f;
+
+    [Tooltip("Time without a shot before the fire-rate ramp starts over.")]
+    public float fireRateRampResetDelay = 1.5f;
 
     [Tooltip("Unit may fire immediately while moving instead of waiting for movement to finish")]
     public bool canShootWhileMoving = false;

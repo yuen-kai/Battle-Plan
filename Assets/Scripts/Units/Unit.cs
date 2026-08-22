@@ -11,10 +11,6 @@ public class Unit : NetworkBehaviour
     private readonly NetworkVariable<int> rosterSlot = new(-1);
     private readonly NetworkVariable<int> abilityCooldownRoundsRemaining = new(0);
 
-    // One replicated write per stun rather than a per-frame countdown, the same trade Movement's
-    // DiveRecoveryState makes: the indicator's fill is a pure function of elapsed server time, so
-    // every peer draws the right point in it from the moment it learns about it, fog reveals
-    // midway through included.
     private readonly NetworkVariable<StunState> stunState = new();
 
     public int TeamIndex => teamIndex.Value;
@@ -29,9 +25,6 @@ public class Unit : NetworkBehaviour
         && GameLoop.Instance.LocalTeamIndex >= 0
         && TeamIndex == GameLoop.Instance.LocalTeamIndex;
 
-    /// <summary>True for the short, wall-clock window a knockback or similar hit has interrupted
-    /// this unit for. Not round-based: it is meant to resolve inside the same round's execution
-    /// window it was applied in.</summary>
     public bool IsStunned => IsStunnedAt(stunState.Value, CurrentServerTime);
 
     [HideInInspector]
@@ -50,8 +43,6 @@ public class Unit : NetworkBehaviour
         teamIndex.OnValueChanged += OnTeamIndexChanged;
         abilityCooldownRoundsRemaining.OnValueChanged += OnAbilityCooldownRoundsChanged;
         RefreshTeamPresentation();
-        // Not animated: the cooldown a unit spawns with, or comes back out of fog with, is state
-        // that was already true before this client could see it, not a recharge to play out.
         RefreshAbilityStatusRing(animate: false);
 
         stunState.OnValueChanged += OnStunStateChanged;
@@ -99,12 +90,6 @@ public class Unit : NetworkBehaviour
         rosterSlot.Value = value;
     }
 
-    /// <summary>
-    /// Hard-interrupts this unit the way it already interrupts itself for a shield rush, a pogo
-    /// jump or an area lock — movement paused, weapons stood down — then hands it back at the end
-    /// of a short, wall-clock window instead of a round boundary. A second call mid-window
-    /// restarts the timer rather than stacking a second recovery behind the first.
-    /// </summary>
     public void ApplyStun(float duration)
     {
         if (!IsServer || duration <= 0f)
@@ -115,17 +100,16 @@ public class Unit : NetworkBehaviour
         if (movement == null || shooting == null)
             return;
 
-        movement.PauseMovement();
-        movement.moving = false;
-        shooting.StandDown();
-
         if (stunCoroutine != null)
             StopCoroutine(stunCoroutine);
 
         stunState.Value = new StunState(NetworkManager.ServerTime.Time, duration);
+        GetComponent<Ability>()?.InterruptForStun();
 
-        // Guarded so this stays callable from an edit-mode test that forces IsServer without a
-        // running player loop; coroutines are otherwise only ever started in a live match.
+        movement.PauseMovement();
+        movement.moving = false;
+        shooting.StandDown();
+
         if (Application.isPlaying)
             stunCoroutine = StartCoroutine(ResumeAfterStun(duration));
     }
@@ -142,15 +126,34 @@ public class Unit : NetworkBehaviour
         if (IsServer && stunState.Value.Active)
             stunState.Value = default;
 
-        // Mirrors how a dodger picks back up after its dive recovery: whatever the unit would
-        // normally be doing resumes rather than staying stood down.
-        GetComponent<Movement>()?.transitionToShooting();
+        TryResumeShooting();
     }
 
-    /// <summary>Whether <paramref name="state"/> is still an active stun at <paramref name="serverTime"/>.</summary>
     public static bool IsStunnedAt(StunState state, double serverTime)
     {
         return state.Active && state.ProgressAt(serverTime) < 1f;
+    }
+
+    public void PauseShootingForAbility()
+    {
+        Movement movement = GetComponent<Movement>();
+        if (movement != null)
+        {
+            movement.PauseMovement();
+            movement.moving = false;
+        }
+        GetComponent<Shooting>()?.PauseShooting();
+    }
+
+    public void ResumeShootingAfterAbility()
+    {
+        TryResumeShooting(onlyIfWeaponsStillFree: true);
+    }
+
+    private void TryResumeShooting(bool onlyIfWeaponsStillFree = false)
+    {
+        if (!IsStunned)
+            GetComponent<Movement>()?.transitionToShooting(onlyIfWeaponsStillFree);
     }
 
     public bool TryStartAbilityCooldown()

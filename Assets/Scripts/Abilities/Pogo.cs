@@ -81,7 +81,7 @@ public partial class Pogo : Ability
         // frame. Hold the round's weapons free so the units it came down among can answer it,
         // however late in the round the jump resolves.
         GameLoop.Instance?.HoldReturnFireWindow();
-        transform.GetComponent<Movement>().transitionToShooting();
+        transform.GetComponent<Movement>().transitionToShooting(onlyIfWeaponsStillFree: true);
     }
 
     [ClientRpc]

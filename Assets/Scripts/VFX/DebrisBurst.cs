@@ -1575,6 +1575,7 @@ public static class DebrisBurst
         )
         {
             GameObject host = new(name);
+            host.SetActive(false);
             host.transform.SetParent(transform, worldPositionStays: false);
 
             ParticleSystem system = host.AddComponent<ParticleSystem>();
@@ -1611,7 +1612,7 @@ public static class DebrisBurst
                 systemRenderer.alignment = ParticleSystemRenderSpace.View;
             }
 
-            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            host.SetActive(true);
             return system;
         }
 

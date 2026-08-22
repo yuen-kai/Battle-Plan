@@ -458,22 +458,6 @@ public class GameLoop : NetworkBehaviour
             : UnitsPerTeamThisMatch;
     }
 
-    /// <summary>
-    /// Drops any run-and-gun trait lent out by an ability (see <c>RunAndGun</c>). Called at every
-    /// round boundary, which is what makes such a grant last exactly the round it was cast in.
-    /// </summary>
-    private static void ClearShootWhileMovingGrants()
-    {
-        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
-        {
-            foreach (GameObject unit in GetTeamUnits(teamIndex))
-            {
-                if (unit != null)
-                    unit.GetComponent<Movement>()?.ClearShootWhileMovingGrant();
-            }
-        }
-    }
-
     private static List<Vector2Int[]> CreateSpawnLayout(bool useDevLayout)
     {
         if (TutorialSession.IsActive)
@@ -1499,7 +1483,6 @@ public class GameLoop : NetworkBehaviour
             resolvingOverlaps = false;
             unitsBeingShoved.Clear();
             returnFireWindowUntil = 0f;
-            ClearShootWhileMovingGrants();
             currentPhase = "planning";
 
             // Fast-forward the whole simulation (movement/shooting/physics) in dev mode.
@@ -2013,15 +1996,15 @@ public class GameLoop : NetworkBehaviour
     private void ApplyWallDestructionLocal(Vector2Int cell)
     {
         EnsureWallDestructionMap().Walls.Remove(cell);
-        EnsureWallInstanceRegistry();
-        if (
-            wallInstancesByCell.TryGetValue(cell, out GameObject wallInstance)
-            && wallInstance != null
-        )
-        {
+        if (TryGetWallInstance(cell, out GameObject wallInstance))
             wallInstance.SetActive(false);
-        }
         serverFogDirty = true;
+    }
+
+    public bool TryGetWallInstance(Vector2Int cell, out GameObject wallInstance)
+    {
+        EnsureWallInstanceRegistry();
+        return wallInstancesByCell.TryGetValue(cell, out wallInstance) && wallInstance != null;
     }
 
     private MapDefinition EnsureWallDestructionMap()
@@ -2353,11 +2336,19 @@ public class GameLoop : NetworkBehaviour
             );
         }
 
+        Ability ability = unit.GetComponent<Ability>();
+        if (ability == null)
+            yield break;
+
         runningAbilities++;
-        yield return StartCoroutine(
-            unit.GetComponent<Ability>().ExecuteAbility(square, data.abilityRadius)
-        );
-        runningAbilities--;
+        try
+        {
+            yield return ability.RunAbility(square, data.abilityRadius);
+        }
+        finally
+        {
+            runningAbilities--;
+        }
     }
 
     [ClientRpc]
@@ -2437,6 +2428,8 @@ public class GameLoop : NetworkBehaviour
         foreach (var (unit, square, data) in activations)
         {
             Vector3 effectSquare = ResolveAbilityEffectSquare(unit, square, data);
+            if (data.responseDistLine)
+                effectSquare = ResolveLineAbilityEndpoint(unit, square);
             // Fog: only line telegraphs render the caster position. For non-line abilities,
             // don't put a possibly-hidden caster's cell on the wire (RPC payloads reach the
             // enemy client even though the marker branch never reads casterPos).
@@ -2480,7 +2473,7 @@ public class GameLoop : NetworkBehaviour
             List<GameObject> threatened = data.responseDistLine
                 ? GetUnitsInRangeOfLine(
                     unit.transform.position,
-                    square,
+                    ResolveLineAbilityEndpoint(unit, square),
                     enemyTeam,
                     data.responseRange
                 )
@@ -2830,23 +2823,48 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
-    /// <summary>Enemies within `range` cells of the caster→square line (AreaLock-style threats).</summary>
     List<GameObject> GetUnitsInRangeOfLine(
         Vector3 casterPos,
-        Vector3 square,
+        Vector3 lineEnd,
         string team,
         float range
     )
     {
         List<GameObject> unitsInRange = new();
-        Vector3 direction = (square - casterPos).normalized;
-        if (direction == Vector3.zero)
+        if (lineEnd == casterPos)
             return unitsInRange;
 
-        Vector3 end = square + direction * 50f;
+        foreach (GameObject targetUnit in GameObject.FindGameObjectsWithTag(team))
+        {
+            float distanceToLine = DistancePointToLineSegment(
+                targetUnit.transform.position,
+                casterPos,
+                lineEnd
+            );
+            if (distanceToLine <= range * cellSize)
+                unitsInRange.Add(targetUnit);
+        }
+        return unitsInRange;
+    }
+
+    public static Vector3 ResolveLineAbilityEndpoint(GameObject unit, Vector3 selectedSquare)
+    {
+        if (unit == null)
+            return selectedSquare;
+
+        BunkerBuster bunkerBuster = unit.GetComponent<BunkerBuster>();
+        if (bunkerBuster != null)
+            return bunkerBuster.ResolvePlannedImpactPoint(selectedSquare);
+
+        Vector3 casterPosition = unit.transform.position;
+        Vector3 direction = (selectedSquare - casterPosition).normalized;
+        if (direction == Vector3.zero)
+            return casterPosition;
+
+        Vector3 endpoint = selectedSquare + direction * 50f;
         if (
             Physics.Raycast(
-                casterPos,
+                casterPosition,
                 direction,
                 out RaycastHit hit,
                 Mathf.Infinity,
@@ -2854,20 +2872,10 @@ public class GameLoop : NetworkBehaviour
             )
         )
         {
-            end = hit.point;
+            endpoint = hit.point;
         }
 
-        foreach (GameObject targetUnit in GameObject.FindGameObjectsWithTag(team))
-        {
-            float distanceToLine = DistancePointToLineSegment(
-                targetUnit.transform.position,
-                casterPos,
-                end
-            );
-            if (distanceToLine <= range * cellSize)
-                unitsInRange.Add(targetUnit);
-        }
-        return unitsInRange;
+        return endpoint;
     }
 
     static float DistancePointToLineSegment(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
@@ -2907,22 +2915,8 @@ public class GameLoop : NetworkBehaviour
     {
         if (line)
         {
-            Vector3 direction = (square - casterPos).normalized;
-            if (direction == Vector3.zero)
+            if (square == casterPos)
                 return;
-            Vector3 end = square + direction * 50f;
-            if (
-                Physics.Raycast(
-                    casterPos,
-                    direction,
-                    out RaycastHit hit,
-                    Mathf.Infinity,
-                    LayerMask.GetMask("Walls")
-                )
-            )
-            {
-                end = hit.point;
-            }
 
             GameObject laserObject = new("AbilityTelegraphLine");
             LineRenderer lr = laserObject.AddComponent<LineRenderer>();
@@ -2931,7 +2925,7 @@ public class GameLoop : NetworkBehaviour
             lr.startWidth = lr.endWidth = 0.15f;
             lr.positionCount = 2;
             lr.SetPosition(0, casterPos);
-            lr.SetPosition(1, end);
+            lr.SetPosition(1, square);
             clientTelegraphs.Add(laserObject);
         }
         else if (isSmokeScreen)
@@ -4409,7 +4403,11 @@ public class GameLoop : NetworkBehaviour
         // keeps whichever character and dummy the sandbox window last chose.
         if (replaySandbox)
         {
-            SandboxSession.Begin(SandboxSession.TestUnitIndex, SandboxSession.DummyUnitIndex);
+            SandboxSession.Begin(
+                SandboxSession.TestUnitIndex,
+                SandboxSession.DummyUnitIndex,
+                SandboxSession.EnemyCount
+            );
             MatchOptions.SetCurrent(SandboxSession.BuildMatchOptions());
             ConfigureTeam(
                 HostTeamIndex,

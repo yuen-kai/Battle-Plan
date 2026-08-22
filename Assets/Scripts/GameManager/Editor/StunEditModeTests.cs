@@ -125,6 +125,101 @@ public class StunEditModeTests
     }
 
     [Test]
+    public void AbilityRecovery_DoesNotResumeShootingWhileStunned()
+    {
+        GameObject unitObject = new("StunnedAbilityUnit");
+        try
+        {
+            Unit unit = unitObject.AddComponent<Unit>();
+            unitObject.AddComponent<Movement>();
+            Shooting shooting = unitObject.AddComponent<Shooting>();
+            SetIsServer(unit, true);
+
+            unit.PauseShootingForAbility();
+            unit.ApplyStun(0.3f);
+            unit.ResumeShootingAfterAbility();
+
+            Assert.That(unit.IsStunned, Is.True);
+            Assert.That(shooting.allowShooting, Is.False);
+            Assert.That(shooting.stillShooting, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unitObject);
+        }
+    }
+
+    [Test]
+    public void AbilityInterruptionUsesCoroutineHandlesInsteadOfBooleanState()
+    {
+        FieldInfo execution = typeof(Ability).GetField(
+            "execution",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        FieldInfo interruptibleExecution = typeof(Ability).GetField(
+            "interruptibleExecution",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+
+        Assert.That(execution?.FieldType, Is.EqualTo(typeof(Coroutine)));
+        Assert.That(interruptibleExecution?.FieldType, Is.EqualTo(typeof(Coroutine)));
+        Assert.That(
+            typeof(Unit).GetField(
+                "abilityActionInProgress",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            ),
+            Is.Null
+        );
+    }
+
+    [Test]
+    public void TransitionToShootingCannotOverrideAnActiveStun()
+    {
+        GameObject unitObject = new("StunnedTransitionUnit");
+        try
+        {
+            Unit unit = unitObject.AddComponent<Unit>();
+            Movement movement = unitObject.AddComponent<Movement>();
+            Shooting shooting = unitObject.AddComponent<Shooting>();
+            SetIsServer(unit, true);
+
+            unit.ApplyStun(0.3f);
+            movement.transitionToShooting();
+
+            Assert.That(unit.IsStunned, Is.True);
+            Assert.That(shooting.allowShooting, Is.False);
+            Assert.That(shooting.stillShooting, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unitObject);
+        }
+    }
+
+    [Test]
+    public void AbilityResetDoesNotResumeShooting()
+    {
+        GameObject unitObject = new("ResetAbilityUnit");
+        try
+        {
+            unitObject.AddComponent<Unit>();
+            unitObject.AddComponent<Movement>();
+            Shooting shooting = unitObject.AddComponent<Shooting>();
+            Ability ability = unitObject.AddComponent<ChainSurge>();
+            shooting.StandDown();
+
+            ability.ResetForRespawn();
+
+            Assert.That(shooting.allowShooting, Is.False);
+            Assert.That(shooting.stillShooting, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unitObject);
+        }
+    }
+
+    [Test]
     public void ApplyStun_IsANoOpWithoutServerAuthorityOrAPositiveDuration()
     {
         GameObject unitObject = new("StunTestUnitGuarded");

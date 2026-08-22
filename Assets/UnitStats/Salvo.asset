@@ -15,17 +15,16 @@ MonoBehaviour:
   unitModel: {fileID: 4136433947033533029, guid: dfbc52239d483463497aa5a0954ccf11, type: 3}
   unitName: Salvo
   unitClass: 2
-  unitDescription: Lays down a wall of fire that doesn't let up, and reaches around
-    a corner to keep it going.
+  unitDescription: Lays down sustained fire to control a lane.
   playStyle: Sets up and holds a lane instead of chasing kills.
   weaponName: Machine gun
-  strengths: Never stops to reload, and its ability reaches through an adjacent wall.
+  strengths: Nearly uninterrupted fire and strong lane pressure.
   weaknesses: Slow to relocate, and each shot alone hits soft.
   unitSprite: {fileID: 21300000, guid: c3bce04960ab8416fb0845c996a66d72, type: 3}
   unavailableForRoster: 0
   abilityName: Suppressing Fire
-  abilityDescription: Winds up, then sprays a wide barrage down a lane -- even through
-    an adjacent wall. Fizzles if stunned before it fires.
+  abilityDescription: Winds up, then sprays a wide barrage, even through adjacent
+    walls!
   abilitySprite: {fileID: 21300000, guid: ed534ec8c9b294cae9f3b689ea894409, type: 3}
   moveDist: 2
   moveSpeed: 0.8
@@ -33,17 +32,18 @@ MonoBehaviour:
   rotationSpeed: 360
   blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
   redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
-  timeBetweenShots: 0.22
-  magazineSize: 15
-  reloadTime: 0.6
-  bulletSpread: 10
-  fireRateRampShots: 6
-  fireRateRampStartDelay: 0.55
+  timeBetweenShots: 0.2
+  magazineSize: 5
+  reloadTime: 0.05
+  bulletSpread: 8
+  fireRateRampShots: 3
+  fireRateRampStartDelay: 0.5
+  fireRateRampResetDelay: 1.5
   canShootWhileMoving: 0
   bulletSpeed: 3.5
   targetRange: 5
   bulletRange: 6
-  damage: 3
+  damage: 8
   backstabMultiplier: 1
   backstabAngle: 90
   bulletExplodesOnImpact: 0

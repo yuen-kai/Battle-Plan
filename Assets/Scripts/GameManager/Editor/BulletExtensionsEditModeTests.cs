@@ -4,13 +4,6 @@ using NUnit.Framework;
 using Unity.Netcode;
 using UnityEngine;
 
-// Bullet.OnCollisionEnter needs a live Unity Collision from an actual physics contact, which has
-// no accessible public constructor and is therefore runtime acceptance, not exercised here (the
-// same constraint WallDestructionEditModeTests documents for GameLoop.TryDestroyWallCell). These
-// tests instead drive the private hit-resolution helpers OnCollisionEnter delegates to --
-// ApplyDirectHitDamage and ResolveAreaImpact -- via reflection on bare, uninitialized Bullet
-// instances, which exercises the exact same production code (backstab math, the on-hit callback,
-// and the AoE overlap/line-of-sight query) without needing a physics event to trigger it.
 [TestFixture]
 [Category("BulletExtensions")]
 public class BulletExtensionsEditModeTests
@@ -127,11 +120,9 @@ public class BulletExtensionsEditModeTests
         return bullet;
     }
 
-    // === Item 5: on-hit callback, identical whether the bullet pierces or not ===
-
     [TestCase(false)]
     [TestCase(true)]
-    public void ApplyDirectHitDamage_FiresOnHitWithBackstabAdjustedDamage(bool pierces)
+    public void ApplyDirectHitDamage_UsesBackstabAdjustedDamage(bool pierces)
     {
         GameObject bulletObject = Track(new GameObject("TestBullet"));
         Bullet bullet = CreateBullet(bulletObject, Vector3.zero);
@@ -142,7 +133,6 @@ public class BulletExtensionsEditModeTests
         frontHitTarget.transform.rotation = Quaternion.LookRotation(Vector3.back);
         Health frontHitHealth = AddLivingHealth(frontHitTarget, startingHealth: 100f);
 
-        List<GameObject> hits = new();
         bullet.Initialize(
             velocity: Vector3.zero,
             shotDamage: 10f,
@@ -153,17 +143,11 @@ public class BulletExtensionsEditModeTests
             authoritative: true,
             shotExplodesOnImpact: false,
             shotAoeRadius: 0f,
-            shotPierces: pierces,
-            shotOnHit: hit => hits.Add(hit)
+            shotPierces: pierces
         );
 
         InvokeApplyDirectHitDamage(bullet, frontHitTarget);
 
-        CollectionAssert.AreEqual(
-            new[] { frontHitTarget },
-            hits,
-            "A front hit must report the hit target exactly once, pierces or not."
-        );
         Assert.That(
             frontHitHealth.CurrentHealth,
             Is.EqualTo(90f).Within(0.001f),
@@ -176,7 +160,6 @@ public class BulletExtensionsEditModeTests
         backstabTarget.transform.rotation = Quaternion.LookRotation(Vector3.forward);
         Health backstabHealth = AddLivingHealth(backstabTarget, startingHealth: 100f);
 
-        List<GameObject> backstabHits = new();
         Bullet secondBullet = CreateBullet(Track(new GameObject("SecondTestBullet")), Vector3.zero);
         secondBullet.Initialize(
             velocity: Vector3.zero,
@@ -188,13 +171,11 @@ public class BulletExtensionsEditModeTests
             authoritative: true,
             shotExplodesOnImpact: false,
             shotAoeRadius: 0f,
-            shotPierces: pierces,
-            shotOnHit: hit => backstabHits.Add(hit)
+            shotPierces: pierces
         );
 
         InvokeApplyDirectHitDamage(secondBullet, backstabTarget);
 
-        Assert.That(backstabHits, Is.EqualTo(new[] { backstabTarget }));
         Assert.That(
             backstabHealth.CurrentHealth,
             Is.EqualTo(70f).Within(0.001f),
@@ -216,9 +197,11 @@ public class BulletExtensionsEditModeTests
 
         GameObject clearEnemy = Track(CreateSphereCollider("ClearEnemy", enemyLayer));
         clearEnemy.transform.position = impactPosition + new Vector3(1f, 0f, 0f);
+        Health clearEnemyHealth = AddLivingHealth(clearEnemy, 100f);
 
         GameObject blockedEnemy = Track(CreateSphereCollider("BlockedEnemy", enemyLayer));
         blockedEnemy.transform.position = impactPosition + new Vector3(0f, 0f, 4f);
+        Health blockedEnemyHealth = AddLivingHealth(blockedEnemy, 100f);
 
         GameObject blockingWall = Track(CreateBoxCollider("BlockingWall", wallLayer));
         blockingWall.transform.position = impactPosition + new Vector3(0f, 0f, 2f);
@@ -228,7 +211,6 @@ public class BulletExtensionsEditModeTests
 
         GameObject bulletObject = Track(new GameObject("AoeTestBullet"));
         Bullet bullet = CreateBullet(bulletObject, impactPosition);
-        List<GameObject> hits = new();
         bullet.Initialize(
             velocity: Vector3.zero,
             shotDamage: 10f,
@@ -239,18 +221,13 @@ public class BulletExtensionsEditModeTests
             authoritative: true,
             shotExplodesOnImpact: true,
             shotAoeRadius: 5f,
-            shotPierces: false,
-            shotOnHit: hit => hits.Add(hit)
+            shotPierces: false
         );
 
         InvokeResolveAreaImpact(bullet, impactPosition);
 
-        Assert.That(hits, Contains.Item(clearEnemy), "A clear enemy in radius must be splashed.");
-        Assert.That(
-            hits,
-            Has.No.Member(blockedEnemy),
-            "A wall between the impact and this enemy must block the splash."
-        );
+        Assert.That(clearEnemyHealth.CurrentHealth, Is.EqualTo(90f).Within(0.001f));
+        Assert.That(blockedEnemyHealth.CurrentHealth, Is.EqualTo(100f).Within(0.001f));
     }
 
     [Test]
@@ -262,10 +239,10 @@ public class BulletExtensionsEditModeTests
         Vector3 impactPosition = new(2100f, 0f, 2100f);
         GameObject directHitEnemy = Track(CreateSphereCollider("DirectHitEnemy", enemyLayer));
         directHitEnemy.transform.position = impactPosition;
+        Health directHitHealth = AddLivingHealth(directHitEnemy, 100f);
 
         GameObject bulletObject = Track(new GameObject("AoeDedupeTestBullet"));
         Bullet bullet = CreateBullet(bulletObject, impactPosition);
-        List<GameObject> hits = new();
         bullet.Initialize(
             velocity: Vector3.zero,
             shotDamage: 10f,
@@ -276,23 +253,17 @@ public class BulletExtensionsEditModeTests
             authoritative: true,
             shotExplodesOnImpact: true,
             shotAoeRadius: 5f,
-            shotPierces: false,
-            shotOnHit: hit => hits.Add(hit)
+            shotPierces: false
         );
 
-        // Simulates what OnCollisionEnter already did before calling ResolveAreaImpact: crediting
-        // the directly hit target through the guarded ApplyDirectHitDamage path.
+        // The direct target is credited before splash targets are resolved.
         GetHitTargets(bullet).Add(directHitEnemy);
         InvokeApplyDirectHitDamage(bullet, directHitEnemy);
         Physics.SyncTransforms();
 
         InvokeResolveAreaImpact(bullet, impactPosition);
 
-        Assert.That(
-            hits,
-            Is.EqualTo(new[] { directHitEnemy }),
-            "The splash must not re-credit a target the direct hit already paid out."
-        );
+        Assert.That(directHitHealth.CurrentHealth, Is.EqualTo(90f).Within(0.001f));
     }
 
     private static GameObject CreateSphereCollider(string name, int layer)

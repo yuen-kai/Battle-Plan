@@ -1239,7 +1239,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -6749919452485262053, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2008610568
+      value: 4085423645
       objectReference: {fileID: 0}
     - target: {fileID: -159396357692938789, guid: 73e003ef324e37948a4305b0ab228998, type: 3}
       propertyPath: damage
@@ -1358,7 +1358,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BunkerBuster
   ShowTopMostFoldoutHeaderGroup: 1
-  damage: 90
+  damage: 55
   rocketPrefab: {fileID: 9216282734646946488, guid: 89992899276a0402a9a242140b1165c9, type: 3}
   rocketExplosionPrefab: {fileID: 7426381648914058826, guid: ae8b6b4593e1ede4f9708cd44c729170, type: 3}
 --- !u!4 &8278047107763744475 stripped

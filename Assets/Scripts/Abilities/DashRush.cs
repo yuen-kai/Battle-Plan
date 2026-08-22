@@ -152,7 +152,7 @@ public class DashRush : Ability
         ShoveEnemiesOnContact(enemiesOnTheLine, direction);
         movement.PauseMovement();
         movement.moving = false;
-        movement.transitionToShooting();
+        movement.transitionToShooting(onlyIfWeaponsStillFree: true);
     }
 
     /// <summary>

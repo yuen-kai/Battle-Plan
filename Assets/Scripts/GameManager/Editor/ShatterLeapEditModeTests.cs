@@ -5,14 +5,6 @@ using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
-// ShatterLeap's ExecuteAbility coroutine flies a lob arc frame by frame and reads IsServer, none of
-// which edit mode can drive without a running player loop (see SuppressingFireEditModeTests and
-// ChainSurgeEditModeTests for the same constraint on their own coroutines). So, the same way those
-// two pull their damage queries out for direct testing, this exercises ShatterLeap's own seams
-// instead: FindEnemiesInLandingRadius (the overlap-then-line-of-sight query, mirroring
-// SuppressingFire.FindEnemiesInBarrage and ChainSurge.ResolveTargets) and ApplyLandingDamage (the
-// damage application, mirroring ChainSurge.ApplyZap). Both are public instance methods on
-// ShatterLeap for exactly that reason.
 [TestFixture]
 [Category("ShatterLeap")]
 public class ShatterLeapEditModeTests
@@ -29,9 +21,6 @@ public class ShatterLeapEditModeTests
     [SetUp]
     public void SetUp()
     {
-        // Gives NetworkManager.Singleton a safe, never-started instance so NetworkBehaviour.IsServer
-        // (read inside Health.TakeDamage via NetworkObject/NetworkManager plumbing) resolves without
-        // throwing -- mirrors SuppressingFireEditModeTests' and ChainSurgeEditModeTests' own setup.
         networkManagerHost = new GameObject("ShatterLeapEditModeTestsNetworkManager");
         NetworkManager manager = networkManagerHost.AddComponent<NetworkManager>();
         SetSingleton(manager);
@@ -98,7 +87,6 @@ public class ShatterLeapEditModeTests
         Vector3 landingPosition = GameLoop.gridCoordToWorld(new Vector2Int(3, 3));
         ShatterLeap ability = CreateCaster(landingPosition);
 
-        // Ten cells out is well past the 1.6-cell default splash.
         GameObject farEnemy = CreateEnemyCollider(
             landingPosition + new Vector3(10f * GameLoop.cellSize, 0f, 0f)
         );
@@ -134,8 +122,6 @@ public class ShatterLeapEditModeTests
 
         Physics.SyncTransforms();
 
-        // A radius wide enough to geometrically reach both candidates, so the wall -- not the
-        // radius -- is what has to explain the blocked enemy being left out.
         List<GameObject> hitEnemies = ability.FindEnemiesInLandingRadius(landingPosition, 3f);
 
         Assert.That(
@@ -175,6 +161,39 @@ public class ShatterLeapEditModeTests
             Is.EqualTo(StartingHealth).Within(Tolerance),
             "A target ApplyLandingDamage was never given must be left untouched."
         );
+    }
+
+    [Test]
+    public void InterruptionRestoresTheCasterToASafeGroundedState()
+    {
+        GameObject caster = new("InterruptedShatterLeapCaster");
+        spawnedObjects.Add(caster);
+        Movement movement = caster.AddComponent<Movement>();
+        Collider unitCollider = caster.AddComponent<CapsuleCollider>();
+        ShatterLeap ability = caster.AddComponent<ShatterLeap>();
+        Vector3 launchPosition = new(2f, 0.5f, 3f);
+
+        caster.transform.position = new Vector3(4f, 5f, 6f);
+        movement.moving = true;
+        unitCollider.enabled = false;
+
+        FieldInfo returnPosition = typeof(ShatterLeap).GetField(
+            "returnPositionOnInterrupt",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        MethodInfo interrupt = typeof(ShatterLeap).GetMethod(
+            "OnAbilityInterrupted",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        Assert.That(returnPosition, Is.Not.Null);
+        Assert.That(interrupt, Is.Not.Null);
+
+        returnPosition.SetValue(ability, (Vector3?)launchPosition);
+        interrupt.Invoke(ability, null);
+
+        Assert.That(caster.transform.position, Is.EqualTo(launchPosition));
+        Assert.That(movement.moving, Is.False);
+        Assert.That(unitCollider.enabled, Is.True);
     }
 
     private ShatterLeap CreateCaster(Vector3 position)

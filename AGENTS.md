@@ -6,6 +6,10 @@ Battle Plan targets Unity 6000.3.1f1 with Netcode for GameObjects for
 multiplayer. Match existing patterns rather than introducing new
 architecture.
 
+Before mapping the repository from scratch, read
+`docs/architecture/CodeMap.md`. Update it whenever a change moves a major
+responsibility or alters the round, ability, projectile, or networking flow.
+
 ## Unity C# conventions
 
 - No custom namespaces are used anywhere in `Assets/Scripts` — don't add one to a new file, it'll be inconsistent with everything else.

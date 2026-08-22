@@ -26,6 +26,9 @@ public static class AbilityKnockback
         if (unit == null)
             yield break;
 
+        Unit identity = unit.GetComponent<Unit>();
+        identity?.ApplyStun(stunSeconds + ShoveSlideSeconds);
+
         if (
             GameLoop.Instance != null
             && TryResolveDestination(unit, dashDirection, out Vector2Int destinationCell)
@@ -36,7 +39,7 @@ public static class AbilityKnockback
             GameLoop.Instance.UnregisterUnitBeingShoved(unit);
         }
 
-        unit.GetComponent<Unit>()?.ApplyStun(stunSeconds);
+        identity?.ApplyStun(stunSeconds);
     }
 
     private static bool TryResolveDestination(

@@ -175,7 +175,7 @@ public class Shield : Ability
         if (shieldTimeRemaining > 0f)
             yield return new WaitForSeconds(shieldTimeRemaining);
         shieldActive.Value = false;
-        movement.transitionToShooting();
+        movement.transitionToShooting(onlyIfWeaponsStillFree: true);
     }
 
     public static bool IsEligibleAllyForSpeedBoost(

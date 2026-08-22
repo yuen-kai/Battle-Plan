@@ -2177,7 +2177,7 @@ public static class TrailerStudio
                     0.45f
                 );
                 spawned.Add(
-                    ability.StartCoroutine(ability.ExecuteAbility(abilityWorld, abilityRadius))
+                    ability.StartCoroutine(ability.RunAbility(abilityWorld, abilityRadius))
                 );
                 if (beat.SmokeFootprint)
                     spawned.Add(ability.StartCoroutine(DeploySmokeScreen(beat.AbilityTarget)));

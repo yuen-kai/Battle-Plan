@@ -3,16 +3,6 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>
-/// The character sandbox decides its whole shape before the board is built — one unit a side, at
-/// fixed cells, with a fixed set of match options — so almost all of it IS statically checkable
-/// without Play mode, unlike the version of this tool that patched a running 5-a-side match. What
-/// stays out of reach here is the human half: entering Play mode and handing over the HUD.
-///
-/// <see cref="SandboxSession"/> is shared static state read while a match spawns, so every test here
-/// must end it in <see cref="TearDown"/> — a leaked active session would field one unit a side in
-/// every other fixture that asserts a full crew.
-/// </summary>
 [TestFixture]
 [Category("CharacterSandbox")]
 public class CharacterSandboxEditModeTests
@@ -72,8 +62,6 @@ public class CharacterSandboxEditModeTests
     [Test]
     public void AdjacentWallCells_AreRealWallsNextToTheirSpawns()
     {
-        // The sandbox promises "a wall nearby" without shipping a bespoke board, so the advertised
-        // cover cells have to actually be walls on the map the session selects.
         Assert.That(GameLoop.wallLayout, Has.Member(SandboxSession.PlayerAdjacentWall));
         Assert.That(GameLoop.wallLayout, Has.Member(SandboxSession.EnemyAdjacentWall));
         Assert.That(
@@ -117,8 +105,6 @@ public class CharacterSandboxEditModeTests
     [Test]
     public void Begin_FreezesTheDummyTeamBeforeAnyUnitGameObjectExists()
     {
-        // The freeze has to be registered at team level here rather than per unit, because the bot
-        // plans the opening round before the dummy's GameObject exists.
         Assert.That(BotFrozenUnits.IsFrozen(null, GameLoop.OpponentTeamIndex), Is.False);
 
         SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex);
@@ -163,11 +149,8 @@ public class CharacterSandboxEditModeTests
     [Test]
     public void EveryExtraSpawnCellIsLegalAndDistinct()
     {
-        // The crowd cells are hardcoded, so nothing but a test stops one from being placed inside a
-        // wall or on top of another unit's cell after a map edit.
         List<Vector2Int> all = new() { SandboxSession.PlayerSpawn };
         all.AddRange(SandboxSession.EnemySpawns);
-        all.AddRange(SandboxSession.AllySpawns);
 
         foreach (Vector2Int cell in all)
         {
@@ -180,13 +163,9 @@ public class CharacterSandboxEditModeTests
     [Test]
     public void EveryCrowdCellIsCloseEnoughForARadiusAbilityToReachIt()
     {
-        // The whole point of fielding a crowd is to exercise an ability that reaches several units
-        // at once, so every extra body has to sit inside a typical ability radius (3 cells) of the
-        // character under test. A cell further out would make a working ability look broken.
         const float TypicalAbilityRadiusCells = 3f;
         List<Vector2Int> crowd = new();
         crowd.AddRange(SandboxSession.EnemySpawns);
-        crowd.AddRange(SandboxSession.AllySpawns);
 
         foreach (Vector2Int cell in crowd)
         {
@@ -205,8 +184,7 @@ public class CharacterSandboxEditModeTests
         SandboxSession.Begin(
             0,
             CharacterSandbox.DefaultDummyUnitIndex,
-            enemyCount: SandboxSession.MaxEnemyCount,
-            allyCount: 3
+            enemyCount: SandboxSession.MaxEnemyCount
         );
 
         var layout = SandboxSession.CreateSpawnLayout();
@@ -215,32 +193,27 @@ public class CharacterSandboxEditModeTests
             layout[GameLoop.OpponentTeamIndex].Length,
             Is.EqualTo(SandboxSession.MaxEnemyCount)
         );
-        Assert.That(layout[GameLoop.HostTeamIndex].Length, Is.EqualTo(3));
-        // The character under test always stands on its own documented cell, whoever joins it.
+        Assert.That(layout[GameLoop.HostTeamIndex].Length, Is.EqualTo(1));
         Assert.That(layout[GameLoop.HostTeamIndex][0], Is.EqualTo(SandboxSession.PlayerSpawn));
         Assert.That(
             GameLoop.UnitsForTeamThisMatch(GameLoop.OpponentTeamIndex),
             Is.EqualTo(SandboxSession.MaxEnemyCount)
         );
-        Assert.That(GameLoop.UnitsForTeamThisMatch(GameLoop.HostTeamIndex), Is.EqualTo(3));
+        Assert.That(GameLoop.UnitsForTeamThisMatch(GameLoop.HostTeamIndex), Is.EqualTo(1));
     }
 
     [Test]
     public void CrowdCountsAreClampedAndResetWhenTheSessionEnds()
     {
-        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 99, allyCount: 99);
+        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 99);
         Assert.That(SandboxSession.EnemyCount, Is.EqualTo(SandboxSession.MaxEnemyCount));
-        Assert.That(SandboxSession.AllyCount, Is.EqualTo(SandboxSession.MaxAllyCount));
 
-        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 0, allyCount: -5);
+        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 0);
         Assert.That(SandboxSession.EnemyCount, Is.EqualTo(1));
-        Assert.That(SandboxSession.AllyCount, Is.EqualTo(1));
 
-        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 4, allyCount: 2);
+        SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex, enemyCount: 4);
         SandboxSession.End();
-        // A leaked crowd size would field the wrong board in every later sandbox launch.
         Assert.That(SandboxSession.EnemyCount, Is.EqualTo(1));
-        Assert.That(SandboxSession.AllyCount, Is.EqualTo(1));
     }
 
     [Test]
@@ -266,14 +239,40 @@ public class CharacterSandboxEditModeTests
         int[] hostRoster = SandboxSession.BuildHostRoster();
         int[] opponentRoster = SandboxSession.BuildOpponentRoster();
 
-        // Slot 0 is the only slot spawned (UnitsPerTeam == 1), but the roster stays full length so
-        // GameLoop.ConfigureTeam's validation is untouched.
         Assert.That(hostRoster[0], Is.EqualTo(testUnitIndex));
         Assert.That(opponentRoster[0], Is.EqualTo(dummyUnitIndex));
         Assert.That(hostRoster.Length, Is.EqualTo(RosterRules.UnitsPerPlayer));
         Assert.That(opponentRoster.Length, Is.EqualTo(RosterRules.UnitsPerPlayer));
         Assert.That(RosterRules.Validate(hostRoster, catalog.units).IsValid, Is.True);
         Assert.That(RosterRules.Validate(opponentRoster, catalog.units).IsValid, Is.True);
+    }
+
+    [Test]
+    public void BuildOpponentRoster_RepeatsTheSelectedDummyForTheWholeCrowd()
+    {
+        const int dummyUnitIndex = 3;
+        SandboxSession.Begin(0, dummyUnitIndex, SandboxSession.MaxEnemyCount);
+
+        Assert.That(
+            SandboxSession.BuildOpponentRoster(),
+            Is.All.EqualTo(dummyUnitIndex)
+        );
+    }
+
+    [Test]
+    public void VoltaicSandbox_AlwaysRecommendsTheFullCrowd()
+    {
+        UnitDatabase catalog = LoadCatalog();
+        UnitData voltaic = catalog.units.Find(unit => unit != null && unit.unitName == "Voltaic");
+        UnitData ordinary = catalog.units.Find(unit => unit != null && unit.unitName == "Soldier");
+
+        Assert.That(voltaic, Is.Not.Null);
+        Assert.That(ordinary, Is.Not.Null);
+        Assert.That(
+            SandboxSession.GetRecommendedEnemyCount(voltaic, 1),
+            Is.EqualTo(SandboxSession.MaxEnemyCount)
+        );
+        Assert.That(SandboxSession.GetRecommendedEnemyCount(ordinary, 2), Is.EqualTo(2));
     }
 
     [Test]
@@ -290,8 +289,6 @@ public class CharacterSandboxEditModeTests
     [Test]
     public void EveryCatalogEntry_CanBeChosenAsTheCharacterUnderTest()
     {
-        // The picker window offers the whole catalog, so every eligible entry must survive roster
-        // validation as a sandbox host crew — otherwise a character would be listed but unlaunchable.
         UnitDatabase catalog = LoadCatalog();
 
         for (int unitIndex = 0; unitIndex < catalog.units.Count; unitIndex++)
@@ -314,9 +311,6 @@ public class CharacterSandboxEditModeTests
     [Test]
     public void TutorialSession_TakesPrecedenceOverASandboxSession()
     {
-        // Both are one-a-side sandboxes reading the same seams. They should never overlap, but if
-        // they do the tutorial must win, because a student's match is the one with a script driving
-        // it that would break.
         SandboxSession.Begin(0, CharacterSandbox.DefaultDummyUnitIndex);
         TutorialSession.Begin();
         try

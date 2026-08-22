@@ -755,7 +755,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 shield.CompareTag("Untagged"),
                 Is.True,
-                "Bullet.OnCollisionEnter must block and despawn without treating the shield as a unit."
+                "A shield must block the swept projectile query without being treated as a unit."
             );
             Assert.That(
                 Shield.TryApplyCollisionLayer(shield, teamIndex),

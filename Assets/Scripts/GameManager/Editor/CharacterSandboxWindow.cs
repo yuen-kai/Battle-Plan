@@ -2,18 +2,6 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>
-/// The character sandbox's picker screen: every roster-eligible character in AllUnits.asset, listed
-/// with its portrait and ability, one click each to drop it onto a board against a stationary dummy.
-/// Also the sandbox's live control panel — the dummy's crew and whether it shoots back can both be
-/// changed while a match is running.
-///
-/// An <see cref="EditorWindow"/> rather than an in-game screen because this is a development tool
-/// for choosing what to load, so it must be usable before Play mode has started, and because it can
-/// then stay docked beside the Game view to restart with a different character without leaving Play
-/// mode. Reads the catalog through <see cref="AssetDatabase"/> so the list is correct with no match
-/// running and no scene open.
-/// </summary>
 public class CharacterSandboxWindow : EditorWindow
 {
     private const string CatalogPath = "Assets/UnitStats/AllUnits.asset";
@@ -24,7 +12,6 @@ public class CharacterSandboxWindow : EditorWindow
     private int dummyUnitIndex = CharacterSandbox.DefaultDummyUnitIndex;
     private bool dummyFightsBack;
     private int enemyCount = 1;
-    private int allyCount = 1;
 
     [MenuItem("Battle Plan/Character Sandbox")]
     public static void Open()
@@ -37,7 +24,6 @@ public class CharacterSandboxWindow : EditorWindow
     private void OnEnable()
     {
         catalog = AssetDatabase.LoadAssetAtPath<UnitDatabase>(CatalogPath);
-        // Repaint on Play-mode transitions so the status line and the live controls are never stale.
         EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
     }
 
@@ -111,15 +97,12 @@ public class CharacterSandboxWindow : EditorWindow
         if (picked != liveDummyIndex)
         {
             dummyUnitIndex = picked;
-            // Which unit the dummy is gets decided before the board is built, so changing it
-            // mid-match means restarting with the same character under test.
             if (CharacterSandbox.IsRunning)
                 CharacterSandbox.Launch(
                     SandboxSession.TestUnitIndex,
                     picked,
                     dummyFightsBack,
-                    enemyCount,
-                    allyCount
+                    enemyCount
                 );
         }
 
@@ -133,44 +116,17 @@ public class CharacterSandboxWindow : EditorWindow
         if (pickedCount != liveEnemyCount)
         {
             enemyCount = pickedCount;
-            // Crew size is fixed when the board is built, so this also needs a restart.
             if (CharacterSandbox.IsRunning)
                 CharacterSandbox.Launch(
                     SandboxSession.TestUnitIndex,
                     dummyUnitIndex,
                     dummyFightsBack,
-                    pickedCount,
-                    allyCount
+                    pickedCount
                 );
         }
         EditorGUILayout.LabelField(
             " ",
             "More than one is for abilities that hit several enemies at once.",
-            EditorStyles.miniLabel
-        );
-
-        int liveAllyCount = CharacterSandbox.IsRunning ? SandboxSession.AllyCount : allyCount;
-        int pickedAllies = EditorGUILayout.IntSlider(
-            "Teammates",
-            Mathf.Clamp(liveAllyCount, 1, SandboxSession.MaxAllyCount),
-            1,
-            SandboxSession.MaxAllyCount
-        );
-        if (pickedAllies != liveAllyCount)
-        {
-            allyCount = pickedAllies;
-            if (CharacterSandbox.IsRunning)
-                CharacterSandbox.Launch(
-                    SandboxSession.TestUnitIndex,
-                    dummyUnitIndex,
-                    dummyFightsBack,
-                    enemyCount,
-                    pickedAllies
-                );
-        }
-        EditorGUILayout.LabelField(
-            " ",
-            "Counts the character under test. More is for abilities that buff nearby allies.",
             EditorStyles.miniLabel
         );
 
@@ -181,8 +137,6 @@ public class CharacterSandboxWindow : EditorWindow
         if (toggled != liveFightsBack)
         {
             dummyFightsBack = toggled;
-            // Unlike the crew, this one takes effect immediately: SandboxDirector re-applies it
-            // every frame, so it can be flipped in the middle of a round.
             if (CharacterSandbox.IsRunning)
                 SandboxSession.DummyFightsBack = toggled;
         }
@@ -212,8 +166,11 @@ public class CharacterSandboxWindow : EditorWindow
             using (new EditorGUILayout.VerticalScope())
             {
                 EditorGUILayout.LabelField(unit.unitName, EditorStyles.boldLabel);
+                string ability = string.IsNullOrWhiteSpace(unit.abilityName)
+                    ? "No ability"
+                    : unit.abilityName;
                 EditorGUILayout.LabelField(
-                    $"{unit.abilityName}  ·  {unit.maxHealth:0} HP  ·  {unit.damage} dmg",
+                    $"{ability}  ·  {unit.maxHealth:0} HP  ·  {unit.damage} dmg",
                     EditorStyles.miniLabel
                 );
                 if (!unit.IsRosterEligible)
@@ -243,19 +200,21 @@ public class CharacterSandboxWindow : EditorWindow
                         CharacterSandbox.IsRunning
                             ? SandboxSession.DummyFightsBack
                             : dummyFightsBack,
-                        CharacterSandbox.IsRunning ? SandboxSession.EnemyCount : enemyCount,
-                        CharacterSandbox.IsRunning ? SandboxSession.AllyCount : allyCount
+                        RecommendedEnemyCount(unit)
                     );
                 }
             }
         }
     }
 
-    /// <summary>
-    /// Sprites are drawn through their own texture rect rather than with a plain
-    /// <c>GUI.DrawTexture</c>, because a portrait packed into an atlas would otherwise draw the
-    /// whole atlas.
-    /// </summary>
+    private int RecommendedEnemyCount(UnitData unit)
+    {
+        int requestedCount = CharacterSandbox.IsRunning
+            ? SandboxSession.EnemyCount
+            : enemyCount;
+        return SandboxSession.GetRecommendedEnemyCount(unit, requestedCount);
+    }
+
     private static void DrawPortrait(Rect rect, UnitData unit)
     {
         Sprite sprite = unit.unitSprite;

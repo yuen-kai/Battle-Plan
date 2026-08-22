@@ -7,15 +7,6 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.TestTools.Utils;
 
-// TripleVolley's coroutine pauses/resumes Shooting and rotates the caster via Movement, none of
-// which edit mode can fully drive without a running player loop (see StunEditModeTests and
-// SuppressingFireEditModeTests for the same constraint). So, the same way SuppressingFire's own
-// pure seams (FindEnemiesInBarrage, ShouldApplyBarrageDamage) are exercised directly instead of the
-// whole coroutine, this suite exercises TripleVolley's own pure seam -- ComputeFanDirections, the
-// exact three headings the fan commits to -- plus the coroutine's up-front, single-MoveNext bail-out
-// when the targeted square is not adjacent to the caster, mirrored on ShieldStanceEditModeTests'
-// ExecuteAbility_ResolvesTheShieldDirectionFromTheTargetedAdjacentCell (which also drives the
-// coroutine by hand via reflection-set IsServer plus a single MoveNext rather than a full run).
 [TestFixture]
 [Category("TripleVolley")]
 public class TripleVolleyEditModeTests
@@ -129,8 +120,6 @@ public class TripleVolleyEditModeTests
 
             SetIsServer(ability, true);
 
-            // (6, 3) is two cells away from (3, 3) along a single axis -- not adjacent -- so this
-            // must hit the bail-out branch rather than resolving any direction.
             var routine = ability.ExecuteAbility(GameLoop.gridCoordToWorld(new Vector2Int(6, 3)), 0f);
 
             LogAssert.Expect(

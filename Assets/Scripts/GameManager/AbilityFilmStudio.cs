@@ -550,7 +550,7 @@ public static class AbilityFilmStudio
             // Mirrors GameLoop.RunAbility, which is what a real activation looks like on every peer.
             HitFlash.FlashTarget(caster, 0.4f, 1.5f);
             ImpactShockwave.Spawn(caster.transform.position, teamColor, 1.8f, 0.45f);
-            abilityRoutine = ability.StartCoroutine(ability.ExecuteAbility(targetWorld, radius));
+            abilityRoutine = ability.StartCoroutine(ability.RunAbility(targetWorld, radius));
             if (shot.SmokeFootprint)
                 smokeRoutine = ability.StartCoroutine(DeploySmokeScreen(shot.TargetCell));
         }
