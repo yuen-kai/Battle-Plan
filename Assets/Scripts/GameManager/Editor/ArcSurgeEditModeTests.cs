@@ -6,8 +6,8 @@ using UnityEditor;
 using UnityEngine;
 
 [TestFixture]
-[Category("ChainSurge")]
-public class ChainSurgeEditModeTests
+[Category("ArcSurge")]
+public class ArcSurgeEditModeTests
 {
     private const string WallPrefabPath = "Assets/Prefabs/Map/Wall.prefab";
     private const string BlueTeamTag = "BlueTeam";
@@ -21,7 +21,7 @@ public class ChainSurgeEditModeTests
     [SetUp]
     public void SetUp()
     {
-        networkManagerHost = new GameObject("ChainSurgeEditModeTestsNetworkManager");
+        networkManagerHost = new GameObject("ArcSurgeEditModeTestsNetworkManager");
         NetworkManager manager = networkManagerHost.AddComponent<NetworkManager>();
         SetSingleton(manager);
     }
@@ -43,9 +43,9 @@ public class ChainSurgeEditModeTests
     [Test]
     public void StunSeconds_IsShorterThanDashRushsKnockbackStunPerTheDesignersLighterStunDirection()
     {
-        Assert.That(ChainSurge.StunSeconds, Is.GreaterThan(0f));
+        Assert.That(ArcSurge.StunSeconds, Is.GreaterThan(0f));
         Assert.That(
-            ChainSurge.StunSeconds,
+            ArcSurge.StunSeconds,
             Is.LessThan(DashRush.KnockbackStunSeconds),
             "A zap's stun is 'some stun', not the knockback-grade interrupt DashRush's own "
                 + "designer-corrected constant already owns -- it must read as lighter."
@@ -55,7 +55,7 @@ public class ChainSurgeEditModeTests
     [Test]
     public void MaxTargets_IsCappedAtFive()
     {
-        FieldInfo field = typeof(ChainSurge).GetField(
+        FieldInfo field = typeof(ArcSurge).GetField(
             "MaxTargets",
             BindingFlags.Static | BindingFlags.NonPublic
         );
@@ -64,15 +64,15 @@ public class ChainSurgeEditModeTests
     }
 
     [Test]
-    public void Damage_DefaultsToFortyFive()
+    public void Damage_DefaultsToSeventy()
     {
-        GameObject caster = new("ChainSurgeDamageCaster");
+        GameObject caster = new("ArcSurgeDamageCaster");
         spawnedObjects.Add(caster);
-        ChainSurge ability = caster.AddComponent<ChainSurge>();
+        ArcSurge ability = caster.AddComponent<ArcSurge>();
 
         SerializedProperty damage = new SerializedObject(ability).FindProperty("damage");
         Assert.That(damage, Is.Not.Null, "Missing serialized 'damage' field.");
-        Assert.That(damage.floatValue, Is.EqualTo(45f).Within(Tolerance));
+        Assert.That(damage.floatValue, Is.EqualTo(70f).Within(Tolerance));
     }
 
     private static readonly Vector3[] SevenDistinctDirections =
@@ -90,7 +90,7 @@ public class ChainSurgeEditModeTests
     public void ResolveTargets_CapsAtFiveNearestEnemiesEvenWithMoreInRange()
     {
         Vector3 casterPosition = new(1000f, 0f, 1000f);
-        ChainSurge chainSurge = CreateCaster(casterPosition);
+        ArcSurge arcSurge = CreateCaster(casterPosition);
 
         List<GameObject> enemies = new();
         for (int index = 1; index <= SevenDistinctDirections.Length; index++)
@@ -103,7 +103,7 @@ public class ChainSurgeEditModeTests
 
         Physics.SyncTransforms();
 
-        List<GameObject> targets = chainSurge.ResolveTargets(casterPosition, radiusCells: 10f);
+        List<GameObject> targets = arcSurge.ResolveTargets(casterPosition, radiusCells: 10f);
 
         Assert.That(targets.Count, Is.EqualTo(5), "A single cast may reach at most five enemies.");
         for (int index = 0; index < 5; index++)
@@ -128,7 +128,7 @@ public class ChainSurgeEditModeTests
     public void ResolveTargets_DoesNotHitAnEnemyBehindAWallButStillHitsAClearOne()
     {
         Vector3 casterPosition = new(2000f, 0f, 2000f);
-        ChainSurge chainSurge = CreateCaster(casterPosition);
+        ArcSurge arcSurge = CreateCaster(casterPosition);
 
         Vector3 wallPosition = casterPosition + new Vector3(GameLoop.cellSize, 0f, 0f);
         Vector3 blockedEnemyPosition = casterPosition + new Vector3(2f * GameLoop.cellSize, 0f, 0f);
@@ -145,7 +145,7 @@ public class ChainSurgeEditModeTests
 
         Physics.SyncTransforms();
 
-        List<GameObject> targets = chainSurge.ResolveTargets(casterPosition, radiusCells: 5f);
+        List<GameObject> targets = arcSurge.ResolveTargets(casterPosition, radiusCells: 5f);
 
         Assert.That(
             targets.Contains(blockedEnemy),
@@ -163,7 +163,7 @@ public class ChainSurgeEditModeTests
     public void ResolveTargets_IncludesTheDisplayedRadiusBoundaryRegardlessOfColliderHeight()
     {
         Vector3 casterPosition = new(3000f, 0f, 3000f);
-        ChainSurge chainSurge = CreateCaster(casterPosition);
+        ArcSurge arcSurge = CreateCaster(casterPosition);
         GameObject boundaryEnemy = CreateEnemyCollider(
             casterPosition + new Vector3(3f * GameLoop.cellSize, 1f, 0f)
         );
@@ -171,7 +171,7 @@ public class ChainSurgeEditModeTests
         Physics.SyncTransforms();
 
         Assert.That(
-            chainSurge.ResolveTargets(casterPosition, radiusCells: 3f),
+            arcSurge.ResolveTargets(casterPosition, radiusCells: 3f),
             Contains.Item(boundaryEnemy)
         );
     }
@@ -180,7 +180,7 @@ public class ChainSurgeEditModeTests
     public void ResolveTargets_EnemiesDoNotBlockArcsToEachOther()
     {
         Vector3 casterPosition = new(3500f, 0f, 3500f);
-        ChainSurge chainSurge = CreateCaster(casterPosition);
+        ArcSurge arcSurge = CreateCaster(casterPosition);
         GameObject nearEnemy = CreateEnemyCollider(
             casterPosition + Vector3.forward * GameLoop.cellSize
         );
@@ -190,7 +190,7 @@ public class ChainSurgeEditModeTests
 
         Physics.SyncTransforms();
 
-        List<GameObject> targets = chainSurge.ResolveTargets(casterPosition, radiusCells: 3f);
+        List<GameObject> targets = arcSurge.ResolveTargets(casterPosition, radiusCells: 3f);
         Assert.That(targets, Contains.Item(nearEnemy));
         Assert.That(targets, Contains.Item(farEnemy));
     }
@@ -199,8 +199,8 @@ public class ChainSurgeEditModeTests
     public void ResolveTargets_ReturnsOneUnitForMultipleChildColliders()
     {
         Vector3 casterPosition = new(4000f, 0f, 4000f);
-        ChainSurge chainSurge = CreateCaster(casterPosition);
-        GameObject enemy = new("ChainSurgeMultiColliderEnemy");
+        ArcSurge arcSurge = CreateCaster(casterPosition);
+        GameObject enemy = new("ArcSurgeMultiColliderEnemy");
         spawnedObjects.Add(enemy);
         enemy.transform.position = casterPosition + Vector3.right * GameLoop.cellSize;
         enemy.AddComponent<Unit>();
@@ -216,27 +216,27 @@ public class ChainSurgeEditModeTests
 
         Physics.SyncTransforms();
 
-        List<GameObject> targets = chainSurge.ResolveTargets(casterPosition, radiusCells: 3f);
+        List<GameObject> targets = arcSurge.ResolveTargets(casterPosition, radiusCells: 3f);
         Assert.That(targets, Is.EqualTo(new[] { enemy }));
     }
 
     [Test]
     public void ApplyZap_DamagesAndStunsOnlyTheTargetsItWasGiven()
     {
-        GameObject caster = new("ChainSurgeZapCaster");
+        GameObject caster = new("ArcSurgeZapCaster");
         spawnedObjects.Add(caster);
-        ChainSurge chainSurge = caster.AddComponent<ChainSurge>();
+        ArcSurge arcSurge = caster.AddComponent<ArcSurge>();
 
-        GameObject hitTarget = CreateZapTarget("ChainSurgeHitTarget");
-        GameObject untouchedTarget = CreateZapTarget("ChainSurgeUntouchedTarget");
+        GameObject hitTarget = CreateZapTarget("ArcSurgeHitTarget");
+        GameObject untouchedTarget = CreateZapTarget("ArcSurgeUntouchedTarget");
 
-        chainSurge.ApplyZap(new List<GameObject> { hitTarget });
+        arcSurge.ApplyZap(new List<GameObject> { hitTarget });
 
         Health hitHealth = hitTarget.GetComponent<Health>();
         Unit hitUnit = hitTarget.GetComponent<Unit>();
         Assert.That(
             hitHealth.CurrentHealth,
-            Is.EqualTo(StartingHealth - 45f).Within(Tolerance),
+            Is.EqualTo(StartingHealth - 70f).Within(Tolerance),
             "A resolved target must take the ability's damage."
         );
         Assert.That(hitUnit.IsStunned, Is.True, "A resolved target must be stunned.");
@@ -251,18 +251,18 @@ public class ChainSurgeEditModeTests
         Assert.That(untouchedUnit.IsStunned, Is.False);
     }
 
-    private ChainSurge CreateCaster(Vector3 position)
+    private ArcSurge CreateCaster(Vector3 position)
     {
-        GameObject caster = new("ChainSurgeCaster");
+        GameObject caster = new("ArcSurgeCaster");
         spawnedObjects.Add(caster);
         caster.tag = BlueTeamTag;
         caster.transform.position = position;
-        return caster.AddComponent<ChainSurge>();
+        return caster.AddComponent<ArcSurge>();
     }
 
     private GameObject CreateEnemyCollider(Vector3 position)
     {
-        GameObject enemy = new($"ChainSurgeEnemy_{spawnedObjects.Count}");
+        GameObject enemy = new($"ArcSurgeEnemy_{spawnedObjects.Count}");
         spawnedObjects.Add(enemy);
         enemy.transform.position = position;
         enemy.AddComponent<SphereCollider>();

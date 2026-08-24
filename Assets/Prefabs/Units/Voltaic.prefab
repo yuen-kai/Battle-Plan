@@ -1356,9 +1356,9 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d8e85da65384e4192b8ea692f2090b04, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ChainSurge
+  m_EditorClassIdentifier: Assembly-CSharp::ArcSurge
   ShowTopMostFoldoutHeaderGroup: 1
-  damage: 45
+  damage: 70
 --- !u!4 &8278047107763744475 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5014284374218104416, guid: 73e003ef324e37948a4305b0ab228998, type: 3}

@@ -12,7 +12,7 @@ public class ShatterLeap : Ability
     private const float ArcApexHeight = 5f;
 
     [SerializeField]
-    private float damage = 50f;
+    private float damage = 60f;
 
     private Vector3? returnPositionOnInterrupt;
 

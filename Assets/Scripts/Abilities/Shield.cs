@@ -5,11 +5,11 @@ using UnityEngine;
 
 public class Shield : Ability
 {
-    public const float AbilityDurationSeconds = 3f;
+    public const float AbilityDurationSeconds = 4.5f;
     public const int ShieldWidthIncreaseCellsPerSide = 1;
     public const float AllySpeedBoostRadiusCells = 2f;
     public const float AllySpeedBoostMultiplier = 1.5f;
-    public const float AllySpeedBoostDurationSeconds = AbilityDurationSeconds;
+    public const float AllySpeedBoostDurationSeconds = 3f;
     public const string BlueShieldLayerName = "BlueShield";
     public const string RedShieldLayerName = "RedShield";
 

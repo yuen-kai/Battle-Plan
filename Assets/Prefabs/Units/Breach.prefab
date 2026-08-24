@@ -1358,7 +1358,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BunkerBuster
   ShowTopMostFoldoutHeaderGroup: 1
-  damage: 55
+  damage: 75
   rocketPrefab: {fileID: 9216282734646946488, guid: 89992899276a0402a9a242140b1165c9, type: 3}
   rocketExplosionPrefab: {fileID: 7426381648914058826, guid: ae8b6b4593e1ede4f9708cd44c729170, type: 3}
 --- !u!4 &8278047107763744475 stripped

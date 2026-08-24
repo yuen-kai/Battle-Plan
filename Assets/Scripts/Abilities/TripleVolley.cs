@@ -9,7 +9,7 @@ public class TripleVolley : Ability
     private const float VolleyVisualLocalWidth = 0.6f;
     private const float VolleyVisualLocalLength = 3.5f;
 
-    public const float VolleyDamage = 25f;
+    public const float VolleyDamage = 40f;
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {

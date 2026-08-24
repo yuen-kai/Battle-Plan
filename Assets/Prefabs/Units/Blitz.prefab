@@ -1358,7 +1358,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShatterLeap
   ShowTopMostFoldoutHeaderGroup: 1
-  damage: 50
+  damage: 60
 --- !u!4 &8278047107763744475 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5014284374218104416, guid: 73e003ef324e37948a4305b0ab228998, type: 3}

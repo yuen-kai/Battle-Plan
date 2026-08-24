@@ -38,9 +38,10 @@ MonoBehaviour:
   bulletSpread: 25
   fireRateRampShots: 0
   fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
   canShootWhileMoving: 0
   bulletSpeed: 2
-  targetRange: 2
+  targetRange: 2.5
   bulletRange: 3
   damage: 8
   backstabMultiplier: 1

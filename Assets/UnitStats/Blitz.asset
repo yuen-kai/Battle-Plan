@@ -34,17 +34,18 @@ MonoBehaviour:
   rotationSpeed: 360
   blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
   redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
-  timeBetweenShots: 0.55
-  magazineSize: 5
-  reloadTime: 2.4
-  bulletSpread: 22
+  timeBetweenShots: 0.01
+  magazineSize: 6
+  reloadTime: 3.2
+  bulletSpread: 18
   fireRateRampShots: 0
   fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
   canShootWhileMoving: 0
   bulletSpeed: 2
-  targetRange: 2.5
+  targetRange: 2.2
   bulletRange: 2.8
-  damage: 8
+  damage: 10
   backstabMultiplier: 1
   backstabAngle: 90
   bulletExplodesOnImpact: 0
@@ -62,7 +63,7 @@ MonoBehaviour:
   abilityFixedDistance: 0
   abilityRadius: 1.6
   selectTime: 4
-  responseRange: 2
+  responseRange: 2.6
   responseDistLine: 0
   timeDivePerUnit: 3
   diveRange: 2

@@ -69,7 +69,7 @@ public static class SandboxSession
         bool testsMultipleTargets =
             unit != null
             && unit.unitModel != null
-            && unit.unitModel.GetComponent<ChainSurge>() != null;
+            && unit.unitModel.GetComponent<ArcSurge>() != null;
         return testsMultipleTargets
             ? MaxEnemyCount
             : Mathf.Clamp(requestedCount, 1, MaxEnemyCount);

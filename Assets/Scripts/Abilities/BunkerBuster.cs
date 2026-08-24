@@ -14,7 +14,7 @@ public class BunkerBuster : Ability
     private const float FlightHeightCells = 0.45f;
 
     [SerializeField]
-    private float damage = 55f;
+    private float damage = 75f;
 
     private GameObject activeRocket;
 

@@ -152,6 +152,23 @@ public static class AbilityFilmStudio
             CrossStartSeconds = 1.3f,
             CrossSeconds = 1.0f,
         },
+        new()
+        {
+            Name = "arcsurge",
+            AbilityType = "ArcSurge",
+            CasterCell = new Vector2Int(7, 5),
+            TargetCell = new Vector2Int(7, 5),
+            EnemyCells = new[]
+            {
+                new Vector2Int(9, 5),
+                new Vector2Int(7, 7),
+                new Vector2Int(5, 4),
+                new Vector2Int(9, 7),
+            },
+            LookAtCell = new Vector2(7f, 5f),
+            CameraDistance = 19f,
+            CaptureSeconds = 3.4f,
+        },
     };
 
     static readonly PrimitiveShot[] Primitives =

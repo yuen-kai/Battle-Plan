@@ -1,5 +1,7 @@
 # Claude Code Configuration
 
+Code style: thoughtful, concise, and written such that comments are not needed. do not include comments unless absolutely necessary
+
 ## Project overview
 
 Battle Plan targets Unity 6000.3.1f1 with Netcode for GameObjects for

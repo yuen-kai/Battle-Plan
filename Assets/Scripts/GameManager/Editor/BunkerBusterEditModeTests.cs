@@ -77,7 +77,7 @@ public class BunkerBusterEditModeTests
         BunkerBuster ability = breach.unitModel.GetComponent<BunkerBuster>();
         Assert.That(ability, Is.Not.Null, "Breach prefab is missing BunkerBuster.");
         float damage = (float)damageField.GetValue(ability);
-        Assert.That(damage, Is.EqualTo(55f).Within(0.001f));
+        Assert.That(damage, Is.EqualTo(75f).Within(0.001f));
     }
 
     [Test]

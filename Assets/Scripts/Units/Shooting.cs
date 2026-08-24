@@ -18,6 +18,9 @@ public class Shooting : NetworkBehaviour
     private int continuousShotsFired;
     private float lastShotTime = float.NegativeInfinity;
 
+    private const float ShotEdgeWeight = 1f;
+    private const float ShotCenterWeight = 1f;
+
     [HideInInspector]
     public bool allowShooting = true;
 
@@ -215,7 +218,6 @@ public class Shooting : NetworkBehaviour
         currentAmmo = unitData.magazineSize;
 
         float remainingTargetLockTime = unitData.targetLockDuration;
-
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
@@ -226,6 +228,12 @@ public class Shooting : NetworkBehaviour
             }
 
             remainingTargetLockTime = unitData.targetLockDuration;
+
+            SpreadZoneWeights shotZones = new(
+                ShotEdgeWeight,
+                ShotCenterWeight,
+                ShotEdgeWeight
+            );
 
             while (currentAmmo > 0)
             {
@@ -272,7 +280,12 @@ public class Shooting : NetworkBehaviour
                     unitData.timeBetweenShots
                 );
 
-                FireBullet();
+                FireBullet(
+                    transform.forward,
+                    unitData.bulletSpread,
+                    shotZones,
+                    consumeAmmo: true
+                );
                 continuousShotsFired++;
                 lastShotTime = shotTime;
                 yield return new WaitForSeconds(shotDelay);
@@ -312,56 +325,52 @@ public class Shooting : NetworkBehaviour
         return Mathf.Lerp(rampStartDelay, floorDelay, progress);
     }
 
-    public void FireBullet()
+    private static Vector3 ApplyZoneSpread(
+        Vector3 forward,
+        Vector3 up,
+        int zone,
+        float maxSpreadAngle
+    )
     {
-        float spreadAngle = Random.Range(-unitData.bulletSpread, unitData.bulletSpread);
-        Vector3 direction =
-            Quaternion.AngleAxis(spreadAngle, transform.up) * transform.forward;
-
-        FireResolvedBullet(
-            direction,
-            unitData.bulletRange,
-            unitData.bulletExplodesOnImpact,
-            unitData.bulletAoeRadius,
-            unitData.bulletPierces,
-            consumeAmmo: true,
-            ignoredWallCell: null
-        );
+        float spreadAngle = zone switch
+        {
+            0 => Random.Range(-maxSpreadAngle, -maxSpreadAngle * 0.33f),
+            1 => Random.Range(-maxSpreadAngle * 0.33f, maxSpreadAngle * 0.33f),
+            2 => Random.Range(maxSpreadAngle * 0.33f, maxSpreadAngle),
+            _ => 0f
+        };
+        return Quaternion.AngleAxis(spreadAngle, up) * forward;
     }
 
-    public void FireBulletInDirection(
-        Vector3 direction,
+    public void FireBullet(
+        Vector3 baseDirection,
+        float spreadAngle,
+        SpreadZoneWeights spreadZones,
         float range = -1,
         bool? pierces = null,
-        Vector2Int? ignoredWallCell = null
+        Vector2Int? ignoredWallCell = null,
+        bool consumeAmmo = false
     )
     {
-        if (direction.sqrMagnitude <= Mathf.Epsilon)
+        if (baseDirection.sqrMagnitude <= Mathf.Epsilon)
             return;
+
+        Vector3 direction =
+            spreadZones != null && spreadAngle > 0f
+                ? ApplyZoneSpread(
+                    baseDirection,
+                    transform.up,
+                    spreadZones.NextZone(),
+                    spreadAngle
+                )
+                : baseDirection;
         direction.Normalize();
 
+        bool explodesOnImpact = unitData.bulletExplodesOnImpact;
+        float aoeRadius = unitData.bulletAoeRadius;
         range = range == -1 ? unitData.bulletRange : range;
-        FireResolvedBullet(
-            direction,
-            range,
-            unitData.bulletExplodesOnImpact,
-            unitData.bulletAoeRadius,
-            pierces ?? unitData.bulletPierces,
-            consumeAmmo: false,
-            ignoredWallCell: ignoredWallCell
-        );
-    }
+        bool bulletPierces = pierces ?? unitData.bulletPierces;
 
-    private void FireResolvedBullet(
-        Vector3 direction,
-        float range,
-        bool explodesOnImpact,
-        float aoeRadius,
-        bool pierces,
-        bool consumeAmmo,
-        Vector2Int? ignoredWallCell
-    )
-    {
         Vector3 origin = transform.position;
         bool ignoresWallCell = ignoredWallCell.HasValue;
         Vector2Int wallCell = ignoredWallCell.GetValueOrDefault();
@@ -372,7 +381,7 @@ public class Shooting : NetworkBehaviour
                 range,
                 explodesOnImpact,
                 aoeRadius,
-                pierces,
+                bulletPierces,
                 authoritative: true,
                 ignoresWallCell: ignoresWallCell,
                 ignoredWallCell: wallCell
@@ -385,7 +394,7 @@ public class Shooting : NetworkBehaviour
             range,
             explodesOnImpact,
             aoeRadius,
-            pierces,
+            bulletPierces,
             ignoresWallCell,
             wallCell
         );
@@ -634,6 +643,56 @@ public class Shooting : NetworkBehaviour
             return true;
         }
         return false;
+    }
+}
+
+public sealed class SpreadZoneWeights
+{
+    private const float BalanceStrength = 1f;
+
+    private readonly float[] targetShare = new float[3];
+    private readonly float[] credit = new float[3];
+    private readonly float[] roll = new float[3];
+
+    public SpreadZoneWeights(float left, float center, float right)
+    {
+        float sum = left + center + right;
+        if (sum <= 0f)
+            left = center = right = sum = 1f;
+
+        targetShare[0] = left / sum;
+        targetShare[1] = center / sum;
+        targetShare[2] = right / sum;
+    }
+
+    public int NextZone()
+    {
+        float total = 0f;
+        for (int i = 0; i < 3; i++)
+        {
+            credit[i] += targetShare[i];
+            roll[i] = targetShare[i] * Mathf.Exp(BalanceStrength * credit[i]);
+            total += roll[i];
+        }
+
+        int zone = 2;
+        if (total > 0f)
+        {
+            float pick = Random.value * total;
+            float cumulative = 0f;
+            for (int i = 0; i < 3; i++)
+            {
+                cumulative += roll[i];
+                if (pick < cumulative)
+                {
+                    zone = i;
+                    break;
+                }
+            }
+        }
+
+        credit[zone] -= 1f;
+        return zone;
     }
 }
 

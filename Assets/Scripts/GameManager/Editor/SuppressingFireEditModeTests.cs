@@ -112,7 +112,7 @@ public class SuppressingFireEditModeTests
         UnitData salvo = AssetDatabase.LoadAssetAtPath<UnitData>(SalvoDataPath);
         Assert.That(salvo, Is.Not.Null, $"Could not load {SalvoDataPath}.");
 
-        float spread = GetPrivateConst<float>("SpreadDegrees");
+        float spread = GetPrivateConst<float>("BarrageSpreadDegrees");
         int shots = GetPrivateConst<int>("BarrageShots");
         float secondsBetween = GetPrivateConst<float>("SecondsBetweenShots");
         float rangeCells = GetPrivateConst<float>("BarrageRangeCells");

@@ -228,13 +228,6 @@ public class Movement : NetworkBehaviour
             yield return RecoverFromDive();
         }
 
-        // A "shoot while moving" unit's Shooting coroutine was already started by GameLoop
-        // alongside this one (see GameLoop.ExecuteMoves), so calling transitionToShooting here
-        // would restart it from a fresh magazine the moment movement finishes, discarding whatever
-        // it fired mid-move. Dive always still goes through the normal gate below regardless of
-        // this flag: the dodge recovery cost is exactly what stops a fast dive from being a free
-        // "reposition and immediately open fire," and that must hold for every unit that can dodge,
-        // not just the ones without this flag.
         if (!dive && CanShootWhileMoving)
         {
             PauseMovement();

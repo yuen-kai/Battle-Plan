@@ -29,31 +29,31 @@ MonoBehaviour:
     permanently destroying any wall it hits.
   abilitySprite: {fileID: 21300000, guid: f8eca8ca6753144969b6b1a661c6e20a, type: 3}
   moveDist: 2
-  moveSpeed: 0.85
+  moveSpeed: 0.9
   diveSpeed: 4
   rotationSpeed: 360
   blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
   redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
-  timeBetweenShots: 2.4
+  timeBetweenShots: 1.4
   magazineSize: 3
-  reloadTime: 3
-  bulletSpread: 6
+  reloadTime: 2.8
+  bulletSpread: 4
   fireRateRampShots: 0
   fireRateRampStartDelay: 0
   canShootWhileMoving: 0
-  bulletSpeed: 1.3
+  bulletSpeed: 2
   targetRange: 6
-  bulletRange: 6.5
-  damage: 15
+  bulletRange: 7
+  damage: 22
   backstabMultiplier: 1
   backstabAngle: 90
   bulletExplodesOnImpact: 1
-  bulletAoeRadius: 1
+  bulletAoeRadius: 1.2
   bulletPierces: 0
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 250
-  visionRange: 5
+  visionRange: 6
   maxHealth: 150
   abilityCardSprite: {fileID: 21300000, guid: f8eca8ca6753144969b6b1a661c6e20a, type: 3}
   selectAbilitySquare: 1
@@ -62,8 +62,8 @@ MonoBehaviour:
   abilityFixedDistance: 0
   abilityRadius: 1.5
   selectTime: 4
-  responseRange: 1.6
+  responseRange: 2
   responseDistLine: 1
   timeDivePerUnit: 3
   diveRange: 2
-  abilityCooldownRounds: 2
+  abilityCooldownRounds: 3

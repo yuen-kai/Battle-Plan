@@ -49,7 +49,7 @@ public class ShatterLeapEditModeTests
 
         SerializedProperty damage = new SerializedObject(ability).FindProperty("damage");
         Assert.That(damage, Is.Not.Null, "Missing serialized 'damage' field.");
-        Assert.That(damage.floatValue, Is.EqualTo(50f).Within(Tolerance));
+        Assert.That(damage.floatValue, Is.EqualTo(60f).Within(Tolerance));
 
         ParameterInfo areaRadiusParameter = typeof(ShatterLeap)
             .GetMethod("ExecuteAbility")
@@ -151,7 +151,7 @@ public class ShatterLeapEditModeTests
         Health hitHealth = hitTarget.GetComponent<Health>();
         Assert.That(
             hitHealth.CurrentHealth,
-            Is.EqualTo(StartingHealth - 50f).Within(Tolerance),
+            Is.EqualTo(StartingHealth - 60f).Within(Tolerance),
             "A resolved target must take the ability's damage."
         );
 

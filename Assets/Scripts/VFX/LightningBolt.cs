@@ -5,16 +5,19 @@ public sealed class LightningBolt : MonoBehaviour
 {
     private const string BeamShaderName = "BattlePlan/EnergyBeam";
 
-    public static readonly Color ElectricBlue = new(0.52f, 0.76f, 1f, 1f);
+    public static readonly Color ElectricBlue = new(0.28f, 0.6f, 1f, 1f);
 
-    private const float CoreWidth = 0.05f;
-    private const float GlowWidth = 0.26f;
+    // A wide halo carrying the hue and a thin filament carrying the heat. The board's floor is
+    // bright enough that an additive line trends white on its own, so the blue only survives where
+    // the glow is wide and the white core inside it is narrow.
+    private const float CoreWidth = 0.06f;
+    private const float GlowWidth = 0.46f;
 
     private const float ForkWidthShare = 0.55f;
 
     private const float CrackleInterval = 0.045f;
 
-    private const float HoldShare = 0.4f;
+    private const float HoldShare = 0.28f;
 
     private const float StrikeSwell = 0.85f;
     private const float StrikeShare = 0.2f;
@@ -120,7 +123,7 @@ public sealed class LightningBolt : MonoBehaviour
             GlowWidth,
             color,
             color * 1.6f,
-            coreShare: 0.35f,
+            coreShare: 0.14f,
             points: boltPoints.Length
         );
         coreLine = CreateLine(
@@ -129,7 +132,7 @@ public sealed class LightningBolt : MonoBehaviour
             CoreWidth,
             Color.Lerp(color, Color.white, 0.6f) * 2f,
             Color.white * 4f,
-            coreShare: 0.85f,
+            coreShare: 0.55f,
             points: boltPoints.Length
         );
 
@@ -142,7 +145,7 @@ public sealed class LightningBolt : MonoBehaviour
                 GlowWidth * ForkWidthShare,
                 color,
                 Color.Lerp(color, Color.white, 0.45f) * 1.8f,
-                coreShare: 0.5f,
+                coreShare: 0.22f,
                 points: forkPoints.Length
             );
         }

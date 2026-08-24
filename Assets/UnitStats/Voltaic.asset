@@ -25,7 +25,7 @@ MonoBehaviour:
     walls.
   unitSprite: {fileID: 21300000, guid: 767a37d8dbea2492e818cc982103863f, type: 3}
   unavailableForRoster: 0
-  abilityName: Chain Surge
+  abilityName: Arc Surge
   abilityDescription: Zaps up to five nearby enemies at once for solid damage and
     a brief stun.
   abilitySprite: {fileID: 21300000, guid: 904893c1ebb1243e39d59553a42f4126, type: 3}
@@ -35,14 +35,14 @@ MonoBehaviour:
   rotationSpeed: 360
   blueBulletPrefab: {fileID: 7020020037714857193, guid: bbf5f51a5e20c4c2aa808325815169d2, type: 3}
   redBulletPrefab: {fileID: 5793367004619842165, guid: f0c21c0c02c1b44d3987a5d056c5e96b, type: 3}
-  timeBetweenShots: 0.9
+  timeBetweenShots: 0.6
   magazineSize: 4
-  reloadTime: 2
+  reloadTime: 2.4
   bulletSpread: 4
   fireRateRampShots: 0
   fireRateRampStartDelay: 0
   canShootWhileMoving: 0
-  bulletSpeed: 4
+  bulletSpeed: 4.5
   targetRange: 5
   bulletRange: 6
   damage: 11
@@ -63,8 +63,8 @@ MonoBehaviour:
   abilityFixedDistance: 0
   abilityRadius: 3
   selectTime: 4
-  responseRange: 4.5
+  responseRange: 3.5
   responseDistLine: 0
   timeDivePerUnit: 3
   diveRange: 2
-  abilityCooldownRounds: 2
+  abilityCooldownRounds: 3

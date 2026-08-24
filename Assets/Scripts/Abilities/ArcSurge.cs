@@ -3,18 +3,18 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-public class ChainSurge : Ability
+public class ArcSurge : Ability
 {
     private const int MaxTargets = 5;
 
-    public const float StunSeconds = 0.3f;
+    public const float StunSeconds = 0.5f;
 
     [SerializeField]
-    private float damage = 45f;
+    private float damage = 70f;
 
-    private const float ChargeSeconds = 0.7f;
+    private const float ChargeSeconds = 1f;
 
-    private const float RecoverySeconds = 1.1f;
+    private const float RecoverySeconds = 2f;
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3f)
     {
@@ -22,14 +22,14 @@ public class ChainSurge : Ability
             yield break;
 
         BeginInterruptibleAbilityAction();
-        ShowChargeClientRpc(NetworkObjectId, transform.position);
+        ShowChargeClientRpc(NetworkObjectId, transform.position, HandOrigin(), AreaRadius);
 
         yield return new WaitForSeconds(ChargeSeconds);
 
         List<GameObject> targets = ResolveTargets(transform.position, AreaRadius);
         ApplyZap(targets);
 
-        ShowZapClientRpc(HandOrigin(), StrikePoints(targets));
+        ShowZapClientRpc(transform.position, HandOrigin(), StrikePoints(targets), AreaRadius);
 
         yield return new WaitForSeconds(RecoverySeconds);
         CompleteInterruptibleAbilityAction();
@@ -124,48 +124,91 @@ public class ChainSurge : Ability
 
     private const float StrikeHeightFallback = 0.95f;
 
-    private const float BoltIntensity = 2.4f;
+    private const float BoltIntensity = 2.2f;
 
-    private const float BoltLifetime = 0.3f;
-    private const float BoltLifetimeJitter = 0.04f;
+    // A single arc left standing for the length of the surge reads as a decal stuck to the board.
+    // The discharge is held open by restriking it instead: each burst redraws every arc with fresh
+    // geometry, so the fan is never the same shape two frames running.
+    private const float BoltLifetime = 0.34f;
+    private const int SurgeBursts = 5;
+    private const float BurstSeconds = 0.16f;
 
-    private const float DischargeScale = 1.2f;
+    // Nearest target first, a beat apart, so the fan snaps outward instead of appearing whole.
+    private const float ArcStaggerSeconds = 0.04f;
+
     private const float DischargeIntensity = 1.1f;
-    private const float StrikeScale = 0.9f;
-    private const float StrikeIntensity = 0.7f;
+
+    private const float CoreShare = 0.3f;
+    private const float CorePunch = 0.6f;
+
+    private const float ShockwaveSeconds = 0.5f;
+
+    private const float CameraPunch = 1.15f;
 
     [ClientRpc]
-    private void ShowChargeClientRpc(ulong casterId, Vector3 casterPosition)
+    private void ShowChargeClientRpc(
+        ulong casterId,
+        Vector3 casterPosition,
+        Vector3 focus,
+        float areaRadius
+    )
     {
-        Color bolt = AbilityJuice.Hot(LightningBolt.ElectricBlue, BoltIntensity);
-        ChainSurgeVFX.SpawnCharge(casterId, casterPosition, bolt, ChargeSeconds);
+        ArcSurgeVFX.SpawnCharge(
+            casterId,
+            casterPosition,
+            focus,
+            BoltColor(),
+            ChargeSeconds,
+            areaRadius * GameLoop.cellSize
+        );
     }
 
     [ClientRpc]
     private void CancelChargeClientRpc(ulong casterId)
     {
-        ChainSurgeVFX.CancelCharge(casterId);
+        ArcSurgeVFX.CancelCharge(casterId);
     }
 
     [ClientRpc]
-    private void ShowZapClientRpc(Vector3 origin, Vector3[] strikePoints)
+    private void ShowZapClientRpc(
+        Vector3 casterPosition,
+        Vector3 origin,
+        Vector3[] strikePoints,
+        float areaRadius
+    )
     {
-        Color bolt = AbilityJuice.Hot(LightningBolt.ElectricBlue, BoltIntensity);
-        ChainSurgeVFX.SpawnDischarge(origin, bolt, DischargeScale, DischargeIntensity);
+        Color bolt = BoltColor();
+        float blast = areaRadius * GameLoop.cellSize;
 
-        if (strikePoints == null)
-            return;
+        ArcSurgeVFX.SpawnDischarge(casterPosition, bolt, blast, DischargeIntensity);
 
-        foreach (Vector3 strikePoint in strikePoints)
-        {
-            LightningBolt.Spawn(
-                origin,
-                strikePoint,
-                bolt,
-                BoltLifetime + Random.Range(-BoltLifetimeJitter, BoltLifetimeJitter)
-            );
-            ChainSurgeVFX.SpawnStrike(strikePoint, bolt, StrikeScale, StrikeIntensity);
-        }
+        // No ground dust: a discharge displaces nothing, and the dirt read as a grenade's leftovers.
+        ImpactShockwave.Spawn(
+            casterPosition,
+            LightningBolt.ElectricBlue,
+            blast,
+            ShockwaveSeconds,
+            withLightPop: true,
+            groundDust: 0f
+        );
+        ImpactCore.Spawn(origin, bolt, GameLoop.cellSize * CoreShare, CorePunch);
+        ImpactCamera.Punch(casterPosition, CameraPunch);
+
+        ArcSurgeVFX.SpawnArcs(
+            origin,
+            strikePoints,
+            bolt,
+            BoltLifetime,
+            ArcStaggerSeconds,
+            SurgeBursts,
+            BurstSeconds,
+            StunSeconds
+        );
+    }
+
+    private static Color BoltColor()
+    {
+        return AbilityJuice.Hot(LightningBolt.ElectricBlue, BoltIntensity);
     }
 
     protected override void OnAbilityInterrupted()

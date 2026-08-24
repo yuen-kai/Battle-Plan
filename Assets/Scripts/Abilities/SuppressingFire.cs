@@ -6,15 +6,16 @@ public class SuppressingFire : Ability
 {
     private const float WindUpSeconds = 0.8f;
 
-    private const int BarrageShots = 25;
-    private const float SecondsBetweenShots = 0.22f;
+    private const int BarrageShots = 40;
+    private const float SecondsBetweenShots = 0.10f;
 
     private const float RecoverySeconds = 1.4f;
 
-    private const float SpreadDegrees = 18f;
-    private const float SpreadStride = 0.6180339887f;
+    private const float BarrageSpreadDegrees = 20f;
+    private const float BarrageRangeCells = 14f;
 
-    private const float BarrageRangeCells = 4f;
+    private const float BarrageEdgeWeight = 0.15f;
+    private const float BarrageCenterWeight = 0.7f;
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {
@@ -60,16 +61,18 @@ public class SuppressingFire : Ability
 
         BarrageFxClientRpc(transform.position, direction3D);
 
-        float spreadPhase = Random.value;
+        SpreadZoneWeights barrageZones = new(
+            BarrageEdgeWeight,
+            BarrageCenterWeight,
+            BarrageEdgeWeight
+        );
 
         for (int shot = 0; shot < BarrageShots; shot++)
         {
-            float sample = Mathf.Repeat(spreadPhase + shot * SpreadStride, 1f);
-            float spread = Mathf.Lerp(-SpreadDegrees, SpreadDegrees, sample);
-            Vector3 shotDirection = Quaternion.AngleAxis(spread, Vector3.up) * direction3D;
-
-            shooting.FireBulletInDirection(
-                shotDirection,
+            shooting.FireBullet(
+                direction3D,
+                BarrageSpreadDegrees,
+                barrageZones,
                 range: BarrageRangeCells,
                 ignoredWallCell: ignoredWallCell
             );

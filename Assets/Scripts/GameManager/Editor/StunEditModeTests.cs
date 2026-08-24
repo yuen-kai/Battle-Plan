@@ -205,7 +205,7 @@ public class StunEditModeTests
             unitObject.AddComponent<Unit>();
             unitObject.AddComponent<Movement>();
             Shooting shooting = unitObject.AddComponent<Shooting>();
-            Ability ability = unitObject.AddComponent<ChainSurge>();
+            Ability ability = unitObject.AddComponent<ArcSurge>();
             shooting.StandDown();
 
             ability.ResetForRespawn();
