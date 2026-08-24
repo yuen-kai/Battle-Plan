@@ -32,6 +32,16 @@ public class ShatterLeap : Ability
             : AbilityPathKind.None;
     }
 
+    public override bool TryGetCasterDestination(
+        Vector3 targetSquare,
+        UnitData data,
+        out Vector2Int destinationCell
+    )
+    {
+        destinationCell = GridSystem.ConvertToGridCoords(targetSquare);
+        return true;
+    }
+
     private Vector3 GetLandingPosition(Vector3 abilitySquare)
     {
         return abilitySquare + Helper.heightOffset(transform);

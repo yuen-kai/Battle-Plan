@@ -66,6 +66,21 @@ public abstract class Ability : NetworkBehaviour
         return AbilityPathKind.None;
     }
 
+    /// <summary>
+    /// The cell this ability sets its caster down on, for the abilities that carry it — a rush, a
+    /// jump. Planning holds that cell against the rest of the team and frees the one the caster
+    /// launches from, so an ability that leaves its caster where it stands reports nothing.
+    /// </summary>
+    public virtual bool TryGetCasterDestination(
+        Vector3 targetSquare,
+        UnitData data,
+        out Vector2Int destinationCell
+    )
+    {
+        destinationCell = default;
+        return false;
+    }
+
     protected void BeginInterruptibleAbilityAction()
     {
         interruptibleExecution = execution;

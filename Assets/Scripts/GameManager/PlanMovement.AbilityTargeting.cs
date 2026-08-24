@@ -124,6 +124,9 @@ public partial class PlanMovement
         plans[selectedUnit] = (true, new List<Vector3> { start, square });
         currentPlan = plans[selectedUnit].Item2;
         RefreshAbilityIndicators();
+        // An ability that carries its caster hands back the square it leaves and takes the one it
+        // is aimed at, so the team's routes are redrawn against the cells this aim just changed.
+        RefreshAllRibbons();
         GameHUDController.Instance?.SetTargetFeedback("Target locked.", false);
     }
 

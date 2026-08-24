@@ -16,8 +16,17 @@ public class Health : NetworkBehaviour
     private Transform healthBar;
     private Transform healthFill;
     private UnityEngine.UI.Image healthFillImage;
+    private float unitCanvasHeight;
 
     private const float TypicalMaxHealth = 100f;
+
+    /// <summary>
+    /// The air the bar keeps above its own unit on screen, given as world units of lift per unit of
+    /// distance from the lens. A slope rather than a length, so it holds the same share of the frame
+    /// at any range and any field of view. Sized to clear a whole unit silhouette — a 3.1-unit body
+    /// seen from 73 degrees above — with a little left over.
+    /// </summary>
+    private const float MinCanvasScreenGap = 0.07f;
 
     /// <summary>Read-only HP accessor for dev tooling/tests (server-authoritative value on host).</summary>
     public float CurrentHealth => currentHealth.Value;
@@ -31,6 +40,10 @@ public class Health : NetworkBehaviour
         healthFill = healthBar != null ? healthBar.Find("HealthFill") : null;
         healthFillImage =
             healthFill != null ? healthFill.GetComponent<UnityEngine.UI.Image>() : null;
+        unitCanvasHeight =
+            unitCanvas is RectTransform canvasRect
+                ? canvasRect.anchoredPosition.y * transform.localScale.y
+                : 0f;
 
         currentHealth.OnValueChanged += OnHealthChanged;
         isAlive.OnValueChanged += OnAliveChanged;
@@ -58,11 +71,54 @@ public class Health : NetworkBehaviour
 
     void Update()
     {
-        if (!IsClient)
+        if (!IsClient || unitCanvas == null)
             return;
 
-        if (GameLoop.Instance?.TeamCamera != null && unitCanvas != null)
-            unitCanvas.forward = GameLoop.Instance.TeamCamera.transform.forward;
+        Camera view = GameLoop.ViewCamera;
+        if (view == null)
+            return;
+
+        unitCanvas.forward = view.transform.forward;
+        unitCanvas.position = CanvasPosition(view.transform);
+    }
+
+    /// <summary>
+    /// Where the bar has to sit to be readable from the board camera.
+    /// <para>
+    /// The camera looks down at 73 degrees from just short of the host's own back row, so the near
+    /// rank — which is the local player's crew, and row zero is where it deploys — is seen from
+    /// almost directly overhead and from the far side of its own vertical axis. Height in world Y
+    /// then projects *down* the screen instead of up it: authored between 1.3 and 2 units above the
+    /// unit, the bar came out underneath the unit wearing it, tangled in its own silhouette, for
+    /// exactly the crew the player watches most. The far rank is seen at a slant and had no such
+    /// problem, which is why only friendly bars read badly.
+    /// </para>
+    /// <para>
+    /// The authored height is kept as the per-unit intent it is, and topped up along the camera's
+    /// own up axis until the bar clears its unit by <see cref="MinCanvasScreenGap"/> on screen.
+    /// Lifting along that axis leaves depth untouched, so a single correction lands exactly on the
+    /// gap asked for, and it carries the bar away from the lens rather than towards it — nothing
+    /// new can come between the two.
+    /// </para>
+    /// </summary>
+    private Vector3 CanvasPosition(Transform lens)
+    {
+        Vector3 unitPosition = transform.position;
+        Vector3 canvasPosition = unitPosition + Vector3.up * unitCanvasHeight;
+
+        Vector3 toUnit = unitPosition - lens.position;
+        Vector3 toCanvas = canvasPosition - lens.position;
+        float unitDepth = Vector3.Dot(toUnit, lens.forward);
+        float canvasDepth = Vector3.Dot(toCanvas, lens.forward);
+        if (unitDepth <= 0f || canvasDepth <= 0f)
+            return canvasPosition;
+
+        float screenGap =
+            Vector3.Dot(toCanvas, lens.up) / canvasDepth - Vector3.Dot(toUnit, lens.up) / unitDepth;
+
+        return screenGap >= MinCanvasScreenGap
+            ? canvasPosition
+            : canvasPosition + lens.up * ((MinCanvasScreenGap - screenGap) * canvasDepth);
     }
 
     public void TakeDamage(float damage)

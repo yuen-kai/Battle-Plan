@@ -26,6 +26,16 @@ public partial class Pogo : Ability
             : AbilityPathKind.None;
     }
 
+    public override bool TryGetCasterDestination(
+        Vector3 targetSquare,
+        UnitData data,
+        out Vector2Int destinationCell
+    )
+    {
+        destinationCell = GridSystem.ConvertToGridCoords(targetSquare);
+        return true;
+    }
+
     /// <summary>
     /// Where the rider comes down. Reads the collider, so it has to be resolved before the jump
     /// disables it.

@@ -2847,6 +2847,17 @@ public class GameLoop : NetworkBehaviour
         return unitsInRange;
     }
 
+    /// <summary>
+    /// How far a line ability's beam runs: past the square it was aimed at until a wall stops it.
+    /// <para>
+    /// The aim is taken across the deck rather than at the square itself. A square is a cell on the
+    /// floor and the caster stands a body's half-height above it, so aiming at the square tilts the
+    /// line downwards and the fifty units of overshoot past it drive the far end deep into the
+    /// floor — a lock laser previewed as a ramp into the ground, and a wall raycast that dips under
+    /// the cover it was supposed to be stopped by. <see cref="AreaLock"/>'s own beam runs level at
+    /// muzzle height; the telegraph and the planning preview have to run along that same line.
+    /// </para>
+    /// </summary>
     public static Vector3 ResolveLineAbilityEndpoint(GameObject unit, Vector3 selectedSquare)
     {
         if (unit == null)
@@ -2857,11 +2868,12 @@ public class GameLoop : NetworkBehaviour
             return bunkerBuster.ResolvePlannedImpactPoint(selectedSquare);
 
         Vector3 casterPosition = unit.transform.position;
-        Vector3 direction = (selectedSquare - casterPosition).normalized;
+        Vector3 aimPoint = new(selectedSquare.x, casterPosition.y, selectedSquare.z);
+        Vector3 direction = (aimPoint - casterPosition).normalized;
         if (direction == Vector3.zero)
             return casterPosition;
 
-        Vector3 endpoint = selectedSquare + direction * 50f;
+        Vector3 endpoint = aimPoint + direction * 50f;
         if (
             Physics.Raycast(
                 casterPosition,
@@ -5477,9 +5489,9 @@ public class GameLoop : NetworkBehaviour
                     continue;
 
                 // A unit with no orders, or one spending the round on an ability, never marches
-                // anywhere: ExecuteMoves keeps casters on their own cell, and the repositioning a
-                // rush or a jump does is settled by the overlap pass when it lands. Either way the
-                // cell it is standing on is held against every route.
+                // anywhere: ExecuteMoves keeps casters on their own cell. A rush or a jump does
+                // carry its caster, so the cell held against every route is the one the ability
+                // sets it down on — planning holds the same cell, so both sides read one board.
                 if (
                     !paths.TryGetValue(unit, out (bool, List<Vector3>) plan)
                     || plan.Item1
@@ -5487,9 +5499,7 @@ public class GameLoop : NetworkBehaviour
                     || plan.Item2.Count < 2
                 )
                 {
-                    claimed.Add(
-                        GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit))
-                    );
+                    claimed.Add(PlanMovement.GetPlannedEndCell(unit, plan.Item1, plan.Item2));
                     continue;
                 }
 

@@ -6,22 +6,37 @@ using UnityEngine;
 public partial class PlanMovement
 {
     /// <summary>
-    /// Selects the team unit occupying the given cell and prepares its movement path for editing.
-    /// This is essential during dodge windows, where the unit cards don't map to the alerted set.
+    /// Claims a press for the team unit standing on the given cell, preparing that unit's movement
+    /// path for editing. This is essential during dodge windows, where the unit cards don't map to
+    /// the alerted set. A press on the unit already being edited is claimed too, without disturbing
+    /// it, so that the square a unit is standing on always answers for the unit.
     /// </summary>
     public bool TrySelectUnitForMovementAtCell(Vector3 cell)
     {
-        if (!CanEditPlan)
+        GameObject unit = FindPlanningUnitAtCell(cell);
+        if (unit == null)
             return false;
+
+        return unit == selectedUnit || TrySetSelectionMode(unit, false);
+    }
+
+    /// <summary>
+    /// The unit of this team that is standing on the given cell and may still be given orders, or
+    /// null for an empty square. Two units never share a square, so the first match is the answer.
+    /// </summary>
+    public GameObject FindPlanningUnitAtCell(Vector3 cell)
+    {
+        if (!CanEditPlan)
+            return null;
 
         foreach (GameObject character in teamCharacters)
         {
-            if (!IsPlanningUnitAvailable(character) || character == selectedUnit)
+            if (!IsPlanningUnitAvailable(character))
                 continue;
             if (GridSystem.GetNearestGridCell(character) == cell)
-                return TrySetSelectionMode(character, false);
+                return character;
         }
-        return false;
+        return null;
     }
 
     // Two routes drawn closer together than this within one cell count as pointed at equally.
@@ -227,7 +242,8 @@ public partial class PlanMovement
     /// <summary>
     /// Which entry of a plan holds the cell its unit is standing on when the round resolves: the
     /// last step of a route, or the first cell for a unit spending the round on an ability, since
-    /// a caster does not march anywhere during execution. -1 for a plan with nothing in it.
+    /// a caster stays on its own cell unless the ability itself carries it somewhere.
+    /// -1 for a plan with nothing in it.
     /// </summary>
     public static int GetPlannedEndIndex(bool abilityMode, int planLength)
     {
@@ -237,16 +253,56 @@ public partial class PlanMovement
         return abilityMode ? 0 : planLength - 1;
     }
 
-    /// <summary>The cell a plan leaves its unit standing on; the unit's own cell without one.</summary>
-    private Vector3 GetPlannedEndCell(GameObject unit)
+    /// <summary>
+    /// The cell a plan leaves its unit standing on: where a route stops, where a rush or a jump
+    /// sets its caster down, or the cell the unit already holds for anything else. An ability that
+    /// moves its caster therefore gives up the square it launches from and holds the square it is
+    /// aimed at, which is the pair of cells the rest of the team plans around.
+    /// </summary>
+    public static Vector2Int GetPlannedEndCell(
+        GameObject unit,
+        bool abilityMode,
+        List<Vector3> plan
+    )
     {
-        if (plans.TryGetValue(unit, out (bool, List<Vector3>) plan))
-        {
-            int endIndex = GetPlannedEndIndex(plan.Item1, plan.Item2?.Count ?? 0);
-            if (endIndex >= 0)
-                return plan.Item2[endIndex];
-        }
-        return GridSystem.GetNearestGridCell(unit);
+        int endIndex = GetPlannedEndIndex(abilityMode, plan?.Count ?? 0);
+        if (endIndex < 0)
+            return GridSystem.ConvertToGridCoords(GridSystem.GetNearestGridCell(unit));
+        if (abilityMode && TryGetCasterDestinationCell(unit, plan, out Vector2Int landingCell))
+            return landingCell;
+
+        return GridSystem.ConvertToGridCoords(plan[endIndex]);
+    }
+
+    /// <summary>
+    /// Where a unit's ability puts it down, asked of the ability itself so a new one that moves its
+    /// caster needs nothing here changed. An ability plan carries its target square as its last
+    /// entry, so a plan without one is fired on the caster's own cell and moves nobody.
+    /// </summary>
+    private static bool TryGetCasterDestinationCell(
+        GameObject unit,
+        List<Vector3> plan,
+        out Vector2Int destinationCell
+    )
+    {
+        destinationCell = default;
+        if (unit == null || plan == null || plan.Count < 2)
+            return false;
+
+        Ability ability = unit.GetComponent<Ability>();
+        return ability != null
+            && ability.TryGetCasterDestination(
+                plan[^1],
+                unit.GetComponent<Movement>()?.unitData,
+                out destinationCell
+            );
+    }
+
+    /// <summary>The cell a plan leaves its unit standing on; the unit's own cell without one.</summary>
+    private Vector2Int GetPlannedEndCell(GameObject unit)
+    {
+        plans.TryGetValue(unit, out (bool, List<Vector3>) plan);
+        return GetPlannedEndCell(unit, plan.Item1, plan.Item2);
     }
 
     /// <summary>
@@ -260,7 +316,7 @@ public partial class PlanMovement
         {
             if (unit == excludedUnit || !IsPlanningUnitAvailable(unit))
                 continue;
-            if (GridSystem.ConvertToGridCoords(GetPlannedEndCell(unit)) == target)
+            if (GetPlannedEndCell(unit) == target)
                 return true;
         }
         return false;
@@ -326,7 +382,7 @@ public partial class PlanMovement
             bool hasPlan = plans.TryGetValue(unit, out (bool, List<Vector3>) plan);
             if (!hasPlan || plan.Item1 || plan.Item2 == null || plan.Item2.Count < 2)
             {
-                claimed.Add(GridSystem.ConvertToGridCoords(GetPlannedEndCell(unit)));
+                claimed.Add(GetPlannedEndCell(unit));
                 continue;
             }
             movers.Add((unit, GetRosterSlot(unit), plan.Item2));

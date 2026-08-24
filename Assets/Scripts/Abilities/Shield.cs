@@ -73,6 +73,15 @@ public class Shield : Ability
             : AbilityPathKind.None;
     }
 
+    public override bool TryGetCasterDestination(
+        Vector3 targetSquare,
+        UnitData data,
+        out Vector2Int destinationCell
+    )
+    {
+        return TryResolveRush(targetSquare, data, out _, out destinationCell, out _);
+    }
+
     /// <summary>
     /// The cells this rush leaves from and stops on, for a direction read off
     /// <paramref name="targetSquare"/>. Shared with the path drawn while planning so the preview

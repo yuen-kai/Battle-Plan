@@ -363,6 +363,53 @@ public class AbilityPathPreviewEditModeTests
         }
     }
 
+    /// <summary>
+    /// A lock is telegraphed as a line rather than a path, and both the dodge telegraph and the
+    /// planning preview run from the caster to
+    /// <see cref="GameLoop.ResolveLineAbilityEndpoint"/>. The square it is aimed at sits on the
+    /// floor while the caster stands above it, so an aim taken at the square itself tilts the line
+    /// down and the overshoot past it ends up metres underground.
+    /// </summary>
+    [TestCase("Sniper")]
+    [TestCase("Salvo")]
+    public void LineAbilityEndpoint_RunsLevelWithTheCaster(string unitName)
+    {
+        UnitData data = LoadUnit(unitName);
+        Assert.That(data.responseDistLine, Is.True, $"{unitName} threatens along a line.");
+
+        GameObject caster = SpawnAt(data, new Vector2Int(5, 5));
+        try
+        {
+            Vector3 casterPosition = caster.transform.position;
+            Assert.That(
+                casterPosition.y,
+                Is.GreaterThan(Tolerance),
+                "The caster stands above the deck, which is what the aim has to account for."
+            );
+
+            Vector3 endpoint = GameLoop.ResolveLineAbilityEndpoint(
+                caster,
+                Square(new Vector2Int(9, 5))
+            );
+
+            Assert.That(
+                endpoint.y,
+                Is.EqualTo(casterPosition.y).Within(Tolerance),
+                "A beam that leaves the muzzle level has to stay level."
+            );
+            Assert.That(
+                endpoint.z,
+                Is.EqualTo(casterPosition.z).Within(Tolerance),
+                "The aim was straight down the row."
+            );
+            Assert.That(endpoint.x, Is.GreaterThan(casterPosition.x));
+        }
+        finally
+        {
+            Object.DestroyImmediate(caster);
+        }
+    }
+
     [Test]
     public void EndChevron_PointsTheWayThePathArrivesAndIsSymmetricAboutIt()
     {
