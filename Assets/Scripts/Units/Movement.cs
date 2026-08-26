@@ -17,23 +17,46 @@ public class Movement : NetworkBehaviour
         public bool TrySet(float requestedMultiplier, float duration, float startsAt)
         {
             if (
-                requestedMultiplier <= 1f
-                || duration <= 0f
-                || float.IsNaN(requestedMultiplier)
-                || float.IsInfinity(requestedMultiplier)
+                duration <= 0f
                 || float.IsNaN(duration)
                 || float.IsInfinity(duration)
-                || float.IsNaN(startsAt)
-                || float.IsInfinity(startsAt)
+                || !IsUsableBoost(requestedMultiplier, startsAt)
             )
             {
                 return false;
             }
 
+            Set(requestedMultiplier, startsAt, startsAt + duration);
+            return true;
+        }
+
+        /// <summary>
+        /// An open-ended boost, for buffs whose window is a phase of play rather than a stopwatch:
+        /// it stays on until something clears it, which for a round-scoped buff is the round ending.
+        /// </summary>
+        public bool TrySetUntilCleared(float requestedMultiplier, float startsAt)
+        {
+            if (!IsUsableBoost(requestedMultiplier, startsAt))
+                return false;
+
+            Set(requestedMultiplier, startsAt, float.PositiveInfinity);
+            return true;
+        }
+
+        private static bool IsUsableBoost(float requestedMultiplier, float startsAt)
+        {
+            return requestedMultiplier > 1f
+                && !float.IsNaN(requestedMultiplier)
+                && !float.IsInfinity(requestedMultiplier)
+                && !float.IsNaN(startsAt)
+                && !float.IsInfinity(startsAt);
+        }
+
+        private void Set(float requestedMultiplier, float startsAt, float expiresAt)
+        {
             multiplier = requestedMultiplier;
             this.startsAt = startsAt;
-            expiresAt = startsAt + duration;
-            return true;
+            this.expiresAt = expiresAt;
         }
 
         public float GetMultiplier(float atTime)
@@ -150,6 +173,23 @@ public class Movement : NetworkBehaviour
             return false;
 
         if (!temporaryMoveSpeedBoost.TrySet(multiplier, duration, startsAt))
+            return false;
+
+        temporaryMoveSpeedBoostPresentationActive.Value = true;
+        return true;
+    }
+
+    /// <summary>
+    /// A boost that lasts as long as the round does rather than for a set number of seconds, so a
+    /// unit keeps it for however long its own orders take to walk out. GameLoop ends it at the
+    /// round boundary; death and respawn clear it the same way they clear a timed one.
+    /// </summary>
+    public bool TryApplyMoveSpeedBoostForRound(float multiplier, float startsAt)
+    {
+        if (!IsServer)
+            return false;
+
+        if (!temporaryMoveSpeedBoost.TrySetUntilCleared(multiplier, startsAt))
             return false;
 
         temporaryMoveSpeedBoostPresentationActive.Value = true;
@@ -530,13 +570,13 @@ public static class UnitBasePlate
 }
 
 /// <summary>
-/// Local-only Shield Rush presentation. A pulsing teal ground ring identifies the positive buff,
+/// Local-only move speed boost presentation. A pulsing teal ground ring identifies the positive buff,
 /// while three animated floor streaks trail opposite the unit's facing to communicate speed.
 /// Runtime construction keeps the effect on every unit without prefab or scene dependencies.
 /// </summary>
 public sealed class SpeedBoostIndicatorVisual : MonoBehaviour
 {
-    public const string GameObjectName = "ShieldRushSpeedBoostIndicator";
+    public const string GameObjectName = "SpeedBoostIndicator";
 
     private const int StreakCount = 3;
     private const float GroundOffset = 0.08f;
@@ -589,7 +629,7 @@ public sealed class SpeedBoostIndicatorVisual : MonoBehaviour
         {
             Debug.LogWarning(
                 "[SpeedBoostIndicatorVisual] BattlePlan/GroundGlow shader not found; "
-                    + "Shield Rush speed indicator disabled."
+                    + "the move speed indicator is disabled."
             );
             return null;
         }
@@ -636,7 +676,7 @@ public sealed class SpeedBoostIndicatorVisual : MonoBehaviour
 
         visualMaterial = new Material(glowShader)
         {
-            name = "Shield Rush Speed Boost (Runtime)",
+            name = "Move Speed Boost (Runtime)",
             hideFlags = HideFlags.DontSave,
             enableInstancing = true,
         };
@@ -748,7 +788,7 @@ public sealed class SpeedBoostIndicatorVisual : MonoBehaviour
     {
         Mesh mesh = new()
         {
-            name = "Shield Rush Speed Boost Quad (Runtime)",
+            name = "Move Speed Boost Quad (Runtime)",
             hideFlags = HideFlags.DontSave,
             vertices = new[]
             {

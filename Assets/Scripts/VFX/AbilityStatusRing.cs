@@ -22,7 +22,7 @@ public sealed class AbilityStatusRing : MonoBehaviour
 
     // Sized against the plate the dial is cut into. The team puck is 1.755 across and its dark rim
     // 2.015, so a band centred at 0.8 sits on the puck's outer face with plate colour still reading
-    // inside it and the rim still reading outside. It also stays clear of Shield Rush's 2.15 ring,
+    // inside it and the rim still reading outside. It also stays clear of the speed boost's 2.15 ring,
     // which is the only other thing that ever draws at this radius.
     private const float QuadSize = 2f;
     private const float Radius = 0.8f;

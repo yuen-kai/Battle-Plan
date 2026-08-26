@@ -17,7 +17,7 @@ public sealed class StunPulse : MonoBehaviour
 {
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-    // Electric violet: distinct from dive recovery's amber, hit flash's white and Shield Rush's
+    // Electric violet: distinct from dive recovery's amber, hit flash's white and the speed boost's
     // teal, so a stunned unit never reads as any of the other three.
     private static readonly Color StunColor = new(0.62f, 0.22f, 1f, 1f);
 

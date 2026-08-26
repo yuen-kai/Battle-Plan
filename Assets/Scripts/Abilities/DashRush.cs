@@ -5,11 +5,23 @@ using UnityEngine;
 /// <summary>
 /// A rush to a cell, same feel as Shield's old rush, but the destructive half of the kit instead
 /// of the defensive one: every enemy standing anywhere on the line it sweeps gets shoved off to the
-/// side and stunned, rather than the caster raising a bullet-blocking shield when it lands.
+/// side and stunned, rather than the caster raising a bullet-blocking shield when it lands. The
+/// crew it launches from is carried along with it -- allies in the 3x3 around the starting cell
+/// keep a move speed boost for the rest of the round, so the charge opens a push rather than
+/// leaving Ramrod out in front on its own.
 /// </summary>
 public class DashRush : Ability
 {
     private const float RushSpeedCellsPerSecond = 4.5f;
+
+    /// <summary>
+    /// The 3x3 around the cell the charge leaves from: the crew close enough to be swept along with
+    /// the push, expressed as a footprint radius rather than a distance so it is the square players
+    /// read off the board and not a circle that clips its corners.
+    /// </summary>
+    public const int AllySpeedBoostRadiusCells = 1;
+
+    public const float AllySpeedBoostMultiplier = 1.5f;
 
     // Short enough to read as a hard, telegraphed interrupt rather than a long lockout -- the
     // designer's explicit correction for how a knockback stun should feel.
@@ -135,6 +147,7 @@ public class DashRush : Ability
         transform.position = startPosition;
 
         List<GameObject> enemiesOnTheLine = FindEnemiesOnLine(startCell, destinationCell, direction);
+        ApplyAllySpeedBoost(startCell);
 
         Vector3 facingTarget =
             startPosition + new Vector3(direction.x, 0f, direction.y) * GameLoop.cellSize;
@@ -186,7 +199,37 @@ public class DashRush : Ability
             return new List<GameObject>();
 
         int enemyTeamIndex = GameLoop.GetEnemyTeamIndex(casterIdentity.TeamIndex);
-        return FindEnemiesOnCells(sweptCells, GameLoop.GetTeamUnits(enemyTeamIndex));
+        return FindUnitsOnCells(sweptCells, GameLoop.GetTeamUnits(enemyTeamIndex));
+    }
+
+    /// <summary>
+    /// Hurries along every ally standing in the 3x3 around the cell the charge leaves from, for the
+    /// rest of the round rather than for a set number of seconds: the point of the buff is that the
+    /// crew arrives with the push, and how long their own orders take to walk out is not something
+    /// a stopwatch here can know. Read off the board as the charge launches, for the same reason the
+    /// enemies on the line are -- who is standing next to Ramrod is a question about the moment it
+    /// sets off, not about where everyone has walked to by the time it lands.
+    /// </summary>
+    private void ApplyAllySpeedBoost(Vector2Int startCell)
+    {
+        Unit casterIdentity = GetComponent<Unit>();
+        if (!IsServer || casterIdentity == null)
+            return;
+
+        float startsAt = Time.time;
+        foreach (
+            GameObject ally in FindUnitsOnCells(
+                GridSystem.GetSquareFootprint(startCell, AllySpeedBoostRadiusCells),
+                GameLoop.GetTeamUnits(casterIdentity.TeamIndex)
+            )
+        )
+        {
+            if (ally == gameObject)
+                continue;
+
+            ally.GetComponent<Movement>()
+                ?.TryApplyMoveSpeedBoostForRound(AllySpeedBoostMultiplier, startsAt);
+        }
     }
 
     /// <summary>
@@ -253,9 +296,10 @@ public class DashRush : Ability
     /// The living, active units among <paramref name="candidateUnits"/> standing on any of
     /// <paramref name="cells"/> right now. Matches AbilityKnockback's own occupancy check
     /// (activeInHierarchy plus Health.IsAlive, cells read off live transforms) read the other way
-    /// around: who is here, not just whether someone is.
+    /// around: who is here, not just whether someone is. Team-blind -- the caller decides whether
+    /// it is asking about the enemies on the line or the crew standing beside the launch.
     /// </summary>
-    public static List<GameObject> FindEnemiesOnCells(
+    public static List<GameObject> FindUnitsOnCells(
         IReadOnlyCollection<Vector2Int> cells,
         IEnumerable<GameObject> candidateUnits
     )

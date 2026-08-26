@@ -7,9 +7,6 @@ public class Shield : Ability
 {
     public const float AbilityDurationSeconds = 4.5f;
     public const int ShieldWidthIncreaseCellsPerSide = 1;
-    public const float AllySpeedBoostRadiusCells = 2f;
-    public const float AllySpeedBoostMultiplier = 1.5f;
-    public const float AllySpeedBoostDurationSeconds = 3f;
     public const string BlueShieldLayerName = "BlueShield";
     public const string RedShieldLayerName = "RedShield";
 
@@ -156,7 +153,6 @@ public class Shield : Ability
 
         shieldActive.Value = true;
         float shieldStartedAt = Time.time;
-        ApplyAllySpeedBoost(startCell, shieldStartedAt);
 
         Vector3 facingTarget =
             startPosition + new Vector3(direction.x, 0f, direction.y) * GameLoop.cellSize;
@@ -185,22 +181,6 @@ public class Shield : Ability
             yield return new WaitForSeconds(shieldTimeRemaining);
         shieldActive.Value = false;
         movement.transitionToShooting(onlyIfWeaponsStillFree: true);
-    }
-
-    public static bool IsEligibleAllyForSpeedBoost(
-        Vector2Int casterCell,
-        int casterTeamIndex,
-        Vector2Int candidateCell,
-        int candidateTeamIndex,
-        bool candidateIsLiving,
-        bool candidateIsCaster
-    )
-    {
-        return casterTeamIndex >= 0
-            && candidateTeamIndex == casterTeamIndex
-            && candidateIsLiving
-            && !candidateIsCaster
-            && Vector2.Distance(casterCell, candidateCell) <= AllySpeedBoostRadiusCells + 0.001f;
     }
 
     public static bool TryExpandShieldFootprint(Transform shield)
@@ -247,49 +227,6 @@ public class Shield : Ability
 
         shield.gameObject.layer = shieldLayer;
         return true;
-    }
-
-    private void ApplyAllySpeedBoost(Vector2Int casterCell, float startsAt)
-    {
-        Unit casterIdentity = GetComponent<Unit>();
-        if (!IsServer || casterIdentity == null)
-            return;
-
-        int casterTeamIndex = casterIdentity.TeamIndex;
-        foreach (GameObject candidate in GameLoop.GetTeamUnits(casterTeamIndex))
-        {
-            if (candidate == null)
-                continue;
-
-            Unit candidateIdentity = candidate.GetComponent<Unit>();
-            Health candidateHealth = candidate.GetComponent<Health>();
-            Movement candidateMovement = candidate.GetComponent<Movement>();
-            if (candidateIdentity == null || candidateHealth == null || candidateMovement == null)
-                continue;
-
-            Vector2Int candidateCell = GridSystem.ConvertToGridCoords(
-                GridSystem.GetNearestGridCell(candidate)
-            );
-            if (
-                !IsEligibleAllyForSpeedBoost(
-                    casterCell,
-                    casterTeamIndex,
-                    candidateCell,
-                    candidateIdentity.TeamIndex,
-                    candidate.activeInHierarchy && candidateHealth.IsAlive,
-                    candidate == gameObject
-                )
-            )
-            {
-                continue;
-            }
-
-            candidateMovement.TryApplyTemporaryMoveSpeedBoost(
-                AllySpeedBoostMultiplier,
-                AllySpeedBoostDurationSeconds,
-                startsAt
-            );
-        }
     }
 
     private void OnShieldActiveChanged(bool previousValue, bool newValue)

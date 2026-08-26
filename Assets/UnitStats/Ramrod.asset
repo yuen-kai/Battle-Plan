@@ -24,7 +24,7 @@ MonoBehaviour:
   unavailableForRoster: 0
   abilityName: Ram Charge
   abilityDescription: Dash forward, ramming every enemy in your path aside and stunning
-    them where they land.
+    them where they land. Allies beside you move 1.5x faster for the round.
   abilitySprite: {fileID: 21300000, guid: de5596e03f34647d29d7f08e3b25ff86, type: 3}
   moveDist: 3
   moveSpeed: 1

@@ -892,103 +892,15 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void ShieldRushBoost_OnlySelectsNearbyLivingAllies()
-    {
-        Vector2Int casterCell = new(4, 4);
-        int casterTeamIndex = GameLoop.HostTeamIndex;
-
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(6, 4),
-                casterTeamIndex,
-                true,
-                false
-            ),
-            Is.True,
-            "A living ally exactly two cells away is inside the rush radius."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(5, 5),
-                casterTeamIndex,
-                true,
-                false
-            ),
-            Is.True,
-            "A nearby diagonal ally is inside the radial rush boost."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                casterCell,
-                casterTeamIndex,
-                true,
-                true
-            ),
-            Is.False,
-            "The caster uses its fixed dash speed and does not buff itself."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(5, 4),
-                GameLoop.OpponentTeamIndex,
-                true,
-                false
-            ),
-            Is.False,
-            "Nearby enemies never receive an allied rush boost."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(5, 4),
-                casterTeamIndex,
-                false,
-                false
-            ),
-            Is.False,
-            "Dead allies never receive the rush boost."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(6, 6),
-                casterTeamIndex,
-                true,
-                false
-            ),
-            Is.False,
-            "Living allies outside the two-cell radius are not boosted."
-        );
-    }
-
-    [Test]
-    public void ShieldRushBoost_ExpiresAndRestoresBaseMoveSpeed()
+    public void TimedMoveSpeedBoost_ExpiresAndRestoresBaseMoveSpeed()
     {
         const float boostStartedAt = 10f;
         const float baseMoveSpeed = 2f;
+        const float multiplier = 1.5f;
+        const float duration = 3f;
         Movement.TimedMoveSpeedBoost speedBoost = new();
 
-        Assert.That(Shield.AllySpeedBoostRadiusCells, Is.EqualTo(2f).Within(0.001f));
-        Assert.That(Shield.AllySpeedBoostMultiplier, Is.EqualTo(1.5f).Within(0.001f));
-        Assert.That(Shield.AllySpeedBoostDurationSeconds, Is.EqualTo(3f).Within(0.001f));
-        Assert.That(
-            speedBoost.TrySet(
-                Shield.AllySpeedBoostMultiplier,
-                Shield.AllySpeedBoostDurationSeconds,
-                boostStartedAt
-            ),
-            Is.True
-        );
+        Assert.That(speedBoost.TrySet(multiplier, duration, boostStartedAt), Is.True);
         Assert.That(
             speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt - 0.001f),
             Is.EqualTo(baseMoveSpeed).Within(0.001f)
@@ -996,30 +908,25 @@ public class GameplayNetworkEditModeTests
         Assert.That(speedBoost.IsActive(boostStartedAt - 0.001f), Is.False);
         Assert.That(
             speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 1f),
-            Is.EqualTo(baseMoveSpeed * Shield.AllySpeedBoostMultiplier).Within(0.001f)
+            Is.EqualTo(baseMoveSpeed * multiplier).Within(0.001f)
         );
         Assert.That(speedBoost.IsActive(boostStartedAt + 1f), Is.True);
         Assert.That(
-            speedBoost.GetEffectiveSpeed(
-                baseMoveSpeed,
-                boostStartedAt + Shield.AllySpeedBoostDurationSeconds
-            ),
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + duration),
             Is.EqualTo(baseMoveSpeed).Within(0.001f),
-            "The boost restores base speed at the exact end of the shield window."
+            "The boost restores base speed at the exact end of its window."
         );
         Assert.That(
-            speedBoost.IsActive(boostStartedAt + Shield.AllySpeedBoostDurationSeconds),
+            speedBoost.IsActive(boostStartedAt + duration),
             Is.False,
             "The active-state decision ends exactly with the gameplay speed boost."
         );
         Assert.That(
-            speedBoost.TrySet(
-                Shield.AllySpeedBoostMultiplier,
-                Shield.AllySpeedBoostDurationSeconds,
-                boostStartedAt
-            ),
-            Is.True
+            speedBoost.TrySet(multiplier, float.PositiveInfinity, boostStartedAt),
+            Is.False,
+            "A timed boost needs a real deadline; an open-ended one goes through TrySetUntilCleared."
         );
+        Assert.That(speedBoost.TrySet(multiplier, duration, boostStartedAt), Is.True);
         speedBoost.Clear();
         Assert.That(
             speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 1f),
@@ -1034,9 +941,9 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void ShieldRushBoostIndicator_BuildsLocalGroundVisualWithoutColliders()
+    public void MoveSpeedBoostIndicator_BuildsLocalGroundVisualWithoutColliders()
     {
-        GameObject unit = new("Shield Rush indicator test unit");
+        GameObject unit = new("Move speed boost indicator test unit");
         unit.transform.position = Vector3.up;
         unit.AddComponent<CapsuleCollider>();
         MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
@@ -1354,7 +1261,7 @@ public class GameplayNetworkEditModeTests
     }
 
     /// <summary>
-    /// Shield Rush's ring was being drawn inside the base plate the unit stands on, where depth
+    /// The speed boost ring was being drawn inside the base plate the unit stands on, where depth
     /// testing hid it and every one of its streaks. Every unit prefab carries such a plate, so a
     /// ground effect that only clears the board plane is invisible in every real match.
     /// </summary>

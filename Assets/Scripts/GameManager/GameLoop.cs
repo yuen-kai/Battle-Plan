@@ -1721,6 +1721,7 @@ public class GameLoop : NetworkBehaviour
             acceptingSmokeRegistrations = false;
             HideAbilityTelegraphsClientRpc();
             TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
+            ClearMoveSpeedBoosts();
             RecordBattleReportOutcomes();
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
@@ -2278,6 +2279,26 @@ public class GameLoop : NetworkBehaviour
                 }
 
                 NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Move-speed boosts are round-scoped: an ally hurried along this round starts the next one at
+    /// its own pace. Timed boosts run out by themselves, so this only has to end the open-ended
+    /// ones, and clearing a boost that already expired is a no-op.
+    /// </summary>
+    private void ClearMoveSpeedBoosts()
+    {
+        if (!IsServer)
+            return;
+
+        foreach (var teamEntry in allTeamUnitObjects)
+        {
+            foreach (GameObject unit in teamEntry.Value ?? System.Array.Empty<GameObject>())
+            {
+                if (unit != null)
+                    unit.GetComponent<Movement>()?.ClearTemporaryMoveSpeedBoost();
             }
         }
     }

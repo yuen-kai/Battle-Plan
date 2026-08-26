@@ -6,11 +6,12 @@ using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
-// DashRush's own line-sweep and the aim preview it shares with the old Shield rush are both pure
-// functions of grid state, so they are exercised directly here the same way GridSystem's and
-// AbilityKnockback's helpers are elsewhere. The knockback/stun it fires off per enemy found is
-// AbilityKnockback's and Unit.ApplyStun's own responsibility and is covered by their own suites;
-// this file only checks that DashRush finds the right enemies to hand them to.
+// DashRush's line-sweep, its ally-boost footprint and the aim preview it shares with the old Shield
+// rush are all pure functions of grid state, so they are exercised directly here the same way
+// GridSystem's and AbilityKnockback's helpers are elsewhere. The knockback/stun it fires off per
+// enemy found and the speed boost it hands each ally are AbilityKnockback's, Unit.ApplyStun's and
+// Movement's own responsibilities, covered by their own suites; this file only checks that DashRush
+// picks the right units out of the board to hand them to.
 [TestFixture]
 [Category("DashRush")]
 public class DashRushEditModeTests
@@ -83,7 +84,7 @@ public class DashRushEditModeTests
     }
 
     [Test]
-    public void FindEnemiesOnCells_ReturnsOnlyLivingActiveUnitsStandingOnTheSweptCells()
+    public void FindUnitsOnCells_ReturnsOnlyLivingActiveUnitsStandingOnTheSweptCells()
     {
         GameObject onPath = CreateUnitAt(new Vector2Int(3, 2), alive: true, active: true);
         GameObject deadOnPath = CreateUnitAt(new Vector2Int(4, 2), alive: false, active: true);
@@ -97,7 +98,7 @@ public class DashRushEditModeTests
             new Vector2Int(5, 2),
         };
 
-        List<GameObject> found = DashRush.FindEnemiesOnCells(
+        List<GameObject> found = DashRush.FindUnitsOnCells(
             sweptCells,
             new[] { onPath, deadOnPath, inactiveOnPath, offPath }
         );
@@ -106,18 +107,94 @@ public class DashRushEditModeTests
     }
 
     [Test]
-    public void FindEnemiesOnCells_TreatsAUnitWithoutHealthAsLivingWheneverItIsActive()
+    public void FindUnitsOnCells_TreatsAUnitWithoutHealthAsLivingWheneverItIsActive()
     {
         GameObject noHealthUnit = new("NoHealthUnit");
         spawnedObjects.Add(noHealthUnit);
         noHealthUnit.transform.position = GameLoop.gridCoordToWorld(new Vector2Int(1, 1));
 
-        List<GameObject> found = DashRush.FindEnemiesOnCells(
+        List<GameObject> found = DashRush.FindUnitsOnCells(
             new List<Vector2Int> { new(1, 1) },
             new[] { noHealthUnit }
         );
 
         Assert.That(found, Contains.Item(noHealthUnit));
+    }
+
+    [Test]
+    public void AllySpeedBoostFootprint_CoversExactlyTheThreeByThreeAroundTheLaunchCell()
+    {
+        Vector2Int startCell = new(4, 4);
+        List<Vector2Int> footprint = GridSystem.GetSquareFootprint(
+            startCell,
+            DashRush.AllySpeedBoostRadiusCells
+        );
+
+        Assert.That(footprint.Count, Is.EqualTo(9));
+        Assert.That(footprint, Contains.Item(startCell));
+        Assert.That(
+            footprint,
+            Contains.Item(startCell + new Vector2Int(1, 1)),
+            "A 3x3 includes its diagonals, which a circular radius of one would clip."
+        );
+        Assert.That(
+            footprint,
+            Has.No.Member(startCell + new Vector2Int(2, 0)),
+            "Two cells out is a different ally's problem."
+        );
+    }
+
+    [Test]
+    public void AllySpeedBoost_HurriesEveryAllyInTheFootprintExceptTheChargerItself()
+    {
+        Vector2Int startCell = new(4, 4);
+        GameObject beside = CreateUnitAt(startCell + new Vector2Int(1, 0), alive: true, active: true);
+        GameObject diagonal =
+            CreateUnitAt(startCell + new Vector2Int(-1, 1), alive: true, active: true);
+        GameObject downed = CreateUnitAt(startCell + new Vector2Int(0, 1), alive: false, active: true);
+        GameObject faraway = CreateUnitAt(startCell + new Vector2Int(0, 3), alive: true, active: true);
+        GameObject charger = CreateUnitAt(startCell, alive: true, active: true);
+
+        List<GameObject> boosted = DashRush.FindUnitsOnCells(
+            GridSystem.GetSquareFootprint(startCell, DashRush.AllySpeedBoostRadiusCells),
+            new[] { beside, diagonal, downed, faraway, charger }
+        );
+        boosted.Remove(charger);
+
+        CollectionAssert.AreEquivalent(new[] { beside, diagonal }, boosted);
+    }
+
+    [Test]
+    public void AllySpeedBoost_HoldsItsMultiplierUntilTheRoundClearsItRatherThanTimingOut()
+    {
+        const float boostStartedAt = 10f;
+        const float baseMoveSpeed = 2f;
+        Movement.TimedMoveSpeedBoost speedBoost = new();
+
+        Assert.That(DashRush.AllySpeedBoostMultiplier, Is.EqualTo(1.5f).Within(Tolerance));
+        Assert.That(
+            speedBoost.TrySetUntilCleared(DashRush.AllySpeedBoostMultiplier, boostStartedAt),
+            Is.True
+        );
+        Assert.That(
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt - Tolerance),
+            Is.EqualTo(baseMoveSpeed).Within(Tolerance),
+            "The boost is not retroactive to before the charge launched."
+        );
+        Assert.That(
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 600f),
+            Is.EqualTo(baseMoveSpeed * DashRush.AllySpeedBoostMultiplier).Within(Tolerance),
+            "An open-ended boost has no stopwatch to run out."
+        );
+        Assert.That(speedBoost.IsActive(boostStartedAt + 600f), Is.True);
+
+        speedBoost.Clear();
+        Assert.That(
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 600f),
+            Is.EqualTo(baseMoveSpeed).Within(Tolerance),
+            "The round boundary is what ends it, and it ends immediately when it does."
+        );
+        Assert.That(speedBoost.IsActive(boostStartedAt + 600f), Is.False);
     }
 
     [Test]
