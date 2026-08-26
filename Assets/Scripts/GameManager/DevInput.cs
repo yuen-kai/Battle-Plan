@@ -61,6 +61,22 @@ public static class DevInput
         );
     }
 
+    /// <summary>Start an Escort the President dev match at leg 1.</summary>
+    public static void StartEscortMatch(
+        float speed = -1f,
+        bool botOpponent = false,
+        bool fogOfWar = true
+    )
+    {
+        EscortSeries.End();
+        StartConfiguredMatch(
+            GameMode.EscortThePresident,
+            botOpponent ? OpponentType.AI : OpponentType.Player,
+            speed,
+            fogOfWar
+        );
+    }
+
     private static void StartConfiguredMatch(
         GameMode gameMode,
         OpponentType opponentType,

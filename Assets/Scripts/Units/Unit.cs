@@ -177,6 +177,19 @@ public class Unit : NetworkBehaviour
         return true;
     }
 
+    public bool RefundAbilityCooldown()
+    {
+        if (!IsServer)
+            return false;
+
+        int remaining = abilityCooldownRoundsRemaining.Value;
+        if (!RefundAbilityCooldown(ref remaining))
+            return false;
+
+        abilityCooldownRoundsRemaining.Value = remaining;
+        return true;
+    }
+
     public bool TickAbilityCooldownRound()
     {
         if (!IsServer)
@@ -216,6 +229,16 @@ public class Unit : NetworkBehaviour
             return false;
 
         remainingRounds--;
+        return true;
+    }
+
+    public static bool RefundAbilityCooldown(ref int remainingRounds)
+    {
+        remainingRounds = Mathf.Max(0, remainingRounds);
+        if (remainingRounds == 0)
+            return false;
+
+        remainingRounds = 0;
         return true;
     }
 

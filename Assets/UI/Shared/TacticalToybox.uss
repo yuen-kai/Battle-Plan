@@ -330,6 +330,10 @@
     background-image: url("project://database/Assets/UI/Shared/Icons/hill.svg");
 }
 
+.toybox-ui .toy-icon--escort {
+    background-image: url("project://database/Assets/UI/Shared/Icons/escort.svg");
+}
+
 .toybox-ui .toy-icon--flag {
     background-image: url("project://database/Assets/UI/Shared/Icons/flag.svg");
 }

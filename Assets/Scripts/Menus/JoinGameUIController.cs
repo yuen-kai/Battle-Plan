@@ -41,6 +41,7 @@ public class JoinGameUIController : MonoBehaviour
     private Button titleButton;
     private Button eliminationButton;
     private Button kingButton;
+    private Button escortButton;
     private Button createMatchButton;
     private Button joinMatchButton;
     private Button cancelHostButton;
@@ -215,6 +216,7 @@ public class JoinGameUIController : MonoBehaviour
         titleButton = RequireElement<Button>("title-button");
         eliminationButton = RequireElement<Button>("elimination-button");
         kingButton = RequireElement<Button>("king-button");
+        escortButton = RequireElement<Button>("escort-button");
         createMatchButton = RequireElement<Button>("create-match-button");
         joinMatchButton = RequireElement<Button>("join-match-button");
         cancelHostButton = RequireElement<Button>("cancel-host-button");
@@ -261,6 +263,8 @@ public class JoinGameUIController : MonoBehaviour
             eliminationButton.clicked += SelectEliminationMode;
         if (kingButton != null)
             kingButton.clicked += SelectKingOfTheHillMode;
+        if (escortButton != null)
+            escortButton.clicked += SelectEscortMode;
         if (playerOpponentButton != null)
             playerOpponentButton.clicked += SelectPlayerOpponent;
         if (aiOpponentButton != null)
@@ -316,6 +320,8 @@ public class JoinGameUIController : MonoBehaviour
             eliminationButton.clicked -= SelectEliminationMode;
         if (kingButton != null)
             kingButton.clicked -= SelectKingOfTheHillMode;
+        if (escortButton != null)
+            escortButton.clicked -= SelectEscortMode;
         if (playerOpponentButton != null)
             playerOpponentButton.clicked -= SelectPlayerOpponent;
         if (aiOpponentButton != null)
@@ -398,6 +404,7 @@ public class JoinGameUIController : MonoBehaviour
 
         eliminationButton?.SetEnabled(true);
         kingButton?.SetEnabled(true);
+        escortButton?.SetEnabled(true);
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
         joinCodeInput?.SetValueWithoutNotify(string.Empty);
         localMultiplayerToggle?.SetValueWithoutNotify(false);
@@ -493,6 +500,11 @@ public class JoinGameUIController : MonoBehaviour
         SetGameMode(GameMode.KingOfTheHill);
     }
 
+    private void SelectEscortMode()
+    {
+        SetGameMode(GameMode.EscortThePresident);
+    }
+
     private void SetGameMode(GameMode gameMode)
     {
         pendingOptions.gameMode = gameMode;
@@ -505,6 +517,10 @@ public class JoinGameUIController : MonoBehaviour
         kingButton?.EnableInClassList(
             "button--selected",
             pendingOptions.gameMode == GameMode.KingOfTheHill
+        );
+        escortButton?.EnableInClassList(
+            "button--selected",
+            pendingOptions.gameMode == GameMode.EscortThePresident
         );
         SetCreateStatus(string.Empty, false);
     }
@@ -1102,6 +1118,7 @@ public class JoinGameUIController : MonoBehaviour
         titleButton?.SetEnabled(enabled);
         eliminationButton?.SetEnabled(enabled);
         kingButton?.SetEnabled(enabled);
+        escortButton?.SetEnabled(enabled);
         createMatchButton?.SetEnabled(enabled);
         joinMatchButton?.SetEnabled(enabled);
         playerOpponentButton?.SetEnabled(enabled);

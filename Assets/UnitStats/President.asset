@@ -1,0 +1,72 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: President
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitModel: {fileID: 2129558826794870872, guid: eb172b56d11084075a34009ca5669d73, type: 3}
+  unitName: The President
+  unitClass: 4
+  unitDescription: "The man the whole leg is about. Cannot win a fight, and does
+    not have to \u2014 he only has to arrive."
+  playStyle: Walk him across behind a screen, and pull the screen back to him when
+    it thins out.
+  weaponName: Sidearm pistol
+  strengths: Rallies the whole crew to his cell and halves what they take for the
+    round.
+  weaknesses: Least health and shortest reach on the roster; losing him loses the
+    leg.
+  unitSprite: {fileID: 21300000, guid: 017e43383bb6494d8b22b1968a09fe32, type: 3}
+  unavailableForRoster: 1
+  abilityName: Close Ranks
+  abilityDescription: Cancel your crew's orders, pull them into the ring around him,
+    and halve the damage all of them take this round.
+  abilitySprite: {fileID: 21300000, guid: 017e43383bb6494d8b22b1968a09fe32, type: 3}
+  moveDist: 3
+  moveSpeed: 1
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
+  redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
+  timeBetweenShots: 0.35
+  magazineSize: 6
+  reloadTime: 2.2
+  bulletSpread: 6
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
+  canShootWhileMoving: 0
+  bulletSpeed: 3
+  targetRange: 3
+  bulletRange: 4
+  damage: 6
+  backstabMultiplier: 1
+  backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 0
+  findTargetTime: 0
+  targetLockDuration: 0
+  aimRotationSpeed: 270
+  visionRange: 5
+  maxHealth: 60
+  abilityCardSprite: {fileID: 21300000, guid: 017e43383bb6494d8b22b1968a09fe32, type: 3}
+  selectAbilitySquare: 0
+  abilitySquareRange: 0
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
+  abilityRadius: 1
+  selectTime: 4
+  responseRange: 0
+  responseDistLine: 0
+  timeDivePerUnit: 3
+  diveRange: 2
+  abilityCooldownRounds: 3

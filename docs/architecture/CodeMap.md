@@ -11,6 +11,7 @@ Battle Plan is a Unity 6000.3 project using Netcode for GameObjects. The server 
 | Area | Primary location | Responsibility |
 | --- | --- | --- |
 | Match orchestration | `Assets/Scripts/GameManager/GameLoop.cs` | Match setup, phases, order collection, server validation, dodge windows, execution, win conditions, cooldown progression, fog, smoke, and permanent wall state |
+| Game modes | `MatchOptions.cs`, `GameLoop.cs`, `EscortSeries.cs` | Which mode is live, and the objective rules each one adds to the round loop |
 | Planning | `Assets/Scripts/GameManager/PlanMovement*.cs`, `PathSelection.cs`, `PlanningPaths.cs` | Local unit selection, movement routes, ability targets, previews, commit/unlock state, and plan serialization |
 | Grid and maps | `Assets/Scripts/GameManager/GridSystem.cs`, `Assets/Scripts/Map/` | Coordinate conversion, grid traversal, range/line queries, map definitions, active wall cells, and wall presentation |
 | Units and combat | `Assets/Scripts/Units/` | Unit identity, health, movement, shooting, bullets, animation, replicated stun/cooldown state, and `UnitData` |
@@ -35,6 +36,48 @@ Battle Plan is a Unity 6000.3 project using Netcode for GameObjects. The server 
 8. Execution waits for shooting, abilities, overlap resolution, and return-fire windows before the next round or match result.
 
 The stable phase labels are `planning`, `dodging`, `executing`, and `idle`.
+
+## Game modes
+
+`MatchOptions.gameMode` selects the mode and is replicated, so both peers agree before either
+validates anything. Every mode runs the same round flow above; a mode adds an arbitration step after
+step 8 and nothing else.
+
+| Mode | Arbitration | State |
+| --- | --- | --- |
+| Elimination | The post-loop `EndGame` resolves a survivor or a simultaneous-wipe draw | none |
+| King of the Hill | `ResolveKingOfTheHillRound` advances a control streak | `replicatedHillControl` |
+| Escort the President | `ResolveEscortRound` reads each president into a standing and asks `EscortSeries.ResolveLeg` | `replicatedEscortState` + the static `EscortSeries` |
+
+Enum ids are a wire contract. Id 2 was Capture the Flag and is retired — an older peer can still put
+it on the wire, so `MatchOptions.Sanitized` must keep folding unknown ids back to Elimination, and a
+new mode takes the next free id rather than reusing a retired one.
+
+### Escort the President
+
+A match is a *series* of legs rather than a single board. Leg 1 gives the host crew a president, leg 2
+gives the opponent crew one, and a 1-1 split runs a decider that arms both. A leg is won by
+extraction, by killing the president, by wiping the defence, or by the defence surviving
+`EscortSeries.RoundsPerLeg` — which is a bound so a leg cannot run forever, not a pressure clock. The
+decider is settled by whichever president covered more ground the moment either of them resolves.
+
+- `EscortSeries` is a static session in the mould of `TutorialSession`/`SandboxSession`: a leg boundary
+  reloads the Game scene, so the bookkeeping has to outlive the `GameLoop` that recorded it. The crew
+  each side fields changes when the president changes hands, so the board is rebuilt rather than
+  patched. The host owns it; clients follow through `SyncFromServer` off `replicatedEscortState`.
+- Every leg rule, the extraction geometry, and the payload spawn layout are pure static functions
+  there, covered by `EscortSeriesEditModeTests`.
+- The president is never picked. He is substituted into the middle crew slot at spawn time by
+  `GameLoop.ResolveFieldedCatalogIndex`, so `RosterRules` validation and `ConfigureTeam` are
+  untouched and his `UnitData` stays `unavailableForRoster`. `GameLoop.GetPresident` finds him by his
+  `PresidentialRecall` component rather than by slot index.
+- A wiped crew is a leg result rather than a match result, so the round loop's elimination break is
+  skipped for this mode and arbitration gets the round first.
+- The bot does not walk its whole crew at one objective here. `BotPlayer.ResolveEscortRoles` splits
+  it: the president plans first and runs his own route, his crew screens the cell he committed to,
+  and a defending crew takes the ground between him and his zone (`BuildEscortInterceptTargets`).
+  `WouldAbandonHill` is King of the Hill only. The defence reads the president's position out of
+  `BotKnowledge`, never off the board, and guards the zone until it has seen him.
 
 ## Planning layout
 
@@ -64,6 +107,19 @@ Every ability derives from `Ability` in `BaseAbility.cs` and implements `Execute
 
 Do not add parallel “is interrupted” polling flags to individual abilities. The coroutine lifecycle is the interruption mechanism.
 
+A stun is not the only way an ability ends early. `Ability.CancelForDisplacement` stops one whether or
+not it reached an interruptible window; a round starts every ability on the same frame, so one that
+has not begun has declared nothing interruptible and the stun path would pass over it. An ability that
+cancels its own crew's orders declares `CancelsAlliedOrders`, which makes the round resolve it first,
+and hands the spent charge back through `GameLoop.RefundAbilityCharge`. `PresidentialRecall` is the
+only one, and the only caller.
+
+`PresidentialRecall` commits every ally's cell, cancellation and refund up front, then animates the
+arrival: a beckon beat, then one staggered arc per ally over `AbilityTrajectory.SampleLob`, colliders
+off in flight the way `ShatterLeap` does it. Landing is what applies each ally's guard. The whole
+rally is under a second and `OnAbilityInterrupted` lands anyone still airborne, so the round resolves
+on the same cells whether or not the animation finishes.
+
 Planning previews ask an ability for optional path points through `BuildPlannedPath`. Runtime effect code remains in the concrete ability.
 
 ## Shooting and projectile flow
@@ -84,7 +140,10 @@ A networked unit prefab normally combines:
 - `Unit`: replicated team, roster slot, cooldown, and stun state.
 - `Movement`: routes, rotation, locomotion, and transition back to shooting.
 - `Shooting`: weapon cadence, targeting, and projectile creation.
-- `Health`: authoritative damage and death.
+- `Health`: authoritative damage and death, plus the round-scoped damage guard `GameLoop` clears at
+  the round boundary alongside move-speed boosts. `GuardOrbVisual` is its indicator: an additive
+  `BattlePlan/GuardOrb` shell parented to the unit, so host-side fog suppression reaches it with the
+  rest of the unit's renderers.
 - One concrete `Ability` component when the unit has an active ability.
 - `AnimationHandler` and presentation components as needed.
 
@@ -96,6 +155,8 @@ Important `UnitData` targeting fields include `selectAbilitySquare`, `selectAbil
 
 - `GridSystem` owns coordinate conversion and reusable grid math.
 - `MapCatalog.Active` exposes the current `MapDefinition`; `GameLoop.wallLayout` is its live wall-cell set.
+- Objective cells are drawn on the deck by `GameLoop.ObjectiveOutline`, shared by the hill pad and the
+  escort extraction zones. It outlines a cell set; it owns no gameplay rule.
 - `CoverVariant` chooses a wall's visual form. It does not own gameplay blocking.
 - `GameLoop` owns permanent wall removal and the cell-to-wall-instance registry.
 - Smoke is server-authored denial state, not a physical wall. It affects visibility and bullet-path checks without entering wall pathfinding.
@@ -116,6 +177,7 @@ Prefer cell-based rules for planning and validation. Use physics when the actual
 | Change | Start here | Also inspect |
 | --- | --- | --- |
 | Round phases, win rules, dodge windows | `GameLoop.cs` | `DevInput.cs`, relevant editor checks |
+| Game mode rule or a new mode | `MatchOptions.cs`, then the mode's own arbitration in `GameLoop.cs` | `EscortSeries.cs` for the objective-series pattern, `JoinGameUIController`, `GameHUDController`, `BotPlayer.GetStrategicTargets` |
 | Planning interaction or target validation | Matching `PlanMovement` partial | `PathSelection.cs`, `GameLoop.SanitizeAbilityPlan` |
 | Grid/path rule | `GridSystem.cs` | Planning validation and server sanitation callers |
 | New or changed ability | Concrete file in `Abilities/` | `BaseAbility.cs`, unit prefab, `UnitData`, planning preview |

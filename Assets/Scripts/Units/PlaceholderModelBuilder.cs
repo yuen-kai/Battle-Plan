@@ -267,6 +267,83 @@ public static class PlaceholderModelBuilder
         };
     }
 
+    public static GameObject BuildPresident()
+    {
+        return BuildHumanoidSilhouette("President", CreatePresidentSpec());
+    }
+
+    // Offsets below are written against the values BuildHumanoidSilhouette derives from these
+    // scales: torso capsule half-depth 0.23, head sphere diameter 0.31.
+    private static PlaceholderModelSpec CreatePresidentSpec()
+    {
+        Color suit = new(0.11f, 0.14f, 0.25f, 1f);
+        Color shirt = new(0.93f, 0.94f, 0.95f, 1f);
+        Color tie = new(0.64f, 0.13f, 0.14f, 1f);
+        Color skin = new(0.85f, 0.68f, 0.55f, 1f);
+        Color hair = new(0.78f, 0.79f, 0.81f, 1f);
+        Color gunmetal = new(0.12f, 0.12f, 0.14f, 1f);
+
+        return new PlaceholderModelSpec
+        {
+            HeightScale = 0.96f,
+            WidthScale = 0.92f,
+            AccentColor = suit,
+            Accessories = new List<PlaceholderAccessorySpec>
+            {
+                new()
+                {
+                    Name = "ShirtFront",
+                    PrimitiveType = PrimitiveType.Cube,
+                    Anchor = PlaceholderBodyAnchor.Torso,
+                    LocalPosition = new Vector3(0f, 0.08f, 0.235f),
+                    LocalEulerAngles = Vector3.zero,
+                    LocalScale = new Vector3(0.15f, 0.2f, 0.05f),
+                    Color = shirt,
+                },
+                new()
+                {
+                    Name = "Tie",
+                    PrimitiveType = PrimitiveType.Cube,
+                    Anchor = PlaceholderBodyAnchor.Torso,
+                    LocalPosition = new Vector3(0f, -0.01f, 0.255f),
+                    LocalEulerAngles = Vector3.zero,
+                    LocalScale = new Vector3(0.05f, 0.3f, 0.05f),
+                    Color = tie,
+                },
+                new()
+                {
+                    Name = "Face",
+                    PrimitiveType = PrimitiveType.Sphere,
+                    Anchor = PlaceholderBodyAnchor.Head,
+                    LocalPosition = Vector3.zero,
+                    LocalEulerAngles = Vector3.zero,
+                    LocalScale = new Vector3(0.34f, 0.34f, 0.34f),
+                    Color = skin,
+                },
+                new()
+                {
+                    Name = "Hair",
+                    PrimitiveType = PrimitiveType.Sphere,
+                    Anchor = PlaceholderBodyAnchor.Head,
+                    LocalPosition = new Vector3(0f, 0.075f, -0.01f),
+                    LocalEulerAngles = Vector3.zero,
+                    LocalScale = new Vector3(0.36f, 0.22f, 0.36f),
+                    Color = hair,
+                },
+                new()
+                {
+                    Name = "Pistol",
+                    PrimitiveType = PrimitiveType.Cube,
+                    Anchor = PlaceholderBodyAnchor.RightHand,
+                    LocalPosition = new Vector3(0.03f, -0.02f, 0.08f),
+                    LocalEulerAngles = Vector3.zero,
+                    LocalScale = new Vector3(0.07f, 0.09f, 0.22f),
+                    Color = gunmetal,
+                },
+            },
+        };
+    }
+
     private static Transform CreateAnchor(Transform parent, PlaceholderBodyAnchor anchor, Vector3 localPosition)
     {
         GameObject anchorObject = new(anchor.ToString());

@@ -27,6 +27,9 @@ public enum MatchResultReason : byte
     KingOfTheHill,
     DisconnectForfeit,
 
+    EscortSeries,
+    EscortStalemate,
+
     // The tutorial sandbox closes when its last lesson lands rather than when a crew dies, so it
     // reports an outcome that is neither a victory nor a defeat.
     TutorialComplete,
@@ -49,7 +52,10 @@ public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
                 && Reason != MatchResultReason.None
                 && Reason != MatchResultReason.SimultaneousElimination,
             MatchOutcome.Draw => WinningTeamIndex == GameLoop.NoHillController
-                && Reason == MatchResultReason.SimultaneousElimination,
+                && (
+                    Reason == MatchResultReason.SimultaneousElimination
+                    || Reason == MatchResultReason.EscortStalemate
+                ),
             _ => false,
         };
 
@@ -86,9 +92,13 @@ public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
             return "Tutorial complete.";
         if (Outcome == MatchOutcome.Draw)
         {
-            return Reason == MatchResultReason.SimultaneousElimination
-                ? "Draw — both crews eliminated."
-                : "Draw.";
+            return Reason switch
+            {
+                MatchResultReason.SimultaneousElimination => "Draw — both crews eliminated.",
+                MatchResultReason.EscortStalemate =>
+                    "Draw — both motorcades ended the decider level.",
+                _ => "Draw.",
+            };
         }
 
         string status = WinningTeamIndex == localTeamIndex ? "You win!" : "You lose!";
@@ -97,6 +107,9 @@ public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
             MatchResultReason.KingOfTheHill =>
                 $"{status} Held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds.",
             MatchResultReason.DisconnectForfeit => $"{status} Opponent disconnected.",
+            MatchResultReason.EscortSeries =>
+                $"{status} Escort series {EscortSeries.GetLegWins(localTeamIndex)}"
+                + $"–{EscortSeries.GetLegWins(GameLoop.GetEnemyTeamIndex(localTeamIndex))}.",
             _ => status,
         };
     }
@@ -200,6 +213,59 @@ public struct HillControlState : INetworkSerializable, System.IEquatable<HillCon
     public override int GetHashCode()
     {
         return System.HashCode.Combine(Status, ControllingTeamIndex, Streak);
+    }
+}
+
+public struct EscortState : INetworkSerializable, System.IEquatable<EscortState>
+{
+    public int LegNumber;
+    public int HostLegWins;
+    public int OpponentLegWins;
+    public int RoundsRemaining;
+
+    public static EscortState Empty => new(0, 0, 0, 0);
+
+    public EscortState(int legNumber, int hostLegWins, int opponentLegWins, int roundsRemaining)
+    {
+        LegNumber = Mathf.Max(0, legNumber);
+        HostLegWins = Mathf.Max(0, hostLegWins);
+        OpponentLegWins = Mathf.Max(0, opponentLegWins);
+        RoundsRemaining = Mathf.Max(0, roundsRemaining);
+    }
+
+    public bool IsRunning => LegNumber > 0;
+
+    public int LegWinsFor(int teamIndex) =>
+        teamIndex == GameLoop.OpponentTeamIndex ? OpponentLegWins : HostLegWins;
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref LegNumber);
+        serializer.SerializeValue(ref HostLegWins);
+        serializer.SerializeValue(ref OpponentLegWins);
+        serializer.SerializeValue(ref RoundsRemaining);
+
+        if (serializer.IsReader)
+            this = new EscortState(LegNumber, HostLegWins, OpponentLegWins, RoundsRemaining);
+    }
+
+    public bool Equals(EscortState other)
+    {
+        return LegNumber == other.LegNumber
+            && HostLegWins == other.HostLegWins
+            && OpponentLegWins == other.OpponentLegWins
+            && RoundsRemaining == other.RoundsRemaining;
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is EscortState other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return System.HashCode.Combine(LegNumber, HostLegWins, OpponentLegWins, RoundsRemaining);
     }
 }
 
@@ -464,6 +530,8 @@ public class GameLoop : NetworkBehaviour
             return TutorialSession.CreateSpawnLayout();
         if (SandboxSession.IsActive)
             return SandboxSession.CreateSpawnLayout();
+        if (MatchOptions.Current.IsEscort)
+            return EscortSeries.CreateSpawnLayout(EscortSeries.LegNumber);
 
         List<Vector2Int[]> layout = new(TeamCount);
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
@@ -634,18 +702,19 @@ public class GameLoop : NetworkBehaviour
     private readonly NetworkVariable<HillControlState> replicatedHillControl = new(
         HillControlState.Empty
     );
-    private readonly List<Renderer> hillOverlayRenderers = new();
-    private GameObject hillOverlayRoot;
-    private Material hillOverlayMaterial;
-    private MaterialPropertyBlock hillOverlayProperties;
-    private static readonly int HillBaseColorId = Shader.PropertyToID("_BaseColor");
-
-    // The boundary is drawn as four flat strips around the pad rather than a glow under it: a
-    // line reads as a border you are inside or outside of, which is the only thing the player
-    // needs from it. Width and height are world units on the deck plane.
-    private const float HillBoundaryWidth = 0.12f;
-    private const float HillBoundaryHeight = 0.05f;
+    private ObjectiveOutline hillOverlay;
     private static Color HillUncontestedColour => TeamPalette.HillUnclaimed;
+
+    // === ESCORT THE PRESIDENT ===
+    private readonly NetworkVariable<EscortState> replicatedEscortState = new(EscortState.Empty);
+    private readonly Dictionary<int, ObjectiveOutline> escortOverlays = new();
+    private int escortRoundsRemaining;
+    private bool legTransitionStarted;
+
+    private const float LegIntermissionSeconds = 5f;
+
+    // -2 not yet resolved, -1 no president in the catalogue.
+    private int presidentCatalogIndex = -2;
 #if UNITY_EDITOR
     private readonly Dictionary<ulong, string> devHillPresentationReports = new();
 #endif
@@ -805,6 +874,7 @@ public class GameLoop : NetworkBehaviour
         teamOneParticipant.OnValueChanged += OnTeamParticipantChanged;
         fogOfWarEnabled.OnValueChanged += OnFogOfWarEnabledChanged;
         replicatedHillControl.OnValueChanged += OnHillControlChanged;
+        replicatedEscortState.OnValueChanged += OnEscortStateChanged;
         if (NetworkManager != null)
         {
             NetworkManager.OnClientDisconnectCallback += OnClientDisconnected;
@@ -824,6 +894,7 @@ public class GameLoop : NetworkBehaviour
         activeSmokeCells.Clear();
         ClearSmokeScreenVisualsLocal();
         ClearWallDestructionState();
+        legTransitionStarted = false;
 
         if (IsServer)
         {
@@ -834,6 +905,20 @@ public class GameLoop : NetworkBehaviour
             teamOneParticipant.Value = GetConfiguredParticipantId(OpponentTeamIndex);
             fogOfWarEnabled.Value = replicatedMatchOptions.Value.fogOfWar;
             replicatedHillControl.Value = HillControlState.Empty;
+
+            if (replicatedMatchOptions.Value.IsEscort)
+            {
+                if (!EscortSeries.IsActive)
+                    EscortSeries.Begin();
+                escortRoundsRemaining = EscortSeries.RoundsPerLeg;
+            }
+            else
+            {
+                EscortSeries.End();
+                escortRoundsRemaining = 0;
+            }
+            PublishEscortState();
+
             botPlayer = replicatedMatchOptions.Value.IsBotMatch
                 ? new BotPlayer(this, OpponentTeamIndex)
                 : null;
@@ -871,6 +956,7 @@ public class GameLoop : NetworkBehaviour
 
         GameHUDController.Instance?.SetMatchSummary(replicatedMatchOptions.Value);
         RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
+        OnEscortStateChanged(EscortState.Empty, replicatedEscortState.Value);
         Unit.RefreshAllTeamPresentation();
 
         if (IsServer)
@@ -904,6 +990,7 @@ public class GameLoop : NetworkBehaviour
         teamOneParticipant.OnValueChanged -= OnTeamParticipantChanged;
         fogOfWarEnabled.OnValueChanged -= OnFogOfWarEnabledChanged;
         replicatedHillControl.OnValueChanged -= OnHillControlChanged;
+        replicatedEscortState.OnValueChanged -= OnEscortStateChanged;
         if (NetworkManager != null)
         {
             NetworkManager.OnClientDisconnectCallback -= OnClientDisconnected;
@@ -921,6 +1008,7 @@ public class GameLoop : NetworkBehaviour
         StopClientFog();
         StopClientSmokeVision();
         ClearKingOfTheHillOverlay();
+        ClearEscortOverlays();
         unitSpawnTransforms.Clear();
         ClearActiveSmokeCells(notifyClients: false);
         ClearWallDestructionState();
@@ -936,6 +1024,7 @@ public class GameLoop : NetworkBehaviour
         MatchOptions.SetCurrent(newValue);
         GameHUDController.Instance?.SetMatchSummary(newValue);
         RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
+        RefreshEscortPresentation(replicatedEscortState.Value);
     }
 
     private void OnHillControlChanged(HillControlState previousValue, HillControlState newValue)
@@ -1218,16 +1307,18 @@ public class GameLoop : NetworkBehaviour
         allTeamUnitObjects[teamIndex] = new GameObject[fieldedCount];
         for (int i = 0; i < fieldedCount; i++)
         {
+            int catalogIndex = ResolveFieldedCatalogIndex(teamIndex, i, teamUnits[i]);
+            GameObject unitModel = allUnits.units[catalogIndex].unitModel;
             NetworkObject.VisibilityDelegate visibility = IsAuthorizedGameplayObserver;
             GameObject unit = IsBotParticipant(participantId)
                 ? NetworkHelper.Spawn(
-                    allUnits.units[teamUnits[i]].unitModel,
+                    unitModel,
                     gridCoordToWorld(spawnPositions[i]),
                     rotation,
                     visibility: visibility
                 )
                 : NetworkHelper.Spawn(
-                    allUnits.units[teamUnits[i]].unitModel,
+                    unitModel,
                     gridCoordToWorld(spawnPositions[i]),
                     rotation,
                     ownerClientId: participantId,
@@ -1257,7 +1348,7 @@ public class GameLoop : NetworkBehaviour
             {
                 SetUnitCardClientRpc(
                     i,
-                    teamUnits[i],
+                    catalogIndex,
                     unitIdentity.AbilityCooldownRoundsRemaining,
                     NetworkHelper.ToClient(participantId)
                 );
@@ -1669,7 +1760,13 @@ public class GameLoop : NetworkBehaviour
             ExecuteMoves(paths);
 
             // Fire abilities alongside movement; each ability handles its own pauses/transitions.
-            foreach (var activation in activations)
+            // Order-cancelling abilities run first so what they reach does not depend on the
+            // order activations were collected in.
+            foreach (
+                var activation in activations.OrderByDescending(candidate =>
+                    candidate.unit.GetComponent<Ability>()?.CancelsAlliedOrders ?? false
+                )
+            )
             {
                 StartCoroutine(RunAbility(activation.unit, activation.square, activation.data));
             }
@@ -1722,15 +1819,20 @@ public class GameLoop : NetworkBehaviour
             HideAbilityTelegraphsClientRpc();
             TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
             ClearMoveSpeedBoosts();
+            ClearDamageReductions();
             RecordBattleReportOutcomes();
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
             // path resolves a survivor or simultaneous-wipe draw.
+            // Escort reads a wiped crew as a leg result instead; see ResolveEscortRound.
             int livingTeamCount = Enumerable.Range(0, TeamCount).Count(HasLivingTeamUnits);
-            if (livingTeamCount < TeamCount)
+            if (livingTeamCount < TeamCount && !Options.IsEscort)
                 break;
 
             if (Options.IsKingOfTheHill && ResolveKingOfTheHillRound())
+                yield break;
+
+            if (Options.IsEscort && ResolveEscortRound())
                 yield break;
 
             if (ShouldRespawnEliminatedUnits(Options.gameMode, livingTeamCount))
@@ -2257,6 +2359,16 @@ public class GameLoop : NetworkBehaviour
             );
         }
         return started;
+    }
+
+    public bool RefundAbilityCharge(GameObject unit)
+    {
+        Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+        if (!IsServer || identity == null || !identity.RefundAbilityCooldown())
+            return false;
+
+        NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
+        return true;
     }
 
     private void TickAbilityCooldownsAfterRound(ISet<Unit> startedThisRound)
@@ -3137,6 +3249,336 @@ public class GameLoop : NetworkBehaviour
         return true;
     }
 
+    // === ESCORT THE PRESIDENT ===
+
+    public EscortState EscortStatus => replicatedEscortState.Value;
+
+    public HashSet<Vector2Int> EscortExtractionCellsFor(int teamIndex)
+    {
+        return Options.IsEscort && EscortSeries.IsEscortingTeam(teamIndex)
+            ? EscortSeries.ExtractionCellsFor(teamIndex)
+            : new HashSet<Vector2Int>();
+    }
+
+    public GameObject GetPresident(int teamIndex)
+    {
+        foreach (GameObject unit in GetTeamUnits(teamIndex))
+        {
+            if (unit != null && unit.GetComponent<PresidentialRecall>() != null)
+                return unit;
+        }
+        return null;
+    }
+
+    private int PresidentCatalogIndex
+    {
+        get
+        {
+            if (presidentCatalogIndex != -2)
+                return presidentCatalogIndex;
+
+            presidentCatalogIndex = -1;
+            for (int index = 0; index < (allUnits?.units?.Count ?? 0); index++)
+            {
+                GameObject model = allUnits.units[index]?.unitModel;
+                if (model != null && model.GetComponent<PresidentialRecall>() != null)
+                {
+                    presidentCatalogIndex = index;
+                    break;
+                }
+            }
+
+            if (presidentCatalogIndex < 0)
+            {
+                Debug.LogError(
+                    "[GameLoop] No unit in the catalogue carries PresidentialRecall, so Escort the "
+                        + "President cannot field a president. Check AllUnits."
+                );
+            }
+            return presidentCatalogIndex;
+        }
+    }
+
+    private int ResolveFieldedCatalogIndex(int teamIndex, int rosterSlot, int selectedCatalogIndex)
+    {
+        if (
+            !Options.IsEscort
+            || rosterSlot != EscortSeries.PresidentRosterSlot
+            || !EscortSeries.IsEscortingTeam(teamIndex)
+        )
+        {
+            return selectedCatalogIndex;
+        }
+
+        int presidentIndex = PresidentCatalogIndex;
+        return presidentIndex >= 0 ? presidentIndex : selectedCatalogIndex;
+    }
+
+    private bool ResolveEscortRound()
+    {
+        escortRoundsRemaining = Mathf.Max(0, escortRoundsRemaining - 1);
+        PublishEscortState();
+
+        List<EscortStanding> standings = new();
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (!EscortSeries.IsEscortingTeam(teamIndex))
+                continue;
+
+            GameObject president = GetPresident(teamIndex);
+            if (president == null)
+            {
+                Debug.LogError(
+                    $"[GameLoop] Team {teamIndex} is escorting but has no president on the board."
+                );
+                continue;
+            }
+
+            bool alive = IsLivingUnit(president);
+            Vector2Int cell = GridSystem.ConvertToGridCoords(
+                GridSystem.GetNearestGridCell(president)
+            );
+            bool extracted =
+                alive && EscortSeries.ExtractionCellsFor(teamIndex).Contains(cell);
+            standings.Add(
+                new EscortStanding(
+                    teamIndex,
+                    extracted,
+                    !alive,
+                    !HasLivingTeamUnits(GetEnemyTeamIndex(teamIndex)),
+                    EscortSeries.StepsToExtraction(cell, teamIndex)
+                )
+            );
+        }
+
+        EscortLegResult result = EscortSeries.ResolveLeg(
+            EscortSeries.LegNumber,
+            standings,
+            escortRoundsRemaining
+        );
+        if (!result.Decided)
+            return false;
+
+        FinishLeg(result);
+        return true;
+    }
+
+    private void FinishLeg(EscortLegResult result)
+    {
+        if (!IsServer || matchEnded || legTransitionStarted)
+            return;
+
+        EscortSeries.RecordLeg(result.WinningTeamIndex);
+        currentPhase = "idle";
+        Time.timeScale = 1f;
+
+        bool decided = EscortSeries.IsSeriesDecided(
+            EscortSeries.GetLegWins(HostTeamIndex),
+            EscortSeries.GetLegWins(OpponentTeamIndex),
+            EscortSeries.CompletedLegs,
+            out int seriesWinner
+        );
+
+        if (decided)
+        {
+            PublishEscortState();
+            FinishGame(
+                seriesWinner == NoHillController
+                    ? MatchResult.Draw(MatchResultReason.EscortStalemate)
+                    : MatchResult.ForWinner(seriesWinner, MatchResultReason.EscortSeries)
+            );
+            return;
+        }
+
+        legTransitionStarted = true;
+        FinishPlanningClientRpc();
+        SetCardsInteractableClientRpc(false);
+        HideAbilityTelegraphsClientRpc();
+        StartCoroutine(RunLegIntermission(result));
+    }
+
+    private IEnumerator RunLegIntermission(EscortLegResult result)
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (!TryGetHumanClientId(teamIndex, out ulong clientId))
+                continue;
+            if (NetworkManager == null || !NetworkManager.ConnectedClients.ContainsKey(clientId))
+                continue;
+
+            setOverlayUITextClientRpc(
+                DescribeLegVerdict(result, teamIndex),
+                result.HasWinner
+                    ? (
+                        result.WinningTeamIndex == teamIndex
+                            ? MessagePerspective.Friendly
+                            : MessagePerspective.Enemy
+                    )
+                    : MessagePerspective.Neutral,
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+
+        yield return new WaitForSecondsRealtime(LegIntermissionSeconds);
+        if (!IsServer || matchEnded)
+            yield break;
+
+        StartNextLeg();
+    }
+
+    private string DescribeLegVerdict(EscortLegResult result, int viewerTeamIndex)
+    {
+        string score =
+            $"{EscortSeries.GetLegWins(viewerTeamIndex)}–"
+            + $"{EscortSeries.GetLegWins(GetEnemyTeamIndex(viewerTeamIndex))}";
+        if (!result.HasWinner)
+            return $"Leg level · {score}";
+
+        bool won = result.WinningTeamIndex == viewerTeamIndex;
+        string headline = result.Reason switch
+        {
+            EscortLegReason.Extracted => won
+                ? "President extracted"
+                : "Their president got through",
+            EscortLegReason.PresidentDown => won ? "President down" : "Your president is down",
+            EscortLegReason.DefendersHeld => won ? "You held the line" : "Time — they held",
+            EscortLegReason.DefenceEliminated => won
+                ? "Escort unopposed — crew wiped"
+                : "Your crew was wiped out",
+            _ => won ? "Leg won on ground covered" : "Leg lost on ground covered",
+        };
+        return $"{headline} · {score}";
+    }
+
+    private void StartNextLeg()
+    {
+        if (NetworkManager == null)
+            return;
+
+        if (!Options.IsBotMatch && GetConnectedHumanClientIds().Count() < 2)
+        {
+            legTransitionStarted = false;
+            ulong remaining = GetConnectedHumanClientIds().FirstOrDefault();
+            int remainingTeam = GetTeamIndexForClient(remaining);
+            if (remainingTeam >= 0)
+            {
+                FinishGame(
+                    MatchResult.ForWinner(remainingTeam, MatchResultReason.DisconnectForfeit)
+                );
+            }
+            else
+            {
+                disconnectRecoveryStarted = true;
+                StartCoroutine(ReturnHostToJoinGameAfterShutdown());
+            }
+            return;
+        }
+
+        MatchOptions options = Options;
+        ulong hostParticipant = GetConfiguredParticipantId(HostTeamIndex);
+        ulong opponentParticipant = GetConfiguredParticipantId(OpponentTeamIndex);
+        int[] hostRoster = GetConfiguredRoster(HostTeamIndex);
+        int[] opponentRoster = GetConfiguredRoster(OpponentTeamIndex);
+
+        ResetMatchState();
+        NetworkHelper.CleanupAllNetworkObjects();
+        MatchOptions.SetCurrent(options);
+        ConfigureTeam(HostTeamIndex, hostParticipant, hostRoster);
+        ConfigureTeam(OpponentTeamIndex, opponentParticipant, opponentRoster);
+        NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+    }
+
+    private void PublishEscortState()
+    {
+        if (!IsServer)
+            return;
+
+        replicatedEscortState.Value = new EscortState(
+            EscortSeries.LegNumber,
+            EscortSeries.GetLegWins(HostTeamIndex),
+            EscortSeries.GetLegWins(OpponentTeamIndex),
+            escortRoundsRemaining
+        );
+    }
+
+    private void OnEscortStateChanged(EscortState previousValue, EscortState newValue)
+    {
+        if (!IsServer && newValue.IsRunning)
+        {
+            EscortSeries.SyncFromServer(
+                newValue.LegNumber,
+                newValue.HostLegWins,
+                newValue.OpponentLegWins
+            );
+        }
+        RefreshEscortPresentation(newValue);
+    }
+
+    private void RefreshEscortPresentation(EscortState state)
+    {
+        if (!IsClient)
+            return;
+
+        if (!Options.IsEscort || !state.IsRunning)
+        {
+            ClearEscortOverlays();
+            GameHUDController.Instance?.SetEscortState(EscortState.Empty, -1);
+            return;
+        }
+
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            HashSet<Vector2Int> cells = EscortExtractionCellsFor(teamIndex);
+            if (cells.Count == 0)
+            {
+                if (escortOverlays.TryGetValue(teamIndex, out ObjectiveOutline stale))
+                {
+                    stale?.Dispose();
+                    escortOverlays.Remove(teamIndex);
+                }
+                continue;
+            }
+
+            if (!escortOverlays.TryGetValue(teamIndex, out ObjectiveOutline outline))
+            {
+                outline = ObjectiveOutline.Build(
+                    transform,
+                    $"EscortExtraction{teamIndex}",
+                    cells
+                );
+                escortOverlays[teamIndex] = outline;
+            }
+
+            Color color = TeamPalette.ForTeamIndex(teamIndex);
+            color.a = 1f;
+            outline?.SetColor(color);
+        }
+
+        GameHUDController.Instance?.SetEscortState(state, LocalTeamIndex);
+    }
+
+    private void ClearEscortOverlays()
+    {
+        foreach (ObjectiveOutline outline in escortOverlays.Values)
+            outline?.Dispose();
+        escortOverlays.Clear();
+    }
+
+    private void ClearDamageReductions()
+    {
+        if (!IsServer)
+            return;
+
+        foreach (var teamEntry in allTeamUnitObjects)
+        {
+            foreach (GameObject unit in teamEntry.Value ?? System.Array.Empty<GameObject>())
+            {
+                if (unit != null)
+                    unit.GetComponent<Health>()?.ClearDamageReduction();
+            }
+        }
+    }
+
     private void RespawnEliminatedUnits()
     {
         List<(
@@ -3287,86 +3729,15 @@ public class GameLoop : NetworkBehaviour
 
     private void EnsureKingOfTheHillOverlay()
     {
-        if (hillOverlayRoot != null)
-            return;
-
-        Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
-        if (unlit == null)
-        {
-            Debug.LogError(
-                "[GameLoop] URP Unlit shader is required for the hill boundary."
-            );
-            return;
-        }
-
-        hillOverlayRoot = new GameObject("KingOfTheHillOverlay");
-        hillOverlayRoot.transform.SetParent(transform, true);
-        hillOverlayMaterial = new Material(unlit) { name = "KingOfTheHillBoundary (Runtime)" };
-        hillOverlayProperties = new MaterialPropertyBlock();
-
-        GetHillPadBounds(out Vector3 min, out Vector3 max);
-        float y = HillBoundaryHeight;
-        float w = HillBoundaryWidth;
-        float spanX = max.x - min.x;
-        float spanZ = max.z - min.z;
-        float midX = (min.x + max.x) * 0.5f;
-        float midZ = (min.z + max.z) * 0.5f;
-
-        // Corners are covered by the two full-length side strips, so the end strips stop short
-        // of them and no two strips overlap and double their alpha.
-        AddHillBoundaryStrip("South", new Vector3(midX, y, min.z), new Vector2(spanX, w));
-        AddHillBoundaryStrip("North", new Vector3(midX, y, max.z), new Vector2(spanX, w));
-        AddHillBoundaryStrip("West", new Vector3(min.x, y, midZ), new Vector2(w, spanZ - w * 2f));
-        AddHillBoundaryStrip("East", new Vector3(max.x, y, midZ), new Vector2(w, spanZ - w * 2f));
-    }
-
-    /// <summary>
-    /// Outer edge of the hill pad in world space, half a cell out from the outermost hill cells.
-    /// </summary>
-    private void GetHillPadBounds(out Vector3 min, out Vector3 max)
-    {
-        var first = true;
-        min = max = Vector3.zero;
-        foreach (Vector2Int cell in KingOfTheHillCells)
-        {
-            Vector3 centre = gridCoordToWorld(cell);
-            if (first)
-            {
-                min = max = centre;
-                first = false;
-                continue;
-            }
-            min = Vector3.Min(min, centre);
-            max = Vector3.Max(max, centre);
-        }
-
-        float half = cellSize * 0.5f;
-        min -= new Vector3(half, 0f, half);
-        max += new Vector3(half, 0f, half);
-    }
-
-    private void AddHillBoundaryStrip(string edge, Vector3 centre, Vector2 size)
-    {
-        GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        strip.name = $"HillBoundary_{edge}";
-        strip.transform.SetParent(hillOverlayRoot.transform, true);
-        strip.transform.position = centre;
-        strip.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-        strip.transform.localScale = new Vector3(size.x, size.y, 1f);
-        Destroy(strip.GetComponent<Collider>());
-
-        Renderer stripRenderer = strip.GetComponent<Renderer>();
-        stripRenderer.sharedMaterial = hillOverlayMaterial;
-        stripRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        stripRenderer.receiveShadows = false;
-        hillOverlayRenderers.Add(stripRenderer);
+        hillOverlay ??= ObjectiveOutline.Build(
+            transform,
+            "KingOfTheHillOverlay",
+            KingOfTheHillCells
+        );
     }
 
     private void UpdateKingOfTheHillOverlay(HillControlState state)
     {
-        if (hillOverlayProperties == null || hillOverlayRenderers.Count == 0)
-            return;
-
         // The pad is the one thing both seats must name the same way, so it takes the absolute
         // team colour rather than the viewer-relative one every other team-tinted visual uses.
         bool controlled =
@@ -3375,14 +3746,136 @@ public class GameLoop : NetworkBehaviour
             ? TeamPalette.ForTeamIndex(state.ControllingTeamIndex)
             : HillUncontestedColour;
         color.a = 1f;
+        hillOverlay?.SetColor(color);
+    }
 
-        hillOverlayProperties.Clear();
-        hillOverlayProperties.SetColor(HillBaseColorId, color);
+    private sealed class ObjectiveOutline
+    {
+        // World units on the deck plane.
+        private const float BoundaryWidth = 0.12f;
+        private const float BoundaryHeight = 0.05f;
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-        foreach (Renderer stripRenderer in hillOverlayRenderers)
+        private readonly GameObject root;
+        private readonly Material material;
+        private readonly List<Renderer> strips = new();
+        private readonly MaterialPropertyBlock properties = new();
+
+        public int StripCount => strips.Count;
+
+        private ObjectiveOutline(GameObject root, Material material)
         {
-            if (stripRenderer != null)
-                stripRenderer.SetPropertyBlock(hillOverlayProperties);
+            this.root = root;
+            this.material = material;
+        }
+
+        public static ObjectiveOutline Build(
+            Transform parent,
+            string name,
+            IEnumerable<Vector2Int> cells
+        )
+        {
+            Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlit == null)
+            {
+                Debug.LogError(
+                    "[GameLoop] URP Unlit shader is required for an objective boundary."
+                );
+                return null;
+            }
+            if (!TryGetPadBounds(cells, out Vector3 min, out Vector3 max))
+                return null;
+
+            GameObject root = new(name);
+            root.transform.SetParent(parent, true);
+            ObjectiveOutline outline = new(
+                root,
+                new Material(unlit) { name = $"{name}Boundary (Runtime)" }
+            );
+
+            float y = BoundaryHeight;
+            float w = BoundaryWidth;
+            float spanX = max.x - min.x;
+            float spanZ = max.z - min.z;
+            float midX = (min.x + max.x) * 0.5f;
+            float midZ = (min.z + max.z) * 0.5f;
+
+            // End strips stop short of the corners so no two strips overlap and double their alpha.
+            outline.AddStrip("South", new Vector3(midX, y, min.z), new Vector2(spanX, w));
+            outline.AddStrip("North", new Vector3(midX, y, max.z), new Vector2(spanX, w));
+            outline.AddStrip("West", new Vector3(min.x, y, midZ), new Vector2(w, spanZ - w * 2f));
+            outline.AddStrip("East", new Vector3(max.x, y, midZ), new Vector2(w, spanZ - w * 2f));
+            return outline;
+        }
+
+        public void SetColor(Color color)
+        {
+            if (strips.Count == 0)
+                return;
+
+            properties.Clear();
+            properties.SetColor(BaseColorId, color);
+            foreach (Renderer stripRenderer in strips)
+            {
+                if (stripRenderer != null)
+                    stripRenderer.SetPropertyBlock(properties);
+            }
+        }
+
+        public void Dispose()
+        {
+            strips.Clear();
+            if (root != null)
+                Object.Destroy(root);
+            if (material != null)
+                Object.Destroy(material);
+        }
+
+        private static bool TryGetPadBounds(
+            IEnumerable<Vector2Int> cells,
+            out Vector3 min,
+            out Vector3 max
+        )
+        {
+            bool first = true;
+            min = max = Vector3.zero;
+            foreach (Vector2Int cell in cells ?? Enumerable.Empty<Vector2Int>())
+            {
+                Vector3 centre = gridCoordToWorld(cell);
+                if (first)
+                {
+                    min = max = centre;
+                    first = false;
+                    continue;
+                }
+                min = Vector3.Min(min, centre);
+                max = Vector3.Max(max, centre);
+            }
+
+            if (first)
+                return false;
+
+            float half = cellSize * 0.5f;
+            min -= new Vector3(half, 0f, half);
+            max += new Vector3(half, 0f, half);
+            return true;
+        }
+
+        private void AddStrip(string edge, Vector3 centre, Vector2 size)
+        {
+            GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            strip.name = $"Boundary_{edge}";
+            strip.transform.SetParent(root.transform, true);
+            strip.transform.position = centre;
+            strip.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            strip.transform.localScale = new Vector3(size.x, size.y, 1f);
+            Object.Destroy(strip.GetComponent<Collider>());
+
+            Renderer stripRenderer = strip.GetComponent<Renderer>();
+            stripRenderer.sharedMaterial = material;
+            stripRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            stripRenderer.receiveShadows = false;
+            strips.Add(stripRenderer);
         }
     }
 
@@ -3424,7 +3917,7 @@ public class GameLoop : NetworkBehaviour
         );
         DevSubmitHillPresentationReportServerRpc(
             Options.gameMode,
-            hillOverlayRenderers.Count,
+            hillOverlay?.StripCount ?? 0,
             (byte)state.Status,
             state.ControllingTeamIndex,
             state.Streak,
@@ -3457,20 +3950,8 @@ public class GameLoop : NetworkBehaviour
 
     private void ClearKingOfTheHillOverlay()
     {
-        hillOverlayRenderers.Clear();
-        hillOverlayProperties = null;
-
-        if (hillOverlayRoot != null)
-        {
-            Destroy(hillOverlayRoot);
-            hillOverlayRoot = null;
-        }
-
-        if (hillOverlayMaterial != null)
-        {
-            Destroy(hillOverlayMaterial);
-            hillOverlayMaterial = null;
-        }
+        hillOverlay?.Dispose();
+        hillOverlay = null;
     }
 
     // === FOG OF WAR (server: authoritative per-client visibility) ===
@@ -4491,6 +4972,7 @@ public class GameLoop : NetworkBehaviour
     private static void ReturnToTitleScreen()
     {
         MatchOptions.Reset();
+        EscortSeries.End();
         ResetMatchState();
         SceneManager.LoadScene("Title Screen");
     }

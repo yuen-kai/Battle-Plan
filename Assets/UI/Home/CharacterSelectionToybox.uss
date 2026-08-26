@@ -649,6 +649,23 @@
     display: flex;
 }
 
+/* Escort matches only: the slot the president takes over. */
+.selected-slot--president,
+.selected-slot--president:disabled,
+.selected-slot--president:disabled:hover,
+.selected-slot--president:disabled:active {
+    border-left-color: var(--toy-primary);
+}
+
+.selected-slot--president .selected-slot__detail {
+    display: flex;
+    color: var(--toy-primary-copy);
+}
+
+.selected-slot--president.selected-slot--filled .selected-slot__detail {
+    color: var(--toy-text-on-accent-quiet);
+}
+
 .confirm-column {
     width: 280px;
     min-width: 240px;

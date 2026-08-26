@@ -19,6 +19,10 @@
                     <ui:Label text="Hill control" class="hill-status-readout__key toy-readout__label" picking-mode="Ignore" />
                     <ui:Label name="hill-status-label" text="No control · 0/3" class="hill-status-readout__value toy-chip" picking-mode="Ignore" />
                 </ui:VisualElement>
+                <ui:VisualElement name="escort-status-readout" class="hill-status-readout toy-readout hidden" picking-mode="Ignore">
+                    <ui:Label name="escort-status-key" text="Leg 1 · You escort" class="hill-status-readout__key toy-readout__label" picking-mode="Ignore" />
+                    <ui:Label name="escort-status-label" text="0–0 · 8 rounds left" class="hill-status-readout__value toy-chip" picking-mode="Ignore" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- The objective banner. Its two angled caps make the plate a trapezoid that narrows

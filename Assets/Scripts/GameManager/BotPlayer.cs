@@ -212,8 +212,19 @@ public sealed class BotPlayer
         HashSet<Vector2Int> occupiedCells = new(botUnits.Select(GetCell).Concat(visibleEnemyCells));
         List<Vector2Int> targets = GetStrategicTargets(
             gameLoop.Options.gameMode,
-            knowledge.GetTargetCells()
+            knowledge.GetTargetCells(),
+            TeamIndex
         );
+
+        ResolveEscortRoles(
+            out GameObject ownPresident,
+            out List<Vector2Int> presidentTargets,
+            out List<Vector2Int> escortCrewTargets
+        );
+
+        // The president plans first so his crew can screen the cell he commits to.
+        if (ownPresident != null)
+            botUnits = botUnits.OrderByDescending(unit => unit == ownPresident).ToArray();
 
         foreach (GameObject unit in botUnits)
         {
@@ -242,13 +253,15 @@ public sealed class BotPlayer
             occupiedCells.Remove(start);
             List<Vector2Int> cellPath = BuildMovementPath(
                 start,
-                targets,
+                unit == ownPresident ? presidentTargets : escortCrewTargets ?? targets,
                 visibleEnemyCells,
                 occupiedCells,
                 unit.GetComponent<Movement>().unitData.moveDist,
                 observedCells,
                 lastObservedEpoch
             );
+            if (unit == ownPresident && cellPath.Count > 0)
+                escortCrewTargets = BuildEscortScreenTargets(cellPath[^1], TeamIndex);
             // Movement speeds vary by unit, so reserving only matching timesteps is unsafe.
             // Reserve every cell in an earlier unit's route to prevent crossings and edge swaps.
             ReservePathCells(occupiedCells, cellPath);
@@ -259,15 +272,140 @@ public sealed class BotPlayer
         return plans;
     }
 
-    public static List<Vector2Int> GetStrategicTargets(
-        GameMode gameMode,
-        IEnumerable<Vector2Int> knownEnemyCells
+    public const int EscortScreenLeadCells = 2;
+    public const int EscortInterceptLeadCells = 1;
+    public const int EscortRoleSpreadCells = 2;
+
+    private void ResolveEscortRoles(
+        out GameObject ownPresident,
+        out List<Vector2Int> presidentTargets,
+        out List<Vector2Int> escortCrewTargets
     )
     {
-        IEnumerable<Vector2Int> targets =
-            gameMode == GameMode.KingOfTheHill
-                ? GameLoop.KingOfTheHillCells
-                : (knownEnemyCells ?? Enumerable.Empty<Vector2Int>());
+        ownPresident = null;
+        presidentTargets = null;
+        escortCrewTargets = null;
+        if (!gameLoop.Options.IsEscort)
+            return;
+
+        if (EscortSeries.IsEscortingTeam(TeamIndex))
+        {
+            GameObject president = gameLoop.GetPresident(TeamIndex);
+            if (president == null || !IsLiving(president))
+                return;
+
+            ownPresident = president;
+            presidentTargets = EscortSeries.ExtractionCellsFor(TeamIndex).ToList();
+            escortCrewTargets = BuildEscortScreenTargets(GetCell(president), TeamIndex);
+            return;
+        }
+
+        int escortingTeamIndex = GameLoop.GetEnemyTeamIndex(TeamIndex);
+        escortCrewTargets = TryGetKnownEnemyPresidentCell(escortingTeamIndex, out Vector2Int seenAt)
+            ? BuildEscortInterceptTargets(seenAt, escortingTeamIndex)
+            : EscortSeries.ExtractionCellsFor(escortingTeamIndex).ToList();
+    }
+
+    private bool TryGetKnownEnemyPresidentCell(int escortingTeamIndex, out Vector2Int cell)
+    {
+        cell = default;
+        GameObject president = gameLoop.GetPresident(escortingTeamIndex);
+        return president != null
+            && knowledge.LastKnownCells.TryGetValue(GetStableUnitId(president), out cell);
+    }
+
+    public static List<Vector2Int> BuildEscortScreenTargets(
+        Vector2Int presidentCell,
+        int escortingTeamIndex
+    )
+    {
+        return OpenFootprint(
+            StepTowardExtraction(presidentCell, escortingTeamIndex, EscortScreenLeadCells),
+            EscortRoleSpreadCells
+        );
+    }
+
+    public static List<Vector2Int> BuildEscortInterceptTargets(
+        Vector2Int presidentCell,
+        int escortingTeamIndex
+    )
+    {
+        int presidentSteps = EscortSeries.StepsToExtraction(presidentCell, escortingTeamIndex);
+        List<Vector2Int> between = OpenFootprint(
+                StepTowardExtraction(presidentCell, escortingTeamIndex, EscortInterceptLeadCells),
+                EscortRoleSpreadCells
+            )
+            .Where(cell =>
+                EscortSeries.StepsToExtraction(cell, escortingTeamIndex) <= presidentSteps
+            )
+            .ToList();
+        return between.Count > 0 ? between : new List<Vector2Int> { presidentCell };
+    }
+
+    private static Vector2Int StepTowardExtraction(
+        Vector2Int from,
+        int escortingTeamIndex,
+        int steps
+    )
+    {
+        Vector2Int goal = NearestExtractionCell(from, escortingTeamIndex);
+        int distance = GridSystem.GetGridDistance(from, goal);
+        if (distance == 0 || steps <= 0)
+            return from;
+
+        float progress = Mathf.Min(1f, steps / (float)distance);
+        return new Vector2Int(
+            Mathf.RoundToInt(Mathf.Lerp(from.x, goal.x, progress)),
+            Mathf.RoundToInt(Mathf.Lerp(from.y, goal.y, progress))
+        );
+    }
+
+    private static Vector2Int NearestExtractionCell(Vector2Int from, int escortingTeamIndex)
+    {
+        Vector2Int nearest = from;
+        int fewest = int.MaxValue;
+        foreach (
+            Vector2Int cell in EscortSeries
+                .ExtractionCellsFor(escortingTeamIndex)
+                .OrderBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+        )
+        {
+            int steps = GridSystem.GetGridDistance(from, cell);
+            if (steps >= fewest)
+                continue;
+            fewest = steps;
+            nearest = cell;
+        }
+        return nearest;
+    }
+
+    private static List<Vector2Int> OpenFootprint(Vector2Int centre, int radius)
+    {
+        HashSet<Vector2Int> walls = GameLoop.wallLayout;
+        return GridSystem
+            .GetSquareFootprint(centre, radius)
+            .Where(cell => GridSystem.IsCellInBounds(cell) && !walls.Contains(cell))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Where the crew is trying to be, as opposed to who it is trying to shoot. An objective mode
+    /// names cells; Elimination names whichever enemies have been seen.
+    /// </summary>
+    public static List<Vector2Int> GetStrategicTargets(
+        GameMode gameMode,
+        IEnumerable<Vector2Int> knownEnemyCells,
+        int botTeamIndex = -1
+    )
+    {
+        IEnumerable<Vector2Int> targets;
+        if (gameMode == GameMode.KingOfTheHill)
+            targets = GameLoop.KingOfTheHillCells;
+        else if (gameMode == GameMode.EscortThePresident && botTeamIndex >= 0)
+            targets = GetEscortObjectiveCells(botTeamIndex);
+        else
+            targets = knownEnemyCells ?? Enumerable.Empty<Vector2Int>();
         return targets.Distinct().OrderBy(cell => cell.x).ThenBy(cell => cell.y).ToList();
     }
 
@@ -280,6 +418,13 @@ public sealed class BotPlayer
         return gameMode == GameMode.KingOfTheHill
             && GameLoop.KingOfTheHillCells.Contains(start)
             && !GameLoop.KingOfTheHillCells.Contains(destination);
+    }
+
+    private static IEnumerable<Vector2Int> GetEscortObjectiveCells(int botTeamIndex)
+    {
+        return EscortSeries.IsEscortingTeam(botTeamIndex)
+            ? EscortSeries.ExtractionCellsFor(botTeamIndex)
+            : EscortSeries.ExtractionCellsFor(GameLoop.GetEnemyTeamIndex(botTeamIndex));
     }
 
     public PathsDict CreateDodgeContribution(

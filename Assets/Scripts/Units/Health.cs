@@ -12,6 +12,11 @@ public class Health : NetworkBehaviour
     private NetworkVariable<float> currentHealth = new();
     private NetworkVariable<bool> isAlive = new(true);
 
+    private float damageTakenMultiplier = 1f;
+    private readonly NetworkVariable<bool> damageReductionActive = new(false);
+
+    private GuardOrbVisual guardOrb;
+
     private Transform unitCanvas;
     private Transform healthBar;
     private Transform healthFill;
@@ -32,6 +37,7 @@ public class Health : NetworkBehaviour
     public float CurrentHealth => currentHealth.Value;
     public float MaxHealth => unitData != null ? Mathf.Max(0f, unitData.maxHealth) : 0f;
     public bool IsAlive => isAlive.Value;
+    public bool HasDamageReduction => damageReductionActive.Value;
 
     public override void OnNetworkSpawn()
     {
@@ -47,12 +53,17 @@ public class Health : NetworkBehaviour
 
         currentHealth.OnValueChanged += OnHealthChanged;
         isAlive.OnValueChanged += OnAliveChanged;
+        damageReductionActive.OnValueChanged += OnDamageReductionChanged;
 
         if (IsServer)
         {
             isAlive.Value = true;
             currentHealth.Value = unitData.maxHealth;
+            damageTakenMultiplier = 1f;
+            damageReductionActive.Value = false;
         }
+
+        RefreshGuardPresentation(damageReductionActive.Value);
 
         UpdateMaxHealthScale();
         UpdateHealthFill(currentHealth.Value);
@@ -66,6 +77,7 @@ public class Health : NetworkBehaviour
     {
         currentHealth.OnValueChanged -= OnHealthChanged;
         isAlive.OnValueChanged -= OnAliveChanged;
+        damageReductionActive.OnValueChanged -= OnDamageReductionChanged;
         base.OnNetworkDespawn();
     }
 
@@ -121,6 +133,22 @@ public class Health : NetworkBehaviour
             : canvasPosition + lens.up * ((MinCanvasScreenGap - screenGap) * canvasDepth);
     }
 
+    public void ApplyDamageReductionForRound(float multiplier)
+    {
+        if (!IsServer || !isAlive.Value)
+            return;
+
+        damageTakenMultiplier = Mathf.Min(damageTakenMultiplier, Mathf.Clamp01(multiplier));
+        damageReductionActive.Value = damageTakenMultiplier < 1f;
+    }
+
+    public void ClearDamageReduction()
+    {
+        damageTakenMultiplier = 1f;
+        if (IsServer)
+            damageReductionActive.Value = false;
+    }
+
     public void TakeDamage(float damage)
     {
         if (!IsServer || !isAlive.Value)
@@ -130,7 +158,7 @@ public class Health : NetworkBehaviour
         // health bar, but neither crew can be eliminated, so a fumbled dodge cannot end the lesson
         // script early or hand a first-time player a defeat.
         float floor = TutorialSession.IsActive ? 1f : 0f;
-        currentHealth.Value = Mathf.Max(floor, currentHealth.Value - damage);
+        currentHealth.Value = Mathf.Max(floor, currentHealth.Value - damage * damageTakenMultiplier);
         if (currentHealth.Value > 0f)
         {
             GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
@@ -139,6 +167,7 @@ public class Health : NetworkBehaviour
 
         isAlive.Value = false;
         GetComponent<Movement>()?.ClearTemporaryMoveSpeedBoost();
+        ClearDamageReduction();
         GameLoop.Instance?.DisableUnitCard(gameObject);
         GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
 
@@ -190,6 +219,7 @@ public class Health : NetworkBehaviour
             movement.ClearTemporaryMoveSpeedBoost();
             movement.moving = false;
         }
+        ClearDamageReduction();
 
         Shooting shooting = GetComponent<Shooting>();
         shooting?.PauseShooting();
@@ -263,6 +293,19 @@ public class Health : NetworkBehaviour
         if (lethal || severity >= 0.7f)
             return DamageTone.Critical;
         return severity >= 0.4f ? DamageTone.Heavy : DamageTone.Normal;
+    }
+
+    private void OnDamageReductionChanged(bool previousValue, bool newValue)
+    {
+        RefreshGuardPresentation(newValue);
+    }
+
+    private void RefreshGuardPresentation(bool active)
+    {
+        if (active && guardOrb == null)
+            guardOrb = GuardOrbVisual.Attach(gameObject);
+        if (guardOrb != null)
+            guardOrb.SetGuarded(active);
     }
 
     private void OnAliveChanged(bool previousValue, bool newValue)

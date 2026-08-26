@@ -38,12 +38,15 @@ public class GameHUDController : MonoBehaviour
     private VisualElement hudDock;
     private VisualElement enemyStatusStrip;
     private VisualElement hillStatusReadout;
+    private VisualElement escortStatusReadout;
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
     private VisualElement resultsPanel;
     private Label phaseLabel;
     private Label timerLabel;
     private Label hillStatusLabel;
+    private Label escortStatusKey;
+    private Label escortStatusLabel;
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
@@ -93,6 +96,8 @@ public class GameHUDController : MonoBehaviour
     private bool timerSuppressed;
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
+    public string EscortStatusText =>
+        $"{escortStatusKey?.text ?? string.Empty} · {escortStatusLabel?.text ?? string.Empty}";
     public string RejoinNoticeText => rejoinNoticeStatus?.text ?? string.Empty;
 
     private void OnEnable()
@@ -180,6 +185,9 @@ public class GameHUDController : MonoBehaviour
         timerLabel = RequireElement<Label>("timer-label");
         hillStatusReadout = RequireElement<VisualElement>("hill-status-readout");
         hillStatusLabel = RequireElement<Label>("hill-status-label");
+        escortStatusReadout = RequireElement<VisualElement>("escort-status-readout");
+        escortStatusKey = RequireElement<Label>("escort-status-key");
+        escortStatusLabel = RequireElement<Label>("escort-status-label");
         rejoinNotice = RequireElement<VisualElement>("rejoin-notice");
         rejoinNoticeTitle = RequireElement<Label>("rejoin-notice-title");
         rejoinNoticeStatus = RequireElement<Label>("rejoin-notice-status");
@@ -661,6 +669,57 @@ public class GameHUDController : MonoBehaviour
                 GameLoop.Instance != null ? GameLoop.Instance.HillControl : HillControlState.Empty
             );
         }
+
+        bool showEscortStatus = options.IsEscort;
+        root?.EnableInClassList("escort", showEscortStatus);
+        if (!showEscortStatus)
+        {
+            escortStatusReadout?.AddToClassList("hidden");
+            return;
+        }
+
+        SetEscortState(
+            GameLoop.Instance != null ? GameLoop.Instance.EscortStatus : EscortState.Empty,
+            GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1
+        );
+    }
+
+    public void SetEscortState(EscortState state, int localTeamIndex)
+    {
+        if (escortStatusReadout == null || escortStatusLabel == null || escortStatusKey == null)
+            return;
+
+        bool running = state.IsRunning && localTeamIndex >= 0;
+        escortStatusReadout.EnableInClassList("hidden", !running);
+        if (!running)
+            return;
+
+        bool localEscorts = EscortSeries.IsEscortingTeam(state.LegNumber, localTeamIndex);
+        bool enemyEscorts = EscortSeries.IsEscortingTeam(
+            state.LegNumber,
+            GameLoop.GetEnemyTeamIndex(localTeamIndex)
+        );
+        string role = localEscorts && enemyEscorts ? "Both escort"
+            : localEscorts ? "You escort"
+            : "You defend";
+        escortStatusKey.text =
+            $"Leg {Mathf.Clamp(state.LegNumber, 1, EscortSeries.DeciderLeg)}"
+            + $"/{EscortSeries.DeciderLeg} · {role}";
+
+        int rounds = state.RoundsRemaining;
+        escortStatusLabel.text =
+            $"{state.LegWinsFor(localTeamIndex)}–"
+            + $"{state.LegWinsFor(GameLoop.GetEnemyTeamIndex(localTeamIndex))} · "
+            + (rounds == 1 ? "1 round left" : $"{rounds} rounds left");
+
+        bool decider = localEscorts && enemyEscorts;
+        bool hostEscorts = EscortSeries.IsEscortingTeam(
+            state.LegNumber,
+            GameLoop.HostTeamIndex
+        );
+        escortStatusLabel.EnableInClassList("hill-status--contested", decider);
+        escortStatusLabel.EnableInClassList("hill-status--blue", !decider && hostEscorts);
+        escortStatusLabel.EnableInClassList("hill-status--red", !decider && !hostEscorts);
     }
 
     public void SetHillControl(HillControlState state)

@@ -44,6 +44,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private Label mapCaption;
     private Texture2D previewTexture;
     private MapDefinition shownMap;
+    private bool escortMode;
     private bool localSelectionSubmitted;
     private bool sceneLoadRequested;
     private bool uiCallbacksRegistered;
@@ -139,11 +140,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
         fogSummary = RequireElement<Label>("fog-summary");
         mapPreview = RequireElement<VisualElement>("map-preview");
         mapCaption = RequireElement<Label>("map-caption");
-        if (rosterInstruction != null)
-        {
-            rosterInstruction.text =
-                $"Pick {UnitsPerPlayer}. Repeats are allowed. Select a filled slot to remove it.";
-        }
         if (rosterCountLabel != null)
             rosterCountLabel.text = $"Pick {UnitsPerPlayer} units";
     }
@@ -475,6 +471,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
     private void UpdateSelectionState()
     {
+        UpdateRosterInstruction();
         bool selectionComplete = selectedUnits.All(index => index >= 0);
         RosterValidationResult validation = selectionComplete
             ? RosterRules.Validate(selectedUnits, allUnits?.units)
@@ -499,7 +496,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
             bool filled =
                 allUnits?.units != null && unitIndex >= 0 && unitIndex < allUnits.units.Count;
             UnitData data = filled ? allUnits.units[unitIndex] : null;
-            slotViews[i].Configure(data, filled, canEdit);
+            slotViews[i]
+                .Configure(
+                    data,
+                    filled,
+                    canEdit,
+                    escortMode && i == EscortSeries.PresidentRosterSlot
+                );
         }
 
         if (confirmButton != null)
@@ -507,6 +510,18 @@ public class CharacterSelectionUIController : NetworkBehaviour
             confirmButton.SetEnabled(IsSpawned && IsClient && selectionValid && canEdit);
         }
         UpdateStatusText();
+    }
+
+    private void UpdateRosterInstruction()
+    {
+        if (rosterInstruction == null)
+            return;
+
+        rosterInstruction.text = escortMode
+            ? $"Pick {UnitsPerPlayer}. Repeats are allowed. Slot "
+                + $"{EscortSeries.PresidentRosterSlot + 1} is the president's — the unit you put "
+                + "there only fields in the legs your crew defends."
+            : $"Pick {UnitsPerPlayer}. Repeats are allowed. Select a filled slot to remove it.";
     }
 
     private void ConfirmSelection()
@@ -735,6 +750,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private void UpdateSummary(MatchOptions options)
     {
         options = options.Sanitized();
+        escortMode = options.IsEscort;
         if (modeSummary != null)
             modeSummary.text = options.GameModeDisplayName;
         if (opponentSummary != null)
@@ -919,22 +935,26 @@ public class CharacterSelectionUIController : NetworkBehaviour
             this.detail = detail;
         }
 
-        public void Configure(UnitData data, bool filled, bool canEdit)
+        public void Configure(UnitData data, bool filled, bool canEdit, bool isPresidentSlot)
         {
             Button.EnableInClassList("selected-slot--filled", filled);
+            Button.EnableInClassList("selected-slot--president", isPresidentSlot);
             Button.SetEnabled(filled && canEdit);
-            Button.tooltip =
-                filled && data != null
-                    ? $"Remove {data.unitName} from the crew"
-                    : "Open crew slot";
+            Button.tooltip = isPresidentSlot
+                ? "The president takes this slot in the legs your crew escorts"
+                : (
+                    filled && data != null
+                        ? $"Remove {data.unitName} from the crew"
+                        : "Open crew slot"
+                );
             if (unitName != null)
                 unitName.text = filled && data != null ? data.unitName : "Open slot";
             if (detail != null)
             {
-                detail.text =
-                    filled && data != null && !string.IsNullOrWhiteSpace(data.abilityName)
+                detail.text = isPresidentSlot ? "President stands in here"
+                    : filled && data != null && !string.IsNullOrWhiteSpace(data.abilityName)
                         ? data.abilityName
-                        : "Choose a unit";
+                    : "Choose a unit";
             }
             SetBackgroundImage(portrait, filled && data != null ? data.unitSprite : null);
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using NUnit.Framework;
 using UnityEditor;
@@ -939,7 +940,7 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
-    public void JoinOffersEliminationAndKingOfTheHillWithNoDisabledModes()
+    public void JoinOffersEveryPlayableModeWithNoDisabledButtons()
     {
         const string assetPath = "Assets/UI/Join/JoinGame.uxml";
         VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
@@ -948,22 +949,31 @@ public class UIToolkitAssetSmokeTests
         TemplateContainer tree = asset.Instantiate();
         Button elimination = tree.Q<Button>("elimination-button");
         Button king = tree.Q<Button>("king-button");
+        Button escort = tree.Q<Button>("escort-button");
 
         Assert.That(elimination, Is.Not.Null);
         Assert.That(king, Is.Not.Null);
+        Assert.That(escort, Is.Not.Null);
         Assert.That(elimination.enabledSelf, Is.True);
         Assert.That(king.enabledSelf, Is.True);
+        Assert.That(escort.enabledSelf, Is.True);
 
+        // Named rather than counted: this assembly cannot reference GameMode.
         List<Button> modeOptions = tree.Query<Button>(className: "mode-option").ToList();
         Assert.That(
-            modeOptions.Count,
-            Is.EqualTo(2),
-            "The mode row must only advertise modes the build can actually play."
+            modeOptions.Select(option => option.name).ToArray(),
+            Is.EquivalentTo(new[] { "elimination-button", "king-button", "escort-button" }),
+            "The mode row must advertise exactly the modes JoinGameUIController handles."
         );
         Assert.That(
             modeOptions.TrueForAll(option => option.enabledSelf),
             Is.True,
             "A disabled mode button advertises a mode that does not exist."
+        );
+        Assert.That(
+            modeOptions.Count(option => option.ClassListContains("mode-option--last")),
+            Is.EqualTo(1),
+            "Exactly one tile closes the row, and it is the one that drops its right margin."
         );
     }
 

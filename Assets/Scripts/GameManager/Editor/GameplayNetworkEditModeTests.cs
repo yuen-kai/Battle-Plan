@@ -45,6 +45,13 @@ public class GameplayNetworkEditModeTests
         Assert.That(sanitizedKingOfTheHill.IsKingOfTheHill, Is.True);
         Assert.That(sanitizedKingOfTheHill.GameModeDisplayName, Is.EqualTo("King of the Hill"));
 
+        MatchOptions escort = defaults;
+        escort.gameMode = GameMode.EscortThePresident;
+        MatchOptions sanitizedEscort = escort.Sanitized();
+        Assert.That(sanitizedEscort.gameMode, Is.EqualTo(GameMode.EscortThePresident));
+        Assert.That(sanitizedEscort.IsEscort, Is.True);
+        Assert.That(sanitizedEscort.GameModeDisplayName, Is.EqualTo("Escort the President"));
+
         MatchOptions unsupported = defaults;
         unsupported.gameMode = RetiredGameModeId;
         Assert.That(unsupported.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
@@ -2106,6 +2113,16 @@ public class GameplayNetworkEditModeTests
         );
         for (int index = 1; index < catalog.units.Count; index++)
         {
+            if (catalog.units[index].unitModel?.GetComponent<PresidentialRecall>() != null)
+            {
+                Assert.That(
+                    catalog.units[index].IsRosterEligible,
+                    Is.False,
+                    "The president is substituted into a crew, never chosen into one."
+                );
+                continue;
+            }
+
             Assert.That(
                 catalog.units[index].IsRosterEligible,
                 Is.True,
@@ -3189,7 +3206,7 @@ public class GameplayNetworkEditModeTests
     // === No-new-mode / no-size-drift guards (Wave 1) ===
 
     [Test]
-    public void SupportedGameModes_RemainEliminationAndKingOfTheHillOnly()
+    public void SupportedGameModes_AreExactlyTheOnesTheBuildCanPlay()
     {
         List<GameMode> supported = new();
         foreach (GameMode mode in System.Enum.GetValues(typeof(GameMode)))
@@ -3201,9 +3218,14 @@ public class GameplayNetworkEditModeTests
         }
 
         CollectionAssert.AreEquivalent(
-            new[] { GameMode.Elimination, GameMode.KingOfTheHill },
+            new[]
+            {
+                GameMode.Elimination,
+                GameMode.KingOfTheHill,
+                GameMode.EscortThePresident,
+            },
             supported,
-            "Only Elimination and King of the Hill may survive sanitization."
+            "Only a mode the build can actually play may survive sanitization."
         );
 
         MatchOptions retired = MatchOptions.Default;

@@ -377,9 +377,10 @@
     justify-content: center;
 }
 
-/* The hill readout floats over the right end of this same band, so King of the
-   Hill keeps the row packed left where it clears the readout at full card width. */
-.koth .enemy-unit-cards .unity-scroll-view__content-container {
+/* An objective readout floats over the right end of this same band, so any mode
+   that carries one keeps the row packed left. */
+.koth .enemy-unit-cards .unity-scroll-view__content-container,
+.escort .enemy-unit-cards .unity-scroll-view__content-container {
     justify-content: flex-start;
 }
 

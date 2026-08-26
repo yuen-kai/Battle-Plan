@@ -38,6 +38,30 @@ public abstract class Ability : NetworkBehaviour
 
     public void InterruptForStun()
     {
+        Interrupt();
+    }
+
+    /// <summary>
+    /// Stops this ability whether or not it reached an interruptible window, unlike
+    /// <see cref="InterruptForStun"/>. Callers own refunding the charge.
+    /// </summary>
+    public bool CancelForDisplacement()
+    {
+        if (execution == null)
+            return false;
+
+        StopCoroutine(execution);
+        execution = null;
+        interruptibleExecution = null;
+        OnAbilityInterrupted();
+        GetComponent<Unit>()?.ResumeShootingAfterAbility();
+        return true;
+    }
+
+    public virtual bool CancelsAlliedOrders => false;
+
+    private void Interrupt()
+    {
         if (interruptibleExecution == null)
             return;
 
