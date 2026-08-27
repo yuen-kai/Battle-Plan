@@ -202,18 +202,18 @@ public class NetworkHandler : NetworkBehaviour
 
         if (SandboxSession.IsActive)
         {
-            // The character sandbox picks both crews in the Editor window, so it goes straight to
-            // the board rather than through character selection — same as the tutorial above.
+            // The sandbox composes both crews itself, so it goes straight to the board rather than
+            // through character selection — same as the tutorial above.
             GameLoop.ResetMatchState();
             GameLoop.ConfigureTeam(
                 GameLoop.HostTeamIndex,
                 NetworkManager.ServerClientId,
-                SandboxSession.BuildHostRoster()
+                SandboxSession.BuildRoster(GameLoop.HostTeamIndex)
             );
             GameLoop.ConfigureTeam(
                 GameLoop.OpponentTeamIndex,
                 GameLoop.BotParticipantId,
-                SandboxSession.BuildOpponentRoster()
+                SandboxSession.BuildRoster(GameLoop.OpponentTeamIndex)
             );
 
             sceneLoadRequested = true;

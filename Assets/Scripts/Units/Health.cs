@@ -154,10 +154,14 @@ public class Health : NetworkBehaviour
         if (!IsServer || !isAlive.Value)
             return;
 
-        // The tutorial sandbox teaches; it does not kill. Hits still land and still read on the
-        // health bar, but neither crew can be eliminated, so a fumbled dodge cannot end the lesson
-        // script early or hand a first-time player a defeat.
-        float floor = TutorialSession.IsActive ? 1f : 0f;
+        // The tutorial teaches; it does not kill. Hits still land and still read on the health bar,
+        // but neither crew can be eliminated, so a fumbled dodge cannot end the lesson script early
+        // or hand a first-time player a defeat. The sandbox offers the same protection per crew, so
+        // a scenario can be run to the end without a casualty finishing the match first.
+        bool cannotBeKilled =
+            TutorialSession.IsActive
+            || SandboxSession.IsImmortal(GetComponent<Unit>()?.TeamIndex ?? -1);
+        float floor = cannotBeKilled ? 1f : 0f;
         currentHealth.Value = Mathf.Max(floor, currentHealth.Value - damage * damageTakenMultiplier);
         if (currentHealth.Value > 0f)
         {

@@ -70,6 +70,9 @@ public static class EscortSeries
     /// <summary>Upper bound on a leg so it cannot run forever.</summary>
     public const int RoundsPerLeg = 12;
 
+    /// <summary>Rounds left when the leg clock announces itself across the screen.</summary>
+    public const int FinalWarningRounds = 3;
+
     public const int LegsToWin = 2;
     public const int DeciderLeg = 3;
     public const int ExtractionZoneWidthCells = 3;

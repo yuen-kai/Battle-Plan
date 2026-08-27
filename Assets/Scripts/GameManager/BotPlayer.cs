@@ -99,8 +99,8 @@ public sealed class BotKnowledge
 /// DEV: opt-in "hold position" override so specific bot-controlled units — or, registered before
 /// their GameObjects even exist, an entire bot team — never plan a move or an ability and never
 /// queue a dodge dive, regardless of what TryChooseAbility/BuildMovementPath would otherwise choose.
-/// Built for the Character Sandbox tool (see <c>CharacterSandbox.cs</c>) so a designated enemy can
-/// serve as a reliable stationary target dummy across an unbounded number of rounds.
+/// Built for the sandbox (see <c>SandboxSession.cs</c>), where the designer plans the opposing crew
+/// by hand and the bot must never choose anything for it.
 ///
 /// Freezing only touches planning/dodge DECISIONS. Health, damage application, on-hit reactions,
 /// and death all still run through the normal Health/Unit pipeline untouched — a frozen unit still
@@ -233,8 +233,8 @@ public sealed class BotPlayer
             {
                 // Frozen means it never moves and never spends the ability slot; whether it shoots
                 // back is a separate question this does not answer, so nothing here touches
-                // Shooting. The character sandbox drives that from SandboxDirector, where it can be
-                // toggled both ways instead of latching a cease-fire on for the rest of the match.
+                // Shooting. A frozen crew still returns fire, which is what a sandbox opponent
+                // standing on a square is expected to do.
                 plans[unit] = (false, new List<Vector3> { startWorld });
                 continue;
             }

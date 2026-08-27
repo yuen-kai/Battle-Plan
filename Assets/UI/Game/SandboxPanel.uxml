@@ -1,0 +1,50 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:VisualElement name="sandbox-layer" class="sandbox-layer" picking-mode="Ignore">
+        <ui:VisualElement name="sandbox-panel" class="sandbox-panel">
+            <ui:VisualElement class="sandbox-panel__header">
+                <ui:Label text="Sandbox" class="sandbox-panel__title" picking-mode="Ignore" />
+                <ui:Button name="sandbox-collapse" text="–" class="sandbox-panel__collapse" tooltip="Fold the panel away" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="sandbox-body" class="sandbox-panel__body">
+                <ui:VisualElement class="sandbox-row">
+                    <ui:Button name="sandbox-reset" text="Reset board" class="button sandbox-button sandbox-button--paired" tooltip="Rebuild both crews where they stand, at full health, from round one" />
+                    <ui:Button name="sandbox-clear" text="Clear crews" class="button sandbox-button" tooltip="Back to one unit a side" />
+                </ui:VisualElement>
+
+                <ui:Button name="sandbox-move" text="Move units" class="button sandbox-button sandbox-button--wide" tooltip="Drag any unit to another square instead of planning" />
+                <ui:Button name="sandbox-recharge" text="Clear cooldowns" class="button sandbox-button sandbox-button--wide" tooltip="Hand every ability back" />
+
+                <ui:VisualElement class="sandbox-divider" picking-mode="Ignore" />
+
+                <ui:VisualElement class="sandbox-crew">
+                    <ui:Label text="Your crew" class="sandbox-crew__name" picking-mode="Ignore" />
+                    <ui:Label name="sandbox-own-count" text="1 / 5" class="sandbox-crew__count mono" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:Toggle name="sandbox-own-immortal" label="Cannot be killed" class="sandbox-toggle" />
+
+                <ui:VisualElement class="sandbox-crew">
+                    <ui:Label text="Enemy crew" class="sandbox-crew__name" picking-mode="Ignore" />
+                    <ui:Label name="sandbox-enemy-count" text="1 / 5" class="sandbox-crew__count mono" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:Toggle name="sandbox-enemy-immortal" label="Cannot be killed" class="sandbox-toggle" />
+
+                <ui:VisualElement class="sandbox-divider" picking-mode="Ignore" />
+
+                <ui:Label name="sandbox-hint" class="sandbox-hint" picking-mode="Ignore" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="sandbox-picker" class="sandbox-picker hidden">
+            <ui:VisualElement name="sandbox-picker-panel" class="sandbox-picker__panel" focusable="true" tabindex="-1">
+                <ui:VisualElement class="sandbox-picker__header">
+                    <ui:Label name="sandbox-picker-title" text="Choose a character" class="sandbox-panel__title" picking-mode="Ignore" />
+                    <ui:Button name="sandbox-picker-close" text="Cancel" class="button sandbox-button" />
+                </ui:VisualElement>
+                <ui:ScrollView name="sandbox-picker-scroll" mode="Vertical" class="sandbox-picker__scroll">
+                    <ui:VisualElement name="sandbox-picker-grid" class="sandbox-picker__grid" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

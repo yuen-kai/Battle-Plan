@@ -450,6 +450,36 @@
     opacity: 1;
 }
 
+/* The leg clock's last call, in the gap between the two bands. Over the board rather than in a
+   readout because it is the one message in the match that must not be missable. */
+.escort-alert {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 26%;
+    align-items: center;
+    opacity: 0;
+    transition-duration: 0.22s;
+    transition-property: opacity;
+}
+
+.escort-alert--visible {
+    opacity: 1;
+}
+
+/* No plate under it, so it takes the halo the display face gets on the stage. Orange because this
+   is the objective's own clock, which is what the accent is reserved for. */
+.escort-alert__copy {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 72px;
+    -unity-font-style: normal;
+    color: var(--toy-primary-copy);
+    letter-spacing: var(--toy-track-display);
+    -unity-text-align: middle-center;
+    text-shadow: 0 4px 24px var(--toy-shadow-stage);
+    white-space: nowrap;
+}
+
 /* Tutorial lesson. The beats worth stopping to read get a card instead of a strip, sat well above
    the instruction line. Anchored to the dock rather than the screen centre so a lesson never lands
    on top of the fight it is describing. */
@@ -1624,6 +1654,10 @@
     min-width: 0;
 }
 
+.narrow .escort-alert__copy {
+    font-size: 56px;
+}
+
 .narrow .hill-status-readout {
     width: 244px;
 }
@@ -1784,6 +1818,10 @@
     font-size: 22px;
 }
 
+.phone .escort-alert__copy {
+    font-size: 34px;
+}
+
 .phone .hill-status-readout {
     top: 0;
     left: auto;
@@ -1898,6 +1936,10 @@
     min-height: 44px;
     padding-top: 7px;
     padding-bottom: 7px;
+}
+
+.short .escort-alert {
+    top: 20%;
 }
 
 .phone.short .hill-status-readout {

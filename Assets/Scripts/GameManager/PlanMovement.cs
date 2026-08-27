@@ -41,6 +41,11 @@ public partial class PlanMovement : MonoBehaviour
     private bool planningLockPending;
     private bool planningUnlockPending;
     private bool lockInAvailable;
+
+    // A dodge response the designer commits by hand rather than on the window's clock. It carries no
+    // lock/unlock protocol — the server takes a dive once and closes the window — so this is a
+    // plain submit button rather than the commit chip's full state machine.
+    private bool dodgeCommitAvailable;
     private int planningSessionVersion;
     private int planningRoundToken = -1;
     private int planningCommitVersion;
@@ -51,7 +56,30 @@ public partial class PlanMovement : MonoBehaviour
 
     private static float cellSize => GameLoop.cellSize;
 
+    /// <summary>
+    /// The sandbox designer gives orders to both crews from one planning session, so the planner
+    /// works over two control groups rather than one team. Everything a control group owns —
+    /// which units may be selected, which cards answer for them, which destinations conflict, and
+    /// which lane a route draws in — asks this first.
+    /// </summary>
+    private static bool DualControl => SandboxSession.IsActive;
+
+    private static int LocalTeamIndex =>
+        GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1;
+
+    private static int TeamOf(GameObject unit)
+    {
+        Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+        return identity != null ? identity.TeamIndex : -1;
+    }
+
     public static PlanMovement Instance { get; private set; }
+
+    /// <summary>
+    /// Whether a planning or dodge session is live. Read by the deferred teardown of the commit
+    /// chip, which must not close a session that opened while it was waiting.
+    /// </summary>
+    public bool IsPlanningSessionOpen => planningActive;
     public bool CanEditPlan => planningActive && planningInitialized && !planningSubmitted;
     public bool CanUnlockPlan => IsCommitAcknowledged && !HasPlanningDeadlineElapsed();
 
@@ -113,6 +141,10 @@ public partial class PlanMovement : MonoBehaviour
         planningLockPending = false;
         planningUnlockPending = false;
         lockInAvailable = allowLockIn && units == null;
+        // Every dodge window elsewhere runs its own short clock out. The sandbox opens it wide and
+        // hands the designer the same button the planning phase has, so a dive can be drawn, looked
+        // at and redrawn before it is committed.
+        dodgeCommitAvailable = units != null && SandboxSession.IsActive;
         planningUnlockCallback = unlockCallback;
         planningRoundToken = planningRound;
         planningCommitVersion = 0;
@@ -127,7 +159,7 @@ public partial class PlanMovement : MonoBehaviour
             &&
             planningActive
             && units == null
-            && teamCharacters.Count < GameLoop.UnitsPerTeamThisMatch
+            && teamCharacters.Count < ExpectedTeamCharacterCount
             && NetworkManager.Singleton != null
             && NetworkManager.Singleton.IsListening
             && NetworkManager.Singleton.ServerTime.Time < endTime
@@ -150,6 +182,8 @@ public partial class PlanMovement : MonoBehaviour
         SwitchToUnit(teamCharacters.FirstOrDefault(IsPlanningUnitAvailable), range);
         if (lockInAvailable)
             GameHUDController.Instance?.ShowPlanningCommitReady();
+        else if (dodgeCommitAvailable)
+            GameHUDController.Instance?.ShowDodgeCommitReady();
         else
             GameHUDController.Instance?.HidePlanningCommit();
 
@@ -164,8 +198,11 @@ public partial class PlanMovement : MonoBehaviour
         )
         {
             GameHUDController.Instance?.SetTimer(timer);
-            if (!CanEditPlan)
+            if (!CanEditPlan || SandboxSession.IsBoardEditLive)
             {
+                // Board-edit mode spends the same drag on moving a unit between squares, so the
+                // planner lets go of the pointer entirely rather than reading it twice. It is only
+                // live between rounds, so a dodge drag still reaches here with the mode left on.
                 PathSelection.Instance?.CancelCurrentDrag();
             }
             else if (selectedUnit == null)
@@ -214,9 +251,38 @@ public partial class PlanMovement : MonoBehaviour
             GameHUDController.Instance?.ShowPlanningCommitLocked();
     }
 
+    /// <summary>
+    /// How many units this session expects to be handed, which is both crews when the sandbox has
+    /// the designer commanding them.
+    /// </summary>
+    private static int ExpectedTeamCharacterCount
+    {
+        get
+        {
+            if (!DualControl)
+                return GameLoop.UnitsPerTeamThisMatch;
+
+            int total = 0;
+            for (int teamIndex = 0; teamIndex < GameLoop.TeamCount; teamIndex++)
+                total += GameLoop.UnitsForTeamThisMatch(teamIndex);
+            return total;
+        }
+    }
+
     public bool TryLockIn()
     {
-        if (!CanEditPlan || !lockInAvailable)
+        if (!CanEditPlan)
+            return false;
+
+        // A dive is committed as it stands, empty included: pressing this with nothing drawn is how
+        // the designer declines the dodge and lets the round resolve.
+        if (dodgeCommitAvailable)
+        {
+            SubmitCurrentPlan(planningSessionVersion);
+            return true;
+        }
+
+        if (!lockInAvailable)
             return false;
 
         GameObject incompleteAbilityUnit = plans
@@ -358,6 +424,7 @@ public partial class PlanMovement : MonoBehaviour
         planningCallback = null;
         planningUnlockCallback = null;
         lockInAvailable = false;
+        dodgeCommitAvailable = false;
         planningRoundToken = -1;
         planningEndTime = 0d;
         PathSelection.Instance?.CancelCurrentDrag();
@@ -400,8 +467,12 @@ public partial class PlanMovement : MonoBehaviour
         PathSelection.Instance?.CancelCurrentDrag();
         TrimAllRoutesToFreeCells();
 
+        // Orders are being given, so the board has stopped being rearranged: the sandbox drops its
+        // board-edit mode on the way out rather than leaving it armed into the next round.
+        SandboxSession.BoardEditActive = false;
+
         bool showCommitState = lockInAvailable;
-        PathsDict submittedPlans = plans;
+        PathsDict submittedPlans = SplitOutOpponentPlans(plans);
         System.Action<PathsDict, int> callback = planningCallback;
         planningSubmitted = true;
         planningLockPending = showCommitState;
@@ -420,6 +491,8 @@ public partial class PlanMovement : MonoBehaviour
             planningCallback = null;
             ClearVisuals();
             GameHUDController.Instance?.SetTimer(0f);
+            if (dodgeCommitAvailable)
+                GameHUDController.Instance?.HidePlanningCommit();
         }
 
         NetworkManager networkManager = NetworkManager.Singleton;
@@ -440,6 +513,36 @@ public partial class PlanMovement : MonoBehaviour
             return;
         }
         callback?.Invoke(submittedPlans, planningCommitVersion);
+    }
+
+    /// <summary>
+    /// Sends the local crew's half over the wire and leaves the opponent's with the sandbox session.
+    /// Both halves were given together, but the submit paths only ever accept the sender's own team,
+    /// so the host reads the other half back server-side. Which half goes where depends on the
+    /// session: orders are collected when planning closes, dives when the dodge window does.
+    /// The board keeps everything either way — it is a record of the whole round, not of one crew.
+    /// </summary>
+    private PathsDict SplitOutOpponentPlans(PathsDict allPlans)
+    {
+        if (!DualControl)
+            return allPlans;
+
+        int localTeamIndex = LocalTeamIndex;
+        PathsDict ownPlans = new();
+        PathsDict opponentPlans = new();
+        foreach (KeyValuePair<GameObject, (bool, List<Vector3>)> entry in allPlans)
+        {
+            if (TeamOf(entry.Key) == localTeamIndex)
+                ownPlans[entry.Key] = entry.Value;
+            else
+                opponentPlans[entry.Key] = entry.Value;
+        }
+
+        if (useUnitCards)
+            SandboxSession.SetPendingEnemyPlan(opponentPlans);
+        else
+            SandboxSession.SetPendingEnemyDodge(opponentPlans);
+        return ownPlans;
     }
 
     /// <summary>

@@ -21,6 +21,19 @@ public partial class PlanMovement
         return slot >= 0 ? slot : Mathf.Max(0, teamCharacters.IndexOf(unit));
     }
 
+    /// <summary>
+    /// Which route identity a unit draws under: its roster slot, except that the sandbox plans two
+    /// crews at once and their slots would otherwise collide. Colliding identities would put two
+    /// units' routes in one lane, drawn on top of each other.
+    /// </summary>
+    private int GetRouteIdentity(GameObject unit)
+    {
+        int slot = GetRosterSlot(unit);
+        if (!DualControl || TeamOf(unit) == LocalTeamIndex)
+            return slot;
+        return slot + SandboxSession.MaxUnitsPerTeam;
+    }
+
     private PathRibbon EnsureRibbon(GameObject unit)
     {
         if (unit == null)
@@ -28,11 +41,11 @@ public partial class PlanMovement
         if (planVisuals.TryGetValue(unit, out PathRibbon existing) && existing != null)
             return existing;
 
-        int slot = GetRosterSlot(unit);
+        int identity = GetRouteIdentity(unit);
         PathRibbon ribbon = PathRibbon.Create(
             planVisualsFolder != null ? planVisualsFolder.transform : null,
-            $"PlanRoute_{slot}",
-            slot
+            $"PlanRoute_{identity}",
+            identity
         );
         planVisuals[unit] = ribbon;
         return ribbon;
@@ -76,7 +89,7 @@ public partial class PlanMovement
             if (entry.Value.Item1 || entry.Value.Item2 == null)
                 continue;
 
-            laneMap.AddRoute(GetRosterSlot(entry.Key), entry.Value.Item2);
+            laneMap.AddRoute(GetRouteIdentity(entry.Key), entry.Value.Item2);
         }
     }
 

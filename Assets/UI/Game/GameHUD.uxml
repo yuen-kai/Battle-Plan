@@ -39,6 +39,10 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="escort-alert" class="escort-alert hidden" picking-mode="Ignore">
+            <ui:Label name="escort-alert-label" class="escort-alert__copy" picking-mode="Ignore" />
+        </ui:VisualElement>
+
         <ui:VisualElement name="hud-dock" class="hud-dock">
             <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
             <ui:VisualElement name="lesson-popup" class="lesson-popup toybox-ui hidden" picking-mode="Ignore">

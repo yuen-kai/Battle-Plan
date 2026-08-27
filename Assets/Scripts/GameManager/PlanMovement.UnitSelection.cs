@@ -3,6 +3,30 @@ using UnityEngine;
 
 public partial class PlanMovement
 {
+    /// <summary>
+    /// The unit a card stands for. A card is a roster slot on one of the two strips, which is a
+    /// stabler handle than a position in <c>teamCharacters</c>: the sandbox puts both crews in that
+    /// list, and either crew can lose a unit mid-match.
+    /// </summary>
+    private GameObject FindCardUnit(int cardIndex, bool enemyStrip)
+    {
+        int localTeamIndex = LocalTeamIndex;
+        if (cardIndex < 0 || localTeamIndex < 0)
+            return null;
+
+        int teamIndex = enemyStrip
+            ? GameLoop.TeamCount - 1 - localTeamIndex
+            : localTeamIndex;
+
+        foreach (GameObject unit in teamCharacters)
+        {
+            Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+            if (identity != null && identity.TeamIndex == teamIndex && identity.RosterSlot == cardIndex)
+                return unit;
+        }
+        return null;
+    }
+
     public void SwitchToUnit(int unitIndex)
     {
         SelectUnit(unitIndex);
@@ -21,17 +45,23 @@ public partial class PlanMovement
     /// <see cref="TrySelectPlanningUnit"/> handles the click that lands on one — so the dock is
     /// free to be the abilities and nothing else.
     /// </remarks>
-    public bool TryActivateUnitCard(int unitIndex)
+    public bool TryActivateUnitCard(int unitIndex) => TryActivateUnitCard(unitIndex, false);
+
+    /// <summary>
+    /// Presses a card on the enemy strip. Only the sandbox offers this: there the enemy strip is
+    /// the designer's second dock rather than a contact readout.
+    /// </summary>
+    public bool TryActivateEnemyUnitCard(int cardIndex)
     {
-        if (
-            !CanEditPlan
-            || !useUnitCards
-            || unitIndex < 0
-            || unitIndex >= teamCharacters.Count
-        )
+        return DualControl && TryActivateUnitCard(cardIndex, true);
+    }
+
+    private bool TryActivateUnitCard(int cardIndex, bool enemyStrip)
+    {
+        if (!CanEditPlan || !useUnitCards)
             return false;
 
-        GameObject unit = teamCharacters[unitIndex];
+        GameObject unit = FindCardUnit(cardIndex, enemyStrip);
         if (!IsPlanningUnitAvailable(unit))
             return false;
 
@@ -69,30 +99,42 @@ public partial class PlanMovement
 
     public void SelectUnit(int unitIndex)
     {
-        if (
-            !CanEditPlan
-            || !useUnitCards
-            || unitIndex < 0
-            || unitIndex >= teamCharacters.Count
-        )
+        if (!CanEditPlan || !useUnitCards)
             return;
 
-        GameObject unit = teamCharacters[unitIndex];
+        GameObject unit = FindCardUnit(unitIndex, false);
         if (IsPlanningUnitAvailable(unit))
             SwitchToUnit(unit);
     }
 
     public void SetSelectionMode(int unitIndex, bool abilityMode)
     {
-        if (
-            !CanEditPlan
-            || !useUnitCards
-            || unitIndex < 0
-            || unitIndex >= teamCharacters.Count
-        )
+        if (!CanEditPlan || !useUnitCards)
             return;
 
-        TrySetSelectionMode(teamCharacters[unitIndex], abilityMode);
+        TrySetSelectionMode(FindCardUnit(unitIndex, false), abilityMode);
+    }
+
+    /// <summary>
+    /// Drops the orders of a unit the sandbox has just stood on a different square. Its route was
+    /// drawn out from the cell it used to hold, so keeping it would leave a plan that starts
+    /// somewhere the unit no longer is.
+    /// </summary>
+    public void NotifyUnitPlacementChanged(GameObject unit)
+    {
+        if (unit == null || !plans.ContainsKey(unit))
+            return;
+
+        plans[unit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(unit) });
+        ClearAbilityIndicator(unit);
+        if (unit == selectedUnit)
+        {
+            currentPlan = plans[unit].Item2;
+            ResetVisualPlan();
+            ApplySelectedUnitModeVisuals();
+        }
+        RefreshAllRibbons();
+        RefreshAbilityIndicators();
     }
 
     private bool TrySetSelectionMode(GameObject unit, bool abilityMode)
@@ -222,14 +264,19 @@ public partial class PlanMovement
         if (!useUnitCards || GameLoop.Instance == null)
             return;
 
-        int count = teamCharacters.Count;
-        for (int i = 0; i < count; i++)
+        foreach (GameObject unit in teamCharacters)
         {
-            bool selected = teamCharacters[i] == selectedUnit;
-            bool abilityMode =
-                plans.TryGetValue(teamCharacters[i], out (bool, List<Vector3>) plan) && plan.Item1;
+            Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+            if (identity == null || identity.RosterSlot < 0)
+                continue;
 
-            GameHUDController.Instance?.SetCardPlanningState(i, selected, abilityMode);
+            bool selected = unit == selectedUnit;
+            bool abilityMode =
+                plans.TryGetValue(unit, out (bool, List<Vector3>) plan) && plan.Item1;
+            if (identity.TeamIndex == LocalTeamIndex)
+                GameHUDController.Instance?.SetCardPlanningState(identity.RosterSlot, selected, abilityMode);
+            else if (DualControl)
+                GameHUDController.Instance?.SetEnemyCardPlanningState(identity.RosterSlot, selected, abilityMode);
         }
     }
 }

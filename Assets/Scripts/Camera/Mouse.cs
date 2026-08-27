@@ -52,6 +52,13 @@ public class Mouse : MonoBehaviour
     /// happens to be standing on: a unit is half a cell wide on a board of 2.7-wide cells, so its
     /// own square keeps plenty of clickable ground around it.
     /// </summary>
+    /// <remarks>
+    /// Own crew even in the sandbox, where the designer commands both. This pick is what lets a
+    /// press on a team-mate's body outrank the square it stands on while an ability is being aimed;
+    /// the opposing crew must keep answering that press with its cell, since aiming at it is the
+    /// point. Selecting an opposing unit runs off its square instead, through
+    /// <see cref="PlanMovement.TrySelectUnitForMovementAtCell"/>.
+    /// </remarks>
     public static GameObject GetFriendlyUnitUnderMouse()
     {
         string teamLayer = GameLoop.Instance != null
@@ -60,9 +67,27 @@ public class Mouse : MonoBehaviour
         if (string.IsNullOrEmpty(teamLayer))
             return null;
 
+        return PickUnit(teamLayer);
+    }
+
+    /// <summary>The unit of either crew whose body the pointer is over, for the sandbox.</summary>
+    public static GameObject GetUnitUnderMouse()
+    {
+        string[] layers = new string[GameLoop.TeamCount];
+        for (int teamIndex = 0; teamIndex < layers.Length; teamIndex++)
+            layers[teamIndex] = GameLoop.GetTeamName(teamIndex);
+        return PickUnit(layers);
+    }
+
+    private static GameObject PickUnit(params string[] teamLayers)
+    {
         // Walls are in the mask but never accepted, so cover a unit is standing behind stops the
         // pick rather than being clicked through.
-        RaycastHit? hit = GetHitUnderMouse(LayerMask.GetMask(teamLayer, "Walls"));
+        string[] mask = new string[teamLayers.Length + 1];
+        System.Array.Copy(teamLayers, mask, teamLayers.Length);
+        mask[^1] = "Walls";
+
+        RaycastHit? hit = GetHitUnderMouse(LayerMask.GetMask(mask));
         Unit unit = hit?.collider.GetComponentInParent<Unit>();
         return unit != null ? unit.gameObject : null;
     }

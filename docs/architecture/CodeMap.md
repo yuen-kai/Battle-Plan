@@ -19,7 +19,7 @@ Battle Plan is a Unity 6000.3 project using Netcode for GameObjects. The server 
 | Networking | `Assets/Scripts/Multiplayer/` | Session lifetime, transport/relay, spawning helpers, reconnect state, and local multiplayer tooling |
 | UI | `Assets/Scripts/Menus/` | Title/join/roster screens, HUD, unit cards, planning feedback, and battle reports |
 | Presentation | `Assets/Scripts/VFX/`, `Assets/Scripts/Camera/` | Reusable gameplay VFX, camera effects, audio, mouse-to-world queries, and visibility-facing effects |
-| Tutorial and development tools | `Assets/Scripts/Tutorial/`, `Assets/Scripts/GameManager/*Studio.cs`, `Dev*.cs`, `CharacterSandbox.cs` | Tutorial flow, deterministic developer input, E2E drivers, sandboxes, and capture tools |
+| Tutorial and development tools | `Assets/Scripts/Tutorial/`, `Assets/Scripts/GameManager/*Studio.cs`, `Dev*.cs`, `Sandbox*.cs`, `Assets/Scripts/Menus/SandboxPanel.cs` | Tutorial flow, deterministic developer input, E2E drivers, the sandbox, and capture tools |
 | Editor checks | `Assets/Scripts/**/Editor/` | Edit-mode tests and editor-only validation close to the systems they cover |
 
 `GameLoop.cs` is an intentional central controller. Add match-wide flow there rather than creating another manager. Smaller input, presentation, math, or component-owned behavior belongs beside the system that owns it.
@@ -94,6 +94,53 @@ decider is settled by whichever president covered more ground the moment either 
 | `PathSelection.cs` | Mouse drag lifecycle and incremental movement-route editing |
 
 Keep new planning behavior in the matching partial. Shared session state can remain in `PlanMovement.cs`; avoid adding another planning manager.
+
+## Sandbox
+
+An editor-only tool, not a game mode: `Battle Plan/Sandbox` enters Play mode, stands up a loopback
+host and drops onto a board the designer composes from inside the running match. It is a real match —
+same round loop, same planning, same server validation — with four things added.
+
+| Piece | Responsibility |
+| --- | --- |
+| `SandboxSession.cs` | The setup: two `SandboxCrew`s (characters, cells, immortality), plus every rule about them as a pure function. Edit-mode tested |
+| `SandboxDirector.cs` | Host-side runtime: keeps the panel on the live HUD, holds the HUD in its sandbox presentation, owns the board-edit drag |
+| `SandboxPanel.cs` | The in-game panel (`Assets/UI/Game/SandboxPanel.uxml`), docked inside the HUD's own tree so it picks like the HUD does |
+| `SandboxLauncher.cs` | The menu item, the loopback launch, and setup persistence in `EditorPrefs` |
+
+- **Both crews are the designer's.** `PlanMovement` runs over two control groups rather than one team
+  (`DualControl`), the enemy card strip becomes a second dock, and one lock-in submits both. The
+  submit RPC only ever accepts the sender's own team, so the opponent's half of the session is left
+  on `SandboxSession` and read back server-side as planning closes. Anything unplanned holds.
+- **Crew composition is on the cards**, one per fielded unit on either strip. Pressing a
+  character's portrait offers every other character for that slot or takes it off the board; an add
+  tile closes each strip. The portrait sits inside the card's own press, which orders the ability, so
+  that press is claimed and stopped at the portrait.
+- **Any character can be fielded**, the president included. The roster names exactly who is on the
+  board, and `SetupUnitsAndCards` skips the `RosterRules` eligibility rule for a sandbox board rather
+  than standing an eligible substitute in for a restricted pick. Substitution was tried and dropped:
+  the roster is built on the join screen before any catalog is loaded, so there was nothing to test
+  eligibility against and a restricted pick reached spawning unchecked — and it lied to everything
+  that names a unit from its roster slot, the cards and the battle report included. What every crew
+  still has to do, sandbox or not, is name a catalog entry that has a model.
+- **Every board change goes through the round loop.** `GameLoop.RequestSandboxRebuild` sets a flag
+  the loop serves at the next round boundary, so a rebuild never lands mid-execution; a finished
+  match is served immediately instead, since no loop is left to serve it. Reset, Clear crews and
+  every roster edit are all that one path.
+- **Board-edit mode** suspends planning input and drags a unit between squares
+  (`GameLoop.SandboxPlaceUnitAtCell`). The setup follows the unit, so the square it is dropped on is
+  the square a rebuild puts it back on. `SandboxSession.IsBoardEditLive` is the single gate: armed,
+  and between rounds — so leaving the mode on never costs the designer a dodge.
+- **The dodge window works the same way.** It is open-ended, one seat is handed every alerted unit
+  on the board (`OpenSandboxDodgeWindow`), and one confirm answers for both crews
+  (`PlanMovement.dodgeCommitAvailable`, `GameHUDController.ShowDodgeCommitReady`). A dive has no
+  lock/unlock protocol — the server takes one and closes the window — so that chip is a plain submit,
+  and pressing it with nothing drawn is how a dodge is declined. The opponent's dives ride
+  `SandboxSession`'s dodge slot and are taken by `AcceptDodgeResponse`, which is also what keeps a
+  team that was never alerted from registering a response it had nothing to give.
+
+The bot is frozen (`BotFrozenUnits`) and, in the sandbox, silent: it must not enter a stand-still
+dodge for the crew the designer is about to dive, because the first response closes the window.
 
 ## Ability lifecycle and stun interruption
 
@@ -187,6 +234,7 @@ Prefer cell-based rules for planning and validation. Use physics when the actual
 | Character tuning | `Assets/UnitStats/*.asset` | Unit prefab and balance/editor checks |
 | Wall or map behavior | `GameLoop.cs`, `GridSystem.cs`, `Assets/Scripts/Map/` | Wall prefab and map definitions |
 | HUD/card feedback | `GameHUDController.cs`, `UnitCardElement.cs` | `PlanMovement` callers |
+| Sandbox behaviour | `SandboxSession.cs` for a setup rule, `SandboxPanel.cs` for a control | `SandboxDirector.cs`, the sandbox block in `GameLoop.cs`, `SandboxEditModeTests` |
 | Session/reconnect issue | `NetworkHandler.cs`, `ReconnectSession.cs`, `ReconnectGrace.cs` | `GameLoop` phase/state restoration |
 
 ## Working and verification agreement

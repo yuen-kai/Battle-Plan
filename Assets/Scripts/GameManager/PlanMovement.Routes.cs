@@ -195,38 +195,55 @@ public partial class PlanMovement
     }
 
     /// <summary>
-    /// Populates the teamCharacters list with units belonging to the local client's team
+    /// The units this session may give orders to: the local client's crew, or both crews when the
+    /// sandbox has the designer commanding them. Ordered by team and then roster slot, so the list
+    /// reads in the same order as the two card strips.
     /// </summary>
     private List<GameObject> PopulateTeamCharacters()
     {
-        List<GameObject> localTeamCharacters = new();
+        List<GameObject> commandedCharacters = new();
 
         if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
         {
             Debug.LogWarning(
                 "[PlanMovement] NetworkManager not available, cannot populate team characters"
             );
-            return localTeamCharacters;
+            return commandedCharacters;
         }
 
-        int localTeamIndex = GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1;
+        int localTeamIndex = LocalTeamIndex;
         if (localTeamIndex < 0)
-            return localTeamCharacters;
+            return commandedCharacters;
 
-        localTeamCharacters.AddRange(
+        commandedCharacters.AddRange(
             NetworkManager
                 .Singleton.SpawnManager.SpawnedObjectsList.Where(netObj => netObj != null)
                 .Select(netObj => netObj.GetComponent<Unit>())
                 .Where(unit =>
                     unit != null
-                    && unit.TeamIndex == localTeamIndex
+                    && (DualControl || unit.TeamIndex == localTeamIndex)
+                    && unit.TeamIndex >= 0
                     && unit.RosterSlot >= 0
                 )
-                .OrderBy(unit => unit.RosterSlot)
+                // The local crew stays first, so the unit selected up front is one of the
+                // designer's own rather than whichever team happened to spawn first.
+                .OrderBy(unit => unit.TeamIndex == localTeamIndex ? 0 : 1)
+                .ThenBy(unit => unit.RosterSlot)
                 .Select(unit => unit.gameObject)
         );
 
-        return localTeamCharacters;
+        return commandedCharacters;
+    }
+
+    /// <summary>
+    /// Whether two units answer to the same set of destination rules. Two units of one crew cannot
+    /// finish the round on the same square; two units of opposing crews can, and the server shoves
+    /// them apart when they do — a rule the sandbox must not quietly tighten just because one
+    /// person is planning both sides.
+    /// </summary>
+    private static bool SharesDestinationRules(GameObject unit, GameObject other)
+    {
+        return !DualControl || TeamOf(unit) == TeamOf(other);
     }
 
     private bool TryRefreshTeamCharactersForSession(int sessionVersion)
@@ -316,6 +333,8 @@ public partial class PlanMovement
         {
             if (unit == excludedUnit || !IsPlanningUnitAvailable(unit))
                 continue;
+            if (!SharesDestinationRules(unit, excludedUnit))
+                continue;
             if (GetPlannedEndCell(unit) == target)
                 return true;
         }
@@ -372,11 +391,26 @@ public partial class PlanMovement
     /// </summary>
     private void TrimAllRoutesToFreeCells()
     {
+        if (!DualControl)
+        {
+            TrimRoutesToFreeCells(-1);
+            return;
+        }
+
+        // Each crew is settled against itself: the two never compete for the same destination.
+        for (int teamIndex = 0; teamIndex < GameLoop.TeamCount; teamIndex++)
+            TrimRoutesToFreeCells(teamIndex);
+    }
+
+    private void TrimRoutesToFreeCells(int teamIndex)
+    {
         HashSet<Vector2Int> claimed = new();
         List<(GameObject unit, int rosterSlot, List<Vector3> route)> movers = new();
         foreach (GameObject unit in reservationUnits)
         {
             if (!IsPlanningUnitAvailable(unit))
+                continue;
+            if (teamIndex >= 0 && TeamOf(unit) != teamIndex)
                 continue;
 
             bool hasPlan = plans.TryGetValue(unit, out (bool, List<Vector3>) plan);

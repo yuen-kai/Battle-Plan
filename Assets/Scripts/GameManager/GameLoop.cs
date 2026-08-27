@@ -508,14 +508,13 @@ public class GameLoop : NetworkBehaviour
     /// </summary>
     public static int UnitsPerTeamThisMatch =>
         TutorialSession.IsActive ? TutorialSession.UnitsPerTeam
-        : SandboxSession.IsActive ? SandboxSession.UnitsPerTeam
+        : SandboxSession.IsActive ? SandboxSession.UnitsForTeam(HostTeamIndex)
         : RosterRules.UnitsPerPlayer;
 
     /// <summary>
     /// How many units a specific team fields. Identical to <see cref="UnitsPerTeamThisMatch"/> for
-    /// every real match — both crews are the same size — but the character sandbox deliberately
-    /// fields an uneven board: one character under test against as many dummies as the ability being
-    /// exercised needs to be judged against.
+    /// every real match — both crews are the same size — but the sandbox deliberately allows an
+    /// uneven board: each side is composed one unit at a time, up to a full crew.
     /// </summary>
     public static int UnitsForTeamThisMatch(int teamIndex)
     {
@@ -692,6 +691,13 @@ public class GameLoop : NetworkBehaviour
     private BotPlayer botPlayer;
     private TutorialDirector tutorialDirector;
     private SandboxDirector sandboxDirector;
+
+    // Held so the sandbox can stop a finished round loop before starting the next one.
+    private Coroutine gameLoopCoroutine;
+
+    // Set when the sandbox panel asks for a new board. Served at the next round boundary, so the
+    // designer can press Reset at any point without a rebuild landing mid-execution.
+    private bool sandboxRebuildPending;
     private int roundNumber;
     private bool planningChangesOpen;
     private double planningDeadline;
@@ -950,7 +956,7 @@ public class GameLoop : NetworkBehaviour
         if (TutorialSession.IsActive && tutorialDirector == null)
             tutorialDirector = gameObject.AddComponent<TutorialDirector>();
 
-        // Same arrangement for the character sandbox, which is also loopback-host-only.
+        // Same arrangement for the sandbox, which is also loopback-host-only.
         if (SandboxSession.IsActive && sandboxDirector == null)
             sandboxDirector = gameObject.AddComponent<SandboxDirector>();
 
@@ -969,7 +975,7 @@ public class GameLoop : NetworkBehaviour
         {
             BeginReconnectGraceForMatch();
             StartGame();
-            StartCoroutine(StartGameLoopAfterFogSetup());
+            gameLoopCoroutine = StartCoroutine(StartGameLoopAfterFogSetup());
             InitializeCameraPosition();
         }
     }
@@ -980,7 +986,16 @@ public class GameLoop : NetworkBehaviour
         yield return null;
         if (FogOfWarEnabled)
             StartServerFog();
-        yield return StartCoroutine(GameLoopTemp());
+        // Run the round loop as this coroutine's own child rather than as a second registration, so
+        // stopping the handle held below stops the round loop with it. The sandbox rebuilds a
+        // finished match in place and must not leave the previous loop running underneath.
+        yield return GameLoopTemp();
+
+        // A rebuild asked for mid-round outlives the round it was asked in. If the match ended
+        // before the loop reached a boundary to serve it at — a crew wiped by the very ability the
+        // designer was watching — it is served here rather than waiting for a second press.
+        if (sandboxRebuildPending && IsServer && IsSpawned)
+            ServeSandboxRebuildNow();
     }
 
     public override void OnNetworkDespawn()
@@ -1245,6 +1260,11 @@ public class GameLoop : NetworkBehaviour
             Vector3 heightOffset = Helper.heightOffset(wall.transform);
             wall.transform.position += heightOffset;
 
+            // Registered as it is spawned rather than left to the lazy scan. The scan reads the
+            // scene, and a board rebuilt in place still has the previous walls in it for the rest
+            // of the frame — it would map cells to instances that are already on their way out.
+            wallInstancesByCell[pos] = wall;
+
             // Sync the height-adjusted position to all clients
             NetworkHelper.SyncHeightAdjustedPositionStatic(wall, wall.transform.position);
         }
@@ -1258,10 +1278,13 @@ public class GameLoop : NetworkBehaviour
             }
         }
 
-        // The card strip shows the LOCAL player's own crew, so it is sized from the host team rather
-        // than from the match-wide figure — in the character sandbox the two differ, and sizing it
-        // from the enemy's dummy count would leave the tester staring at empty slots.
-        SetFieldedCardCountClientRpc(UnitsForTeamThisMatch(HostTeamIndex));
+        // Each strip is sized from the crew it actually shows rather than from the match-wide
+        // figure — the sandbox allows an uneven board, and one shared count would leave whichever
+        // side is smaller sitting beside empty slots.
+        SetFieldedCardCountClientRpc(
+            UnitsForTeamThisMatch(HostTeamIndex),
+            UnitsForTeamThisMatch(OpponentTeamIndex)
+        );
 
         // Setup teams by explicit logical index.
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
@@ -1289,12 +1312,22 @@ public class GameLoop : NetworkBehaviour
         string team
     )
     {
-        RosterValidationResult rosterValidation = RosterRules.Validate(teamUnits, allUnits?.units);
-        if (!rosterValidation.IsValid)
+        // The sandbox composes its crews outside the roster rules on purpose: a character no crew
+        // may pick is still worth standing on the board and looking at. Its board is checked as it
+        // is fielded — every index still has to name a real catalog entry with a model — rather than
+        // against a rule it is deliberately outside of.
+        if (!SandboxSession.IsActive)
         {
-            throw new System.InvalidOperationException(
-                $"Team {teamIndex} has an invalid roster ({rosterValidation.Reason})."
+            RosterValidationResult rosterValidation = RosterRules.Validate(
+                teamUnits,
+                allUnits?.units
             );
+            if (!rosterValidation.IsValid)
+            {
+                throw new System.InvalidOperationException(
+                    $"Team {teamIndex} has an invalid roster ({rosterValidation.Reason})."
+                );
+            }
         }
         int fieldedCount = Mathf.Min(teamUnits.Length, UnitsForTeamThisMatch(teamIndex));
         if (spawnPositions == null || spawnPositions.Count < fieldedCount)
@@ -1308,6 +1341,22 @@ public class GameLoop : NetworkBehaviour
         for (int i = 0; i < fieldedCount; i++)
         {
             int catalogIndex = ResolveFieldedCatalogIndex(teamIndex, i, teamUnits[i]);
+            // Said plainly rather than left to a null dereference two lines down. Naming a real
+            // catalog entry with a model is the one thing every crew still has to do, sandbox
+            // boards included, so it is the one thing checked here for all of them.
+            if (
+                allUnits?.units == null
+                || catalogIndex < 0
+                || catalogIndex >= allUnits.units.Count
+                || allUnits.units[catalogIndex] == null
+                || allUnits.units[catalogIndex].unitModel == null
+            )
+            {
+                throw new System.InvalidOperationException(
+                    $"Team {teamIndex} slot {i} names catalog index {catalogIndex}, which has no "
+                        + "unit model to field."
+                );
+            }
             GameObject unitModel = allUnits.units[catalogIndex].unitModel;
             NetworkObject.VisibilityDelegate visibility = IsAuthorizedGameplayObserver;
             GameObject unit = IsBotParticipant(participantId)
@@ -1361,9 +1410,9 @@ public class GameLoop : NetworkBehaviour
     /// unit does not sit beside four empty slots.
     /// </summary>
     [ClientRpc]
-    void SetFieldedCardCountClientRpc(int fieldedCount)
+    void SetFieldedCardCountClientRpc(int fieldedCount, int enemyFieldedCount)
     {
-        GameHUDController.Instance?.SetFieldedCardCount(fieldedCount);
+        GameHUDController.Instance?.SetFieldedCardCount(fieldedCount, enemyFieldedCount);
     }
 
     [ClientRpc]
@@ -1451,7 +1500,14 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
-        int unitIndex = roster[identity.RosterSlot];
+        // Resolved rather than read straight off the roster: a slot whose fielded character was
+        // substituted at spawn — the escort president, a sandbox pick no crew may make — is not the
+        // character the roster names, and the card has to show whoever is actually standing there.
+        int unitIndex = ResolveFieldedCatalogIndex(
+            identity.TeamIndex,
+            identity.RosterSlot,
+            roster[identity.RosterSlot]
+        );
         if (allUnits?.units == null || unitIndex < 0 || unitIndex >= allUnits.units.Count)
             return;
 
@@ -1576,6 +1632,19 @@ public class GameLoop : NetworkBehaviour
             returnFireWindowUntil = 0f;
             currentPhase = "planning";
 
+            // The board the designer asked for is built here, at the one point in the round where
+            // nothing is mid-flight, and the round is then opened on it from scratch.
+            if (sandboxRebuildPending)
+            {
+                ApplySandboxRebuild();
+                roundNumber = 0;
+                // The crews it replaced are only reaped at the end of this frame, so a round opened
+                // now would be handed both the new units and the outgoing ones — and could select
+                // a unit that is already on its way out. One frame settles it.
+                yield return null;
+                continue;
+            }
+
             // Fast-forward the whole simulation (movement/shooting/physics) in dev mode.
             Time.timeScale = devMode ? Mathf.Max(0.01f, devSpeedMultiplier) : 1f;
 
@@ -1587,7 +1656,8 @@ public class GameLoop : NetworkBehaviour
                 .Max(teamIndex => GetTeamUnits(teamIndex).Count(IsLivingUnit));
             // The tutorial is paced by the student, not a clock: the window is long enough to read
             // a prompt in and the HUD hides the countdown, so the round ends when they lock in. The
-            // character sandbox is paced by the designer inspecting a kit, for the same reason.
+            // sandbox is paced by the designer composing a board, for the same reason. Only the
+            // planning window is stretched; the dodge response keeps its real length.
             float timerLength =
                 TutorialSession.IsActive ? TutorialSession.PlanningSeconds
                 : SandboxSession.IsActive ? SandboxSession.PlanningSeconds
@@ -1655,6 +1725,7 @@ public class GameLoop : NetworkBehaviour
                     // which already merges devSubmittedPaths when devMode is on, and every
                     // subsequent round takes the dev branch properly.
                     && !devMode
+                    && !sandboxRebuildPending
                 )
                 {
                     double now = NetworkManager.Singleton.ServerTime.Time;
@@ -1685,6 +1756,16 @@ public class GameLoop : NetworkBehaviour
                 continue;
             }
 
+            // A sandbox rebuild unwinds it for the same reason: the orders on the board were given
+            // to units that are about to be replaced.
+            if (sandboxRebuildPending && !matchEnded && IsSpawned)
+            {
+                FinishPlanningClientRpc();
+                SetCardsInteractableClientRpc(false);
+                roundNumber--;
+                continue;
+            }
+
             if (
                 matchEnded
                 || !IsSpawned
@@ -1702,6 +1783,18 @@ public class GameLoop : NetworkBehaviour
 
             CameraEffects.Instance?.FlashClientRpc(MessagePerspective.Neutral);
             SetCardsInteractableClientRpc(false);
+
+            // The sandbox designer plans both crews in one session, but the submit RPC only ever
+            // accepts the sender's own team, so the opponent's half of that session arrives here
+            // instead. It replaces the frozen bot contribution made when planning opened.
+            if (sandboxDirector != null)
+            {
+                submittedTeamPaths[OpponentTeamIndex] = SanitizePaths(
+                    SandboxSession.ConsumeEnemyPlan(),
+                    OpponentTeamIndex
+                );
+                latestTeamPlanVersions[OpponentTeamIndex] = 0;
+            }
 
             RestoreRetractedPlanningFallbacks();
             PathsDict paths = new();
@@ -2663,6 +2756,9 @@ public class GameLoop : NetworkBehaviour
 
         if (
             botPlayer != null
+            // The sandbox designer answers for this crew too, so the bot must not answer first: a
+            // stand-still response entered here would close the window before a dive could be drawn.
+            && sandboxDirector == null
             && dodgeAlerted.TryGetValue(botPlayer.TeamIndex, out HashSet<GameObject> botAlerted)
         )
         {
@@ -2715,7 +2811,9 @@ public class GameLoop : NetworkBehaviour
         {
             int mostAlerted = dodgeAlerted.Values.Max(set => set.Count);
             // Three seconds is no time at all to read a first prompt and answer it, so the tutorial
-            // window is effectively open-ended; the client closes it the moment a dive is drawn.
+            // window is effectively open-ended; the client closes it the moment a dive is drawn. The
+            // sandbox is open-ended for the same reason and closes on its own confirm button, so a
+            // dive can be drawn and reconsidered without a clock deciding the round.
             float window =
                 TutorialSession.IsActive ? TutorialSession.PlanningSeconds
                 : SandboxSession.IsActive ? SandboxSession.PlanningSeconds
@@ -2723,28 +2821,33 @@ public class GameLoop : NetworkBehaviour
             double endTime = NetworkManager.Singleton.ServerTime.Time + window;
             dodgeWindowEndTime = endTime;
 
-            foreach (var kvp in dodgeAlerted)
+            if (sandboxDirector != null)
+                OpenSandboxDodgeWindow(endTime);
+            else
             {
-                if (IsBotTeam(kvp.Key))
-                    continue;
-                if (
-                    !TryGetHumanClientId(kvp.Key, out ulong clientId)
-                    || !NetworkManager.Singleton.ConnectedClients.ContainsKey(clientId)
-                )
+                foreach (var kvp in dodgeAlerted)
                 {
-                    dodgeResponsesReceived.Add(kvp.Key);
-                    continue;
-                }
+                    if (IsBotTeam(kvp.Key))
+                        continue;
+                    if (
+                        !TryGetHumanClientId(kvp.Key, out ulong clientId)
+                        || !NetworkManager.Singleton.ConnectedClients.ContainsKey(clientId)
+                    )
+                    {
+                        dodgeResponsesReceived.Add(kvp.Key);
+                        continue;
+                    }
 
-                NetworkObjectReference[] refs = kvp
-                    .Value.Select(u => (NetworkObjectReference)u.GetComponent<NetworkObject>())
-                    .ToArray();
-                StartDodgePlanningClientRpc(
-                    endTime,
-                    refs,
-                    maxDiveRangeThisRound,
-                    NetworkHelper.ToClient(clientId)
-                );
+                    NetworkObjectReference[] refs = kvp
+                        .Value.Select(u => (NetworkObjectReference)u.GetComponent<NetworkObject>())
+                        .ToArray();
+                    StartDodgePlanningClientRpc(
+                        endTime,
+                        refs,
+                        maxDiveRangeThisRound,
+                        NetworkHelper.ToClient(clientId)
+                    );
+                }
             }
 
             // Reads the field rather than the local so a window extended after it opened (a
@@ -2802,7 +2905,9 @@ public class GameLoop : NetworkBehaviour
                 continue;
             }
 
-            bool isThreatened = dodgeAlerted.ContainsKey(teamIndex);
+            // The sandbox designer answers for every alerted crew, so they are asked for a dive
+            // rather than told to wait for a response that is theirs to give.
+            bool isThreatened = sandboxDirector != null || dodgeAlerted.ContainsKey(teamIndex);
             bool isCaster = casterTeamsAwaitingDodge.Contains(teamIndex);
             setOverlayUITextClientRpc(
                 GetDodgeGuidance(isThreatened, isCaster),
@@ -2835,7 +2940,7 @@ public class GameLoop : NetworkBehaviour
         foreach (var teamEntry in dodgeAlerted)
         {
             if (
-                !TryGetHumanClientId(teamEntry.Key, out ulong clientId)
+                !TryGetDodgeAudienceClientId(teamEntry.Key, out ulong clientId)
                 || NetworkManager.Singleton == null
                 || !NetworkManager.Singleton.ConnectedClients.ContainsKey(clientId)
                 || (onlyClientId.HasValue && clientId != onlyClientId.Value)
@@ -2859,6 +2964,49 @@ public class GameLoop : NetworkBehaviour
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// One dodge window for the whole board. The sandbox designer commands both crews, so the single
+    /// seat is handed every alerted unit rather than only its own crew's, and one confirm answers for
+    /// all of them. Own-crew order keeps the first selection on the designer's own units.
+    /// </summary>
+    private void OpenSandboxDodgeWindow(double endTime)
+    {
+        if (
+            !TryGetHumanClientId(HostTeamIndex, out ulong designerClientId)
+            || NetworkManager.Singleton == null
+            || !NetworkManager.Singleton.ConnectedClients.ContainsKey(designerClientId)
+        )
+        {
+            foreach (int alertedTeamIndex in dodgeAlerted.Keys)
+                dodgeResponsesReceived.Add(alertedTeamIndex);
+            return;
+        }
+
+        NetworkObjectReference[] refs = dodgeAlerted
+            .OrderBy(entry => entry.Key == HostTeamIndex ? 0 : 1)
+            .SelectMany(entry => entry.Value)
+            .Where(unit => unit != null && unit.GetComponent<NetworkObject>() != null)
+            .Select(unit => (NetworkObjectReference)unit.GetComponent<NetworkObject>())
+            .ToArray();
+        StartDodgePlanningClientRpc(
+            endTime,
+            refs,
+            maxDiveRangeThisRound,
+            NetworkHelper.ToClient(designerClientId)
+        );
+    }
+
+    /// <summary>
+    /// Which seat is shown a team's dodge alerts: ordinarily that team's own, but the sandbox
+    /// designer answers for both crews and so is shown the alerts on both.
+    /// </summary>
+    private bool TryGetDodgeAudienceClientId(int teamIndex, out ulong clientId)
+    {
+        return sandboxDirector != null
+            ? TryGetHumanClientId(HostTeamIndex, out clientId)
+            : TryGetHumanClientId(teamIndex, out clientId);
     }
 
     [ClientRpc]
@@ -2901,23 +3049,43 @@ public class GameLoop : NetworkBehaviour
 
         ulong sender = rpcParams.Receive.SenderClientId;
         int senderTeamIndex = GetTeamIndexForClient(sender);
+        if (senderTeamIndex < 0 || dodgeAlerted == null)
+            return;
+
+        AcceptDodgeResponse(senderTeamIndex, paths);
+
+        // The sandbox designer answered for the opposing crew in the same window. Those dives cannot
+        // travel with the sender's own — this path only ever accepts the sender's team — so they are
+        // read back here, from the session, exactly as their orders are when planning closes.
+        if (sandboxDirector != null)
+            AcceptDodgeResponse(OpponentTeamIndex, SandboxSession.ConsumeEnemyDodge());
+    }
+
+    /// <summary>
+    /// Takes one team's dives for the open window: only for units that were actually alerted, and
+    /// only once per team. A team not alerted this round has nothing to answer.
+    /// </summary>
+    private void AcceptDodgeResponse(int teamIndex, PathsDict paths)
+    {
         if (
-            senderTeamIndex < 0
-            || dodgeAlerted == null
-            || !dodgeAlerted.TryGetValue(senderTeamIndex, out var allowed)
-            || dodgeResponsesReceived.Contains(senderTeamIndex)
+            !dodgeAlerted.TryGetValue(teamIndex, out HashSet<GameObject> allowed)
+            || dodgeResponsesReceived.Contains(teamIndex)
         )
         {
             return;
         }
 
-        PathsDict sanitized = SanitizePaths(paths, senderTeamIndex, maxDiveRangeThisRound);
+        PathsDict sanitized = SanitizePaths(
+            paths ?? new PathsDict(),
+            teamIndex,
+            maxDiveRangeThisRound
+        );
         foreach (var kvp in sanitized)
         {
             if (allowed.Contains(kvp.Key))
                 dodgeDivePaths[kvp.Key] = kvp.Value;
         }
-        dodgeResponsesReceived.Add(senderTeamIndex);
+        dodgeResponsesReceived.Add(teamIndex);
     }
 
     /// <summary>DEV: queue-free server-side dodge submission (any alerted unit, no mouse).</summary>
@@ -3318,6 +3486,8 @@ public class GameLoop : NetworkBehaviour
     {
         escortRoundsRemaining = Mathf.Max(0, escortRoundsRemaining - 1);
         PublishEscortState();
+        if (escortRoundsRemaining == EscortSeries.FinalWarningRounds)
+            AnnounceEscortFinalCall();
 
         List<EscortStanding> standings = new();
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
@@ -3486,6 +3656,37 @@ public class GameLoop : NetworkBehaviour
         ConfigureTeam(HostTeamIndex, hostParticipant, hostRoster);
         ConfigureTeam(OpponentTeamIndex, opponentParticipant, opponentRoster);
         NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+    }
+
+    /// <summary>
+    /// Each seat is told what the clock means for it, so the escort reads a deadline and the defence
+    /// reads how long it still has to hold. The font capitalises, so the copy is written in prose.
+    /// </summary>
+    private void AnnounceEscortFinalCall()
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (!TryGetHumanClientId(teamIndex, out ulong clientId))
+                continue;
+            if (NetworkManager == null || !NetworkManager.ConnectedClients.ContainsKey(clientId))
+                continue;
+
+            ShowEscortAlertClientRpc(
+                EscortSeries.IsEscortingTeam(teamIndex)
+                    ? $"{escortRoundsRemaining} rounds to extract"
+                    : $"Hold {escortRoundsRemaining} rounds",
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+    }
+
+    [ClientRpc]
+    private void ShowEscortAlertClientRpc(
+        string message,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        GameHUDController.Instance?.ShowEscortAlert(message);
     }
 
     private void PublishEscortState()
@@ -4912,28 +5113,157 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
-        // Same for the character sandbox: killing the dummy ends the match, and "play again" there
-        // means another go at the same character rather than a crew-selection screen. The session
-        // keeps whichever character and dummy the sandbox window last chose.
+        // Same for the sandbox: wiping a crew ends the match, and "play again" there means the same
+        // board again rather than a crew-selection screen. This is the panel's Reset button reached
+        // from the result screen, so it goes through the same rebuild.
         if (replaySandbox)
         {
-            SandboxSession.Begin(
-                SandboxSession.TestUnitIndex,
-                SandboxSession.DummyUnitIndex,
-                SandboxSession.EnemyCount
-            );
-            MatchOptions.SetCurrent(SandboxSession.BuildMatchOptions());
-            ConfigureTeam(
-                HostTeamIndex,
-                NetworkManager.ServerClientId,
-                SandboxSession.BuildHostRoster()
-            );
-            ConfigureTeam(OpponentTeamIndex, BotParticipantId, SandboxSession.BuildOpponentRoster());
-            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            SandboxSession.Begin();
+            RequestSandboxRebuild();
             return;
         }
 
         NetworkManager.SceneManager.LoadScene("HomeScreen", LoadSceneMode.Single);
+    }
+
+    // === SANDBOX BOARD CONTROL (server-only, loopback host) ===
+    // The sandbox panel decides what the board should be; the round loop remains the only thing
+    // that builds one. Everything here is a request or a placement, never a round of its own.
+
+    /// <summary>
+    /// Asks for the board to be rebuilt from the current <see cref="SandboxSession"/> setup: both
+    /// crews respawned at full health on the cells they are placed on, cover restored, smoke and
+    /// the report cleared, and the round count back to one. Served at the next round boundary, or
+    /// immediately when the match has already finished and no round loop is left to serve it.
+    /// </summary>
+    public void RequestSandboxRebuild()
+    {
+        if (!IsServer || !SandboxSession.IsActive)
+            return;
+
+        sandboxRebuildPending = true;
+        if (!matchEnded && currentPhase != "idle")
+            return;
+
+        if (gameLoopCoroutine != null)
+            StopCoroutine(gameLoopCoroutine);
+        ServeSandboxRebuildNow();
+    }
+
+    private void ServeSandboxRebuildNow()
+    {
+        ApplySandboxRebuild();
+        roundNumber = 0;
+        gameLoopCoroutine = StartCoroutine(StartGameLoopAfterFogSetup());
+    }
+
+    private void ApplySandboxRebuild()
+    {
+        sandboxRebuildPending = false;
+        matchEnded = false;
+        disconnectRecoveryStarted = false;
+        legTransitionStarted = false;
+        battleReport = null;
+        openReportRound = null;
+        LastMatchResult = null;
+        LastBattleReport = null;
+        playAgain.Clear();
+        submittedTeamPaths.Clear();
+        latestTeamPlanVersions.Clear();
+        retractedTeamPathFallbacks.Clear();
+        dodgeAlertedTeamsThisRound.Clear();
+        SandboxSession.ConsumeEnemyPlan();
+        SandboxSession.ConsumeEnemyDodge();
+        ClearActiveSmokeCells();
+        smokeDeployments.Clear();
+
+        // Cover is destructible, so a fresh board needs the map its walls were cut from back before
+        // it spawns them: clearing the destruction state alone would leave the scratch clone —
+        // holes and all — as the active map.
+        ClearWallDestructionState();
+        MatchOptions.SetCurrent(MatchOptions.Current);
+        DespawnCover();
+
+        ConfigureTeam(
+            HostTeamIndex,
+            NetworkManager.ServerClientId,
+            SandboxSession.BuildRoster(HostTeamIndex)
+        );
+        ConfigureTeam(
+            OpponentTeamIndex,
+            BotParticipantId,
+            SandboxSession.BuildRoster(OpponentTeamIndex)
+        );
+        spawns = CreateSpawnLayout(UseDevSpawnLayout());
+
+        // StartGame clears the previous crews out itself, so this is the whole teardown.
+        StartGame();
+
+        // Loopback host, so the sandbox's own result screen is dismissed directly rather than
+        // through an RPC round trip.
+        GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
+        GameHUDController.Instance?.HideResults();
+        GameHUDController.Instance?.HideDeployment();
+    }
+
+    private void DespawnCover()
+    {
+        foreach (
+            CoverVariant cover in FindObjectsByType<CoverVariant>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            )
+        )
+        {
+            NetworkObject networkObject = cover.GetComponentInParent<NetworkObject>();
+            if (networkObject != null)
+                Destroy(networkObject.gameObject);
+        }
+    }
+
+    /// <summary>
+    /// Stands a unit on a different square mid-planning, for the sandbox's board-edit drag. The
+    /// setup follows the unit rather than the other way round, so the cell it is dropped on is also
+    /// the cell a rebuild will put it back on.
+    /// </summary>
+    public bool SandboxPlaceUnitAtCell(GameObject unit, Vector2Int cell)
+    {
+        if (!IsServer || !SandboxSession.IsActive || unit == null)
+            return false;
+        if (unit.GetComponent<Unit>() is not Unit identity || identity.RosterSlot < 0)
+            return false;
+        if (!SandboxSession.TryMoveUnit(identity.TeamIndex, identity.RosterSlot, cell))
+            return false;
+
+        Vector3 position = gridCoordToWorld(cell) + Helper.heightOffset(unit.transform);
+        unit.transform.position = position;
+        NetworkHelper.SyncHeightAdjustedPositionStatic(unit, position);
+        unitSpawnTransforms[unit] = (position, unit.transform.rotation);
+        serverFogDirty = true;
+        PlanMovement.Instance?.NotifyUnitPlacementChanged(unit);
+        return true;
+    }
+
+    /// <summary>
+    /// Hands every ability back, so one can be fired again without waiting rounds for it or
+    /// rebuilding the board to get it. Stuns are left alone: a stun is a live consequence of
+    /// something that just happened on the board, and cutting it short would change the round being
+    /// watched rather than set one up.
+    /// </summary>
+    public void SandboxClearAbilityCooldowns()
+    {
+        if (!IsServer || !SandboxSession.IsActive)
+            return;
+
+        foreach (var teamEntry in allTeamUnitObjects)
+        {
+            foreach (GameObject unit in teamEntry.Value ?? System.Array.Empty<GameObject>())
+            {
+                Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+                if (identity != null && identity.ClearAbilityCooldown())
+                    NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
+            }
+        }
     }
 
     /// <summary>
@@ -5588,7 +5918,12 @@ public class GameLoop : NetworkBehaviour
     private IEnumerator HidePlanningCommitAfterFrame()
     {
         yield return null;
-        GameHUDController.Instance?.HidePlanningCommit();
+        // Only if nothing has opened in the meantime. Ordinarily an execution separates one
+        // planning session from the next by many frames, but the sandbox rebuilds a board without
+        // an execution in between — the chip on screen by now can belong to the session that
+        // followed this one, and hiding it would leave that round with no way to lock in.
+        if (PlanMovement.Instance?.IsPlanningSessionOpen != true)
+            GameHUDController.Instance?.HidePlanningCommit();
     }
 
     [ClientRpc]

@@ -190,6 +190,18 @@ public class Unit : NetworkBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Hands the ability straight back, for the sandbox. Reports whether anything was recharging.
+    /// </summary>
+    public bool ClearAbilityCooldown()
+    {
+        if (!IsServer || abilityCooldownRoundsRemaining.Value == 0)
+            return false;
+
+        abilityCooldownRoundsRemaining.Value = 0;
+        return true;
+    }
+
     public bool TickAbilityCooldownRound()
     {
         if (!IsServer)

@@ -29,6 +29,7 @@ public class GameHUDController : MonoBehaviour
     private readonly UnitCardElement[] cards = new UnitCardElement[RosterRules.UnitsPerPlayer];
     private readonly UnitCardElement[] enemyCards =
         new UnitCardElement[RosterRules.UnitsPerPlayer];
+    private bool cardsInteractable;
     private UIDocument document;
     private VisualElement root;
     private VisualElement screen;
@@ -39,6 +40,7 @@ public class GameHUDController : MonoBehaviour
     private VisualElement enemyStatusStrip;
     private VisualElement hillStatusReadout;
     private VisualElement escortStatusReadout;
+    private VisualElement escortAlert;
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
     private VisualElement resultsPanel;
@@ -47,6 +49,8 @@ public class GameHUDController : MonoBehaviour
     private Label hillStatusLabel;
     private Label escortStatusKey;
     private Label escortStatusLabel;
+    private Label escortAlertLabel;
+    private Coroutine escortAlertCoroutine;
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
@@ -96,6 +100,7 @@ public class GameHUDController : MonoBehaviour
     private bool timerSuppressed;
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
+    public string EscortAlertText => escortAlertLabel?.text ?? string.Empty;
     public string EscortStatusText =>
         $"{escortStatusKey?.text ?? string.Empty} · {escortStatusLabel?.text ?? string.Empty}";
     public string RejoinNoticeText => rejoinNoticeStatus?.text ?? string.Empty;
@@ -188,6 +193,8 @@ public class GameHUDController : MonoBehaviour
         escortStatusReadout = RequireElement<VisualElement>("escort-status-readout");
         escortStatusKey = RequireElement<Label>("escort-status-key");
         escortStatusLabel = RequireElement<Label>("escort-status-label");
+        escortAlert = RequireElement<VisualElement>("escort-alert");
+        escortAlertLabel = RequireElement<Label>("escort-alert-label");
         rejoinNotice = RequireElement<VisualElement>("rejoin-notice");
         rejoinNoticeTitle = RequireElement<Label>("rejoin-notice-title");
         rejoinNoticeStatus = RequireElement<Label>("rejoin-notice-status");
@@ -402,7 +409,12 @@ public class GameHUDController : MonoBehaviour
 
     public void SetCardsInteractable(bool interactable)
     {
+        cardsInteractable = interactable;
         foreach (UnitCardElement card in cards)
+            card?.SetInteractable(interactable);
+        // In the sandbox the enemy strip is the designer's second dock, so it opens and closes with
+        // the first. Outside it, those cards are readouts and stay unpressable.
+        foreach (UnitCardElement card in enemyCards)
             card?.SetInteractable(interactable);
 
         ClearTargetFeedback();
@@ -433,6 +445,15 @@ public class GameHUDController : MonoBehaviour
         SetPlanningCommitState("LOCKED", "Locked", false, "Orders are final");
     }
 
+    /// <summary>
+    /// The sandbox's dodge commit. Reads as live and pressable like READY, because that is what it
+    /// is — one press, no unlock, and the window closes.
+    /// </summary>
+    public void ShowDodgeCommitReady()
+    {
+        SetPlanningCommitState("DODGE", "Confirm dive", true, "Commit this dodge and run the round");
+    }
+
     public void HidePlanningCommit()
     {
         planningCommit?.AddToClassList("hidden");
@@ -453,7 +474,7 @@ public class GameHUDController : MonoBehaviour
 
             string nextStateClass = status switch
             {
-                "READY" => "planning-commit--ready",
+                "READY" or "DODGE" => "planning-commit--ready",
                 "SENDING" => "planning-commit--sending",
                 "WAITING" => "planning-commit--waiting",
                 "UNLOCKING" => "planning-commit--unlocking",
@@ -564,15 +585,17 @@ public class GameHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Trims both strips to the crew size actually fielded, so a sandbox match with fewer units
-    /// does not leave unconfigured cards standing in the dock.
+    /// Trims each strip to the crew it shows, so a match fielding fewer units does not leave
+    /// unconfigured cards standing in the dock. The two counts differ whenever the board is uneven,
+    /// which in practice means the sandbox.
     /// </summary>
-    public void SetFieldedCardCount(int fieldedCount)
+    public void SetFieldedCardCount(int fieldedCount, int enemyFieldedCount = -1)
     {
+        int enemyCount = enemyFieldedCount < 0 ? fieldedCount : enemyFieldedCount;
         for (int i = 0; i < cards.Length; i++)
             cards[i]?.Root?.EnableInClassList("hidden", i >= fieldedCount);
         for (int i = 0; i < enemyCards.Length; i++)
-            enemyCards[i]?.Root?.EnableInClassList("hidden", i >= fieldedCount);
+            enemyCards[i]?.Root?.EnableInClassList("hidden", i >= enemyCount);
     }
 
     public void SetCardDisabled(int cardIndex, bool disabled)
@@ -593,10 +616,59 @@ public class GameHUDController : MonoBehaviour
             card.SetPlanningState(selected, abilityMode);
     }
 
+    public void SetEnemyCardPlanningState(int cardIndex, bool selected, bool abilityMode)
+    {
+        if (TryGetEnemyCard(cardIndex, out UnitCardElement card))
+            card.SetPlanningState(selected, abilityMode);
+    }
+
     public void ClearCardPlanningStates()
     {
         foreach (UnitCardElement card in cards)
             card?.SetPlanningState(false, false);
+        foreach (UnitCardElement card in enemyCards)
+            card?.SetPlanningState(false, false);
+    }
+
+    // === SANDBOX DOCK (dev tool) ===
+    // The sandbox composes both crews from the dock, so it needs to reach the strips themselves and
+    // to press cards on the enemy one. Everything here is inert until it is asked for.
+
+    /// <summary>The HUD's own tree, so the sandbox panel can dock inside it and pick like the HUD.</summary>
+    public VisualElement Root => root;
+
+    public VisualElement CardsStrip => cardsContainer;
+
+    public VisualElement EnemyCardsStrip => enemyCardsContainer;
+
+    public void EnableSandboxEnemyCardPresses()
+    {
+        for (int cardIndex = 0; cardIndex < enemyCards.Length; cardIndex++)
+        {
+            int slot = cardIndex;
+            enemyCards[cardIndex]?.EnableSandboxCommand(
+                () => PlanMovement.Instance?.TryActivateEnemyUnitCard(slot)
+            );
+            // A card that was a readout when the round opened never received the phase's request to
+            // be pressable, so it is handed the standing one on the way in.
+            enemyCards[cardIndex]?.SetInteractable(cardsInteractable);
+        }
+    }
+
+    /// <summary>
+    /// Makes the portraits of one strip the way into crew composing, up to the crew it fields, and
+    /// takes the affordance off the slots beyond it.
+    /// </summary>
+    public void SetSandboxCrewControls(bool enemyStrip, int fieldedCount, Action<int> onOpenSlot)
+    {
+        UnitCardElement[] strip = enemyStrip ? enemyCards : cards;
+        for (int cardIndex = 0; cardIndex < strip.Length; cardIndex++)
+        {
+            int slot = cardIndex;
+            strip[cardIndex]?.SetSandboxSlotAction(
+                cardIndex < fieldedCount ? () => onOpenSlot(slot) : null
+            );
+        }
     }
 
     public void SetPhase(string message, MessagePerspective perspective)
@@ -675,6 +747,7 @@ public class GameHUDController : MonoBehaviour
         if (!showEscortStatus)
         {
             escortStatusReadout?.AddToClassList("hidden");
+            HideEscortAlert();
             return;
         }
 
@@ -682,6 +755,49 @@ public class GameHUDController : MonoBehaviour
             GameLoop.Instance != null ? GameLoop.Instance.EscortStatus : EscortState.Empty,
             GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1
         );
+    }
+
+    /// <summary>
+    /// Throws the leg clock's last call across the board. Real seconds, so a dev fast-forward cannot
+    /// blink it past the player it exists for.
+    /// </summary>
+    public void ShowEscortAlert(string message, float seconds = 2.6f)
+    {
+        if (escortAlert == null || escortAlertLabel == null)
+            return;
+
+        escortAlertLabel.text = message ?? string.Empty;
+        escortAlert.RemoveFromClassList("hidden");
+        escortAlert.AddToClassList("escort-alert--visible");
+        escortAlert.BringToFront();
+        Flash(MessagePerspective.Neutral, 0.35f);
+
+        if (escortAlertCoroutine != null)
+            StopCoroutine(escortAlertCoroutine);
+        escortAlertCoroutine = StartCoroutine(HideEscortAlertAfter(Mathf.Max(0.1f, seconds)));
+    }
+
+    public void HideEscortAlert()
+    {
+        if (escortAlertCoroutine != null)
+        {
+            StopCoroutine(escortAlertCoroutine);
+            escortAlertCoroutine = null;
+        }
+        escortAlert?.RemoveFromClassList("escort-alert--visible");
+        escortAlert?.AddToClassList("hidden");
+    }
+
+    private IEnumerator HideEscortAlertAfter(float seconds)
+    {
+        yield return new WaitForSecondsRealtime(seconds);
+        escortAlert?.RemoveFromClassList("escort-alert--visible");
+        // Held one transition longer than the fade, so the class that takes it out of layout cannot
+        // cut the fade short. The handle is cleared only after that, or a call landing inside this
+        // window would have nothing to cancel and would be hidden again on the way out.
+        yield return new WaitForSecondsRealtime(0.25f);
+        escortAlert?.AddToClassList("hidden");
+        escortAlertCoroutine = null;
     }
 
     public void SetEscortState(EscortState state, int localTeamIndex)
@@ -862,6 +978,7 @@ public class GameHUDController : MonoBehaviour
         CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
         HideDeployment();
+        HideEscortAlert();
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);

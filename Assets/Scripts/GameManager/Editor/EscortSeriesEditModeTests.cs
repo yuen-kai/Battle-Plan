@@ -652,6 +652,58 @@ public class EscortSeriesEditModeTests
     }
 
     [Test]
+    public void TheLegClockAnnouncesItselfBeforeItExpires()
+    {
+        Assert.That(EscortSeries.FinalWarningRounds, Is.GreaterThan(0));
+        Assert.That(
+            EscortSeries.FinalWarningRounds,
+            Is.LessThan(EscortSeries.RoundsPerLeg),
+            "A warning fired on the opening round is not a warning."
+        );
+
+        // Rounds remaining falls by exactly one a round, so an equality check on the threshold
+        // fires once per leg rather than on every round after it.
+        int remaining = EscortSeries.RoundsPerLeg;
+        int announcements = 0;
+        while (remaining > 0)
+        {
+            remaining--;
+            if (remaining == EscortSeries.FinalWarningRounds)
+                announcements++;
+        }
+        Assert.That(announcements, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TheHudCarriesTheFullScreenLegClockCall()
+    {
+        const string hudPath = "Assets/UI/Game/GameHUD.uxml";
+        var hud = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.UIElements.VisualTreeAsset>(
+            hudPath
+        );
+        Assert.That(hud, Is.Not.Null, $"Could not import {hudPath}.");
+
+        UnityEngine.UIElements.TemplateContainer tree = hud.Instantiate();
+        UnityEngine.UIElements.VisualElement alert =
+            UnityEngine.UIElements.UQueryExtensions.Q(tree, "escort-alert");
+        UnityEngine.UIElements.VisualElement label =
+            UnityEngine.UIElements.UQueryExtensions.Q(tree, "escort-alert-label");
+
+        Assert.That(alert, Is.Not.Null);
+        Assert.That(label, Is.Not.Null);
+        Assert.That(
+            alert.ClassListContains("hidden"),
+            Is.True,
+            "The call starts down; the round that needs it raises it."
+        );
+        Assert.That(
+            alert.pickingMode,
+            Is.EqualTo(UnityEngine.UIElements.PickingMode.Ignore),
+            "It lies over the board, so it must not eat clicks meant for units."
+        );
+    }
+
+    [Test]
     public void TheGuardOrbHugsItsUnitAndCarriesNoCollider()
     {
         GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(

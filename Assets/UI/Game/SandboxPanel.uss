@@ -1,0 +1,286 @@
+/* The sandbox panel and its character picker. A development tool, so it deliberately reads as one:
+   it borrows the game's surfaces, strokes and type so it does not look pasted on, but it stays a
+   plain stack of controls rather than trying to be part of the HUD's composition. */
+
+.sandbox-layer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.sandbox-panel {
+    position: absolute;
+    left: 18px;
+    top: 108px;
+    width: 250px;
+    padding: 0;
+    background-color: var(--toy-panel);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-top-width: 3px;
+    border-top-color: var(--toy-primary);
+}
+
+.sandbox-panel__header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 12px;
+    padding-right: 6px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom-width: var(--toy-stroke-thin);
+    border-bottom-color: var(--toy-divider);
+}
+
+.sandbox-panel__title {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 16px;
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-label);
+}
+
+.sandbox-panel__collapse {
+    width: 26px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    font-size: 15px;
+    background-color: var(--toy-transparent);
+    border-width: 0;
+    color: var(--toy-text-muted);
+}
+
+.sandbox-panel__collapse:hover {
+    color: var(--toy-text);
+}
+
+.sandbox-panel__body {
+    padding: 12px;
+}
+
+.sandbox-panel__body.hidden {
+    display: none;
+}
+
+.sandbox-row {
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.sandbox-button {
+    flex-grow: 1;
+    margin: 0;
+    margin-bottom: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 12px;
+    white-space: normal;
+}
+
+/* USS has no :first-child, so the gap between a pair is carried by the left one's own modifier. */
+.sandbox-button--paired {
+    margin-right: 6px;
+}
+
+.sandbox-button--wide {
+    width: 100%;
+}
+
+/* Move-units mode is a mode, so the button that holds it open reads as held rather than as
+   something that was merely clicked a moment ago. */
+.sandbox-button--armed {
+    background-color: var(--toy-primary);
+    border-color: var(--toy-primary-pressed);
+    color: var(--toy-text-on-primary);
+}
+
+.sandbox-button--armed:hover {
+    background-color: var(--toy-primary-hover);
+}
+
+.sandbox-divider {
+    height: 1px;
+    margin-top: 6px;
+    margin-bottom: 10px;
+    background-color: var(--toy-divider);
+}
+
+.sandbox-crew {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sandbox-crew__name {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 12px;
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-label);
+}
+
+.sandbox-crew__count {
+    font-size: 12px;
+    color: var(--toy-text-muted);
+}
+
+.sandbox-toggle {
+    margin: 0;
+    margin-top: 2px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.sandbox-toggle Label {
+    font-size: 12px;
+    color: var(--toy-text-copy);
+    min-width: 0;
+    flex-grow: 1;
+}
+
+.sandbox-hint {
+    font-size: 11px;
+    color: var(--toy-text-muted);
+    white-space: normal;
+}
+
+/* --- the "add a unit" tile that closes each card strip --- */
+
+.sandbox-add-slot {
+    width: 62px;
+    align-self: stretch;
+    margin: 0;
+    margin-left: 6px;
+    font-size: 11px;
+    white-space: normal;
+    background-color: var(--toy-surface-quiet);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    color: var(--toy-text-copy);
+}
+
+.sandbox-add-slot:hover {
+    background-color: var(--toy-surface-raised);
+    color: var(--toy-text);
+}
+
+/* --- crew composing, on the character's own portrait --- */
+
+/* Marked all the time rather than only on hover: a designer who has not found this yet has no
+   reason to try pressing a portrait, and an affordance nobody looks for is not one. */
+.unit-card__portrait--editable {
+    border-width: 1px;
+    border-color: var(--toy-primary);
+}
+
+.unit-card__portrait--editable:hover {
+    border-width: 2px;
+    border-color: var(--toy-primary-hover);
+}
+
+/* --- character picker --- */
+
+.sandbox-picker {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--toy-scrim);
+}
+
+.sandbox-picker.hidden {
+    display: none;
+}
+
+.sandbox-picker__panel {
+    width: 620px;
+    max-height: 74%;
+    padding: 18px;
+    background-color: var(--toy-surface);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge-strong);
+}
+
+.sandbox-picker__header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.sandbox-picker__header .sandbox-button {
+    flex-grow: 0;
+    margin-bottom: 0;
+}
+
+.sandbox-picker__scroll {
+    flex-grow: 1;
+}
+
+.sandbox-picker__grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.sandbox-pick {
+    width: 94px;
+    height: 116px;
+    margin: 0;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    padding: 6px;
+    align-items: center;
+    justify-content: flex-start;
+    background-color: var(--toy-surface-raised);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+}
+
+.sandbox-pick:hover {
+    background-color: var(--toy-primary-tint);
+    border-color: var(--toy-primary);
+}
+
+.sandbox-pick__portrait {
+    width: 78px;
+    height: 66px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-color: var(--toy-inset);
+}
+
+.sandbox-pick__name {
+    font-size: 11px;
+    color: var(--toy-text);
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin-top: 4px;
+}
+
+.sandbox-pick__note {
+    font-size: 9px;
+    color: var(--toy-text-muted);
+    -unity-text-align: middle-center;
+}
+
+.sandbox-pick--remove {
+    justify-content: center;
+    background-color: var(--toy-surface-quiet);
+}
+
+.sandbox-pick--remove:hover {
+    background-color: var(--toy-danger-tint);
+    border-color: var(--toy-danger);
+}
+
+.sandbox-pick__glyph {
+    font-size: 34px;
+    color: var(--toy-danger-copy);
+    -unity-text-align: middle-center;
+}
