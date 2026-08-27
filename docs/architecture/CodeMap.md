@@ -232,6 +232,7 @@ Prefer cell-based rules for planning and validation. Use physics when the actual
 | Weapon cadence or targeting | `Shooting.cs` | `UnitData`, projectile prefab, `Bullet.cs` |
 | Bullet collision/damage | `Bullet.cs` | Both bullet creation paths in `Shooting.cs` |
 | Character tuning | `Assets/UnitStats/*.asset` | Unit prefab and balance/editor checks |
+| Frame pacing or power draw | `Assets/Scripts/Settings/FrameRatePolicy.cs` | The URP assets under `Assets/Scripts/Renderer/`, `ProjectSettings/QualitySettings.asset`; measure any change with `Battle Plan/Measure GPU cost` (`Editor/GpuCostProbe.cs`) rather than guessing |
 | Wall or map behavior | `GameLoop.cs`, `GridSystem.cs`, `Assets/Scripts/Map/` | Wall prefab and map definitions |
 | HUD/card feedback | `GameHUDController.cs`, `UnitCardElement.cs` | `PlanMovement` callers |
 | Sandbox behaviour | `SandboxSession.cs` for a setup rule, `SandboxPanel.cs` for a control | `SandboxDirector.cs`, the sandbox block in `GameLoop.cs`, `SandboxEditModeTests` |

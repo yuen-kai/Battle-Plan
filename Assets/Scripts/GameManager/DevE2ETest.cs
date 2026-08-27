@@ -302,6 +302,12 @@ public class DevE2ETestRunner : MonoBehaviour
         {
             string dir = System.IO.Path.Combine(Application.temporaryCachePath, "BattlePlanE2E");
             System.IO.Directory.CreateDirectory(dir);
+            // The frame-rate policy is allowed to skip drawing frames nobody is looking at, and
+            // an unfocused editor is exactly when these run — the shot would be of whatever was
+            // last left in the framebuffer. Held for the rest of the run rather than released after
+            // the capture: the write is asynchronous, and a run taking shots wants every frame
+            // drawn throughout anyway. The hold is dropped with the rest of the runtime state.
+            FrameRatePolicy.HoldFullRate = true;
             ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, name + ".png"));
         }
         catch (System.Exception e)

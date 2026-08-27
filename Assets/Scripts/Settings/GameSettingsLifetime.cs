@@ -15,11 +15,14 @@ public static class GameSettingsLifetime
     {
         GameSettings.ClearRuntimeState();
         AudioManager.ClearRuntimeState();
+        FrameRatePolicy.ClearRuntimeState();
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Initialize()
     {
         GameSettings.EnsureLoaded();
+        // After the settings, because it overrides the vSync count the quality level just applied.
+        FrameRatePolicy.Create();
     }
 }
