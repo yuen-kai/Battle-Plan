@@ -14,10 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UnitData
   unitModel: {fileID: 4136433947033533029, guid: ce0dac10fa2864896a4f3745b8fda5c9, type: 3}
   unitName: Breach
-  unitClass: 0
-  unitDescription: Fires ordnance too heavy to duck behind cover from -- the wall
-    it's hiding behind won't be there long either.
-  playStyle: Clears entrenched positions rather than chasing kills in the open.
+  unitClass: 1
+  unitDescription: Fires exploding rockets, forcing enemies to scatter and stay on
+    the move.
+  playStyle: Attacks clustered enemies. Breaks walls, opening lines for his allies.
   weaponName: Rocket launcher
   strengths: High area damage, and its ability tears down cover for good.
   weaknesses: Slow-moving shots are easy to walk out of, and it's not built for a
@@ -34,12 +34,13 @@ MonoBehaviour:
   rotationSpeed: 360
   blueBulletPrefab: {fileID: 7020020037714857193, guid: 15a79998c201f8346ac0816f670429c2, type: 3}
   redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
-  timeBetweenShots: 1.4
+  timeBetweenShots: 0.8
   magazineSize: 3
   reloadTime: 2.8
   bulletSpread: 4
   fireRateRampShots: 0
   fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
   canShootWhileMoving: 0
   bulletSpeed: 2
   targetRange: 6

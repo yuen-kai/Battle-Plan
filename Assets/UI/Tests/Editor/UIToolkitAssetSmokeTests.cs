@@ -81,6 +81,7 @@ public class UIToolkitAssetSmokeTests
             {
                 "screen",
                 "roster-options",
+                "class-filters",
                 "selected-roster",
                 "roster-instruction",
                 "roster-count-label",

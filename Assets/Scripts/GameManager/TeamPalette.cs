@@ -94,9 +94,11 @@ public static class TeamPalette
     public static readonly Color AbilityRange = new(0.541f, 0.353f, 0.039f, 0.55f);
 
     /// <summary>
-    /// What an ability is about to do, shown to both players. The same amber as
-    /// <see cref="AbilityRange"/> because it is the same concept one step later — it replaces
-    /// three near-miss oranges that used to mean this.
+    /// What an ability is about to do, on a surface with no team to read it against: the battle
+    /// report's board, and a live telegraph whose caster's team is unknown. A dodge telegraph in
+    /// a match takes the caster's colour from <see cref="ForViewer"/> instead, so the shape says
+    /// whose ability it is as well as what it does. The same amber as <see cref="AbilityRange"/>
+    /// because it is the same concept one step later — it replaces three near-miss oranges.
     /// </summary>
     public static readonly Color AbilityTelegraph = new(0.541f, 0.353f, 0.039f, 1f);
 

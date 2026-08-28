@@ -156,10 +156,11 @@
 /* ----------------------------------------------------------------- library */
 
 .roster-body {
-    flex-grow: 0;
+    flex-grow: 1;
     flex-shrink: 0;
     height: 380px;
     min-height: 380px;
+    max-height: 640px;
     flex-direction: row;
 }
 
@@ -171,6 +172,40 @@
     padding: var(--toy-space-panel-compact);
 }
 
+.library-head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--toy-space-sm);
+}
+
+.library-head__label {
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.class-chips {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 1;
+    margin-left: var(--toy-space-md);
+}
+
+.roster-screen .class-chip {
+    flex-shrink: 1;
+    min-height: 30px;
+    margin: 0 0 0 var(--toy-space-xs);
+    padding: 0 var(--toy-space-md);
+    justify-content: center;
+    border-radius: var(--toy-radius-sm);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-edge);
+    font-size: var(--toy-type-caption);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .roster-options {
     flex-grow: 1;
     min-height: 0;
@@ -178,20 +213,19 @@
 
 .roster-options .unity-scroll-view__content-container {
     flex-direction: row;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    align-content: flex-start;
 }
 
 /* An instantiated template arrives wrapped in a container, and it is the wrapper
-   that the row lays out. Left shrinkable it gives up width while the tile inside
-   holds its minimum, and the portraits climb over each other instead of the row
-   reaching for the scroller. */
-.roster-options .unity-scroll-view__content-container > * {
+   the grid lays out: five to a row at a fifth of the width each, with the gutter
+   as its own padding so the fifths still add up to the width of the panel. */
+.unit-cell {
     flex-shrink: 0;
-}
-
-.roster-options .unity-scroller--horizontal {
-    min-height: var(--toy-scroll-size);
-    background-color: var(--toy-inset);
+    width: 20%;
+    height: 194px;
+    padding: 0 var(--toy-space-md) var(--toy-space-md) 0;
 }
 
 /* The tile. Margin is stated because the default runtime theme puts three
@@ -202,11 +236,11 @@
    is the edge wash, which reads as a marker rail waiting to be lit. */
 .unit-option {
     position: relative;
-    width: 230px;
-    min-width: 230px;
+    width: 100%;
+    min-width: 0;
     min-height: 0;
     height: 100%;
-    margin: 0 var(--toy-space-md) 0 0;
+    margin: 0;
     padding: 0;
     flex-direction: column;
     align-items: stretch;
@@ -298,7 +332,7 @@
 .unit-option__portrait {
     flex-grow: 1;
     flex-shrink: 1;
-    min-height: 132px;
+    min-height: 60px;
     justify-content: flex-end;
     background-color: var(--toy-warm);
     -unity-background-scale-mode: scale-and-crop;
@@ -342,7 +376,7 @@
    The unit descriptions run from one word to a full sentence, and letting the
    copy size itself gave every tile a different portrait. */
 .unit-option__copy {
-    height: 100px;
+    height: 42px;
     flex-shrink: 0;
     padding: 10px 12px;
     overflow: hidden;
@@ -351,6 +385,7 @@
 }
 
 .unit-option__description {
+    display: none;
     flex-grow: 1;
     flex-shrink: 1;
     min-height: 0;
@@ -372,14 +407,19 @@
 .unit-option__ability-row {
     flex-shrink: 0;
     flex-direction: row;
-    align-items: center;
-    margin-top: var(--toy-space-sm);
+    align-items: flex-start;
+    margin-top: 0;
 }
 
+/* The condensed face seats its caps at the foot of the line box rather than
+   across the middle of it, so a mark the row centres reads seven pixels above
+   the word beside it. The row hangs both from its top and the mark drops onto
+   the caps by hand. */
 .unit-option__ability-mark {
     width: 11px;
     min-width: 11px;
     height: 11px;
+    margin-top: 8px;
     margin-right: 7px;
     -unity-background-scale-mode: scale-to-fit;
     -unity-background-image-tint-color: var(--toy-primary);
@@ -400,6 +440,7 @@
 .unit-option__ability {
     flex-grow: 1;
     min-width: 0;
+    margin: 0;
     -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-caption);
     -unity-font-style: normal;
@@ -732,31 +773,12 @@
     min-height: 300px;
 }
 
-.compact .unit-option {
-    width: 178px;
-    min-width: 178px;
-}
-
 .compact .unit-option__name {
     font-size: var(--toy-type-body-lg);
 }
 
-/* The sentence is the first thing to go: at this width it wraps to five lines
-   and eats the portrait. What is left is the ability, so the copy strip shrinks
-   to exactly that line. */
-.compact .unit-option__copy,
-.short .unit-option__copy {
-    height: 42px;
-}
-
-.compact .unit-option__description,
-.short .unit-option__description {
-    display: none;
-}
-
-.compact .unit-option__ability-row,
-.short .unit-option__ability-row {
-    margin-top: 0;
+.compact .unit-cell {
+    height: 168px;
 }
 
 .narrow .roster-frame {
@@ -805,6 +827,10 @@
     -unity-text-align: middle-left;
 }
 
+.narrow .class-chip {
+    padding: 0 var(--toy-space-sm);
+}
+
 .phone .roster-header {
     min-height: 0;
     flex-direction: column;
@@ -831,9 +857,27 @@
     min-height: 300px;
 }
 
-.phone .unit-option {
-    width: 154px;
-    min-width: 154px;
+.phone .library-head {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.phone .class-chips {
+    margin-left: 0;
+    margin-top: var(--toy-space-xs);
+    justify-content: space-between;
+}
+
+.phone .class-chip {
+    flex-grow: 1;
+    margin-left: 2px;
+    padding: 0 var(--toy-space-xs);
+}
+
+.phone .unit-cell {
+    height: 150px;
+    padding-right: var(--toy-space-sm);
+    padding-bottom: var(--toy-space-sm);
 }
 
 /* Five slots across a phone leave room for a numeral and a name and nothing
@@ -893,8 +937,8 @@
     min-height: 288px;
 }
 
-.short .unit-option__portrait {
-    min-height: 96px;
+.short .unit-cell {
+    height: 156px;
 }
 
 .short .map-preview {

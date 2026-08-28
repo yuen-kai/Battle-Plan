@@ -36,8 +36,11 @@
 
             <ui:VisualElement class="roster-body">
                 <ui:VisualElement class="unit-library toy-panel toy-panel--keyed">
-                    <ui:Label text="All units" class="section-label" picking-mode="Ignore" />
-                    <ui:ScrollView name="roster-options" mode="Horizontal" horizontal-scroller-visibility="Auto" vertical-scroller-visibility="Hidden" class="roster-options" />
+                    <ui:VisualElement class="library-head">
+                        <ui:Label text="Units" class="section-label library-head__label" picking-mode="Ignore" />
+                        <ui:VisualElement name="class-filters" class="class-chips" />
+                    </ui:VisualElement>
+                    <ui:ScrollView name="roster-options" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" class="roster-options" />
                 </ui:VisualElement>
                 <ui:VisualElement class="map-column toy-panel">
                     <ui:Label text="The board" class="section-label map-label" picking-mode="Ignore" />

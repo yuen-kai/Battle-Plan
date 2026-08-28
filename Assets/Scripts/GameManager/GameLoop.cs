@@ -333,7 +333,8 @@ public class GameLoop : NetworkBehaviour
         Vector3 square,
         float radiusCells,
         bool line,
-        bool smokeScreen
+        bool smokeScreen,
+        int casterTeamIndex
     )> activeTelegraphs = new();
     private int runningAbilities;
 
@@ -2663,6 +2664,7 @@ public class GameLoop : NetworkBehaviour
                 ? unit.transform.position
                 : effectSquare;
             bool isSmokeScreen = unit.GetComponent<Smoke>() != null;
+            int casterTeamIndex = unit.GetComponent<Unit>()?.TeamIndex ?? -1;
             // Kept so a rejoining seat can be shown the same already-sanitized payload rather
             // than having the caster's position re-derived for it.
             activeTelegraphs.Add(
@@ -2671,7 +2673,8 @@ public class GameLoop : NetworkBehaviour
                     effectSquare,
                     data.abilityRadius,
                     data.responseDistLine,
-                    isSmokeScreen
+                    isSmokeScreen,
+                    casterTeamIndex
                 )
             );
             ShowAbilityTelegraphClientRpc(
@@ -2679,7 +2682,8 @@ public class GameLoop : NetworkBehaviour
                 effectSquare,
                 data.abilityRadius,
                 data.responseDistLine,
-                isSmokeScreen
+                isSmokeScreen,
+                casterTeamIndex
             );
         }
 
@@ -3223,9 +3227,18 @@ public class GameLoop : NetworkBehaviour
         float radiusCells,
         bool line,
         bool isSmokeScreen,
+        int casterTeamIndex,
         ClientRpcParams clientRpcParams = default
     )
     {
+        // Both crews' activations are telegraphed side by side, so whose ability this is has to be
+        // readable off the shape itself: the dodger is deciding what to run from, not what to look
+        // at. Viewer-relative, matching the units and their VFX on the same screen.
+        Color color =
+            casterTeamIndex >= 0
+                ? GetTeamColorForViewer(casterTeamIndex)
+                : TeamPalette.AbilityTelegraph;
+
         if (line)
         {
             if (square == casterPos)
@@ -3234,12 +3247,17 @@ public class GameLoop : NetworkBehaviour
             GameObject laserObject = new("AbilityTelegraphLine");
             LineRenderer lr = laserObject.AddComponent<LineRenderer>();
             lr.material = new Material(Shader.Find("Sprites/Default"));
-            lr.startColor = lr.endColor = TeamPalette.AbilityTelegraph.WithAlpha(0.8f);
+            lr.startColor = lr.endColor = color.WithAlpha(0.8f);
             lr.startWidth = lr.endWidth = 0.15f;
             lr.positionCount = 2;
             lr.SetPosition(0, casterPos);
             lr.SetPosition(1, square);
             clientTelegraphs.Add(laserObject);
+
+            // A lane ability that also detonates (the Bunker Buster) threatens a disc around
+            // where its lane ends as well as the lane itself.
+            if (radiusCells > 0f)
+                CreateTelegraphBlastDisc(square, radiusCells, color);
         }
         else if (isSmokeScreen)
         {
@@ -3248,48 +3266,61 @@ public class GameLoop : NetworkBehaviour
                 Vector2Int cell in GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
             )
             {
-                CreateTelegraphCellOutline(cell);
+                CreateTelegraphCellOutline(cell, color);
             }
         }
         else if (radiusCells > 0f)
         {
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            Collider markerCollider = marker.GetComponent<Collider>();
-            markerCollider.enabled = false;
-            Destroy(markerCollider);
-            marker.name = "AbilityTelegraphMarker";
-            float diameter = 2f * radiusCells * cellSize;
-            marker.transform.position = square + new Vector3(0, 0.15f, 0);
-            marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
-            var rend = marker.GetComponent<Renderer>();
-            rend.material = new Material(Shader.Find("Sprites/Default"));
-            rend.material.color = TeamPalette.AbilityTelegraph.WithAlpha(0.5f);
-            clientTelegraphs.Add(marker);
+            CreateTelegraphBlastDisc(square, radiusCells, color);
         }
         else
         {
             // Point-target abilities (no blast radius, e.g. the Pogo Rider's Jump) have nothing
             // to show as a disc; outline the single target cell instead so the telegraph reads
             // clearly for the opponent too.
-            CreateTelegraphCellOutline(GridSystem.ConvertToGridCoords(square));
+            CreateTelegraphCellOutline(GridSystem.ConvertToGridCoords(square), color);
         }
+    }
+
+    // The dive-range overlay the dodger is given stacks an opaque outline quad at world y=0.227.
+    // A transparent telegraph under that height is depth-rejected wherever the overlay covers it,
+    // so the ability being answered vanishes exactly when the answer is being drawn. Same
+    // clearance the planning previews take.
+    private const float TelegraphDiscHeight = 0.26f;
+    private const float TelegraphOutlineHeight = 0.28f;
+
+    // Shared blast footprint for ability telegraphs: anything that damages an area around where it
+    // lands, whether it got there down a lane or through the air. Centred on the deck the blast is
+    // measured across, since a rocket's endpoint arrives carrying its flight height.
+    void CreateTelegraphBlastDisc(Vector3 center, float radiusCells, Color color)
+    {
+        GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        Collider markerCollider = marker.GetComponent<Collider>();
+        markerCollider.enabled = false;
+        Destroy(markerCollider);
+        marker.name = "AbilityTelegraphMarker";
+        float diameter = 2f * radiusCells * cellSize;
+        marker.transform.position = new Vector3(center.x, TelegraphDiscHeight, center.z);
+        marker.transform.localScale = new Vector3(diameter, 0.05f, diameter);
+        var rend = marker.GetComponent<Renderer>();
+        rend.material = new Material(Shader.Find("Sprites/Default"));
+        rend.material.color = color.WithAlpha(0.5f);
+        clientTelegraphs.Add(marker);
     }
 
     // Shared single-cell square outline for ability telegraphs (Smoke's per-cell footprint and
     // any zero-radius point-target ability, e.g. Pogo's Jump).
-    void CreateTelegraphCellOutline(Vector2Int cell)
+    void CreateTelegraphCellOutline(Vector2Int cell, Color color)
     {
         GameObject marker = new($"AbilityTelegraphCell_{cell.x}_{cell.y}");
         LineRenderer lineRenderer = marker.AddComponent<LineRenderer>();
         lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
-        lineRenderer.startColor = lineRenderer.endColor = TeamPalette.AbilityTelegraph.WithAlpha(
-            0.85f
-        );
+        lineRenderer.startColor = lineRenderer.endColor = color.WithAlpha(0.85f);
         lineRenderer.startWidth = lineRenderer.endWidth = 0.08f;
         lineRenderer.loop = true;
         lineRenderer.positionCount = 4;
 
-        Vector3 cellCenter = gridCoordToWorld(cell) + Vector3.up * 0.17f;
+        Vector3 cellCenter = gridCoordToWorld(cell) + Vector3.up * TelegraphOutlineHeight;
         float halfSize = cellSize * 0.46f;
         lineRenderer.SetPositions(
             new[]
@@ -5693,6 +5724,7 @@ public class GameLoop : NetworkBehaviour
                 telegraph.radiusCells,
                 telegraph.line,
                 telegraph.smokeScreen,
+                telegraph.casterTeamIndex,
                 target
             );
         }

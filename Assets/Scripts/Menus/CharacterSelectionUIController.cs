@@ -11,6 +11,7 @@ using UnityEngine.UIElements;
 public class CharacterSelectionUIController : NetworkBehaviour
 {
     private const int UnitsPerPlayer = RosterRules.UnitsPerPlayer;
+    private const float RosterWheelStep = 60f;
     private static readonly int[] BotRoster = GameLoop.DefaultBotRoster;
 
     [SerializeField]
@@ -28,10 +29,12 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private readonly int[] selectedUnits = CreateEmptyRoster();
     private readonly List<UnitOptionView> optionViews = new();
     private readonly List<SelectedSlotView> slotViews = new();
+    private readonly List<ClassFilterView> filterViews = new();
 
     private UIDocument document;
     private VisualElement root;
     private ScrollView rosterOptions;
+    private VisualElement classFilters;
     private VisualElement selectedRoster;
     private Label rosterInstruction;
     private Label rosterCountLabel;
@@ -51,6 +54,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private bool networkCallbacksRegistered;
     private bool disconnectRecoveryStarted;
     private string localStatusOverride;
+    private UnitClass? activeClassFilter;
 
     private static int[] CreateEmptyRoster()
     {
@@ -72,6 +76,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
         CacheElements();
         RegisterUiCallbacks();
         BuildRosterOptions();
+        BuildClassFilters();
+        ApplyClassFilter(null);
         BuildSelectedSlots();
         ConsoleUiNavigation.ConfigureButtons(root);
         UpdateSummary(IsSpawned ? replicatedOptions.Value : MatchOptions.Current);
@@ -130,6 +136,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private void CacheElements()
     {
         rosterOptions = RequireElement<ScrollView>("roster-options");
+        classFilters = RequireElement<VisualElement>("class-filters");
         selectedRoster = RequireElement<VisualElement>("selected-roster");
         rosterInstruction = RequireElement<Label>("roster-instruction");
         rosterCountLabel = RequireElement<Label>("roster-count-label");
@@ -164,6 +171,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         if (confirmButton != null)
             confirmButton.clicked += ConfirmSelection;
+        if (rosterOptions != null)
+        {
+            rosterOptions.RegisterCallback<WheelEvent>(
+                OnRosterOptionsWheel,
+                TrickleDown.TrickleDown
+            );
+        }
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         uiCallbacksRegistered = true;
     }
@@ -175,6 +189,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         if (confirmButton != null)
             confirmButton.clicked -= ConfirmSelection;
+        if (rosterOptions != null)
+        {
+            rosterOptions.UnregisterCallback<WheelEvent>(
+                OnRosterOptionsWheel,
+                TrickleDown.TrickleDown
+            );
+        }
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         uiCallbacksRegistered = false;
     }
@@ -221,6 +242,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
         for (int i = 0; i < allUnits.units.Count; i++)
         {
             int unitIndex = i;
+            if (!RosterRules.IsUnitEligible(allUnits.units, unitIndex))
+                continue;
             UnitData data = allUnits.units[i];
             UnitOptionView view = CreateUnitOptionView(data, i);
             view.ClickAction = () => SelectUnit(unitIndex);
@@ -266,6 +289,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
             button.Add(optionStatus);
         }
 
+        viewRoot.AddToClassList("unit-cell");
         button.name = $"unit-option-{index}";
         button.tooltip = data != null ? $"Add {data.unitName} to the crew" : "Add unit";
         if (unitName != null)
@@ -279,7 +303,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
                     : "Move only";
         SetBackgroundImage(portrait, data != null ? data.unitSprite : null);
 
-        return new UnitOptionView(viewRoot, button, data, optionStatus);
+        return new UnitOptionView(viewRoot, button, data, optionStatus, index);
     }
 
     private static Button BuildFallbackUnitOption()
@@ -315,6 +339,77 @@ public class CharacterSelectionUIController : NetworkBehaviour
         button.Add(portrait);
         button.Add(copy);
         return button;
+    }
+
+    private void OnRosterOptionsWheel(WheelEvent evt)
+    {
+        float span = rosterOptions.verticalScroller.highValue;
+        if (span <= 0f || Mathf.Approximately(evt.delta.y, 0f))
+            return;
+
+        Vector2 offset = rosterOptions.scrollOffset;
+        float scrolled = Mathf.Clamp(offset.y + evt.delta.y * RosterWheelStep, 0f, span);
+        if (Mathf.Approximately(scrolled, offset.y))
+            return;
+
+        rosterOptions.scrollOffset = new Vector2(offset.x, scrolled);
+        evt.StopPropagation();
+    }
+
+    private void BuildClassFilters()
+    {
+        foreach (ClassFilterView view in filterViews)
+            view.Dispose();
+        filterViews.Clear();
+        classFilters?.Clear();
+
+        if (classFilters == null || optionViews.Count == 0)
+            return;
+
+        AddClassFilter(null, "All");
+        foreach (UnitClass unitClass in (UnitClass[])Enum.GetValues(typeof(UnitClass)))
+        {
+            if (optionViews.Exists(view => Matches(view, unitClass)))
+                AddClassFilter(unitClass, unitClass.ToString());
+        }
+    }
+
+    private void AddClassFilter(UnitClass? unitClass, string label)
+    {
+        Button button = new()
+        {
+            text = label,
+            name = unitClass == null ? "class-filter-all" : $"class-filter-{unitClass.Value}",
+            tooltip = unitClass == null ? "Show every unit" : $"Show only {label} units",
+        };
+        button.AddToClassList("button");
+        button.AddToClassList("class-chip");
+
+        ClassFilterView view = new(button, unitClass);
+        view.ClickAction = () => ApplyClassFilter(unitClass);
+        button.clicked += view.ClickAction;
+
+        filterViews.Add(view);
+        classFilters.Add(button);
+    }
+
+    private void ApplyClassFilter(UnitClass? unitClass)
+    {
+        activeClassFilter = unitClass;
+
+        foreach (ClassFilterView view in filterViews)
+            view.SetActive(view.UnitClass == activeClassFilter);
+
+        foreach (UnitOptionView view in optionViews)
+            view.SetVisible(activeClassFilter == null || Matches(view, activeClassFilter.Value));
+
+        if (rosterOptions != null)
+            rosterOptions.scrollOffset = new Vector2(rosterOptions.scrollOffset.x, 0f);
+    }
+
+    private static bool Matches(UnitOptionView view, UnitClass unitClass)
+    {
+        return view.Data != null && view.Data.unitClass == unitClass;
     }
 
     private void BuildSelectedSlots()
@@ -406,8 +501,11 @@ public class CharacterSelectionUIController : NetworkBehaviour
             view.Dispose();
         foreach (SelectedSlotView view in slotViews)
             view.Dispose();
+        foreach (ClassFilterView view in filterViews)
+            view.Dispose();
         optionViews.Clear();
         slotViews.Clear();
+        filterViews.Clear();
     }
 
     private void SelectUnit(int unitIndex)
@@ -466,7 +564,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
     private void FocusFirstEnabledRosterOption()
     {
-        optionViews.FirstOrDefault(view => view.CanReceiveFocus)?.Button?.Focus();
+        optionViews.FirstOrDefault(view => view.CanReceiveFocus && view.Visible)?.Button?.Focus();
     }
 
     private void UpdateSelectionState()
@@ -479,15 +577,11 @@ public class CharacterSelectionUIController : NetworkBehaviour
         bool selectionValid = selectionComplete && validation.IsValid;
         bool canEdit = !localSelectionSubmitted && !sceneLoadRequested;
 
-        for (int unitIndex = 0; unitIndex < optionViews.Count; unitIndex++)
+        foreach (UnitOptionView view in optionViews)
         {
-            int pickedCount = selectedUnits.Count(index => index == unitIndex);
-            bool eligible = RosterRules.IsUnitEligible(allUnits?.units, unitIndex);
-            optionViews[unitIndex].Configure(
-                pickedCount,
-                eligible,
-                canEdit && !selectionComplete && eligible
-            );
+            int pickedCount = selectedUnits.Count(index => index == view.UnitIndex);
+            bool eligible = RosterRules.IsUnitEligible(allUnits?.units, view.UnitIndex);
+            view.Configure(pickedCount, eligible, canEdit && !selectionComplete && eligible);
         }
 
         for (int i = 0; i < slotViews.Count && i < selectedUnits.Length; i++)
@@ -854,23 +948,33 @@ public class CharacterSelectionUIController : NetworkBehaviour
     {
         public VisualElement Root { get; }
         public Button Button { get; }
+        public UnitData Data { get; }
+        public int UnitIndex { get; }
         public bool CanReceiveFocus { get; private set; }
+        public bool Visible { get; private set; } = true;
         public Action ClickAction { get; set; }
 
-        private readonly UnitData data;
         private readonly Label optionStatus;
 
         public UnitOptionView(
             VisualElement root,
             Button button,
             UnitData data,
-            Label optionStatus
+            Label optionStatus,
+            int unitIndex
         )
         {
             Root = root;
             Button = button;
-            this.data = data;
+            Data = data;
             this.optionStatus = optionStatus;
+            UnitIndex = unitIndex;
+        }
+
+        public void SetVisible(bool visible)
+        {
+            Visible = visible;
+            Root.EnableInClassList("hidden", !visible);
         }
 
         public void Configure(int pickedCount, bool eligible, bool canChoose)
@@ -892,7 +996,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
             }
 
             string unitName =
-                data != null && !string.IsNullOrWhiteSpace(data.unitName) ? data.unitName : "unit";
+                Data != null && !string.IsNullOrWhiteSpace(Data.unitName) ? Data.unitName : "unit";
             Button.tooltip = !eligible
                 ? $"{unitName} is unavailable for deployment"
                 : (
@@ -957,6 +1061,31 @@ public class CharacterSelectionUIController : NetworkBehaviour
                     : "Choose a unit";
             }
             SetBackgroundImage(portrait, filled && data != null ? data.unitSprite : null);
+        }
+
+        public void Dispose()
+        {
+            if (Button != null && ClickAction != null)
+                Button.clicked -= ClickAction;
+            ClickAction = null;
+        }
+    }
+
+    private sealed class ClassFilterView : IDisposable
+    {
+        public Button Button { get; }
+        public UnitClass? UnitClass { get; }
+        public Action ClickAction { get; set; }
+
+        public ClassFilterView(Button button, UnitClass? unitClass)
+        {
+            Button = button;
+            UnitClass = unitClass;
+        }
+
+        public void SetActive(bool active)
+        {
+            Button.EnableInClassList("button--selected", active);
         }
 
         public void Dispose()

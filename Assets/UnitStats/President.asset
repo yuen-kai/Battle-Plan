@@ -15,8 +15,7 @@ MonoBehaviour:
   unitModel: {fileID: 2129558826794870872, guid: eb172b56d11084075a34009ca5669d73, type: 3}
   unitName: The President
   unitClass: 4
-  unitDescription: "The man the whole leg is about. Cannot win a fight, and does
-    not have to \u2014 he only has to arrive."
+  unitDescription: No introduction needed
   playStyle: Walk him across behind a screen, and pull the screen back to him when
     it thins out.
   weaponName: Sidearm pistol

@@ -15,8 +15,9 @@ MonoBehaviour:
   unitModel: {fileID: 4136433947033533029, guid: dfbc52239d483463497aa5a0954ccf11, type: 3}
   unitName: Salvo
   unitClass: 2
-  unitDescription: Lays down sustained fire to control a lane.
-  playStyle: Sets up and holds a lane instead of chasing kills.
+  unitDescription: Lays down sustained fire
+  playStyle: Sets up and holds a lane instead of chasing kills. The longer the round
+    goes on, the longer he shoots.
   weaponName: Machine gun
   strengths: Nearly uninterrupted fire and strong lane pressure.
   weaknesses: Slow to relocate, and each shot alone hits soft.
