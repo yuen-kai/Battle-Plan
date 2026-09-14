@@ -407,6 +407,7 @@ public class GameLoop : NetworkBehaviour
 
     // Client-side public smoke mirror plus telegraph visuals spawned by client RPCs.
     private readonly HashSet<Vector2Int> clientSmokeCells = new();
+    private readonly HashSet<GameObject> smokeConcealedUnits = new();
     private readonly List<GameObject> clientTelegraphs = new();
     private GameObject clientSmokeVisualRoot;
     private SmokeScreenVisual clientSmokeVisual;
@@ -2357,6 +2358,7 @@ public class GameLoop : NetworkBehaviour
     private void ClearSmokeScreenVisualsLocal()
     {
         clientSmokeCells.Clear();
+        ClearSmokeOccupantConcealment();
 
         StopClientSmokeVision();
         clientSmokeVisual = null;
@@ -2390,6 +2392,103 @@ public class GameLoop : NetworkBehaviour
     {
         if (clientSmokeVisual != null)
             clientSmokeVisual.SetSeenCells(visibleCells);
+        RefreshSmokeOccupantConcealment(visibleCells);
+    }
+
+    private void RefreshSmokeOccupantConcealment(HashSet<Vector2Int> visibleCells)
+    {
+        if (!IsClient)
+            return;
+
+        HashSet<GameObject> conceal = new();
+        if (clientSmokeCells.Count > 0 && visibleCells != null)
+        {
+            foreach (GameObject[] teamUnits in allTeamUnitObjects.Values)
+            {
+                if (teamUnits == null)
+                    continue;
+
+                foreach (GameObject unit in teamUnits)
+                {
+                    if (!IsLivingUnit(unit))
+                        continue;
+
+                    Vector2Int cell = GridSystem.ConvertToGridCoords(unit.transform.position);
+                    if (
+                        !clientSmokeCells.Contains(cell)
+                        || visibleCells.Contains(cell)
+                        || IsForceRevealedToTeam(unit, LocalTeamIndex)
+                    )
+                    {
+                        continue;
+                    }
+
+                    conceal.Add(unit);
+                }
+            }
+        }
+
+        foreach (GameObject unit in conceal)
+        {
+            smokeConcealedUnits.Add(unit);
+            SetUnitVisualsLocal(unit, false);
+        }
+
+        List<GameObject> released = null;
+        foreach (GameObject unit in smokeConcealedUnits)
+        {
+            if (unit != null && conceal.Contains(unit))
+                continue;
+            released ??= new List<GameObject>();
+            released.Add(unit);
+        }
+
+        if (released == null)
+            return;
+
+        foreach (GameObject unit in released)
+        {
+            smokeConcealedUnits.Remove(unit);
+            if (unit == null || !IsLivingUnit(unit))
+                continue;
+            if (ShouldRevealAfterSmokeConcealment(unit, visibleCells))
+                SetUnitVisualsLocal(unit, true);
+        }
+    }
+
+    private void ClearSmokeOccupantConcealment()
+    {
+        if (smokeConcealedUnits.Count == 0)
+            return;
+
+        TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells);
+        GameObject[] concealed = new GameObject[smokeConcealedUnits.Count];
+        smokeConcealedUnits.CopyTo(concealed);
+        smokeConcealedUnits.Clear();
+
+        foreach (GameObject unit in concealed)
+        {
+            if (unit == null || !IsLivingUnit(unit))
+                continue;
+            if (ShouldRevealAfterSmokeConcealment(unit, visibleCells))
+                SetUnitVisualsLocal(unit, true);
+        }
+    }
+
+    private bool ShouldRevealAfterSmokeConcealment(
+        GameObject unit,
+        HashSet<Vector2Int> visibleCells
+    )
+    {
+        Unit identity = unit.GetComponent<Unit>();
+        if (identity == null || identity.TeamIndex == LocalTeamIndex || !FogOfWarEnabled)
+            return true;
+
+        Vector2Int cell = GridSystem.ConvertToGridCoords(unit.transform.position);
+        return visibleCells != null
+            && (
+                visibleCells.Contains(cell) || IsForceRevealedToTeam(unit, LocalTeamIndex)
+            );
     }
 
     /// <summary>

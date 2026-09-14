@@ -238,6 +238,7 @@ capsule's world height, so a model sitting at the root hovers over the board by 
 - `CoverVariant` chooses a wall's visual form. It does not own gameplay blocking.
 - `GameLoop` owns permanent wall removal and the cell-to-wall-instance registry.
 - Smoke is server-authored denial state, not a physical wall. It affects visibility and bullet-path checks without entering wall pathfinding.
+- Client presentation thins the smoke bank over cells the local crew can see into, and hides occupants of smoked cells that remain unseen so gear cannot poke through the opaque bank.
 
 Prefer cell-based rules for planning and validation. Use physics when the actual projectile or collision shape matters.
 
