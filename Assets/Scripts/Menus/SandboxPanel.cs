@@ -31,6 +31,7 @@ public sealed class SandboxPanel
     private readonly Button moveButton;
     private readonly Label ownCount;
     private readonly Label enemyCount;
+    private readonly Toggle fog;
     private readonly Toggle ownImmortal;
     private readonly Toggle enemyImmortal;
     private readonly Label hint;
@@ -53,6 +54,7 @@ public sealed class SandboxPanel
         moveButton = layer.Q<Button>("sandbox-move");
         ownCount = layer.Q<Label>("sandbox-own-count");
         enemyCount = layer.Q<Label>("sandbox-enemy-count");
+        fog = layer.Q<Toggle>("sandbox-fog");
         ownImmortal = layer.Q<Toggle>("sandbox-own-immortal");
         enemyImmortal = layer.Q<Toggle>("sandbox-enemy-immortal");
         hint = layer.Q<Label>("sandbox-hint");
@@ -68,6 +70,7 @@ public sealed class SandboxPanel
         layer.Q<Button>("sandbox-recharge").clicked += () =>
             GameLoop.Instance?.SandboxClearAbilityCooldowns();
         layer.Q<Button>("sandbox-picker-close").clicked += ClosePicker;
+        fog.RegisterValueChangedCallback(evt => SetFog(evt.newValue));
         ownImmortal.RegisterValueChangedCallback(evt => SetImmortal(OwnTeamIndex, evt.newValue));
         enemyImmortal.RegisterValueChangedCallback(evt =>
             SetImmortal(EnemyTeamIndex, evt.newValue)
@@ -196,16 +199,21 @@ public sealed class SandboxPanel
 
         ownCount.text = $"{own.Count} / {SandboxSession.MaxUnitsPerTeam}";
         enemyCount.text = $"{enemy.Count} / {SandboxSession.MaxUnitsPerTeam}";
+        fog.SetValueWithoutNotify(SandboxSession.FogOfWar);
         ownImmortal.SetValueWithoutNotify(own.immortal);
         enemyImmortal.SetValueWithoutNotify(enemy.immortal);
 
         bool editing = SandboxSession.BoardEditActive;
+        bool fogging = SandboxSession.FogOfWar;
         moveButton.EnableInClassList("sandbox-button--armed", editing);
         moveButton.text = editing ? "Moving units" : "Move units";
         hint.text = editing
             ? "Drag any unit to an empty square, between rounds. Turn this off to give orders again."
-            : "Click a unit on either side to give it a route or an ability, then lock in to run the "
-                + "round. Unplanned units hold. Swap or drop a unit on its own card.";
+            : fogging
+                ? "Fog hides each crew from the other, so a unit you cannot see is a unit you "
+                    + "cannot order. Turn fog off to plan the far side."
+                : "Tap a unit on either side to give it a route or an ability, then lock in to run "
+                    + "the round. Unplanned units hold. Swap or drop a unit on its own card.";
 
         ownAddSlot?.SetEnabled(own.Count < SandboxSession.MaxUnitsPerTeam);
         enemyAddSlot?.SetEnabled(enemy.Count < SandboxSession.MaxUnitsPerTeam);
@@ -245,7 +253,7 @@ public sealed class SandboxPanel
         SandboxCrew own = SandboxSession.Crew(OwnTeamIndex);
         SandboxCrew enemy = SandboxSession.Crew(EnemyTeamIndex);
         return $"{own.Count}:{own.immortal}:{enemy.Count}:{enemy.immortal}:"
-            + $"{SandboxSession.BoardEditActive}:{GameLoop.currentPhase}";
+            + $"{SandboxSession.FogOfWar}:{SandboxSession.BoardEditActive}:{GameLoop.currentPhase}";
     }
 
     private void RemoveUnit(int teamIndex, int slot)
@@ -278,6 +286,18 @@ public sealed class SandboxPanel
     {
         SandboxSession.Crew(teamIndex).immortal = immortal;
         SandboxLauncher.SaveSetup();
+        appliedSignature = null;
+    }
+
+    /// <summary>
+    /// Fog is a live match-wide setting rather than a board one, so it takes hold on the running
+    /// round instead of waiting for a rebuild. Remembered with the rest of the setup all the same.
+    /// </summary>
+    private void SetFog(bool enabled)
+    {
+        SandboxSession.FogOfWar = enabled;
+        SandboxLauncher.SaveSetup();
+        GameLoop.Instance?.SetFogOfWarEnabled(enabled);
         appliedSignature = null;
     }
 

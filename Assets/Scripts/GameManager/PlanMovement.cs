@@ -50,6 +50,8 @@ public partial class PlanMovement : MonoBehaviour
     private int planningRoundToken = -1;
     private int planningCommitVersion;
     private double planningEndTime;
+    private PathsDict potentialCameraGesturePlans;
+    private GameObject potentialCameraGestureSelection;
 
     [SerializeField]
     private GameObject moveOverlayCellPrefab;
@@ -71,6 +73,78 @@ public partial class PlanMovement : MonoBehaviour
     {
         Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
         return identity != null ? identity.TeamIndex : -1;
+    }
+
+    /// <summary>
+    /// Saves the editable board state at the start of a touch. A second finger can arrive after the
+    /// first has already selected a unit, trimmed a route, or aimed an ability; the camera gesture
+    /// restores this snapshot so that preliminary single-finger work never becomes an order.
+    /// </summary>
+    public void BeginPotentialCameraGesture()
+    {
+        if (!CanEditPlan || potentialCameraGesturePlans != null)
+            return;
+
+        potentialCameraGesturePlans = ClonePlans(plans);
+        potentialCameraGestureSelection = selectedUnit;
+    }
+
+    public void RestorePotentialCameraGesture()
+    {
+        if (potentialCameraGesturePlans == null)
+            return;
+
+        PathSelection.Instance?.CancelCurrentDrag();
+        if (!CanEditPlan)
+        {
+            FinishPotentialCameraGesture();
+            return;
+        }
+
+        plans = potentialCameraGesturePlans;
+        selectedUnit = potentialCameraGestureSelection;
+        potentialCameraGesturePlans = null;
+        potentialCameraGestureSelection = null;
+        currentPlan =
+            selectedUnit != null && plans.TryGetValue(selectedUnit, out (bool, List<Vector3>) plan)
+                ? plan.Item2
+                : new List<Vector3>();
+
+        GameHUDController.Instance?.ClearTargetFeedback();
+        if (selectedUnit != null)
+        {
+            ApplySelectedUnitModeVisuals();
+        }
+        else
+        {
+            Destroy(moveOverlay);
+            moveOverlay = null;
+            RefreshAllRibbons();
+            RefreshAbilityIndicators();
+        }
+        RefreshUnitCards();
+    }
+
+    public void FinishPotentialCameraGesture()
+    {
+        potentialCameraGesturePlans = null;
+        potentialCameraGestureSelection = null;
+    }
+
+    private static PathsDict ClonePlans(PathsDict source)
+    {
+        PathsDict clone = new();
+        if (source == null)
+            return clone;
+
+        foreach (KeyValuePair<GameObject, (bool, List<Vector3>)> entry in source)
+        {
+            clone[entry.Key] = (
+                entry.Value.Item1,
+                entry.Value.Item2 != null ? new List<Vector3>(entry.Value.Item2) : null
+            );
+        }
+        return clone;
     }
 
     public static PlanMovement Instance { get; private set; }
@@ -271,7 +345,7 @@ public partial class PlanMovement : MonoBehaviour
 
     public bool TryLockIn()
     {
-        if (!CanEditPlan)
+        if (Mouse.CameraGestureActive || !CanEditPlan)
             return false;
 
         // A dive is committed as it stands, empty included: pressing this with nothing drawn is how
@@ -313,7 +387,7 @@ public partial class PlanMovement : MonoBehaviour
 
     public bool TryUnlock()
     {
-        if (!CanUnlockPlan)
+        if (Mouse.CameraGestureActive || !CanUnlockPlan)
             return false;
 
         if (planningUnlockCallback == null)
@@ -427,6 +501,7 @@ public partial class PlanMovement : MonoBehaviour
         dodgeCommitAvailable = false;
         planningRoundToken = -1;
         planningEndTime = 0d;
+        FinishPotentialCameraGesture();
         PathSelection.Instance?.CancelCurrentDrag();
         ClearVisuals();
         GameHUDController.Instance?.SetTimer(0f);
@@ -442,9 +517,9 @@ public partial class PlanMovement : MonoBehaviour
     {
         if (!TutorialSession.IsActive || useUnitCards || planningSubmitted)
             return false;
-        // Held means the drag is still being drawn; the commit waits for the release rather than
-        // firing on the first cell crossed.
-        if (Input.GetMouseButton(0) || selectedUnit == null)
+        // Only an actual gameplay-pointer release commits. A camera gesture suppresses the pointer
+        // and must not look like the release of the route it cancelled.
+        if (!Mouse.PrimaryPointerUp || selectedUnit == null)
             return false;
 
         return plans.TryGetValue(selectedUnit, out (bool, List<Vector3>) plan)

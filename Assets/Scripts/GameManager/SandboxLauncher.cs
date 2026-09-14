@@ -17,6 +17,7 @@ public static class SandboxLauncher
 {
     private const string AutoRunKey = "BattlePlan.Sandbox.AutoRun";
     private const string SetupKey = "BattlePlan.Sandbox.Setup";
+    private const string FogKey = "BattlePlan.Sandbox.Fog";
 
     public static bool IsRunning => Application.isPlaying && SandboxSession.IsActive;
 
@@ -85,10 +86,13 @@ public static class SandboxLauncher
             setup.Append('|').Append(crew.immortal ? '1' : '0');
         }
         UnityEditor.EditorPrefs.SetString(SetupKey, setup.ToString());
+        UnityEditor.EditorPrefs.SetBool(FogKey, SandboxSession.FogOfWar);
     }
 
     private static void LoadSetup()
     {
+        SandboxSession.FogOfWar = UnityEditor.EditorPrefs.GetBool(FogKey, false);
+
         string stored = UnityEditor.EditorPrefs.GetString(SetupKey, string.Empty);
         if (string.IsNullOrEmpty(stored))
             return;

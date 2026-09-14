@@ -92,7 +92,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Click a unit, then a highlighted square to set its route. Press its ability card to spend the round on the ability instead." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Tap or click a unit, then drag across highlighted squares to set its route. Press its ability card to spend the round on the ability instead." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
@@ -106,9 +106,13 @@
                             <ui:Label text="Dodge" class="control-key" picking-mode="Ignore" />
                             <ui:Label text="Drag threatened units to safety." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
+                        <ui:VisualElement class="control-row">
                             <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
                             <ui:Label text="Enemies disappear outside your vision." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row control-row--last">
+                            <ui:Label text="Camera" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Pinch with two fingers to zoom and drag with two fingers to pan. On desktop, use the mouse wheel to zoom, right- or middle-drag to pan, or use WASD / arrow keys." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="control-section">

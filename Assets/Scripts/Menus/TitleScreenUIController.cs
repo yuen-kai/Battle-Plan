@@ -43,6 +43,7 @@ public class TitleScreenUIController : MonoBehaviour
 
         CacheElements();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document);
         RegisterCallbacks();
         settings.ShowStoredSettings();
         CloseModal(false);
@@ -52,6 +53,7 @@ public class TitleScreenUIController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterCallbacks();
+        MobileDisplay.ForgetScreen(document);
         GameSettings.Flush();
         activeModal = null;
         modalReturnButton = null;

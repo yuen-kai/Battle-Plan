@@ -17,12 +17,14 @@ public class SandboxEditModeTests
     {
         // Placement is a function of the live wall layout, and the sandbox always runs on Concourse.
         MapCatalog.SetActive(MapId.Concourse);
+        SandboxSession.FogOfWar = false;
         SandboxSession.ResetAllCrews();
     }
 
     [TearDown]
     public void TearDown()
     {
+        SandboxSession.FogOfWar = false;
         SandboxSession.End();
         SandboxSession.ResetAllCrews();
         BotFrozenUnits.ClearAll();
@@ -354,14 +356,26 @@ public class SandboxEditModeTests
     }
 
     [Test]
-    public void BuildMatchOptions_IsASingleClientBotMatchWithFogOffOnConcourse()
+    public void BuildMatchOptions_IsASingleClientBotMatchOnConcourse()
     {
         MatchOptions options = SandboxSession.BuildMatchOptions();
 
         Assert.That(options.IsBotMatch, Is.True, "The sandbox is a solo loopback host.");
-        Assert.That(options.fogOfWar, Is.False, "Both crews must stay visible at all times.");
+        Assert.That(
+            options.fogOfWar,
+            Is.False,
+            "A fresh board keeps both crews visible so either can be planned."
+        );
         Assert.That(options.mapId, Is.EqualTo(MapId.Concourse));
         Assert.That(options.gameMode, Is.EqualTo(GameMode.Elimination));
+    }
+
+    [Test]
+    public void BuildMatchOptions_SeedsTheMatchWithTheChosenFogSetting()
+    {
+        SandboxSession.FogOfWar = true;
+
+        Assert.That(SandboxSession.BuildMatchOptions().fogOfWar, Is.True);
     }
 
     [Test]

@@ -37,6 +37,8 @@ public class GameHUDController : MonoBehaviour
     private VisualElement cardsContainer;
     private VisualElement enemyCardsContainer;
     private VisualElement hudDock;
+    private VisualElement hudDockRow;
+    private VisualElement hudTop;
     private VisualElement enemyStatusStrip;
     private VisualElement hillStatusReadout;
     private VisualElement escortStatusReadout;
@@ -50,6 +52,7 @@ public class GameHUDController : MonoBehaviour
     private Label escortStatusKey;
     private Label escortStatusLabel;
     private Label escortAlertLabel;
+    private Label escortAlertDetail;
     private Coroutine escortAlertCoroutine;
     private Label deploymentStatus;
     private Label resultsStatus;
@@ -101,6 +104,7 @@ public class GameHUDController : MonoBehaviour
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
     public string EscortAlertText => escortAlertLabel?.text ?? string.Empty;
+    public string EscortAlertDetailText => escortAlertDetail?.text ?? string.Empty;
     public string EscortStatusText =>
         $"{escortStatusKey?.text ?? string.Empty} · {escortStatusLabel?.text ?? string.Empty}";
     public string RejoinNoticeText => rejoinNoticeStatus?.text ?? string.Empty;
@@ -131,6 +135,7 @@ public class GameHUDController : MonoBehaviour
         RegisterCallbacks();
         BuildCards();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document, ApplySafeAreaInsets);
         HideResults();
         CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
@@ -145,6 +150,7 @@ public class GameHUDController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterCallbacks();
+        MobileDisplay.ForgetScreen(document);
         // A level chosen mid-match survives leaving it, even if the sheet never got closed.
         GameSettings.Flush();
         ReleaseBoardViewport();
@@ -182,6 +188,8 @@ public class GameHUDController : MonoBehaviour
         cardsContainer = RequireElement<VisualElement>("unit-cards");
         enemyCardsContainer = RequireElement<VisualElement>("enemy-unit-cards");
         hudDock = RequireElement<VisualElement>("hud-dock");
+        hudDockRow = RequireElement<VisualElement>("hud-dock-row");
+        hudTop = RequireElement<VisualElement>("hud-top");
         enemyStatusStrip = RequireElement<VisualElement>("enemy-status-strip");
         deploymentOverlay = RequireElement<VisualElement>("deployment-overlay");
         resultsOverlay = RequireElement<VisualElement>("results-overlay");
@@ -195,6 +203,7 @@ public class GameHUDController : MonoBehaviour
         escortStatusLabel = RequireElement<Label>("escort-status-label");
         escortAlert = RequireElement<VisualElement>("escort-alert");
         escortAlertLabel = RequireElement<Label>("escort-alert-label");
+        escortAlertDetail = RequireElement<Label>("escort-alert-detail");
         rejoinNotice = RequireElement<VisualElement>("rejoin-notice");
         rejoinNoticeTitle = RequireElement<Label>("rejoin-notice-title");
         rejoinNoticeStatus = RequireElement<Label>("rejoin-notice-status");
@@ -757,20 +766,45 @@ public class GameHUDController : MonoBehaviour
         );
     }
 
+    /// <summary>Throws the leg clock's last call across the board.</summary>
+    public void ShowEscortClockCall(string message, float seconds = 2.6f)
+    {
+        ShowEscortAlert(message, null, false, seconds);
+        Flash(MessagePerspective.Neutral, 0.35f);
+    }
+
     /// <summary>
-    /// Throws the leg clock's last call across the board. Real seconds, so a dev fast-forward cannot
-    /// blink it past the player it exists for.
+    /// The same news the results overlay would give, told at the end of a leg instead of the series.
+    /// The caller flashes, so this does not: the phase notch punctuates the same moment.
     /// </summary>
-    public void ShowEscortAlert(string message, float seconds = 2.6f)
+    public void ShowEscortLegVerdict(string headline, string score, float seconds)
+    {
+        ShowEscortAlert(headline, score, true, seconds);
+    }
+
+    /// <summary>Real seconds, so a dev fast-forward cannot blink it past the player it is for.</summary>
+    private void ShowEscortAlert(
+        string headline,
+        string detail,
+        bool verdict,
+        float seconds
+    )
     {
         if (escortAlert == null || escortAlertLabel == null)
             return;
 
-        escortAlertLabel.text = message ?? string.Empty;
+        escortAlertLabel.text = headline ?? string.Empty;
+        bool hasDetail = !string.IsNullOrWhiteSpace(detail);
+        if (escortAlertDetail != null)
+        {
+            escortAlertDetail.text = hasDetail ? detail : string.Empty;
+            escortAlertDetail.EnableInClassList("hidden", !hasDetail);
+        }
+
+        escortAlert.EnableInClassList("escort-alert--verdict", verdict);
         escortAlert.RemoveFromClassList("hidden");
         escortAlert.AddToClassList("escort-alert--visible");
         escortAlert.BringToFront();
-        Flash(MessagePerspective.Neutral, 0.35f);
 
         if (escortAlertCoroutine != null)
             StopCoroutine(escortAlertCoroutine);
@@ -1664,6 +1698,38 @@ public class GameHUDController : MonoBehaviour
     }
 
     private void OnChromeGeometryChanged(GeometryChangedEvent evt) => FitBoardViewport();
+
+    /// <summary>
+    /// Keeps HUD content clear of a display cutout without insetting the bars themselves. The
+    /// opaque dock and enemy strip must keep reaching the screen edge: <see cref="FitBoardViewport"/>
+    /// hands the camera only the band between them, and nothing else paints the edge a shrunken bar
+    /// would uncover. Their contents carry the inset instead.
+    /// </summary>
+    private void ApplySafeAreaInsets(Vector4 insets)
+    {
+        if (hudDockRow != null)
+        {
+            hudDockRow.style.marginLeft = insets.x;
+            hudDockRow.style.marginRight = insets.z;
+            hudDockRow.style.marginBottom = insets.w;
+        }
+
+        if (enemyCardsContainer != null)
+        {
+            enemyCardsContainer.style.marginLeft = insets.x;
+            enemyCardsContainer.style.marginTop = insets.y;
+            enemyCardsContainer.style.marginRight = insets.z;
+        }
+
+        if (hudTop != null)
+        {
+            hudTop.style.marginLeft = insets.x;
+            hudTop.style.marginTop = insets.y;
+            hudTop.style.marginRight = insets.z;
+        }
+
+        FitBoardViewport();
+    }
 
     /// <summary>
     /// Gives the board the screen it is not sharing with the HUD by shrinking the camera viewport

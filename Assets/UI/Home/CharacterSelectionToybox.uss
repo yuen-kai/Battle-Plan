@@ -333,52 +333,49 @@
     flex-grow: 1;
     flex-shrink: 1;
     min-height: 60px;
-    justify-content: flex-end;
     background-color: var(--toy-warm);
-    -unity-background-scale-mode: scale-and-crop;
+    -unity-background-scale-mode: stretch-to-fill;
 }
 
-/* Dimming the picture through the tint rather than the element: opacity here
-   takes the nameplate sitting inside the portrait down with it, and a unit you
-   cannot deploy still has to be identifiable. */
+/* Tint the picture rather than fading the tile, so an unavailable unit still
+   reads as itself. */
 .unit-option--unavailable .unit-option__portrait {
     -unity-background-image-tint-color: var(--toy-disabled-border);
 }
 
-/* The name is burned into the foot of the picture instead of sitting under it.
-   Below the portrait it cost the tile forty pixels of face, which is the only
-   thing on a hero tile anyone actually reads at a glance. */
 .unit-option__name {
+    flex-grow: 1;
     flex-shrink: 0;
-    padding: 4px 11px 5px 11px;
-    background-color: var(--toy-panel);
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
     -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
     font-size: var(--toy-type-title);
     -unity-font-style: normal;
     color: var(--toy-text);
-    letter-spacing: var(--toy-track-label);
+    letter-spacing: var(--toy-track-title);
+    -unity-text-align: middle-center;
     white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .unit-option:hover .unit-option__name,
 .unit-option--selected .unit-option__name {
-    background-color: var(--toy-select);
     color: var(--toy-text-on-deep);
 }
 
 .unit-option--unavailable .unit-option__name {
-    background-color: var(--toy-panel);
     color: var(--toy-text-muted);
 }
 
-/* Fixed height so the ability line lands on the same baseline across the row.
-   The unit descriptions run from one word to a full sentence, and letting the
-   copy size itself gave every tile a different portrait. */
+/* Title plate under the portrait. Extra bottom inset lifts Oswald's caps,
+   which sit low in the line box, onto the optical centre of the band. */
 .unit-option__copy {
-    height: 42px;
+    height: 44px;
     flex-shrink: 0;
-    padding: 10px 12px;
+    padding: 0 10px 5px 10px;
     overflow: hidden;
     border-top-width: var(--toy-stroke-thin);
     border-top-color: var(--toy-edge);
@@ -401,60 +398,6 @@
 }
 
 .unit-option--unavailable .unit-option__description {
-    color: var(--toy-text-muted);
-}
-
-.unit-option__ability-row {
-    flex-shrink: 0;
-    flex-direction: row;
-    align-items: flex-start;
-    margin-top: 0;
-}
-
-/* The condensed face seats its caps at the foot of the line box rather than
-   across the middle of it, so a mark the row centres reads seven pixels above
-   the word beside it. The row hangs both from its top and the mark drops onto
-   the caps by hand. */
-.unit-option__ability-mark {
-    width: 11px;
-    min-width: 11px;
-    height: 11px;
-    margin-top: 8px;
-    margin-right: 7px;
-    -unity-background-scale-mode: scale-to-fit;
-    -unity-background-image-tint-color: var(--toy-primary);
-}
-
-/* The mark follows the plate, not the accent: on the inverted tile the orange
-   rule down the leading edge is already saying "chosen", and a second orange
-   mark inside it made the state read as two different things. */
-.unit-option:hover .unit-option__ability-mark,
-.unit-option--selected .unit-option__ability-mark {
-    -unity-background-image-tint-color: var(--toy-text-on-deep);
-}
-
-.unit-option--unavailable .unit-option__ability-mark {
-    -unity-background-image-tint-color: var(--toy-text-muted);
-}
-
-.unit-option__ability {
-    flex-grow: 1;
-    min-width: 0;
-    margin: 0;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-caption);
-    -unity-font-style: normal;
-    color: var(--toy-text);
-    letter-spacing: var(--toy-track-label);
-    white-space: normal;
-}
-
-.unit-option:hover .unit-option__ability,
-.unit-option--selected .unit-option__ability {
-    color: var(--toy-text-on-deep);
-}
-
-.unit-option--unavailable .unit-option__ability {
     color: var(--toy-text-muted);
 }
 
@@ -643,7 +586,7 @@
     height: var(--toy-target);
     margin-right: var(--toy-space-md);
     background-color: var(--toy-warm);
-    -unity-background-scale-mode: scale-and-crop;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
 .selected-slot--filled .selected-slot__portrait {
@@ -771,10 +714,6 @@
 .compact .roster-body {
     height: 300px;
     min-height: 300px;
-}
-
-.compact .unit-option__name {
-    font-size: var(--toy-type-body-lg);
 }
 
 .compact .unit-cell {

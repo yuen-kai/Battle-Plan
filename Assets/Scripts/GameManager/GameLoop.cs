@@ -530,8 +530,32 @@ public class GameLoop : NetworkBehaviour
             return TutorialSession.CreateSpawnLayout();
         if (SandboxSession.IsActive)
             return SandboxSession.CreateSpawnLayout();
-        if (MatchOptions.Current.IsEscort)
-            return EscortSeries.CreateSpawnLayout(EscortSeries.LegNumber);
+
+        return CreateSpawnLayout(
+            MatchOptions.Current.gameMode,
+            EscortSeries.LegNumber,
+            useDevLayout
+        );
+    }
+
+    /// <summary>
+    /// Where a mode puts both crews, asked without a live match. Escort is the only mode that
+    /// deploys differently — one crew on its back rank and the other dug in ahead of the zone it
+    /// guards — and which crew does which alternates by leg, so the leg is a parameter rather than
+    /// read from the series.
+    ///
+    /// Public so the lobby preview can draw the deployment a player is about to be dropped into
+    /// (leg 1) from the same routine the match uses. Drawing it from a copy of these rules would
+    /// let the picture and the board disagree, which is the one thing a preview must never do.
+    /// </summary>
+    public static List<Vector2Int[]> CreateSpawnLayout(
+        GameMode gameMode,
+        int legNumber,
+        bool useDevLayout = false
+    )
+    {
+        if (gameMode == GameMode.EscortThePresident)
+            return EscortSeries.CreateSpawnLayout(legNumber);
 
         List<Vector2Int[]> layout = new(TeamCount);
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
@@ -875,6 +899,7 @@ public class GameLoop : NetworkBehaviour
         base.OnNetworkSpawn();
         Instance = this;
         TeamCamera = teamCameraParent != null ? teamCameraParent.GetComponent<Camera>() : null;
+        BoardCameraController.Attach(TeamCamera);
 
         replicatedMatchOptions.OnValueChanged += OnMatchOptionsChanged;
         teamZeroParticipant.OnValueChanged += OnTeamParticipantChanged;
@@ -1245,8 +1270,10 @@ public class GameLoop : NetworkBehaviour
         {
             if (teamCameraParent != null)
             {
+                ImpactCamera.PrepareForExternalCameraMotion(TeamCamera);
                 teamCameraParent.transform.position = cameraPositions[teamIndex].position;
                 teamCameraParent.transform.rotation = cameraPositions[teamIndex].rotation;
+                TeamCamera?.GetComponent<BoardCameraController>()?.ResetInputState();
             }
         }
     }
@@ -1824,7 +1851,13 @@ public class GameLoop : NetworkBehaviour
                 CollectAbilityActivations(paths);
             if (activations.Count > 0)
             {
-                yield return StartCoroutine(RunDodgePhase(activations, paths));
+                // The president's Close Ranks wipes its own crew's plans at execution, so those
+                // abilities never fire. Resolve that before the window opens rather than after:
+                // telegraphing one, or making an enemy spend its dive answering it, prompts a
+                // dodge against an ability that is already cancelled.
+                yield return StartCoroutine(
+                    RunDodgePhase(ActivationsSurvivingAlliedCancels(activations), paths)
+                );
                 // Dodging cancels the dodger's own ability plan; re-collect what survived.
                 activations = CollectAbilityActivations(paths);
             }
@@ -2431,6 +2464,45 @@ public class GameLoop : NetworkBehaviour
             activations.Add((unit, square, data));
         }
         return activations;
+    }
+
+    /// <summary>
+    /// The activations that still resolve once an order-cancelling ability
+    /// (<see cref="Ability.CancelsAlliedOrders"/>, the president's Close Ranks) has wiped its own
+    /// crew's plans. The canceller itself survives; every other plan on its team does not.
+    /// </summary>
+    private List<(GameObject unit, Vector3 square, UnitData data)> ActivationsSurvivingAlliedCancels(
+        List<(GameObject unit, Vector3 square, UnitData data)> activations
+    )
+    {
+        return ActivationsSurvivingAlliedCancels(
+            activations,
+            activation => activation.unit.GetComponent<Unit>()?.TeamIndex ?? -1,
+            activation => activation.unit.GetComponent<Ability>()?.CancelsAlliedOrders ?? false
+        );
+    }
+
+    public static List<T> ActivationsSurvivingAlliedCancels<T>(
+        List<T> activations,
+        System.Func<T, int> teamOf,
+        System.Func<T, bool> cancelsAlliedOrders
+    )
+    {
+        HashSet<int> cancellingTeams = activations
+            .Where(cancelsAlliedOrders)
+            .Select(teamOf)
+            .Where(teamIndex => teamIndex >= 0)
+            .ToHashSet();
+
+        if (cancellingTeams.Count == 0)
+            return activations;
+
+        return activations
+            .Where(activation =>
+                cancelsAlliedOrders(activation)
+                || !cancellingTeams.Contains(teamOf(activation))
+            )
+            .ToList();
     }
 
     private List<(GameObject unit, Vector3 square, UnitData data)> StartAbilityCooldowns(
@@ -3454,7 +3526,26 @@ public class GameLoop : NetworkBehaviour
 
     public HashSet<Vector2Int> EscortExtractionCellsFor(int teamIndex)
     {
-        return Options.IsEscort && EscortSeries.IsEscortingTeam(teamIndex)
+        return EscortExtractionCellsFor(Options.gameMode, EscortSeries.LegNumber, teamIndex);
+    }
+
+    /// <summary>
+    /// The zone a crew is walking its president to, asked without a live match. Empty unless the
+    /// mode is Escort and that crew is the one escorting this leg, which is what makes a single
+    /// pad appear on legs 1 and 2 and both of them on the decider.
+    ///
+    /// Public for the lobby preview, which paints the objective the chosen mode actually has. See
+    /// <see cref="CreateSpawnLayout(GameMode, int, bool)"/> for why the preview asks rather than
+    /// keeps a copy.
+    /// </summary>
+    public static HashSet<Vector2Int> EscortExtractionCellsFor(
+        GameMode gameMode,
+        int legNumber,
+        int teamIndex
+    )
+    {
+        return gameMode == GameMode.EscortThePresident
+            && EscortSeries.IsEscortingTeam(legNumber, teamIndex)
             ? EscortSeries.ExtractionCellsFor(teamIndex)
             : new HashSet<Vector2Int>();
     }
@@ -3607,16 +3698,21 @@ public class GameLoop : NetworkBehaviour
             if (NetworkManager == null || !NetworkManager.ConnectedClients.ContainsKey(clientId))
                 continue;
 
-            setOverlayUITextClientRpc(
-                DescribeLegVerdict(result, teamIndex),
-                result.HasWinner
-                    ? (
-                        result.WinningTeamIndex == teamIndex
-                            ? MessagePerspective.Friendly
-                            : MessagePerspective.Enemy
-                    )
-                    : MessagePerspective.Neutral,
-                NetworkHelper.ToClient(clientId)
+            MessagePerspective perspective = result.HasWinner
+                ? (
+                    result.WinningTeamIndex == teamIndex
+                        ? MessagePerspective.Friendly
+                        : MessagePerspective.Enemy
+                )
+                : MessagePerspective.Neutral;
+            ClientRpcParams seat = NetworkHelper.ToClient(clientId);
+
+            setOverlayUITextClientRpc("Leg complete", perspective, seat);
+            ShowEscortLegVerdictClientRpc(
+                DescribeLegHeadline(result, teamIndex),
+                DescribeSeriesScore(teamIndex),
+                LegIntermissionSeconds,
+                seat
             );
         }
 
@@ -3627,16 +3723,19 @@ public class GameLoop : NetworkBehaviour
         StartNextLeg();
     }
 
-    private string DescribeLegVerdict(EscortLegResult result, int viewerTeamIndex)
+    public string DescribeSeriesScore(int viewerTeamIndex)
     {
-        string score =
-            $"{EscortSeries.GetLegWins(viewerTeamIndex)}–"
+        return $"{EscortSeries.GetLegWins(viewerTeamIndex)}–"
             + $"{EscortSeries.GetLegWins(GetEnemyTeamIndex(viewerTeamIndex))}";
+    }
+
+    public static string DescribeLegHeadline(EscortLegResult result, int viewerTeamIndex)
+    {
         if (!result.HasWinner)
-            return $"Leg level · {score}";
+            return "Leg level";
 
         bool won = result.WinningTeamIndex == viewerTeamIndex;
-        string headline = result.Reason switch
+        return result.Reason switch
         {
             EscortLegReason.Extracted => won
                 ? "President extracted"
@@ -3648,7 +3747,6 @@ public class GameLoop : NetworkBehaviour
                 : "Your crew was wiped out",
             _ => won ? "Leg won on ground covered" : "Leg lost on ground covered",
         };
-        return $"{headline} · {score}";
     }
 
     private void StartNextLeg()
@@ -3702,7 +3800,7 @@ public class GameLoop : NetworkBehaviour
             if (NetworkManager == null || !NetworkManager.ConnectedClients.ContainsKey(clientId))
                 continue;
 
-            ShowEscortAlertClientRpc(
+            ShowEscortClockCallClientRpc(
                 EscortSeries.IsEscortingTeam(teamIndex)
                     ? $"{escortRoundsRemaining} rounds to extract"
                     : $"Hold {escortRoundsRemaining} rounds",
@@ -3712,12 +3810,23 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void ShowEscortAlertClientRpc(
+    private void ShowEscortClockCallClientRpc(
         string message,
         ClientRpcParams clientRpcParams = default
     )
     {
-        GameHUDController.Instance?.ShowEscortAlert(message);
+        GameHUDController.Instance?.ShowEscortClockCall(message);
+    }
+
+    [ClientRpc]
+    private void ShowEscortLegVerdictClientRpc(
+        string headline,
+        string score,
+        float seconds,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        GameHUDController.Instance?.ShowEscortLegVerdict(headline, score, seconds);
     }
 
     private void PublishEscortState()
@@ -4618,10 +4727,12 @@ public class GameLoop : NetworkBehaviour
     /// <summary>
     /// The observation boundary used by BotPlayer. Hidden enemy coordinates are filtered here,
     /// alongside the authoritative fog implementation, before any data reaches bot decisions.
+    /// <paramref name="ignoreFog"/> waives that boundary for a mode that deliberately grants the
+    /// bot full board knowledge; it never affects what a human client is shown.
     /// </summary>
-    public HashSet<Vector2Int> GetObservableCellsForTeam(int teamIndex)
+    public HashSet<Vector2Int> GetObservableCellsForTeam(int teamIndex, bool ignoreFog = false)
     {
-        if (FogOfWarEnabled)
+        if (FogOfWarEnabled && !ignoreFog)
             return ComputeVisibleCellsForTeam(teamIndex);
 
         HashSet<Vector2Int> allCells = new();
@@ -4663,7 +4774,8 @@ public class GameLoop : NetworkBehaviour
 
     public List<BotEnemySighting> GetVisibleEnemySightingsForTeam(
         int observerTeamIndex,
-        ISet<Vector2Int> observableCells
+        ISet<Vector2Int> observableCells,
+        bool ignoreFog = false
     )
     {
         List<BotEnemySighting> authoritativeSightings = new();
@@ -4685,7 +4797,7 @@ public class GameLoop : NetworkBehaviour
         return FilterObservableEnemySightings(
             authoritativeSightings,
             observableCells,
-            FogOfWarEnabled
+            FogOfWarEnabled && !ignoreFog
         );
     }
 

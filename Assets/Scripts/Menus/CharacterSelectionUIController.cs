@@ -47,6 +47,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private Label mapCaption;
     private Texture2D previewTexture;
     private MapDefinition shownMap;
+    private GameMode shownGameMode;
     private bool escortMode;
     private bool localSelectionSubmitted;
     private bool sceneLoadRequested;
@@ -80,6 +81,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
         ApplyClassFilter(null);
         BuildSelectedSlots();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document);
         UpdateSummary(IsSpawned ? replicatedOptions.Value : MatchOptions.Current);
         UpdateSelectionState();
         root.schedule.Execute(FocusFirstEnabledRosterOption);
@@ -88,6 +90,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private void OnDisable()
     {
         UnregisterUiCallbacks();
+        MobileDisplay.ForgetScreen(document);
         DisposeGeneratedViews();
         ReleasePreviewTexture();
         shownMap = null;
@@ -280,7 +283,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
         VisualElement portrait = button.Q<VisualElement>("unit-option-portrait");
         Label unitName = button.Q<Label>("unit-option-name");
         Label description = button.Q<Label>("unit-option-description");
-        Label ability = button.Q<Label>("unit-option-ability");
         Label optionStatus = button.Q<Label>("unit-option-status");
         if (optionStatus == null)
         {
@@ -296,11 +298,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
             unitName.text = data != null ? data.unitName : "Unknown unit";
         if (description != null)
             description.text = data != null ? data.unitDescription : "Unit data unavailable.";
-        if (ability != null)
-            ability.text =
-                data != null && !string.IsNullOrWhiteSpace(data.abilityName)
-                    ? data.abilityName
-                    : "Move only";
         SetBackgroundImage(portrait, data != null ? data.unitSprite : null);
 
         return new UnitOptionView(viewRoot, button, data, optionStatus, index);
@@ -324,18 +321,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
         Label description = new() { name = "unit-option-description" };
         description.AddToClassList("unit-option__description");
 
-        VisualElement abilityRow = new();
-        abilityRow.AddToClassList("unit-option__ability-row");
-        VisualElement abilityMark = new();
-        abilityMark.AddToClassList("unit-option__ability-mark");
-        Label ability = new("Ability") { name = "unit-option-ability" };
-        ability.AddToClassList("unit-option__ability");
-        abilityRow.Add(abilityMark);
-        abilityRow.Add(ability);
-
-        copy.Add(unitName);
         copy.Add(description);
-        copy.Add(abilityRow);
+        copy.Add(unitName);
         button.Add(portrait);
         button.Add(copy);
         return button;
@@ -851,27 +838,31 @@ public class CharacterSelectionUIController : NetworkBehaviour
             opponentSummary.text = options.IsBotMatch ? "AI" : "Player";
         if (fogSummary != null)
             fogSummary.text = options.fogOfWar ? "Fog on" : "Fog off";
-        UpdateMapPanel(options.Map);
+        UpdateMapPanel(options.Map, options.gameMode);
     }
 
     /// <summary>
-    /// Draws the board the lobby actually chose. The UXML carries a baked thumbnail so the screen
-    /// is never blank while this runs, but leaving it in place would show Concourse's cover on
-    /// every map.
+    /// Draws the board the lobby actually chose, set up the way the chosen mode will set it up.
+    /// The UXML carries a baked thumbnail so the screen is never blank while this runs, but
+    /// leaving it in place would show Concourse's cover on every map.
+    ///
+    /// The mode is part of the cache key because it changes the picture: Escort deploys one crew
+    /// forward of its back rank, and only King of the Hill paints the pad.
     /// </summary>
-    private void UpdateMapPanel(MapDefinition map)
+    private void UpdateMapPanel(MapDefinition map, GameMode gameMode)
     {
         if (mapCaption != null)
             mapCaption.text = $"{map.DisplayName} · {GridSystem.ColumnCount} × {GridSystem.RowCount}";
 
-        if (mapPreview == null || map == shownMap)
+        if (mapPreview == null || (map == shownMap && gameMode == shownGameMode))
             return;
 
-        Texture2D next = MapPreviewImage.CreateTexture(map);
+        Texture2D next = MapPreviewImage.CreateTexture(map, gameMode);
         mapPreview.style.backgroundImage = new StyleBackground(next);
         ReleasePreviewTexture();
         previewTexture = next;
         shownMap = map;
+        shownGameMode = gameMode;
     }
 
     private void ReleasePreviewTexture()

@@ -4,10 +4,9 @@ using UnityEngine;
 
 // ModelHeadshotRenderer needs a live camera render and pixel readback, which edit-mode tests can
 // do directly -- no Play mode required, since Camera.Render()/ReadPixels work outside Play mode.
-// These tests use a small hand-built two-primitive stand-in rather than the full
-// PlaceholderModelBuilder silhouette: the renderer only ever looks at Renderer bounds, so it does
-// not care what built the model, and a bare cube+sphere is enough to prove the render, crop and
-// cleanup contract.
+// These tests use a small hand-built two-primitive stand-in rather than a real character: the
+// renderer only ever looks at Renderer bounds, so it does not care what built the model, and a bare
+// cube+sphere is enough to prove the render, crop and cleanup contract.
 [TestFixture]
 [Category("ModelHeadshotRenderer")]
 public class ModelHeadshotRendererEditModeTests

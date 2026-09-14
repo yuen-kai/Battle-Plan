@@ -150,8 +150,9 @@ public static class BotFrozenUnits
 
 /// <summary>
 /// Server-only deterministic opponent. Planning consumes only the bot's fog observation and
-/// its own last-known memory. Dodge planning consumes public ability telegraphs, never the
-/// opponent's submitted movement plans.
+/// its own last-known memory, except in Escort the President, where <see cref="IgnoresFog"/>
+/// grants full board knowledge so the motorcade is hunted rather than searched for. Dodge
+/// planning consumes public ability telegraphs, never the opponent's submitted movement plans.
 /// </summary>
 public sealed class BotPlayer
 {
@@ -164,6 +165,7 @@ public sealed class BotPlayer
 
     public int TeamIndex { get; }
     public BotKnowledge Knowledge => knowledge;
+    public bool IgnoresFog => gameLoop.Options.IsEscort;
     public int PlanningContributionCount { get; private set; }
     public int DodgeContributionCount { get; private set; }
     public int AbilityContributionCount { get; private set; }
@@ -492,10 +494,15 @@ public sealed class BotPlayer
     private void RefreshObservation()
     {
         observationEpoch++;
-        HashSet<Vector2Int> visibleCells = gameLoop.GetObservableCellsForTeam(TeamIndex);
+        bool ignoreFog = IgnoresFog;
+        HashSet<Vector2Int> visibleCells = gameLoop.GetObservableCellsForTeam(
+            TeamIndex,
+            ignoreFog
+        );
         List<BotEnemySighting> sightings = gameLoop.GetVisibleEnemySightingsForTeam(
             TeamIndex,
-            visibleCells
+            visibleCells,
+            ignoreFog
         );
         if (visibleCells != null)
         {

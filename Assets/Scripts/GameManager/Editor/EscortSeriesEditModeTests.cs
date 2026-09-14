@@ -689,8 +689,12 @@ public class EscortSeriesEditModeTests
         UnityEngine.UIElements.VisualElement label =
             UnityEngine.UIElements.UQueryExtensions.Q(tree, "escort-alert-label");
 
+        UnityEngine.UIElements.VisualElement detail =
+            UnityEngine.UIElements.UQueryExtensions.Q(tree, "escort-alert-detail");
+
         Assert.That(alert, Is.Not.Null);
         Assert.That(label, Is.Not.Null);
+        Assert.That(detail, Is.Not.Null);
         Assert.That(
             alert.ClassListContains("hidden"),
             Is.True,
@@ -700,6 +704,40 @@ public class EscortSeriesEditModeTests
             alert.pickingMode,
             Is.EqualTo(UnityEngine.UIElements.PickingMode.Ignore),
             "It lies over the board, so it must not eat clicks meant for units."
+        );
+    }
+
+    [Test]
+    public void EveryLegEndingHasAHeadlineForBothSeats()
+    {
+        foreach (
+            EscortLegReason reason in (EscortLegReason[])
+                System.Enum.GetValues(typeof(EscortLegReason))
+        )
+        {
+            if (reason == EscortLegReason.None)
+                continue;
+
+            EscortLegResult won = EscortLegResult.Won(GameLoop.HostTeamIndex, reason);
+            string winner = GameLoop.DescribeLegHeadline(won, GameLoop.HostTeamIndex);
+            string loser = GameLoop.DescribeLegHeadline(won, GameLoop.OpponentTeamIndex);
+
+            Assert.That(winner, Is.Not.Empty, $"{reason} has no winning headline.");
+            Assert.That(loser, Is.Not.Empty, $"{reason} has no losing headline.");
+            Assert.That(
+                winner,
+                Is.Not.EqualTo(loser),
+                $"{reason} tells both seats the same thing."
+            );
+        }
+
+        Assert.That(
+            GameLoop.DescribeLegHeadline(
+                EscortLegResult.Level(EscortLegReason.GroundCovered),
+                GameLoop.HostTeamIndex
+            ),
+            Is.Not.Empty,
+            "A level decider still has to say so."
         );
     }
 
@@ -782,6 +820,57 @@ public class EscortSeriesEditModeTests
                 PresidentialRecall.RecallRingRadiusCells
             ).Count - 1,
             Is.GreaterThanOrEqualTo(RosterRules.UnitsPerPlayer - 1)
+        );
+    }
+
+    // === PRECOMPUTED DODGE NEED ===
+
+    private static List<(int team, bool cancels)> Surviving(
+        params (int team, bool cancels)[] plans
+    ) =>
+        GameLoop.ActivationsSurvivingAlliedCancels(
+            plans.ToList(),
+            plan => plan.team,
+            plan => plan.cancels
+        );
+
+    [Test]
+    public void CloseRanksDropsItsOwnCrewsPlansBeforeTheDodgeWindowOpens()
+    {
+        List<(int team, bool cancels)> surviving = Surviving(
+            (GameLoop.HostTeamIndex, true),
+            (GameLoop.HostTeamIndex, false),
+            (GameLoop.OpponentTeamIndex, false)
+        );
+
+        Assert.That(
+            surviving,
+            Is.EquivalentTo(
+                new[] { (GameLoop.HostTeamIndex, true), (GameLoop.OpponentTeamIndex, false) }
+            ),
+            "A plan Close Ranks cancels never fires, so it must not telegraph or ask for a dive."
+        );
+    }
+
+    [Test]
+    public void EveryPlanSurvivesWhenNoCrewCallsCloseRanks()
+    {
+        Assert.That(
+            Surviving((GameLoop.HostTeamIndex, false), (GameLoop.OpponentTeamIndex, false)),
+            Is.EquivalentTo(
+                new[] { (GameLoop.HostTeamIndex, false), (GameLoop.OpponentTeamIndex, false) }
+            )
+        );
+    }
+
+    [Test]
+    public void OneCrewsCloseRanksLeavesTheOtherCrewsPlansAlone()
+    {
+        Assert.That(
+            Surviving((GameLoop.HostTeamIndex, true), (GameLoop.OpponentTeamIndex, true)),
+            Is.EquivalentTo(
+                new[] { (GameLoop.HostTeamIndex, true), (GameLoop.OpponentTeamIndex, true) }
+            )
         );
     }
 }

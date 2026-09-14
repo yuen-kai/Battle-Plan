@@ -64,22 +64,28 @@ public class SandboxDirector : MonoBehaviour
 
     private void UpdateBoardEditDrag()
     {
+        if (Mouse.CameraGestureActive)
+        {
+            draggedUnit = null;
+            return;
+        }
+
         if (!SandboxSession.IsBoardEditLive)
         {
             draggedUnit = null;
             return;
         }
 
-        if (Input.GetMouseButtonDown(0))
+        if (Mouse.PrimaryPointerDown)
             draggedUnit = Mouse.GetUnitUnderMouse();
 
-        if (Input.GetMouseButtonUp(0))
+        if (Mouse.PrimaryPointerUp)
         {
             draggedUnit = null;
             return;
         }
 
-        if (draggedUnit == null || !Input.GetMouseButton(0))
+        if (draggedUnit == null || !Mouse.PrimaryPointerHeld)
             return;
 
         // The unit follows the pointer square by square rather than jumping on release: a grid

@@ -480,6 +480,26 @@
     white-space: nowrap;
 }
 
+/* A verdict is a sentence rather than a count, so it drops to the display step and is allowed to
+   wrap. At the shout size "Escort unopposed — crew wiped" runs off both edges of the screen. */
+.escort-alert--verdict .escort-alert__copy {
+    max-width: 900px;
+    font-size: var(--toy-type-display);
+    white-space: normal;
+}
+
+
+.escort-alert__detail {
+    margin-top: 4px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-title-lg);
+    -unity-font-style: normal;
+    color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-title);
+    -unity-text-align: middle-center;
+    text-shadow: 0 3px 16px var(--toy-shadow-stage);
+}
+
 /* Tutorial lesson. The beats worth stopping to read get a card instead of a strip, sat well above
    the instruction line. Anchored to the dock rather than the screen centre so a lesson never lands
    on top of the fight it is describing. */
@@ -1658,6 +1678,11 @@
     font-size: 56px;
 }
 
+.narrow .escort-alert--verdict .escort-alert__copy {
+    max-width: 660px;
+    font-size: var(--toy-type-title-lg);
+}
+
 .narrow .hill-status-readout {
     width: 244px;
 }
@@ -1822,6 +1847,11 @@
     font-size: 34px;
 }
 
+.phone .escort-alert--verdict .escort-alert__copy {
+    max-width: 88%;
+    font-size: var(--toy-type-title);
+}
+
 .phone .hill-status-readout {
     top: 0;
     left: auto;
@@ -1936,6 +1966,22 @@
     min-height: 44px;
     padding-top: 7px;
     padding-bottom: 7px;
+}
+
+/* A landscape phone is short before it is narrow. Stacking the dock, as the phone breakpoint does
+   for a portrait one, costs the board more height than it wins the cards in width: measured on a
+   936x432 panel it took the dock to 188px and left the board 0.325 of the screen, under the
+   floor FitBoardViewport accepts, so the board kept a stale viewport. The row comes back here and
+   the cards scroll sideways instead. */
+.phone.short .hud-dock__row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.phone.short .hud-header-actions {
+    width: auto;
+    margin-left: 8px;
+    margin-top: 0;
 }
 
 .short .escort-alert {

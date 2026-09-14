@@ -90,11 +90,13 @@ public class CharactersScreenUIController : MonoBehaviour
         RegisterCallbacks();
         ApplyFilter(null);
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document);
     }
 
     private void OnDisable()
     {
         UnregisterCallbacks();
+        MobileDisplay.ForgetScreen(document);
         DisposeGeneratedViews();
     }
 

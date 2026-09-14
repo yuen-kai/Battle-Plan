@@ -59,6 +59,7 @@
 
                             <ui:Label text="Board" class="section-label join-section-label" picking-mode="Ignore" />
                             <ui:VisualElement name="map-row" class="map-row" />
+                            <ui:VisualElement name="map-preview" class="map-preview" picking-mode="Ignore" />
                             <ui:Label name="map-caption" class="label label--muted map-caption-line" picking-mode="Ignore" />
 
                             <ui:Label text="Opponent" class="section-label join-section-label" picking-mode="Ignore" />

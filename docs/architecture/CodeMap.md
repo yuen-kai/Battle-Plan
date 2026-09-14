@@ -73,6 +73,10 @@ decider is settled by whichever president covered more ground the moment either 
   `PresidentialRecall` component rather than by slot index.
 - A wiped crew is a leg result rather than a match result, so the round loop's elimination break is
   skipped for this mode and arbitration gets the round first.
+- The full-screen `escort-alert` carries the two moments worth interrupting for: the leg clock's last
+  call at `EscortSeries.FinalWarningRounds` (`ShowEscortClockCall`), and a leg's verdict during the
+  intermission (`ShowEscortLegVerdict`, headline plus series score, toned win/loss). A deciding leg
+  goes to the results overlay instead, so the two never stack.
 - The bot does not walk its whole crew at one objective here. `BotPlayer.ResolveEscortRoles` splits
   it: the president plans first and runs his own route, his crew screens the cell he committed to,
   and a defending crew takes the ground between him and his zone (`BuildEscortInterceptTargets`).
@@ -198,6 +202,33 @@ Static tuning lives in `UnitData` assets under `Assets/UnitStats/`. Prefab wirin
 
 Important `UnitData` targeting fields include `selectAbilitySquare`, `selectAbilityDirection`, `abilityFixedDistance`, `abilitySquareRange`, `abilityRadius`, `responseRange`, and `responseDistLine`. Planning and server sanitation both depend on these values.
 
+### Character models
+
+Blitz, Breach, Farsight, Outrider, President, Salvo, Sentinel and Voltaic are generated rather than
+modelled. `Assets/Editor/CharacterBuilder.cs` is the source of truth for their geometry, the same way
+`ArenaBuilder` is for the board and `ProjectileBuilder` is for rounds: **Battle Plan > Art > Build
+Characters** writes the meshes under `Assets/Meshes/Characters/` and rebuilds the `Body` subtree on
+each unit prefab, and **Build Character Portraits** re-shoots `Assets/Images/Portraits/` from those
+same models through `ModelHeadshotRenderer`. Edit the builder, not the prefab — a hand-edit to the
+`Body` subtree is overwritten by the next build. Soldier, Commander, Sniper, Ramrod and PogoRider are
+hand-authored FBX and are not touched by any of this.
+
+Four things about a generated model are contract rather than art, and `CharacterModelEditModeTests`
+covers each:
+
+- The whole model hangs off one child named `Body`, because `HitReaction.Collect` treats every
+  unrecognised direct child of the unit root as a body part to shove.
+- `Body/Anchors/LeftHand` and `Body/Anchors/RightHand` exist, because `ArcSurge` resolves its
+  lightning origin through those paths by name.
+- Surfaces are URP/Lit with a flat `_BaseColor` and no albedo map, because `HitFlash`, `StunPulse`
+  and `DiveRecoveryPulse` tint a body by pushing `_BaseColor` through a property block.
+- Exactly one node carries the `TeamIndicatorProp` tag and its own renderer, which
+  `Unit.SetTeamIndicators` swaps to the team material.
+
+Models are authored feet-at-zero and parented at the top of the unit's base plate, not at the root:
+`NetworkHelper` spawns a unit on the grid and `Helper.heightOffset` then lifts it by half its
+capsule's world height, so a model sitting at the root hovers over the board by exactly that much.
+
 ## Grid, walls, smoke, and visibility
 
 - `GridSystem` owns coordinate conversion and reusable grid math.
@@ -209,6 +240,32 @@ Important `UnitData` targeting fields include `selectAbilitySquare`, `selectAbil
 - Smoke is server-authored denial state, not a physical wall. It affects visibility and bullet-path checks without entering wall pathfinding.
 
 Prefer cell-based rules for planning and validation. Use physics when the actual projectile or collision shape matters.
+
+## Camera and pointer input
+
+`BoardCameraController` owns local pan and zoom. Desktop navigation uses the wheel, right/middle
+drag, or WASD/arrows; mobile navigation uses a two-finger pan/pinch so one finger remains available
+for unit selection and route drawing. `Mouse` is the shared primary-pointer abstraction and blocks
+planning picks for the complete lifetime of a camera gesture. `ImpactCamera` restores its temporary
+shake offset before navigation changes the resting camera pose, then continues the shake from that
+new pose.
+
+## Running on mobile
+
+`MobileDisplay` fits the shared `BattlePlanPanelSettings` panel to the device. A handheld is
+measured in density-independent units instead of against the authored 1920x1080 reference, which is
+what makes the `phone` and `short` breakpoints engage and their 44px touch targets come out at the
+size they were drawn as; the resulting panel width is clamped so a device that misreports its
+density — a web build reports none at all — still lands inside a layout that was authored. It also
+hands each registered screen the panel-space inset of any display cutout. Menu screens take that as
+padding on their opaque `screen` element, so the ground still reaches the display edge. `GameHUD`
+cannot use that route: `FitBoardViewport` gives the camera only the band between the enemy strip and
+the dock and nothing paints the edge a shrunken bar would uncover, so the bars stay full-bleed and
+their contents carry the inset.
+
+Player settings are landscape-only, Android keeps content inside the cutout region itself, and the
+`BattlePlan` WebGL template withdraws the canvas from browser scroll and pinch-zoom so the game's
+own two-finger gestures survive a mobile browser.
 
 ## Networking rules
 

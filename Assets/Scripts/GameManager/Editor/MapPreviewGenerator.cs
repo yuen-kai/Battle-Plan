@@ -19,6 +19,13 @@ public static class MapPreviewGenerator
     /// </summary>
     private static MapDefinition BakedMap => MapCatalog.Fallback;
 
+    /// <summary>
+    /// And the default mode, for the same reason: this file is only ever the placeholder the
+    /// character-select panel shows for the frame before it draws the lobby's real choice, so it
+    /// should be what a lobby that has chosen nothing yet would produce.
+    /// </summary>
+    private static GameMode BakedGameMode => MatchOptions.Default.gameMode;
+
     [MenuItem("Battle Plan/Regenerate Map Preview")]
     public static void Generate()
     {
@@ -26,9 +33,10 @@ public static class MapPreviewGenerator
         AssetDatabase.ImportAsset(PreviewPath, ImportAssetOptions.ForceUpdate);
         Debug.Log(
             $"[MapPreview] Regenerated {PreviewPath} for {BakedMap.DisplayName} "
-                + $"at {RosterRules.UnitsPerPlayer} units per player."
+                + $"in {BakedGameMode} at {RosterRules.UnitsPerPlayer} units per player."
         );
     }
 
-    public static byte[] BuildPreviewPng() => MapPreviewImage.EncodePng(BakedMap);
+    public static byte[] BuildPreviewPng() =>
+        MapPreviewImage.EncodePng(BakedMap, BakedGameMode);
 }

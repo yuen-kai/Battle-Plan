@@ -28,9 +28,9 @@ public partial class PlanMovement
     {
         Movement movement = selectedUnit != null ? selectedUnit.GetComponent<Movement>() : null;
         UnitData unitData = movement != null ? movement.unitData : null;
-        if (!Input.GetMouseButtonDown(0))
+        if (!Mouse.PrimaryPointerDown)
             return;
-        if (GameHUDController.IsPointerOverUI(Input.mousePosition))
+        if (GameHUDController.IsPointerOverUI(Mouse.PointerPosition))
             return;
         if (selectedUnit == null || unitData == null)
         {

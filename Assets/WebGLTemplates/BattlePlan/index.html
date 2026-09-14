@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-loading-title">{{{ PRODUCT_NAME }}}</div>
+        <div id="unity-progress-bar-empty"><div id="unity-progress-bar-full"></div></div>
+      </div>
+      <div id="unity-warning"></div>
+    </div>
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+
+      function unityShowBanner(msg, type) {
+        var warningBanner = document.querySelector("#unity-warning");
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        div.className = type === 'error' ? 'unity-warning--error' : 'unity-warning--notice';
+        warningBanner.appendChild(div);
+        if (type !== 'error') {
+          setTimeout(function () {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      // The board is panned and pinched with two fingers, which every mobile browser also reads as
+      // scroll the page and zoom the page. "touch-action: none" in the stylesheet withdraws the
+      // canvas from the standard gestures; Safari drives pinch through its own non-standard gesture
+      // events instead, so those are refused here as well. Without both, a pinch zooms the document
+      // and Unity never sees the second finger. The touch events themselves are deliberately left
+      // alone: cancelling their default is what a text field's on-screen keyboard is opened by.
+      ["gesturestart", "gesturechange", "gestureend"].forEach(function (name) {
+        canvas.addEventListener(name, function (event) { event.preventDefault(); }, { passive: false });
+      });
+      document.addEventListener("dblclick", function (event) { event.preventDefault(); }, { passive: false });
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_THREADS
+        workerUrl: buildUrl + "/{{{ WORKER_FILENAME }}}",
+#endif
+#if USE_WASM
+        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        showBanner: unityShowBanner,
+        disabledCanvasEvents: ["contextmenu", "dragstart"],
+      };
+
+      document.querySelector("#unity-loading-bar").style.display = "flex";
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = function () {
+        createUnityInstance(canvas, config, function (progress) {
+          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+        }).then(function () {
+          document.querySelector("#unity-loading-bar").style.display = "none";
+        }).catch(function (message) {
+          unityShowBanner(message, 'error');
+        });
+      };
+
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

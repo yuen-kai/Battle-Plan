@@ -4,16 +4,65 @@ using UnityEngine;
 
 public class Mouse : MonoBehaviour
 {
+    private static bool cameraGestureActive;
+
+    /// <summary>
+    /// True while a multi-touch camera gesture owns the screen. Planning input stays disabled until
+    /// every finger has lifted, so the last finger of a pinch cannot become a route drag or tap.
+    /// </summary>
+    public static bool CameraGestureActive => cameraGestureActive;
+
+    /// <summary>The primary mouse or touch position in Unity's bottom-left screen coordinates.</summary>
+    public static Vector2 PointerPosition =>
+        Input.touchCount > 0 ? Input.GetTouch(0).position : (Vector2)Input.mousePosition;
+
+    public static bool PrimaryPointerDown =>
+        !cameraGestureActive
+        && (
+            Input.touchCount > 0
+                ? Input.GetTouch(0).phase == TouchPhase.Began
+                : Input.GetMouseButtonDown(0)
+        );
+
+    public static bool PrimaryPointerHeld =>
+        !cameraGestureActive
+        && (
+            Input.touchCount > 0
+                ? Input.GetTouch(0).phase is TouchPhase.Began
+                    or TouchPhase.Moved
+                    or TouchPhase.Stationary
+                : Input.GetMouseButton(0)
+        );
+
+    public static bool PrimaryPointerUp =>
+        !cameraGestureActive
+        && (
+            Input.touchCount > 0
+                ? Input.GetTouch(0).phase is TouchPhase.Ended or TouchPhase.Canceled
+                : Input.GetMouseButtonUp(0)
+        );
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        cameraGestureActive = false;
+    }
+
+    public static void SetCameraGestureActive(bool active)
+    {
+        cameraGestureActive = active;
+    }
+
     public static RaycastHit? GetHitUnderMouse(int layerMask)
     {
-        if (GameHUDController.IsPointerOverUI(Input.mousePosition))
+        if (cameraGestureActive || GameHUDController.IsPointerOverUI(PointerPosition))
             return null;
 
         Camera teamCamera = GameLoop.Instance?.TeamCamera;
         if (teamCamera == null)
             return null;
 
-        Ray ray = teamCamera.ScreenPointToRay(Input.mousePosition);
+        Ray ray = teamCamera.ScreenPointToRay(PointerPosition);
         if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, layerMask))
         {
             return hit;

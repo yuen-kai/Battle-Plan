@@ -35,6 +35,12 @@ public class PathSelection : MonoBehaviour
 
     public void MovementSelection(int moveDist)
     {
+        if (Mouse.CameraGestureActive)
+        {
+            CancelCurrentDrag();
+            return;
+        }
+
         if (PlanMovement.Instance?.CanEditPlan != true)
         {
             pathDragActive = false;
@@ -43,15 +49,15 @@ public class PathSelection : MonoBehaviour
 
         moveDist =
             moveDist == -1 ? SelectedUnit.GetComponent<Movement>().unitData.moveDist : moveDist;
-        if (Input.GetMouseButtonDown(0))
+        if (Mouse.PrimaryPointerDown)
         {
             TryStartPath();
         }
-        else if (Input.GetMouseButton(0) && pathDragActive)
+        else if (Mouse.PrimaryPointerHeld && pathDragActive)
         {
             ExtendPath(moveDist);
         }
-        else if (Input.GetMouseButtonUp(0))
+        else if (Mouse.PrimaryPointerUp)
         {
             SettleRouteEnd();
             pathDragActive = false;

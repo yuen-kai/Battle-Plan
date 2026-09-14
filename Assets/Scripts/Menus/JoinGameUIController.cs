@@ -51,7 +51,9 @@ public class JoinGameUIController : MonoBehaviour
     private Toggle fogToggle;
     private Toggle localMultiplayerToggle;
     private VisualElement mapRow;
+    private VisualElement mapPreview;
     private Label mapCaption;
+    private Texture2D mapPreviewTexture;
     private readonly List<(Button button, MapId mapId)> mapOptions = new();
     private TextField joinCodeInput;
     private Label relayCodeLabel;
@@ -101,6 +103,7 @@ public class JoinGameUIController : MonoBehaviour
 
         CacheElements();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document);
         CacheTransportDefaults();
         RegisterCallbacks();
         ConfigureInitialState();
@@ -182,6 +185,8 @@ public class JoinGameUIController : MonoBehaviour
     private void OnDisable()
     {
         networkOperationVersion++;
+        MobileDisplay.ForgetScreen(document);
+        ReleaseMapPreviewTexture();
         CancelAsyncNetworkWork();
         NetworkManager networkManager = NetworkManager.Singleton;
         bool networkIsRunning =
@@ -226,6 +231,7 @@ public class JoinGameUIController : MonoBehaviour
         fogToggle = RequireElement<Toggle>("fog-toggle");
         localMultiplayerToggle = RequireElement<Toggle>("local-multiplayer-toggle");
         mapRow = RequireElement<VisualElement>("map-row");
+        mapPreview = RequireElement<VisualElement>("map-preview");
         mapCaption = RequireElement<Label>("map-caption");
         BuildMapOptions();
         joinCodeInput = RequireElement<TextField>("join-code-input");
@@ -487,7 +493,39 @@ public class JoinGameUIController : MonoBehaviour
 
         if (mapCaption != null)
             mapCaption.text = pendingOptions.Map.Caption;
+        ShowMapPreview();
         SetCreateStatus(string.Empty, false);
+    }
+
+    /// <summary>
+    /// Same drawing routine the character-select panel uses, so the chip a player picks here and
+    /// the board they see next are the same picture. The texture is owned by this screen and
+    /// replaced on every choice, which is affordable because a choice is a click, not a frame.
+    ///
+    /// Redrawn on a mode change as well as a board change: the deployment and the objective pad
+    /// both follow the mode, so a picture drawn for the mode a player has since left is wrong
+    /// about where their crew starts.
+    /// </summary>
+    private void ShowMapPreview()
+    {
+        if (mapPreview == null)
+            return;
+
+        Texture2D next = MapPreviewImage.CreateTexture(
+            pendingOptions.Map,
+            pendingOptions.gameMode
+        );
+        mapPreview.style.backgroundImage = new StyleBackground(next);
+        ReleaseMapPreviewTexture();
+        mapPreviewTexture = next;
+    }
+
+    private void ReleaseMapPreviewTexture()
+    {
+        if (mapPreviewTexture == null)
+            return;
+        Destroy(mapPreviewTexture);
+        mapPreviewTexture = null;
     }
 
     private void SelectEliminationMode()
@@ -522,6 +560,7 @@ public class JoinGameUIController : MonoBehaviour
             "button--selected",
             pendingOptions.gameMode == GameMode.EscortThePresident
         );
+        ShowMapPreview();
         SetCreateStatus(string.Empty, false);
     }
 

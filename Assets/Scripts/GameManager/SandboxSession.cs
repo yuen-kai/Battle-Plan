@@ -71,6 +71,14 @@ public static class SandboxSession
     public static bool IsActive { get; private set; }
 
     /// <summary>
+    /// Whether the board runs under fog, hiding each crew from the other exactly as a real match
+    /// does. Off by default: the designer plans both sides, and a crew that cannot be seen cannot be
+    /// given orders. Part of the remembered setup rather than session state, so a board kept for
+    /// fog work comes back as one.
+    /// </summary>
+    public static bool FogOfWar { get; set; }
+
+    /// <summary>
     /// Set once the join screen has kicked off this session's loopback host, so a scene re-enable
     /// cannot start a second one.
     /// </summary>
@@ -323,7 +331,7 @@ public static class SandboxSession
         {
             gameMode = GameMode.Elimination,
             opponentType = OpponentType.AI,
-            fogOfWar = false,
+            fogOfWar = FogOfWar,
             mapId = MapId.Concourse,
         }.Sanitized();
     }

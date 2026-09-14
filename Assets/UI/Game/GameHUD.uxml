@@ -10,7 +10,7 @@
             <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
             <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
 
-            <ui:VisualElement class="hud-top toybox-ui" picking-mode="Ignore">
+            <ui:VisualElement name="hud-top" class="hud-top toybox-ui" picking-mode="Ignore">
                 <ui:VisualElement name="rejoin-notice" class="rejoin-notice toy-readout hidden" picking-mode="Ignore">
                     <ui:Label name="rejoin-notice-title" text="Opponent dropped" class="rejoin-notice__key toy-readout__label" picking-mode="Ignore" />
                     <ui:Label name="rejoin-notice-status" text="Rejoin window closed" class="rejoin-notice__value toy-chip" picking-mode="Ignore" />
@@ -41,6 +41,7 @@
 
         <ui:VisualElement name="escort-alert" class="escort-alert hidden" picking-mode="Ignore">
             <ui:Label name="escort-alert-label" class="escort-alert__copy" picking-mode="Ignore" />
+            <ui:Label name="escort-alert-detail" class="escort-alert__detail hidden" picking-mode="Ignore" />
         </ui:VisualElement>
 
         <ui:VisualElement name="hud-dock" class="hud-dock">
@@ -56,7 +57,7 @@
             </ui:VisualElement>
             <ui:Label name="target-feedback-label" class="target-feedback hidden" picking-mode="Ignore" />
 
-            <ui:VisualElement class="hud-dock__row">
+            <ui:VisualElement name="hud-dock-row" class="hud-dock__row">
                 <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" />
                 <ui:VisualElement class="hud-header-actions">
                     <ui:VisualElement name="planning-commit" class="planning-commit hidden">
@@ -93,7 +94,7 @@
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Click a unit on the board, then click a highlighted square to set its route. Press that unit's ability card in the dock to spend its round on the ability instead." class="label control-copy" picking-mode="Ignore" />
+                            <ui:Label text="Tap or click a unit on the board, then drag across highlighted squares to set its route. Press that unit's ability card in the dock to spend its round on the ability instead." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                         <ui:VisualElement class="control-row">
                             <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
@@ -107,9 +108,13 @@
                             <ui:Label text="Dodge" class="control-key" picking-mode="Ignore" />
                             <ui:Label text="If threatened during Dodge, drag each flashing unit to safety." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
+                        <ui:VisualElement class="control-row">
                             <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
                             <ui:Label text="Fog hides enemy positions and orders. Enemy health and ability cooldowns remain public on contact cards." class="label control-copy" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="control-row control-row--last">
+                            <ui:Label text="Camera" class="control-key" picking-mode="Ignore" />
+                            <ui:Label text="Pinch with two fingers to zoom and drag with two fingers to pan. On desktop, use the mouse wheel to zoom, right- or middle-drag to pan, or use WASD / arrow keys." class="label control-copy" picking-mode="Ignore" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="control-section">

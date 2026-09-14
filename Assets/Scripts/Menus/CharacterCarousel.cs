@@ -23,13 +23,16 @@ public class CharacterCarousel : MonoBehaviour
     private Transform turntable;
 
     [SerializeField]
-    [Tooltip("Largest the ring is allowed to get, in world units.")]
+    [Tooltip(
+        "Radius the camera is framed around, in world units. A smaller filter still walks the "
+            + "rig forward so the focused unit stays the same size; a larger roster grows past this."
+    )]
     private float ringRadius = 4.7f;
 
     [SerializeField]
     [Tooltip(
-        "Gap held between neighbouring units. The ring is sized from this until it hits the cap, "
-            + "so a two-unit filter draws a small turntable rather than a mostly empty one."
+        "Minimum gap between neighbouring units. The ring grows to hold this, so a full roster "
+            + "never packs tighter than a two-unit filter."
     )]
     private float neighbourSpacing = 5.5f;
 
@@ -101,19 +104,20 @@ public class CharacterCarousel : MonoBehaviour
     private Transform Table => turntable != null ? turntable : transform;
 
     /// <summary>
-    /// Ring size for the current filter. Holding the gap between neighbours constant keeps the
-    /// turntable proportional to how many units are actually on it, and the cap stops a large
-    /// roster from pushing everyone out of frame.
+    /// Ring size for the current filter. Neighbours stay at least <see cref="neighbourSpacing"/>
+    /// apart, so a larger roster grows the turntable rather than packing tighter.
     /// </summary>
-    private float CurrentRadius
+    private float CurrentRadius => RadiusForCount(units.Count, neighbourSpacing);
+
+    /// <summary>
+    /// Radius that keeps neighbouring seats <paramref name="neighbourSpacing"/> apart. One unit
+    /// sits at the origin; two or more size the circle from the chord.
+    /// </summary>
+    public static float RadiusForCount(int count, float neighbourSpacing)
     {
-        get
-        {
-            if (units.Count <= 1)
-                return 0f;
-            float spread = neighbourSpacing / (2f * Mathf.Sin(Mathf.PI / units.Count));
-            return Mathf.Min(ringRadius, spread);
-        }
+        if (count <= 1)
+            return 0f;
+        return neighbourSpacing / (2f * Mathf.Sin(Mathf.PI / count));
     }
 
     /// <summary>

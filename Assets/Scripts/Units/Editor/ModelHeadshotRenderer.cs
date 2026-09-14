@@ -8,8 +8,7 @@ using UnityEngine.Rendering.Universal;
 /// Crop convention for <see cref="ModelHeadshotRenderer"/>: how much of a model's total
 /// bounding-box height the shot frames, measured down from the top, plus how much breathing room
 /// to leave around that crop. A field left at its default (zero) is replaced with the tuned
-/// default in <see cref="ModelHeadshotRenderer"/> — mirrors how <c>PlaceholderModelSpec</c> treats
-/// an unset <c>HeightScale</c>/<c>WidthScale</c> — so callers can write <c>default</c> for "the
+/// default in <see cref="ModelHeadshotRenderer"/>, so callers can write <c>default</c> for "the
 /// usual headshot" or override just the field they care about.
 /// </summary>
 [Serializable]
@@ -21,10 +20,19 @@ public struct HeadshotFraming
     /// <summary>Extra room around the crop, as a fraction of the crop's own size, so the subject never touches the frame edge.</summary>
     public float Margin;
 
+    /// <summary>
+    /// Degrees the camera swings around the model, away from dead-on front. A posed character
+    /// photographed square-on hides the whole depth of what it is holding — a rifle held across the
+    /// chest collapses to a dot — so the hand-made portraits this stands in for are all shot from
+    /// slightly off the shoulder.
+    /// </summary>
+    public float Yaw;
+
     public static readonly HeadshotFraming Default = new()
     {
         TopHeightFraction = 0.4f,
-        Margin = 0.18f,
+        Margin = 0.08f,
+        Yaw = 22f,
     };
 
     /// <summary>Fills in any zero-valued field with <see cref="Default"/>'s value.</summary>
@@ -34,17 +42,17 @@ public struct HeadshotFraming
         {
             TopHeightFraction = TopHeightFraction > 0f ? TopHeightFraction : Default.TopHeightFraction,
             Margin = Margin > 0f ? Margin : Default.Margin,
+            Yaw = Mathf.Abs(Yaw) > 0f ? Yaw : Default.Yaw,
         };
     }
 }
 
 /// <summary>
-/// Renders a bust/shoulders-up "headshot" of a 3D model by standing up a throwaway camera and
-/// light, pointing them at the top slice of the model's own bounding box, and reading the result
-/// back into a <see cref="Texture2D"/>. Built for <c>PlaceholderModelBuilder</c> silhouettes so a
-/// new character can get a portrait that is literally a photo of its placeholder body rather than a
-/// flat icon, while AI image generation is unavailable — but it only looks at renderer bounds, so
-/// it works on any model, placeholder or not.
+/// Renders a "headshot" of a 3D model by standing up a throwaway camera and light, pointing them at
+/// the top slice of the model's own bounding box, and reading the result back into a
+/// <see cref="Texture2D"/>. Used by <c>CharacterBuilder</c> to shoot the roster's portraits from the
+/// characters themselves, so a portrait can never drift from the unit it names — but it only looks
+/// at renderer bounds, so it works on any model.
 /// <para>
 /// Editor-only and stateless: every temporary object (model instance, camera, light, render
 /// texture) is created and torn down inside a single call, and nothing is left in whatever scene
@@ -54,7 +62,13 @@ public struct HeadshotFraming
 /// </summary>
 public static class ModelHeadshotRenderer
 {
-    /// <summary>Default portrait resolution, matching the hand-made PNGs in Assets/Images/Portraits.</summary>
+    /// <summary>
+    /// Roster tile aspect: a cell is a fifth of the library (70% of the 1920 frame) and the
+    /// portrait is the tile minus the 42px copy band, which is about 16:9. Shot at that ratio so
+    /// the tile can fill without a second crop.
+    /// </summary>
+    public const int DefaultWidth = 640;
+    public const int DefaultHeight = 360;
     public const int DefaultResolution = 512;
 
     // Tucked far below the world so a temp instance can never overlap anything a live scene camera
@@ -71,10 +85,22 @@ public static class ModelHeadshotRenderer
         HeadshotFraming framing = default
     )
     {
+        return RenderHeadshot(modelRoot, resolution, resolution, framing);
+    }
+
+    public static Texture2D RenderHeadshot(
+        GameObject modelRoot,
+        int width,
+        int height,
+        HeadshotFraming framing = default
+    )
+    {
         if (modelRoot == null)
             throw new ArgumentNullException(nameof(modelRoot));
-        if (resolution <= 0)
-            throw new ArgumentOutOfRangeException(nameof(resolution));
+        if (width <= 0)
+            throw new ArgumentOutOfRangeException(nameof(width));
+        if (height <= 0)
+            throw new ArgumentOutOfRangeException(nameof(height));
 
         HeadshotFraming resolved = framing.Resolved();
 
@@ -91,20 +117,20 @@ public static class ModelHeadshotRenderer
             instance.name = modelRoot.name + "_HeadshotTemp";
             // Reset to a known transform: the source may be a live scene instance with an arbitrary
             // position/rotation, and framing below assumes the model's own local axes (it "faces
-            // +Z", per PlaceholderModelBuilder) line up with world axes.
+            // +Z") line up with world axes.
             instance.transform.SetPositionAndRotation(IsolatedOrigin, Quaternion.identity);
 
             Bounds bounds = ComputeWorldBounds(instance, IsolatedOrigin);
-            Vector3 cropCenter = ComputeCropCenter(bounds, resolved.TopHeightFraction);
             float orthographicSize = ComputeOrthographicSize(bounds, resolved);
+            Vector3 cropCenter = ComputeLookAt(bounds, orthographicSize);
 
             rigRoot = new GameObject("ModelHeadshotRig") { hideFlags = HideFlags.HideAndDontSave };
             rigRoot.transform.position = IsolatedOrigin;
 
-            camera = BuildCamera(rigRoot.transform, cropCenter, bounds, orthographicSize);
+            camera = BuildCamera(rigRoot.transform, cropCenter, bounds, orthographicSize, resolved.Yaw);
             BuildLights(rigRoot.transform, cropCenter);
 
-            renderTexture = new RenderTexture(resolution, resolution, 24, RenderTextureFormat.ARGB32)
+            renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             {
                 name = "ModelHeadshotTarget",
                 antiAliasing = 1,
@@ -115,11 +141,11 @@ public static class ModelHeadshotRenderer
             camera.Render();
 
             RenderTexture.active = renderTexture;
-            Texture2D texture = new(resolution, resolution, TextureFormat.RGBA32, mipChain: false)
+            Texture2D texture = new(width, height, TextureFormat.RGBA32, mipChain: false)
             {
                 name = modelRoot.name + "_Headshot",
             };
-            texture.ReadPixels(new Rect(0f, 0f, resolution, resolution), 0, 0, recalculateMipMaps: false);
+            texture.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, recalculateMipMaps: false);
             texture.Apply(updateMipmaps: false);
             return texture;
         }
@@ -154,10 +180,21 @@ public static class ModelHeadshotRenderer
         HeadshotFraming framing = default
     )
     {
+        return RenderAndSaveHeadshot(modelRoot, assetPath, resolution, resolution, framing);
+    }
+
+    public static string RenderAndSaveHeadshot(
+        GameObject modelRoot,
+        string assetPath,
+        int width,
+        int height,
+        HeadshotFraming framing = default
+    )
+    {
         if (string.IsNullOrEmpty(assetPath))
             throw new ArgumentException("assetPath must be a non-empty Assets/-relative path.", nameof(assetPath));
 
-        Texture2D texture = RenderHeadshot(modelRoot, resolution, framing);
+        Texture2D texture = RenderHeadshot(modelRoot, width, height, framing);
         try
         {
             byte[] png = ImageConversion.EncodeToPNG(texture);
@@ -219,43 +256,47 @@ public static class ModelHeadshotRenderer
         return bounds;
     }
 
-    /// <summary>Center of the top slice of the bounds that the headshot frames.</summary>
-    private static Vector3 ComputeCropCenter(Bounds bounds, float topHeightFraction)
+    /// <summary>
+    /// Look-at pinned so the crown sits on the top edge of the frame. Slack from margin or a
+    /// wide silhouette falls below, which is where the name strip covers the gun.
+    /// </summary>
+    private static Vector3 ComputeLookAt(Bounds bounds, float orthographicSize)
     {
-        float cropHeight = bounds.size.y * Mathf.Clamp01(topHeightFraction);
-        float cropCenterY = bounds.max.y - cropHeight * 0.5f;
-        return new Vector3(bounds.center.x, cropCenterY, bounds.center.z);
+        return new Vector3(bounds.center.x, bounds.max.y - orthographicSize, bounds.center.z);
     }
 
     /// <summary>
     /// Half-height of the orthographic view: the larger of the crop's own height and the model's
-    /// full width, so neither a tall crop nor a wide silhouette (e.g. a wide-shouldered
-    /// PlaceholderModelSpec) clips out of frame, plus a margin so nothing touches the frame edge.
+    /// full width, so neither a tall crop nor a wide silhouette clips out of frame, plus a margin so
+    /// nothing touches the frame edge.
     /// </summary>
     private static float ComputeOrthographicSize(Bounds bounds, HeadshotFraming framing)
     {
         float cropHeight = bounds.size.y * Mathf.Clamp01(framing.TopHeightFraction);
-        float halfHeight = cropHeight * 0.5f;
-        float halfWidth = bounds.size.x * 0.5f;
-        float size = Mathf.Max(halfHeight, halfWidth, 0.05f);
-        return size * (1f + Mathf.Max(framing.Margin, 0f));
+        return Mathf.Max(cropHeight * 0.5f, 0.05f) * (1f + Mathf.Max(framing.Margin, 0f));
     }
 
     /// <summary>
-    /// A camera on the model's +Z side looking back at -Z: PlaceholderModelBuilder's own convention
-    /// is that a character "faces +Z", so standing on that side and looking back is what frames the
-    /// front of the face rather than the back of the head.
+    /// A camera on the model's +Z side looking back at -Z: a character faces +Z, so standing on that
+    /// side and looking back is what frames the front of the face rather than the back of the head.
     /// </summary>
-    private static Camera BuildCamera(Transform rig, Vector3 cropCenter, Bounds bounds, float orthographicSize)
+    private static Camera BuildCamera(
+        Transform rig,
+        Vector3 cropCenter,
+        Bounds bounds,
+        float orthographicSize,
+        float yaw
+    )
     {
         float depth = Mathf.Max(bounds.size.z, 0.5f);
         float distance = depth * 2f + orthographicSize * 2f + 1f;
 
+        Quaternion swing = Quaternion.Euler(0f, yaw, 0f);
         GameObject cameraObject = new("ModelHeadshotCamera") { hideFlags = HideFlags.HideAndDontSave };
         cameraObject.transform.SetParent(rig, worldPositionStays: false);
         cameraObject.transform.SetPositionAndRotation(
-            cropCenter + Vector3.forward * distance,
-            Quaternion.LookRotation(Vector3.back, Vector3.up)
+            cropCenter + swing * Vector3.forward * distance,
+            Quaternion.LookRotation(swing * Vector3.back, Vector3.up)
         );
 
         Camera camera = cameraObject.AddComponent<Camera>();

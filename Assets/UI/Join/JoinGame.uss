@@ -364,10 +364,26 @@
     white-space: nowrap;
 }
 
+/* The chips name boards; this shows them. Fitted rather than cropped, and the
+   plate is the same --toy-inset the drawn image fills its own margin with, so
+   the letterboxing at other window widths is invisible rather than read as
+   bars. 3:2 to match the 15x10 board, which is also the texture's aspect. */
+.map-preview {
+    width: 100%;
+    max-width: 420px;
+    height: 210px;
+    background-color: var(--toy-inset);
+    -unity-background-scale-mode: scale-to-fit;
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
+    border-radius: var(--toy-radius-md);
+}
+
 /* Carries .label as well, which sets a body size at two classes, so the caption
    has to be asked for at three or it comes out the same size as the chips. */
 .toybox-ui.join-screen .map-caption-line {
-    margin-top: 0;
+    margin-top: var(--toy-space-sm);
     margin-bottom: var(--toy-space-sm);
     font-size: var(--toy-type-caption);
 }
@@ -711,6 +727,10 @@
 
 .short .join-screen .opponent-option {
     min-height: 88px;
+}
+
+.short .map-preview {
+    height: 150px;
 }
 
 /* The descriptions are the first thing to go: every one of them repeats

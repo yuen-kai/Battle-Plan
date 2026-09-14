@@ -58,7 +58,7 @@ public partial class PlanMovement
 
     private bool TryActivateUnitCard(int cardIndex, bool enemyStrip)
     {
-        if (!CanEditPlan || !useUnitCards)
+        if (Mouse.CameraGestureActive || !CanEditPlan || !useUnitCards)
             return false;
 
         GameObject unit = FindCardUnit(cardIndex, enemyStrip);
@@ -99,7 +99,7 @@ public partial class PlanMovement
 
     public void SelectUnit(int unitIndex)
     {
-        if (!CanEditPlan || !useUnitCards)
+        if (Mouse.CameraGestureActive || !CanEditPlan || !useUnitCards)
             return;
 
         GameObject unit = FindCardUnit(unitIndex, false);
@@ -109,7 +109,7 @@ public partial class PlanMovement
 
     public void SetSelectionMode(int unitIndex, bool abilityMode)
     {
-        if (!CanEditPlan || !useUnitCards)
+        if (Mouse.CameraGestureActive || !CanEditPlan || !useUnitCards)
             return;
 
         TrySetSelectionMode(FindCardUnit(unitIndex, false), abilityMode);

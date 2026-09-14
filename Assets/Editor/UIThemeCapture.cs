@@ -454,7 +454,6 @@ public static class UIThemeCapture
                 instance.style.flexShrink = 0f;
                 SetText(instance, "unit-option-name", UnitNames[i]);
                 SetText(instance, "unit-option-description", descriptions[i]);
-                SetText(instance, "unit-option-ability", AbilityNames[i]);
                 if (portraits.Count > 0)
                     instance.Q<VisualElement>("unit-option-portrait").style.backgroundImage =
                         new StyleBackground(portraits[i % portraits.Count]);
