@@ -751,6 +751,9 @@ public class EscortSeriesEditModeTests
         try
         {
             instance.transform.position = Vector3.zero;
+            CapsuleCollider hitbox = instance.GetComponent<CapsuleCollider>();
+            Assert.That(hitbox, Is.Not.Null, "A unit's hitbox is the capsule the shell has to track.");
+
             GuardOrbVisual orb = GuardOrbVisual.Attach(instance);
             orb.SetGuarded(true);
 
@@ -764,14 +767,22 @@ public class EscortSeriesEditModeTests
                 "An indicator that bullets and targeting casts can hit is not an indicator."
             );
 
-            Bounds body = MeasureCharacter(instance);
             Bounds settled = SettleShell(orb, shell);
             Assert.That(
                 settled.size.x,
-                Is.LessThan(GameLoop.cellSize),
-                "The shell has to stay inside its own cell or a huddle turns into one blob."
+                Is.EqualTo(hitbox.radius * 2f * GuardOrbVisual.HitboxScale).Within(0.05f)
             );
-            Assert.That(settled.Contains(body.min) && settled.Contains(body.max), Is.True);
+            Assert.That(
+                settled.size.y,
+                Is.EqualTo(Mathf.Max(hitbox.height, hitbox.radius * 2f) * GuardOrbVisual.HitboxScale)
+                    .Within(0.05f)
+            );
+            Assert.That(settled.size.x, Is.EqualTo(settled.size.z).Within(0.01f));
+            Assert.That(settled.size.y, Is.GreaterThan(settled.size.x));
+            Assert.That(
+                settled.Contains(hitbox.bounds.min) && settled.Contains(hitbox.bounds.max),
+                Is.True
+            );
         }
         finally
         {
@@ -779,26 +790,6 @@ public class EscortSeriesEditModeTests
         }
     }
 
-    private static Bounds MeasureCharacter(GameObject unit)
-    {
-        Bounds bounds = default;
-        bool measured = false;
-        foreach (Renderer candidate in unit.GetComponentsInChildren<Renderer>(true))
-        {
-            if (!DiveRecoveryPulse.IsCharacterRenderer(candidate))
-                continue;
-            if (!measured)
-            {
-                bounds = candidate.bounds;
-                measured = true;
-                continue;
-            }
-            bounds.Encapsulate(candidate.bounds);
-        }
-        return bounds;
-    }
-
-    /// <summary>Runs the bloom to full, which edit mode has no Update to do.</summary>
     private static Bounds SettleShell(GuardOrbVisual orb, Transform shell)
     {
         const System.Reflection.BindingFlags Hidden =

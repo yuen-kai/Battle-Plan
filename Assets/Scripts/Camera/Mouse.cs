@@ -102,11 +102,10 @@ public class Mouse : MonoBehaviour
     /// own square keeps plenty of clickable ground around it.
     /// </summary>
     /// <remarks>
-    /// Own crew even in the sandbox, where the designer commands both. This pick is what lets a
-    /// press on a team-mate's body outrank the square it stands on while an ability is being aimed;
-    /// the opposing crew must keep answering that press with its cell, since aiming at it is the
-    /// point. Selecting an opposing unit runs off its square instead, through
-    /// <see cref="PlanMovement.TrySelectUnitForMovementAtCell"/>.
+    /// Own crew only. A press on a team-mate's body outranks the square it stands on while an
+    /// ability is being aimed; the opposing crew keeps answering that press with its cell, since
+    /// aiming at it is the point. The sandbox, where the designer commands both crews, uses
+    /// <see cref="GetUnitUnderMouse"/> instead so an enemy body is the same kind of pick.
     /// </remarks>
     public static GameObject GetFriendlyUnitUnderMouse()
     {
@@ -119,7 +118,11 @@ public class Mouse : MonoBehaviour
         return PickUnit(teamLayer);
     }
 
-    /// <summary>The unit of either crew whose body the pointer is over, for the sandbox.</summary>
+    /// <summary>
+    /// The unit of either crew whose body the pointer is over. The sandbox uses this so a press on
+    /// an enemy asks for that enemy the way a press on an ally asks for that ally, while the ground
+    /// of their square stays a square.
+    /// </summary>
     public static GameObject GetUnitUnderMouse()
     {
         string[] layers = new string[GameLoop.TeamCount];

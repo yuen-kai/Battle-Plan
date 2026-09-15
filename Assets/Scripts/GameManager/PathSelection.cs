@@ -157,7 +157,7 @@ public class PathSelection : MonoBehaviour
     {
         abilityTapUnit = null;
         Vector3? pointer = Mouse.GetGridPointUnderMouse();
-        if (pointer == null || SelectedUnit == null)
+        if (pointer == null)
             return false;
 
         Vector3 pressedCell = GridSystem.GetNearestGridCell(pointer.Value);
@@ -165,11 +165,14 @@ public class PathSelection : MonoBehaviour
         // A press on the selected unit while it has drawn nothing may turn out to be the click that
         // turns it to its ability. Only the release can say, since this is also the press a route
         // is drawn out from.
-        bool pressedIdleSelection =
-            CurrentPlan?.Count == 1
-            && pressedCell == GridSystem.GetNearestGridCell(SelectedUnit);
-        if (pressedIdleSelection)
+        if (
+            SelectedUnit != null
+            && CurrentPlan?.Count == 1
+            && pressedCell == GridSystem.GetNearestGridCell(SelectedUnit)
+        )
+        {
             abilityTapUnit = SelectedUnit;
+        }
 
         // A unit standing on the pressed square outranks anything drawn across it, its own route
         // included. Routes run over squares their team is standing on all the time — a unit is
@@ -199,6 +202,10 @@ public class PathSelection : MonoBehaviour
             TruncatePlan(planIndex);
             return CurrentRibbon != null;
         }
+
+        // Nothing to take on this square: put the selection down so a click away clears the board.
+        if (SelectedUnit != null)
+            PlanMovement.Instance.SwitchToUnit(null);
         return false;
     }
 

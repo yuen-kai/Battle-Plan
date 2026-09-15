@@ -15,19 +15,12 @@ MonoBehaviour:
   unitModel: {fileID: 2129558826794870872, guid: eb172b56d11084075a34009ca5669d73, type: 3}
   unitName: The President
   unitClass: 4
-  unitDescription: No introduction needed
-  playStyle: Walk him across behind a screen, and pull the screen back to him when
-    it thins out.
+  playStyle: Protect him at all costs
   weaponName: Sidearm pistol
-  strengths: Rallies the whole crew to his cell and halves what they take for the
-    round.
-  weaknesses: Least health and shortest reach on the roster; losing him loses the
-    leg.
   unitSprite: {fileID: 21300000, guid: 017e43383bb6494d8b22b1968a09fe32, type: 3}
   unavailableForRoster: 1
-  abilityName: Close Ranks
-  abilityDescription: Cancel your crew's orders, pull them into the ring around him,
-    and halve the damage all of them take this round.
+  abilityName: Secret Service
+  abilityDescription: Calls the crew over, pulling them into a protective ring around him, and halving the damage all of them take this round.
   abilitySprite: {fileID: 21300000, guid: 017e43383bb6494d8b22b1968a09fe32, type: 3}
   moveDist: 3
   moveSpeed: 1

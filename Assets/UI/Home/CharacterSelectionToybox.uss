@@ -381,26 +381,6 @@
     border-top-color: var(--toy-edge);
 }
 
-.unit-option__description {
-    display: none;
-    flex-grow: 1;
-    flex-shrink: 1;
-    min-height: 0;
-    font-size: var(--toy-type-caption);
-    color: var(--toy-text-copy);
-    white-space: normal;
-    overflow: hidden;
-}
-
-.unit-option:hover .unit-option__description,
-.unit-option--selected .unit-option__description {
-    color: var(--toy-text-on-accent-quiet);
-}
-
-.unit-option--unavailable .unit-option__description {
-    color: var(--toy-text-muted);
-}
-
 /* The stack counter, flush into the corner. Inset from the edge it reads as a
    sticker on the picture; flush it reads as part of the frame. Never give this
    a display property — the controller hides it with the shared .hidden class,

@@ -2,7 +2,6 @@
     <ui:Button name="unit-option-button" class="unit-option" tooltip="Add this unit to your crew">
         <ui:VisualElement name="unit-option-portrait" class="unit-option__portrait" picking-mode="Ignore" />
         <ui:VisualElement class="unit-option__copy" picking-mode="Ignore">
-            <ui:Label name="unit-option-description" class="unit-option__description" picking-mode="Ignore" />
             <ui:Label name="unit-option-name" text="Unit" class="unit-option__name" picking-mode="Ignore" />
         </ui:VisualElement>
         <ui:Label name="unit-option-status" class="unit-option__status hidden" picking-mode="Ignore" />

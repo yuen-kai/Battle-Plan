@@ -43,11 +43,16 @@ public partial class PlanMovement
         // range can be given its orders without the click reading as an aim, while the ground it
         // stands on stays aimable — smoke underfoot is one of the Commander's better plays.
         //
+        // The sandbox commands both crews, so an enemy body is the same pick; elsewhere an enemy
+        // keeps answering with its cell because aiming at it is the point.
+        //
         // Picking a unit and drawing its route is one press in movement mode, and aiming is no
         // reason for it to be two. The press on a team-mate goes straight to the route drag, which
         // finds and takes the unit itself and leaves the gesture live, so the press that moves the
         // selection off this unit is already laying the next one's route.
-        GameObject pointedUnit = Mouse.GetFriendlyUnitUnderMouse();
+        GameObject pointedUnit = DualControl
+            ? Mouse.GetUnitUnderMouse()
+            : Mouse.GetFriendlyUnitUnderMouse();
         if (
             pointedUnit != null
             && pointedUnit != selectedUnit
@@ -115,6 +120,13 @@ public partial class PlanMovement
             )
             {
                 GameHUDController.Instance?.ClearTargetFeedback();
+                return;
+            }
+            // An unused empty press puts the ability down; TryStartPath may already have done so.
+            if (selectedUnit == null || FindPlanningUnitAtCell(square) == null)
+            {
+                if (selectedUnit != null)
+                    SwitchToUnit(null);
                 return;
             }
             ShowInvalidTargetFeedback(validation);
@@ -323,6 +335,25 @@ public partial class PlanMovement
         if (unit.GetComponent<Smoke>() != null)
         {
             CreateSquareFootprintIndicator(host, square, Smoke.FootprintRadius, color);
+            return host;
+        }
+
+        if (
+            unit.GetComponent<SuppressingFire>() != null
+            && GridSystem.TryGetAdjacentDirection(
+                GridSystem.ConvertToGridCoords(start),
+                GridSystem.ConvertToGridCoords(square),
+                out Vector2Int barrageDirection
+            )
+        )
+        {
+            SuppressingFire.CreateConePreview(
+                host.transform,
+                unit.transform.position,
+                new Vector3(barrageDirection.x, 0f, barrageDirection.y),
+                color,
+                unitData.bulletRange
+            );
             return host;
         }
 

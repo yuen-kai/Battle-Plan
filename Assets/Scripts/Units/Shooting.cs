@@ -153,7 +153,7 @@ public class Shooting : NetworkBehaviour
 
     public void StartShooting()
     {
-        if (holdFire)
+        if (holdFire || GetComponent<Unit>()?.IsStunned == true)
         {
             StandDown();
             return;
@@ -171,7 +171,7 @@ public class Shooting : NetworkBehaviour
 
     public void ContinueShooting()
     {
-        if (holdFire)
+        if (holdFire || GetComponent<Unit>()?.IsStunned == true)
         {
             StandDown();
             return;
@@ -348,7 +348,7 @@ public class Shooting : NetworkBehaviour
         SpreadZoneWeights spreadZones,
         float range = -1,
         bool? pierces = null,
-        Vector2Int? ignoredWallCell = null,
+        bool ignoreAdjacentWalls = false,
         bool consumeAmmo = false
     )
     {
@@ -372,8 +372,6 @@ public class Shooting : NetworkBehaviour
         bool bulletPierces = pierces ?? unitData.bulletPierces;
 
         Vector3 origin = transform.position;
-        bool ignoresWallCell = ignoredWallCell.HasValue;
-        Vector2Int wallCell = ignoredWallCell.GetValueOrDefault();
         bullets.Add(
             CreateBullet(
                 origin,
@@ -383,8 +381,7 @@ public class Shooting : NetworkBehaviour
                 aoeRadius,
                 bulletPierces,
                 authoritative: true,
-                ignoresWallCell: ignoresWallCell,
-                ignoredWallCell: wallCell
+                ignoreAdjacentWalls: ignoreAdjacentWalls
             )
         );
 
@@ -395,8 +392,7 @@ public class Shooting : NetworkBehaviour
             explodesOnImpact,
             aoeRadius,
             bulletPierces,
-            ignoresWallCell,
-            wallCell
+            ignoreAdjacentWalls
         );
 
         if (consumeAmmo)
@@ -413,8 +409,7 @@ public class Shooting : NetworkBehaviour
         bool explodesOnImpact,
         float aoeRadius,
         bool pierces,
-        bool ignoresWallCell,
-        Vector2Int ignoredWallCell
+        bool ignoreAdjacentWalls
     )
     {
         if (IsServer)
@@ -428,8 +423,7 @@ public class Shooting : NetworkBehaviour
             aoeRadius,
             pierces,
             authoritative: false,
-            ignoresWallCell: ignoresWallCell,
-            ignoredWallCell: ignoredWallCell
+            ignoreAdjacentWalls: ignoreAdjacentWalls
         );
     }
 
@@ -441,8 +435,7 @@ public class Shooting : NetworkBehaviour
         float aoeRadius,
         bool pierces,
         bool authoritative,
-        bool ignoresWallCell,
-        Vector2Int ignoredWallCell
+        bool ignoreAdjacentWalls
     )
     {
         GameObject bullet = Instantiate(
@@ -463,8 +456,7 @@ public class Shooting : NetworkBehaviour
                 explodesOnImpact,
                 aoeRadius * GameLoop.cellSize,
                 pierces,
-                ignoresWallCell,
-                ignoredWallCell
+                ignoreAdjacentWalls
             );
         return bullet;
     }

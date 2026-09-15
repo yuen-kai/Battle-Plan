@@ -56,8 +56,7 @@ public class Bullet : MonoBehaviour
         bool shotExplodesOnImpact = false,
         float shotAoeRadius = 0f,
         bool shotPierces = false,
-        bool ignoresWallCell = false,
-        Vector2Int ignoredWallCell = default
+        bool ignoreAdjacentWalls = false
     )
     {
         damage = shotDamage;
@@ -74,8 +73,8 @@ public class Bullet : MonoBehaviour
 
         ConfigureCollisionQuery();
 
-        if (ignoresWallCell)
-            IgnoreWall(ignoredWallCell);
+        if (ignoreAdjacentWalls)
+            IgnoreAdjacentWalls(GridSystem.ConvertToGridCoords(startPosition));
 
         ApplyTeamPresentation();
 
@@ -108,6 +107,19 @@ public class Bullet : MonoBehaviour
 
         foreach (Collider projectileCollider in GetComponentsInChildren<Collider>(true))
             projectileCollider.enabled = false;
+    }
+
+    private void IgnoreAdjacentWalls(Vector2Int originCell)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0)
+                    continue;
+                IgnoreWall(originCell + new Vector2Int(dx, dy));
+            }
+        }
     }
 
     private void IgnoreWall(Vector2Int wallCell)

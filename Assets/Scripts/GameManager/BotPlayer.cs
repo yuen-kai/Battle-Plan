@@ -1139,6 +1139,6 @@ public sealed class BotPlayer
         NetworkObject networkObject = unit != null ? unit.GetComponent<NetworkObject>() : null;
         return networkObject != null && networkObject.IsSpawned
             ? networkObject.NetworkObjectId
-            : unchecked((ulong)(uint)(unit != null ? unit.GetInstanceID() : 0));
+            : (unit != null ? unit.GetEntityId().GetRawData() : 0UL);
     }
 }

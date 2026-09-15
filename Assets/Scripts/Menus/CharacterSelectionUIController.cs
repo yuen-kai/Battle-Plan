@@ -282,7 +282,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         VisualElement portrait = button.Q<VisualElement>("unit-option-portrait");
         Label unitName = button.Q<Label>("unit-option-name");
-        Label description = button.Q<Label>("unit-option-description");
         Label optionStatus = button.Q<Label>("unit-option-status");
         if (optionStatus == null)
         {
@@ -296,8 +295,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
         button.tooltip = data != null ? $"Add {data.unitName} to the crew" : "Add unit";
         if (unitName != null)
             unitName.text = data != null ? data.unitName : "Unknown unit";
-        if (description != null)
-            description.text = data != null ? data.unitDescription : "Unit data unavailable.";
         SetBackgroundImage(portrait, data != null ? data.unitSprite : null);
 
         return new UnitOptionView(viewRoot, button, data, optionStatus, index);
@@ -318,10 +315,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         Label unitName = new("Unit") { name = "unit-option-name" };
         unitName.AddToClassList("unit-option__name");
-        Label description = new() { name = "unit-option-description" };
-        description.AddToClassList("unit-option__description");
 
-        copy.Add(description);
         copy.Add(unitName);
         button.Add(portrait);
         button.Add(copy);

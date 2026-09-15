@@ -174,7 +174,6 @@ public class UIToolkitAssetSmokeTests
                 "unit-option-button",
                 "unit-option-portrait",
                 "unit-option-name",
-                "unit-option-description",
                 "unit-option-status",
             },
         },

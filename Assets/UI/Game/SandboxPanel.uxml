@@ -37,6 +37,22 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="sandbox-quick-add" class="sandbox-quick-add">
+            <ui:VisualElement class="sandbox-panel__header">
+                <ui:Label text="Add units" class="sandbox-panel__title" picking-mode="Ignore" />
+                <ui:Label name="sandbox-quick-count" text="1 / 5" class="sandbox-crew__count mono" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:VisualElement class="sandbox-quick-add__body">
+                <ui:VisualElement class="sandbox-team-toggle">
+                    <ui:Button name="sandbox-team-blue" text="Blue" class="button sandbox-button sandbox-team sandbox-team--blue sandbox-team--selected" tooltip="Add units to the blue crew" />
+                    <ui:Button name="sandbox-team-red" text="Red" class="button sandbox-button sandbox-team sandbox-team--red" tooltip="Add units to the red crew" />
+                </ui:VisualElement>
+                <ui:ScrollView name="sandbox-quick-scroll" mode="Vertical" class="sandbox-quick-add__scroll">
+                    <ui:VisualElement name="sandbox-quick-grid" class="sandbox-picker__grid" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <ui:VisualElement name="sandbox-picker" class="sandbox-picker hidden">
             <ui:VisualElement name="sandbox-picker-panel" class="sandbox-picker__panel" focusable="true" tabindex="-1">
                 <ui:VisualElement class="sandbox-picker__header">

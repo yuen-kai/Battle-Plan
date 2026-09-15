@@ -334,6 +334,8 @@ public class GameLoop : NetworkBehaviour
         float radiusCells,
         bool line,
         bool smokeScreen,
+        bool cone,
+        float coneHalfSpreadDegrees,
         int casterTeamIndex
     )> activeTelegraphs = new();
     private int runningAbilities;
@@ -2825,16 +2827,22 @@ public class GameLoop : NetworkBehaviour
         activeTelegraphs.Clear();
         foreach (var (unit, square, data) in activations)
         {
+            bool isCone = unit.GetComponent<SuppressingFire>() != null;
             Vector3 effectSquare = ResolveAbilityEffectSquare(unit, square, data);
-            if (data.responseDistLine)
+            if (isCone)
+                effectSquare = SuppressingFire.ResolveConeAimPoint(unit, square);
+            else if (data.responseDistLine)
                 effectSquare = ResolveLineAbilityEndpoint(unit, square);
-            // Fog: only line telegraphs render the caster position. For non-line abilities,
+            // Fog: only line/cone telegraphs render the caster position. For non-line abilities,
             // don't put a possibly-hidden caster's cell on the wire (RPC payloads reach the
             // enemy client even though the marker branch never reads casterPos).
-            Vector3 telegraphOrigin = data.responseDistLine
+            Vector3 telegraphOrigin = data.responseDistLine || isCone
                 ? unit.transform.position
                 : effectSquare;
             bool isSmokeScreen = unit.GetComponent<Smoke>() != null;
+            bool isLine = data.responseDistLine && !isCone;
+            float telegraphRadius = isCone ? data.bulletRange : data.abilityRadius;
+            float coneHalfSpread = isCone ? SuppressingFire.BarrageSpreadDegrees : 0f;
             int casterTeamIndex = unit.GetComponent<Unit>()?.TeamIndex ?? -1;
             // Kept so a rejoining seat can be shown the same already-sanitized payload rather
             // than having the caster's position re-derived for it.
@@ -2842,18 +2850,22 @@ public class GameLoop : NetworkBehaviour
                 (
                     telegraphOrigin,
                     effectSquare,
-                    data.abilityRadius,
-                    data.responseDistLine,
+                    telegraphRadius,
+                    isLine,
                     isSmokeScreen,
+                    isCone,
+                    coneHalfSpread,
                     casterTeamIndex
                 )
             );
             ShowAbilityTelegraphClientRpc(
                 telegraphOrigin,
                 effectSquare,
-                data.abilityRadius,
-                data.responseDistLine,
+                telegraphRadius,
+                isLine,
                 isSmokeScreen,
+                isCone,
+                coneHalfSpread,
                 casterTeamIndex
             );
         }
@@ -3398,6 +3410,8 @@ public class GameLoop : NetworkBehaviour
         float radiusCells,
         bool line,
         bool isSmokeScreen,
+        bool isCone,
+        float coneHalfSpreadDegrees,
         int casterTeamIndex,
         ClientRpcParams clientRpcParams = default
     )
@@ -3410,7 +3424,29 @@ public class GameLoop : NetworkBehaviour
                 ? GetTeamColorForViewer(casterTeamIndex)
                 : TeamPalette.AbilityTelegraph;
 
-        if (line)
+        if (isCone)
+        {
+            if (square == casterPos)
+                return;
+
+            Vector3 direction = square - casterPos;
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 1e-6f)
+                return;
+
+            GameObject cone = SuppressingFire.CreateConePreview(
+                null,
+                casterPos,
+                direction,
+                color.WithAlpha(0.8f),
+                radiusCells,
+                "AbilityTelegraphCone",
+                coneHalfSpreadDegrees
+            );
+            if (cone != null)
+                clientTelegraphs.Add(cone);
+        }
+        else if (line)
         {
             if (square == casterPos)
                 return;
@@ -4889,7 +4925,7 @@ public class GameLoop : NetworkBehaviour
             ulong enemyId =
                 networkObject != null && networkObject.IsSpawned
                     ? networkObject.NetworkObjectId
-                    : unchecked((ulong)(uint)enemy.GetInstanceID());
+                    : enemy.GetEntityId().GetRawData();
             authoritativeSightings.Add(new BotEnemySighting(enemyId, cell));
         }
 
@@ -5935,6 +5971,8 @@ public class GameLoop : NetworkBehaviour
                 telegraph.radiusCells,
                 telegraph.line,
                 telegraph.smokeScreen,
+                telegraph.cone,
+                telegraph.coneHalfSpreadDegrees,
                 telegraph.casterTeamIndex,
                 target
             );

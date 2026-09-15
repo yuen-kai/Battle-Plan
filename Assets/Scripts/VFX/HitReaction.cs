@@ -646,7 +646,7 @@ class HitReactionDriver : MonoBehaviour
         }
 
         bodyRenderers = renderers.ToArray();
-        turnSign = (GetInstanceID() & 1) == 0 ? 1f : -1f;
+        turnSign = (GetEntityId().GetHashCode() & 1) == 0 ? 1f : -1f;
         HitBody.Measure(transform, bodyRenderers, out centreHeight, out footHeight);
 
         float centreLocal = 0f;
@@ -998,7 +998,7 @@ class HitDeathPuppet : MonoBehaviour
             return;
 
         HitBody.Measure(root, renderers, out float centreHeight, out float footHeight);
-        float spinSign = (root.GetInstanceID() & 1) == 0 ? 1f : -1f;
+        float spinSign = (root.GetEntityId().GetHashCode() & 1) == 0 ? 1f : -1f;
         Vector3 direction = HitBody.AwayFrom(root, sourcePosition);
         Spawn(root, renderers.ToArray(), direction, teamColor, centreHeight, footHeight, spinSign);
     }

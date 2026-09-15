@@ -14,9 +14,10 @@ using UnityEngine.UIElements;
 /// a click on a sandbox control must not also land on the board behind it — and it means the game's
 /// stylesheets already apply.
 ///
-/// Crew composition itself lives on the unit cards. The cards are already the crew, one per fielded
-/// unit on each strip, so a slot is swapped or dropped where it is read rather than in a list here
-/// that would have to be kept beside it.
+/// Crew composition lives on the unit cards and on the right-hand quick-add catalog. The cards are
+/// the crew as fielded; the catalog is for stacking several units onto a side without opening the
+/// modal each time. Slot swaps and removals still happen on the card that already stands for that
+/// unit.
 /// </summary>
 public sealed class SandboxPanel
 {
@@ -35,6 +36,10 @@ public sealed class SandboxPanel
     private readonly Toggle ownImmortal;
     private readonly Toggle enemyImmortal;
     private readonly Label hint;
+    private readonly Label quickCount;
+    private readonly Button teamBlue;
+    private readonly Button teamRed;
+    private readonly VisualElement quickGrid;
     private readonly VisualElement picker;
     private readonly VisualElement pickerPanel;
     private readonly VisualElement pickerGrid;
@@ -44,6 +49,7 @@ public sealed class SandboxPanel
     private Button enemyAddSlot;
     private Action<int> pickedAction;
     private bool collapsed;
+    private int quickAddTeamIndex = GameLoop.HostTeamIndex;
     private string appliedSignature;
 
     private SandboxPanel(VisualElement layer)
@@ -58,6 +64,10 @@ public sealed class SandboxPanel
         ownImmortal = layer.Q<Toggle>("sandbox-own-immortal");
         enemyImmortal = layer.Q<Toggle>("sandbox-enemy-immortal");
         hint = layer.Q<Label>("sandbox-hint");
+        quickCount = layer.Q<Label>("sandbox-quick-count");
+        teamBlue = layer.Q<Button>("sandbox-team-blue");
+        teamRed = layer.Q<Button>("sandbox-team-red");
+        quickGrid = layer.Q<VisualElement>("sandbox-quick-grid");
         picker = layer.Q<VisualElement>("sandbox-picker");
         pickerPanel = layer.Q<VisualElement>("sandbox-picker-panel");
         pickerGrid = layer.Q<VisualElement>("sandbox-picker-grid");
@@ -70,6 +80,8 @@ public sealed class SandboxPanel
         layer.Q<Button>("sandbox-recharge").clicked += () =>
             GameLoop.Instance?.SandboxClearAbilityCooldowns();
         layer.Q<Button>("sandbox-picker-close").clicked += ClosePicker;
+        teamBlue.clicked += () => SetQuickAddTeam(GameLoop.HostTeamIndex);
+        teamRed.clicked += () => SetQuickAddTeam(GameLoop.OpponentTeamIndex);
         fog.RegisterValueChangedCallback(evt => SetFog(evt.newValue));
         ownImmortal.RegisterValueChangedCallback(evt => SetImmortal(OwnTeamIndex, evt.newValue));
         enemyImmortal.RegisterValueChangedCallback(evt =>
@@ -156,6 +168,7 @@ public sealed class SandboxPanel
         hud.EnableSandboxEnemyCardPresses();
         ownAddSlot = AttachAddSlot(ownAddSlot, hud.CardsStrip, OwnTeamIndex);
         enemyAddSlot = AttachAddSlot(enemyAddSlot, hud.EnemyCardsStrip, EnemyTeamIndex);
+        EnsureQuickAddGrid();
         appliedSignature = null;
     }
 
@@ -217,9 +230,74 @@ public sealed class SandboxPanel
 
         ownAddSlot?.SetEnabled(own.Count < SandboxSession.MaxUnitsPerTeam);
         enemyAddSlot?.SetEnabled(enemy.Count < SandboxSession.MaxUnitsPerTeam);
+        RefreshQuickAdd();
 
         hud.SetSandboxCrewControls(false, own.Count, slot => OpenSlotMenu(OwnTeamIndex, slot));
         hud.SetSandboxCrewControls(true, enemy.Count, slot => OpenSlotMenu(EnemyTeamIndex, slot));
+    }
+
+    private void SetQuickAddTeam(int teamIndex)
+    {
+        if (quickAddTeamIndex == teamIndex)
+            return;
+        quickAddTeamIndex = teamIndex;
+        RefreshQuickAdd();
+    }
+
+    /// <summary>
+    /// Fills the right-hand catalog once. Tiles stay up so each press fields another unit instead of
+    /// closing a modal, which is the whole point of having the catalog beside the board.
+    /// </summary>
+    private void EnsureQuickAddGrid()
+    {
+        if (quickGrid == null || quickGrid.childCount > 0)
+            return;
+
+        List<UnitData> catalog = GameLoop.Instance?.allUnits?.units;
+        if (catalog == null)
+            return;
+
+        for (int catalogIndex = 0; catalogIndex < catalog.Count; catalogIndex++)
+        {
+            UnitData unit = catalog[catalogIndex];
+            if (unit == null || unit.unitModel == null)
+                continue;
+            int index = catalogIndex;
+            quickGrid.Add(BuildPick(unit, () => QuickAddUnit(index)));
+        }
+    }
+
+    private void RefreshQuickAdd()
+    {
+        EnsureQuickAddGrid();
+        SandboxCrew crew = SandboxSession.Crew(quickAddTeamIndex);
+        bool room = crew.Count < SandboxSession.MaxUnitsPerTeam;
+        quickCount.text = $"{crew.Count} / {SandboxSession.MaxUnitsPerTeam}";
+        teamBlue.EnableInClassList(
+            "sandbox-team--selected",
+            quickAddTeamIndex == GameLoop.HostTeamIndex
+        );
+        teamRed.EnableInClassList(
+            "sandbox-team--selected",
+            quickAddTeamIndex == GameLoop.OpponentTeamIndex
+        );
+        foreach (VisualElement child in quickGrid.Children())
+            child.SetEnabled(room);
+    }
+
+    private void QuickAddUnit(int catalogIndex)
+    {
+        if (!SandboxSession.TryAddUnit(quickAddTeamIndex, catalogIndex))
+        {
+            GameHUDController.Instance?.SetTargetFeedback(
+                SandboxSession.Crew(quickAddTeamIndex).Count >= SandboxSession.MaxUnitsPerTeam
+                    ? "That crew is full."
+                    : "No free square left for another unit.",
+                true
+            );
+            return;
+        }
+        Rebuild();
     }
 
     /// <summary>
@@ -330,7 +408,13 @@ public sealed class SandboxPanel
             UnitData unit = catalog[catalogIndex];
             if (unit == null || unit.unitModel == null)
                 continue;
-            pickerGrid.Add(BuildPick(catalogIndex, unit));
+            int index = catalogIndex;
+            pickerGrid.Add(BuildPick(unit, () =>
+            {
+                Action<int> picked = pickedAction;
+                ClosePicker();
+                picked?.Invoke(index);
+            }));
         }
 
         picker.RemoveFromClassList("hidden");
@@ -357,21 +441,12 @@ public sealed class SandboxPanel
         Label name = new("Remove");
         name.AddToClassList("sandbox-pick__name");
         remove.Add(name);
-
-        Label note = new("off the board");
-        note.AddToClassList("sandbox-pick__note");
-        remove.Add(note);
         return remove;
     }
 
-    private VisualElement BuildPick(int catalogIndex, UnitData unit)
+    private VisualElement BuildPick(UnitData unit, Action onPicked)
     {
-        Button pick = new(() =>
-        {
-            Action<int> picked = pickedAction;
-            ClosePicker();
-            picked?.Invoke(catalogIndex);
-        })
+        Button pick = new(onPicked)
         {
             tooltip = string.IsNullOrWhiteSpace(unit.abilityName)
                 ? "No ability"
@@ -388,12 +463,6 @@ public sealed class SandboxPanel
         Label name = new(unit.unitName);
         name.AddToClassList("sandbox-pick__name");
         pick.Add(name);
-
-        Label note = new(
-            string.IsNullOrWhiteSpace(unit.abilityName) ? "Move only" : unit.abilityName
-        );
-        note.AddToClassList("sandbox-pick__note");
-        pick.Add(note);
         return pick;
     }
 

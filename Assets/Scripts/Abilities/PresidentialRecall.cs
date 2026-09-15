@@ -121,8 +121,6 @@ public class PresidentialRecall : Ability
                     continue;
                 }
 
-                // Symmetric easing, so the ally accelerates out of its cell and settles into the new
-                // one while the arc still peaks at the halfway point.
                 float eased = Mathf.SmoothStep(0f, 1f, progress);
                 ally.Unit.transform.SetPositionAndRotation(
                     AbilityTrajectory.SampleLob(ally.From, ally.To, ally.ApexHeight, eased),
@@ -144,6 +142,8 @@ public class PresidentialRecall : Ability
 
     private void BeginLeap(RecalledAlly ally)
     {
+        ApplyGuard(ally.Unit);
+
         Movement allyMovement = ally.Unit.GetComponent<Movement>();
         if (allyMovement != null)
             allyMovement.moving = true;
@@ -174,7 +174,6 @@ public class PresidentialRecall : Ability
         if (allyMovement != null)
             allyMovement.moving = false;
 
-        ApplyGuard(ally.Unit);
         allyMovement?.transitionToShooting(onlyIfWeaponsStillFree: true);
     }
 

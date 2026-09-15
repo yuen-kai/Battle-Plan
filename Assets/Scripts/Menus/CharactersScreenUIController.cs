@@ -12,24 +12,6 @@ using UnityEngine.UIElements;
 [RequireComponent(typeof(UIDocument))]
 public class CharactersScreenUIController : MonoBehaviour
 {
-    /// <summary>
-    /// The five things a player needs to tell one unit from another, and nothing else. This screen
-    /// is where someone decides whether a character looks fun, not where they optimise a build, so
-    /// it shows a coarse scale rather than the raw figures — the exact numbers live on the unit
-    /// assets and in the HUD during a match.
-    /// </summary>
-    private static readonly TraitDefinition[] Traits =
-    {
-        new("Toughness", data => data.maxHealth),
-        new("Firepower", data => data.damage),
-        new("Range", data => data.targetRange),
-        new("Mobility", data => data.moveDist),
-        new("Vision", data => data.visionRange),
-    };
-
-    /// <summary>Steps in a trait scale.</summary>
-    private const int PipCount = 5;
-
     /// <summary>One notch of the wheel is worth one unit.</summary>
     private const float WheelStepThreshold = 0.01f;
 
@@ -42,14 +24,12 @@ public class CharactersScreenUIController : MonoBehaviour
     private readonly List<UnitData> orderedUnits = new();
     private readonly List<UnitData> visibleUnits = new();
     private readonly List<ClassFilterView> filterViews = new();
-    private readonly List<TraitRowView> traitRows = new();
     private readonly List<VisualElement> dots = new();
 
     private UIDocument document;
     private VisualElement root;
     private VisualElement stage;
     private VisualElement classFilters;
-    private VisualElement statList;
     private VisualElement dotStrip;
     private Button titleButton;
     private Button prevButton;
@@ -57,10 +37,6 @@ public class CharactersScreenUIController : MonoBehaviour
     private Label rosterCount;
     private Label unitClassLabel;
     private Label unitNameLabel;
-    private Label unitDescriptionLabel;
-    private Label playStyleLabel;
-    private Label strengthsLabel;
-    private Label weaknessesLabel;
     private Label abilityNameLabel;
     private Label abilityCooldownLabel;
     private Label abilityDetailLabel;
@@ -85,7 +61,6 @@ public class CharactersScreenUIController : MonoBehaviour
 
         CacheElements();
         BuildCatalog();
-        BuildStatRows();
         BuildClassFilters();
         RegisterCallbacks();
         ApplyFilter(null);
@@ -107,15 +82,10 @@ public class CharactersScreenUIController : MonoBehaviour
         prevButton = RequireElement<Button>("carousel-prev-button");
         nextButton = RequireElement<Button>("carousel-next-button");
         classFilters = RequireElement<VisualElement>("class-filters");
-        statList = RequireElement<VisualElement>("stat-list");
         dotStrip = RequireElement<VisualElement>("carousel-dots");
         rosterCount = RequireElement<Label>("roster-count");
         unitClassLabel = RequireElement<Label>("unit-class");
         unitNameLabel = RequireElement<Label>("unit-name");
-        unitDescriptionLabel = RequireElement<Label>("unit-description");
-        playStyleLabel = RequireElement<Label>("unit-playstyle");
-        strengthsLabel = RequireElement<Label>("unit-strengths");
-        weaknessesLabel = RequireElement<Label>("unit-weaknesses");
         abilityNameLabel = RequireElement<Label>("ability-name");
         abilityCooldownLabel = RequireElement<Label>("ability-cooldown");
         abilityDetailLabel = RequireElement<Label>("ability-detail");
@@ -218,44 +188,6 @@ public class CharactersScreenUIController : MonoBehaviour
                     : catalogOrder.IndexOf(left).CompareTo(catalogOrder.IndexOf(right));
             }
         );
-    }
-
-    private void BuildStatRows()
-    {
-        traitRows.Clear();
-        if (statList == null)
-            return;
-
-        statList.Clear();
-        foreach (TraitDefinition definition in Traits)
-        {
-            // Scaled against the best in the catalog, so a pip count says "compared to the rest of
-            // this roster" and a sixth character rescales everyone rather than running off the end.
-            float best = 0f;
-            foreach (UnitData data in orderedUnits)
-                best = Mathf.Max(best, definition.Read(data));
-
-            VisualElement row = new() { pickingMode = PickingMode.Ignore };
-            row.AddToClassList("trait-row");
-
-            Label key = new(definition.Key) { pickingMode = PickingMode.Ignore };
-            key.AddToClassList("trait-row__key");
-            row.Add(key);
-
-            VisualElement scale = new() { pickingMode = PickingMode.Ignore };
-            scale.AddToClassList("trait-scale");
-            VisualElement[] pips = new VisualElement[PipCount];
-            for (int i = 0; i < PipCount; i++)
-            {
-                pips[i] = new VisualElement { pickingMode = PickingMode.Ignore };
-                pips[i].AddToClassList("trait-pip");
-                scale.Add(pips[i]);
-            }
-            row.Add(scale);
-
-            statList.Add(row);
-            traitRows.Add(new TraitRowView(definition, best, pips));
-        }
     }
 
     private void BuildClassFilters()
@@ -377,17 +309,6 @@ public class CharactersScreenUIController : MonoBehaviour
         }
         if (unitNameLabel != null)
             unitNameLabel.text = data != null ? data.unitName : "No unit";
-        if (unitDescriptionLabel != null)
-            unitDescriptionLabel.text = data != null ? data.unitDescription : string.Empty;
-        if (playStyleLabel != null)
-            playStyleLabel.text = data != null ? data.playStyle : string.Empty;
-        if (strengthsLabel != null)
-            strengthsLabel.text = data != null ? data.strengths : string.Empty;
-        if (weaknessesLabel != null)
-            weaknessesLabel.text = data != null ? data.weaknesses : string.Empty;
-
-        foreach (TraitRowView row in traitRows)
-            row.Show(data);
 
         bool hasAbility = data != null && !string.IsNullOrWhiteSpace(data.abilityName);
         if (abilityNameLabel != null)
@@ -517,49 +438,7 @@ public class CharactersScreenUIController : MonoBehaviour
         foreach (ClassFilterView view in filterViews)
             view.Dispose();
         filterViews.Clear();
-        traitRows.Clear();
         dots.Clear();
-    }
-
-    private readonly struct TraitDefinition
-    {
-        public readonly string Key;
-        public readonly Func<UnitData, float> Read;
-
-        public TraitDefinition(string key, Func<UnitData, float> read)
-        {
-            Key = key;
-            Read = read;
-        }
-    }
-
-    private sealed class TraitRowView
-    {
-        private readonly TraitDefinition definition;
-        private readonly float best;
-        private readonly VisualElement[] pips;
-
-        public TraitRowView(TraitDefinition definition, float best, VisualElement[] pips)
-        {
-            this.definition = definition;
-            this.best = best;
-            this.pips = pips;
-        }
-
-        public void Show(UnitData data)
-        {
-            int filled = 0;
-            if (data != null && best > 0f)
-            {
-                // Anything a unit actually has earns at least one pip; an empty row would read as
-                // "cannot do this at all", which is never true of these five.
-                float share = Mathf.Clamp01(definition.Read(data) / best);
-                filled = Mathf.Clamp(Mathf.RoundToInt(share * PipCount), 1, PipCount);
-            }
-
-            for (int i = 0; i < pips.Length; i++)
-                pips[i].EnableInClassList("trait-pip--on", i < filled);
-        }
     }
 
     private sealed class ClassFilterView : IDisposable

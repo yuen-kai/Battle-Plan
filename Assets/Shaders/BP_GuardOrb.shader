@@ -1,6 +1,6 @@
 // Battle Plan — holographic protection bubble for a guarded unit. Additive fresnel shell so the
-// character stays readable through it, with scrolling latitude bands. Expects a UV sphere whose
-// UV.y runs pole to pole. See GuardOrbVisual.cs.
+// character stays readable through it, with scrolling latitude bands. Expects a UV capsule (or
+// sphere) whose UV.y runs pole to pole. See GuardOrbVisual.cs.
 Shader "BattlePlan/GuardOrb"
 {
     Properties

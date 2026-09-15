@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Battle Plan targets Unity 6000.3.1f1 with Netcode for GameObjects for
+Battle Plan targets Unity 6000.6.0f1 with Netcode for GameObjects for
 multiplayer. Match existing patterns rather than introducing new
 architecture.
 

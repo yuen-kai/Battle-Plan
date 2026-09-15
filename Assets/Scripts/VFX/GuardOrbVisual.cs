@@ -3,8 +3,8 @@ using UnityEngine;
 public sealed class GuardOrbVisual : MonoBehaviour
 {
     public const string GameObjectName = "GuardOrb";
+    public const float HitboxScale = 1.5f;
 
-    private const float PaddingCells = 0.16f;
     private const float BloomInSeconds = 0.22f;
     private const float BloomOutSeconds = 0.3f;
     private const float SettledScale = 1f;
@@ -70,8 +70,6 @@ public sealed class GuardOrbVisual : MonoBehaviour
             Discard(orbMaterial);
     }
 
-    // Editor tooling builds a shell outside Play mode (asset checks, capture rigs), where Destroy
-    // is an error rather than a deferral.
     private static void Discard(Object target)
     {
         if (Application.isPlaying)
@@ -85,7 +83,6 @@ public sealed class GuardOrbVisual : MonoBehaviour
         if (orbMaterial != null)
             orbMaterial.SetFloat(BloomId, bloom);
 
-        // Overshoots on the way in so the shell reads as thrown up rather than faded up.
         float overshoot = BurstScale - (BurstScale - SettledScale) * Mathf.Clamp01(bloom);
         Vector3 scale = diameters * Mathf.Lerp(0.55f, overshoot, Mathf.Clamp01(bloom));
         orb.localScale = ToLocalScale(scale);
@@ -106,19 +103,16 @@ public sealed class GuardOrbVisual : MonoBehaviour
             return;
         }
 
-        if (!TryMeasureCharacter(out Bounds characterBounds, out bool hiddenByFog))
+        if (!TryMeasureHitbox(out CapsuleCollider hitbox, out bool hiddenByFog))
             return;
 
-        // Per axis rather than one enclosing sphere: a ball sized to a standing figure's height is
-        // two cells wide, and five of them in a 3x3 huddle merge into one blob.
-        float padding = PaddingCells * GameLoop.cellSize;
-        diameters = characterBounds.size + new Vector3(padding, padding, padding);
+        float radius = hitbox.radius * HitboxScale;
+        float height = Mathf.Max(hitbox.height * HitboxScale, radius * 2f);
+        diameters = new Vector3(radius * 2f, height * 0.5f, radius * 2f);
 
-        GameObject orbObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        GameObject orbObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
         orbObject.name = GameObjectName;
         orbObject.layer = gameObject.layer;
-        // Disabled before it is discarded: Destroy is deferred to the end of the frame, and a live
-        // collider on a unit for even one frame is something bullets and targeting casts can hit.
         Collider orbCollider = orbObject.GetComponent<Collider>();
         if (orbCollider != null)
         {
@@ -127,10 +121,8 @@ public sealed class GuardOrbVisual : MonoBehaviour
         }
         orbObject.transform.SetParent(transform, worldPositionStays: false);
 
-        orbObject.transform.localPosition = ToLocalScale(
-            characterBounds.center - transform.position
-        );
-        orbObject.transform.localRotation = Quaternion.identity;
+        orbObject.transform.localPosition = hitbox.center;
+        orbObject.transform.localRotation = CapsuleRotation(hitbox.direction);
 
         orbMaterial = new Material(orbShader)
         {
@@ -142,8 +134,6 @@ public sealed class GuardOrbVisual : MonoBehaviour
         orbRenderer.sharedMaterial = orbMaterial;
         orbRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         orbRenderer.receiveShadows = false;
-        // GameLoop's host-side fog suppresses a hidden unit's existing renderers, so a shell built
-        // while its unit is hidden has to start out suppressed too.
         orbRenderer.forceRenderingOff = hiddenByFog;
 
         orb = orbObject.transform;
@@ -159,26 +149,24 @@ public sealed class GuardOrbVisual : MonoBehaviour
         );
     }
 
-    private bool TryMeasureCharacter(out Bounds characterBounds, out bool hiddenByFog)
-    {
-        characterBounds = default;
-        hiddenByFog = false;
-        bool measured = false;
+    private static Quaternion CapsuleRotation(int direction) =>
+        direction switch
+        {
+            0 => Quaternion.Euler(0f, 0f, 90f),
+            2 => Quaternion.Euler(90f, 0f, 0f),
+            _ => Quaternion.identity,
+        };
 
+    private bool TryMeasureHitbox(out CapsuleCollider hitbox, out bool hiddenByFog)
+    {
+        hiddenByFog = false;
         foreach (Renderer candidate in GetComponentsInChildren<Renderer>(true))
         {
-            if (!DiveRecoveryPulse.IsCharacterRenderer(candidate))
-                continue;
-
-            hiddenByFog |= candidate.forceRenderingOff;
-            if (!measured)
-            {
-                characterBounds = candidate.bounds;
-                measured = true;
-                continue;
-            }
-            characterBounds.Encapsulate(candidate.bounds);
+            if (DiveRecoveryPulse.IsCharacterRenderer(candidate))
+                hiddenByFog |= candidate.forceRenderingOff;
         }
-        return measured;
+
+        hitbox = GetComponent<CapsuleCollider>();
+        return hitbox != null;
     }
 }

@@ -15,19 +15,12 @@ MonoBehaviour:
   unitModel: {fileID: 4136433947033533029, guid: d9531fe0c4dee4f06a8cd91267292128, type: 3}
   unitName: Voltaic
   unitClass: 2
-  unitDescription: Strikes one target with a quick bolt, then calls down a wider
-    arc that catches everyone nearby at once.
-  playStyle: Trades single-target pressure for a burst that punishes a clustered
-    team.
+  playStyle: Get him to a position where he can set of his ability.
   weaponName: Charge pistol
-  strengths: Its ability can lock down a whole group at once.
-  weaknesses: Basic attack alone is unremarkable, and the ability doesn't reach through
-    walls.
   unitSprite: {fileID: 21300000, guid: 767a37d8dbea2492e818cc982103863f, type: 3}
   unavailableForRoster: 0
-  abilityName: Arc Surge
-  abilityDescription: Zaps up to five nearby enemies at once for solid damage and
-    a brief stun.
+  abilityName: Overcharge
+  abilityDescription: Zaps all nearby enemies, dealing big damage and a brief stun.
   abilitySprite: {fileID: 21300000, guid: 904893c1ebb1243e39d59553a42f4126, type: 3}
   moveDist: 3
   moveSpeed: 1
@@ -41,6 +34,7 @@ MonoBehaviour:
   bulletSpread: 4
   fireRateRampShots: 0
   fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
   canShootWhileMoving: 0
   bulletSpeed: 4.5
   targetRange: 5

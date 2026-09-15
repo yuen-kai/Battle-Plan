@@ -27,22 +27,12 @@ public class UnitData : ScriptableObject
     [Tooltip("Role bucket used to group the roster in menus")]
     public UnitClass unitClass = UnitClass.Assault;
 
-    [TextArea(3, 5)]
-    [Tooltip("Description of the unit")]
-    public string unitDescription = "New Unit Description";
-
     [TextArea(2, 3)]
     [Tooltip("How this unit is played, in one sentence")]
     public string playStyle = "";
 
     [Tooltip("Weapon in plain words, e.g. \"Mid-range rifle\"")]
     public string weaponName = "";
-
-    [Tooltip("What this unit is good at, in one line")]
-    public string strengths = "";
-
-    [Tooltip("What this unit struggles against, in one line")]
-    public string weaknesses = "";
 
     [Tooltip("Sprite representing the unit")]
     public Sprite unitSprite;

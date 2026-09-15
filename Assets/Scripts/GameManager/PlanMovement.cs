@@ -281,18 +281,17 @@ public partial class PlanMovement : MonoBehaviour
             }
             else if (selectedUnit == null)
             {
-                Debug.LogWarning("No unit selected");
+                // A click away cleared the selection; the next board press can pick a unit back up.
+                if (Mouse.PrimaryPointerDown)
+                    PathSelection.Instance?.TryStartPath();
+            }
+            else if (!plans[selectedUnit].Item1)
+            {
+                PathSelection.Instance.MovementSelection(range);
             }
             else
             {
-                if (!plans[selectedUnit].Item1)
-                {
-                    PathSelection.Instance.MovementSelection(range);
-                }
-                else
-                {
-                    AbilitySelection();
-                }
+                AbilitySelection();
             }
 
             // A dodge response has no lock-in chip, so it normally rides the window's clock out.

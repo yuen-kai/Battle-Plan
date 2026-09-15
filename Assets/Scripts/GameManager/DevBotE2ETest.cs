@@ -484,6 +484,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                     )
                     .Any(transform =>
                         transform.name == "AbilityTelegraphLine"
+                        || transform.name == "AbilityTelegraphCone"
                         || transform.name == "AbilityTelegraphMarker"
                         || transform.name.StartsWith("SmokeTelegraphCell_")
                         || transform.name.StartsWith("AbilityTelegraphCell_")

@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class ArcSurge : Ability
 {
-    private const int MaxTargets = 5;
+    private const int MaxTargets = 99;
 
     public const float StunSeconds = 0.5f;
 

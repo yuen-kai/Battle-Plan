@@ -70,7 +70,7 @@ public class ModelHeadshotRendererEditModeTests
     [Test]
     public void RenderHeadshot_LeavesNoStrayGameObjectsInTheActiveSceneAfterReturning()
     {
-        int[] objectIdsBefore = AllGameObjectIdsSorted();
+        ulong[] objectIdsBefore = AllGameObjectIdsSorted();
 
         Texture2D headshot = null;
         try
@@ -83,7 +83,7 @@ public class ModelHeadshotRendererEditModeTests
                 Object.DestroyImmediate(headshot);
         }
 
-        int[] objectIdsAfter = AllGameObjectIdsSorted();
+        ulong[] objectIdsAfter = AllGameObjectIdsSorted();
 
         Assert.That(
             objectIdsAfter,
@@ -125,11 +125,11 @@ public class ModelHeadshotRendererEditModeTests
         );
     }
 
-    private static int[] AllGameObjectIdsSorted()
+    private static ulong[] AllGameObjectIdsSorted()
     {
         return Object
-            .FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None)
-            .Select(gameObject => gameObject.GetInstanceID())
+            .FindObjectsByType<GameObject>(FindObjectsInactive.Include)
+            .Select(gameObject => gameObject.GetEntityId().GetRawData())
             .OrderBy(id => id)
             .ToArray();
     }

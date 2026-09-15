@@ -432,14 +432,6 @@ public static class UIThemeCapture
     private static void StageRoster(VisualElement root)
     {
         List<Texture2D> portraits = LoadPortraits();
-        string[] descriptions =
-        {
-            "Jack of all trades.",
-            "Bruiser that wants to be close.",
-            "Punishes a straight line.",
-            "Boing.",
-            "Bends a fight around cover.",
-        };
 
         var options = root.Q<ScrollView>("roster-options");
         VisualTreeAsset optionTemplate = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
@@ -453,7 +445,6 @@ public static class UIThemeCapture
                 Button button = instance.Q<Button>("unit-option-button");
                 instance.style.flexShrink = 0f;
                 SetText(instance, "unit-option-name", UnitNames[i]);
-                SetText(instance, "unit-option-description", descriptions[i]);
                 if (portraits.Count > 0)
                     instance.Q<VisualElement>("unit-option-portrait").style.backgroundImage =
                         new StyleBackground(portraits[i % portraits.Count]);
@@ -525,38 +516,6 @@ public static class UIThemeCapture
                 if (i == 1)
                     dot.AddToClassList("carousel-dot--current");
                 dots.Add(dot);
-            }
-        }
-
-        VisualElement stats = root.Q<VisualElement>("stat-list");
-        if (stats != null)
-        {
-            (string key, int filledPips)[] traits =
-            {
-                ("Health", 3),
-                ("Damage", 3),
-                ("Range", 4),
-                ("Speed", 3),
-            };
-            foreach ((string key, int filledPips) in traits)
-            {
-                VisualElement row = new();
-                row.AddToClassList("trait-row");
-                Label label = new(key);
-                label.AddToClassList("trait-row__key");
-                row.Add(label);
-                VisualElement scale = new();
-                scale.AddToClassList("trait-scale");
-                for (int i = 0; i < 5; i++)
-                {
-                    VisualElement pip = new();
-                    pip.AddToClassList("trait-pip");
-                    if (i < filledPips)
-                        pip.AddToClassList("trait-pip--on");
-                    scale.Add(pip);
-                }
-                row.Add(scale);
-                stats.Add(row);
             }
         }
     }

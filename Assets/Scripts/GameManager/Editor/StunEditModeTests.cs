@@ -197,6 +197,80 @@ public class StunEditModeTests
     }
 
     [Test]
+    public void ContinueShootingDoesNotClearAnAbortLatch()
+    {
+        GameObject unitObject = new("AbortLatchHolds");
+        try
+        {
+            Unit unit = unitObject.AddComponent<Unit>();
+            unitObject.AddComponent<Movement>();
+            Shooting shooting = unitObject.AddComponent<Shooting>();
+            FieldInfo abort = typeof(Shooting).GetField(
+                "abortMagazine",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            Assert.That(abort, Is.Not.Null);
+            SetIsServer(unit, true);
+
+            unit.ApplyStun(0.3f);
+            Assert.That((bool)abort.GetValue(shooting), Is.True);
+
+            shooting.ContinueShooting();
+
+            Assert.That(
+                (bool)abort.GetValue(shooting),
+                Is.True,
+                "ContinueShooting must not reopen a mag that stun aborted."
+            );
+            Assert.That(shooting.allowShooting, Is.False);
+            Assert.That(shooting.stillShooting, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unitObject);
+        }
+    }
+
+    [Test]
+    public void StandDownAbortsTheMagazineWithoutRelyingOnAllowShooting()
+    {
+        GameObject unitObject = new("StandDownAbortsMagazine");
+        try
+        {
+            Shooting shooting = unitObject.AddComponent<Shooting>();
+            FieldInfo abort = typeof(Shooting).GetField(
+                "abortMagazine",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            FieldInfo routine = typeof(Shooting).GetField(
+                "shootingCoroutine",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+            Assert.That(abort, Is.Not.Null);
+            Assert.That(routine, Is.Not.Null);
+
+            shooting.allowShooting = true;
+            shooting.stillShooting = true;
+            abort.SetValue(shooting, false);
+
+            shooting.StandDown();
+
+            Assert.That(
+                (bool)abort.GetValue(shooting),
+                Is.True,
+                "StandDown must raise abortMagazine so a live mag loop stops mid-clip."
+            );
+            Assert.That(routine.GetValue(shooting), Is.Null);
+            Assert.That(shooting.allowShooting, Is.False);
+            Assert.That(shooting.stillShooting, Is.False);
+        }
+        finally
+        {
+            Object.DestroyImmediate(unitObject);
+        }
+    }
+
+    [Test]
     public void AbilityResetDoesNotResumeShooting()
     {
         GameObject unitObject = new("ResetAbilityUnit");

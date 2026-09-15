@@ -15,12 +15,8 @@ MonoBehaviour:
   unitModel: {fileID: 4136433947033533029, guid: 8c9ef994100e54981bf6d8515bb370c1, type: 3}
   unitName: Sentinel
   unitClass: 4
-  unitDescription: Plants a shield and holds the line, daring the enemy to push through
-    it.
   playStyle: Anchors a position behind a raised shield instead of chasing kills.
   weaponName: Sidearm pistol
-  strengths: Holds a chokepoint, denies a lane of fire on demand.
-  weaknesses: Low weapon damage, and the shield only helps while stationary.
   unitSprite: {fileID: 21300000, guid: 7b7799d66a5c641d9acb6d2cc60bfa94, type: 3}
   unavailableForRoster: 0
   abilityName: Shield Wall

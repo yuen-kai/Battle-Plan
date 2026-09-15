@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Unity C# Conventions
 
-This project targets Unity 6000.3.1f1 with Netcode for GameObjects for multiplayer. Match existing patterns rather than introducing new architecture.
+This project targets Unity 6000.6.0f1 with Netcode for GameObjects for multiplayer. Match existing patterns rather than introducing new architecture.
 
 - No custom namespaces are used anywhere in `Assets/Scripts` — don't add one to a new file, it'll be inconsistent with everything else.
 - Networked classes derive from `NetworkBehaviour`. Use `OnNetworkSpawn`/`OnNetworkDespawn` (not `Start`/`Awake`) for setup that depends on network state, and `IsOwner`/`IsServer` to branch ownership logic (see `Assets/Scripts/Units/Unit.cs`).

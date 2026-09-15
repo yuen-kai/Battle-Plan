@@ -15,13 +15,8 @@ MonoBehaviour:
   unitModel: {fileID: 4136433947033533029, guid: ce0dac10fa2864896a4f3745b8fda5c9, type: 3}
   unitName: Breach
   unitClass: 1
-  unitDescription: Fires exploding rockets, forcing enemies to scatter and stay on
-    the move.
   playStyle: Attacks clustered enemies. Breaks walls, opening lines for his allies.
   weaponName: Rocket launcher
-  strengths: High area damage, and its ability tears down cover for good.
-  weaknesses: Slow-moving shots are easy to walk out of, and it's not built for a
-    fight up close.
   unitSprite: {fileID: 21300000, guid: ee7e46638319345bdb00bf860d26d37f, type: 3}
   unavailableForRoster: 0
   abilityName: Bunker Buster

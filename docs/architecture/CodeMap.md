@@ -182,7 +182,7 @@ Planning previews ask an ability for optional path points through `BuildPlannedP
 3. `Bullet` advances with transform velocity and swept collision queries. It gates damage and area impact behind `isAuthoritative`; every peer still handles local tracer movement and impact presentation.
 4. Per-shot exceptions must travel through both creation paths so host and clients see the same collision behavior.
 
-Suppressing Fire is the current example of a narrow collision exception: its bullets ignore only the selected adjacent wall instance. Ordinary bullets and later walls keep normal collision behavior.
+Suppressing Fire is the current example of a narrow collision exception: its bullets ignore every wall in the caster's eight adjacent cells. Ordinary bullets and later walls keep normal collision behavior. Its planning preview and dodge telegraph draw the barrage as a ground cone matching the ability's spread and the unit's ordinary bullet range, rather than a line laser.
 
 ## Unit composition and data
 
@@ -193,8 +193,8 @@ A networked unit prefab normally combines:
 - `Shooting`: weapon cadence, targeting, and projectile creation.
 - `Health`: authoritative damage and death, plus the round-scoped damage guard `GameLoop` clears at
   the round boundary alongside move-speed boosts. `GuardOrbVisual` is its indicator: an additive
-  `BattlePlan/GuardOrb` shell parented to the unit, so host-side fog suppression reaches it with the
-  rest of the unit's renderers.
+  `BattlePlan/GuardOrb` capsule shell sized to the unit's `CapsuleCollider`, parented to the unit so
+  host-side fog suppression reaches it with the rest of the unit's renderers.
 - One concrete `Ability` component when the unit has an active ability.
 - `AnimationHandler` and presentation components as needed.
 
