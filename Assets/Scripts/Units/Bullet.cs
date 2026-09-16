@@ -157,12 +157,6 @@ public class Bullet : MonoBehaviour
 
     void Update()
     {
-        if (IsPathBlockedBySmoke(transform.position))
-        {
-            Destroy(gameObject);
-            return;
-        }
-
         if (Vector3.Distance(startPosition, transform.position) > range || timeElapsed > maxLifetime)
         {
             Destroy(gameObject);
@@ -230,14 +224,8 @@ public class Bullet : MonoBehaviour
 
         if (explodesOnImpact)
         {
-            if (
-                isAuthoritative
-                && isFirstEnemyHit
-                && !IsPathBlockedBySmoke(hitObject.transform.position)
-            )
-            {
+            if (isAuthoritative && isFirstEnemyHit)
                 ApplyDirectHitDamage(hitObject);
-            }
 
             Blast.Explode(
                 impactPosition,
@@ -246,7 +234,7 @@ public class Bullet : MonoBehaviour
                 ShieldRush.GetEnemyShieldMask(GetShooterTeamIndex(enemyTeam)),
                 damage,
                 () => PlayImpactExplosion(impactPosition),
-                authoritative: isAuthoritative && !IsPathBlockedBySmoke(impactPosition),
+                authoritative: isAuthoritative,
                 alreadyHit: hitTargets
             );
 
@@ -256,14 +244,8 @@ public class Bullet : MonoBehaviour
 
         if (isEnemy)
         {
-            if (
-                isAuthoritative
-                && !IsPathBlockedBySmoke(hitObject.transform.position)
-                && isFirstEnemyHit
-            )
-            {
+            if (isAuthoritative && isFirstEnemyHit)
                 ApplyDirectHitDamage(hitObject);
-            }
 
             if (pierces)
                 return;
@@ -305,12 +287,6 @@ public class Bullet : MonoBehaviour
     private bool IsCrit(GameObject hitObject)
     {
         return backstabMultiplier > 1f && CheckBackstab(hitObject);
-    }
-
-    private bool IsPathBlockedBySmoke(Vector3 destination)
-    {
-        return GameLoop.Instance != null
-            && GameLoop.Instance.DoesWorldSegmentCrossActiveSmoke(startPosition, destination);
     }
 
     private bool CheckBackstab(GameObject hitObject)

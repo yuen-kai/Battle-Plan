@@ -54,6 +54,16 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private bool uiCallbacksRegistered;
     private bool networkCallbacksRegistered;
     private bool disconnectRecoveryStarted;
+    private VisualElement deployCurtain;
+    private Coroutine deployCurtainCoroutine;
+
+    /// <summary>
+    /// How long the curtain takes to cover this screen, and how long the server holds off the load
+    /// after asking for it. The hold is the longer of the two so a client a little way down the
+    /// wire still finishes fading before the scene is pulled out from under it.
+    /// </summary>
+    private const float DeployCurtainSeconds = 0.18f;
+    private const float DeployCurtainHoldSeconds = 0.34f;
     private string localStatusOverride;
     private UnitClass? activeClassFilter;
 
@@ -150,6 +160,11 @@ public class CharacterSelectionUIController : NetworkBehaviour
         fogSummary = RequireElement<Label>("fog-summary");
         mapPreview = RequireElement<VisualElement>("map-preview");
         mapCaption = RequireElement<Label>("map-caption");
+        deployCurtain = RequireElement<VisualElement>("deploy-curtain");
+        // A screen that came back — a rejected crew, a dropped seat — must not still be behind the
+        // curtain the last attempt raised.
+        if (deployCurtain != null)
+            deployCurtain.style.opacity = 0f;
         if (rosterCountLabel != null)
             rosterCountLabel.text = $"Pick {UnitsPerPlayer} units";
     }
@@ -739,7 +754,60 @@ public class CharacterSelectionUIController : NetworkBehaviour
         EscortSeries.End();
         GameLoop.ConfigureTeam(GameLoop.HostTeamIndex, hostId, hostRoster);
         GameLoop.ConfigureTeam(GameLoop.OpponentTeamIndex, opponentId, opponentRoster);
+
+        // Both screens are taken down before the scene is, rather than the load cutting straight
+        // from a bright crew screen to the match's near-black deploy card.
+        ShowDeployCurtainClientRpc();
+        StartCoroutine(LoadGameBehindCurtain());
+    }
+
+    /// <summary>
+    /// Waits for the curtain to have covered every seat, then hands over. Aborts if the match fell
+    /// apart while it was waiting — a seat dropping during the hold puts this screen into its own
+    /// recovery, and loading the board on top of that would strand it there.
+    /// </summary>
+    private IEnumerator LoadGameBehindCurtain()
+    {
+        yield return new WaitForSecondsRealtime(DeployCurtainHoldSeconds);
+
+        if (disconnectRecoveryStarted || NetworkManager == null || !IsServer || !IsSpawned)
+            yield break;
+
         NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+    }
+
+    [ClientRpc]
+    private void ShowDeployCurtainClientRpc(ClientRpcParams clientRpcParams = default)
+    {
+        if (deployCurtain == null)
+            return;
+
+        if (deployCurtainCoroutine != null)
+            StopCoroutine(deployCurtainCoroutine);
+        deployCurtain.BringToFront();
+        deployCurtainCoroutine = StartCoroutine(RaiseDeployCurtain());
+    }
+
+    /// <summary>
+    /// Real seconds, and read rather than accumulated: the server is holding the load open against
+    /// a wall clock, so this has to finish on the same one.
+    /// </summary>
+    private IEnumerator RaiseDeployCurtain()
+    {
+        float startedAt = Time.realtimeSinceStartup;
+        for (
+            float elapsed = 0f;
+            elapsed < DeployCurtainSeconds;
+            elapsed = Time.realtimeSinceStartup - startedAt
+        )
+        {
+            float progress = Mathf.Clamp01(elapsed / DeployCurtainSeconds);
+            deployCurtain.style.opacity = 1f - (1f - progress) * (1f - progress) * (1f - progress);
+            yield return null;
+        }
+
+        deployCurtain.style.opacity = 1f;
+        deployCurtainCoroutine = null;
     }
 
     private bool RevalidateStoredSelection(ulong clientId, int[] roster)

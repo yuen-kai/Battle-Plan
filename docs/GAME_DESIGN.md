@@ -277,7 +277,9 @@ invoked by the planning-phase move-or-ability pipeline in `GameLoop` — see §2
   would otherwise be dropped for clients it's hidden from, and bots use the same reveal deadline
   for targeting).
 - `Smoke` (Commander): creates a public 3×3 screen for the execution round. Interior crossings
-  block direct shots, projectiles, Area Lock, and fog sightlines without blocking movement.
+  block target acquisition, Area Lock detection, and fog sightlines without blocking movement.
+  Projectiles already in flight are **not** stopped: a bullet or grenade flies through smoke and
+  damages normally, so smoke denies the shot at the moment it is taken, not mid-air.
 
 ## 5. Script Architecture Map
 

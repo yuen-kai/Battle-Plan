@@ -5,8 +5,8 @@ using UnityEngine;
 // ModelHeadshotRenderer needs a live camera render and pixel readback, which edit-mode tests can
 // do directly -- no Play mode required, since Camera.Render()/ReadPixels work outside Play mode.
 // These tests use a small hand-built two-primitive stand-in rather than a real character: the
-// renderer only ever looks at Renderer bounds, so it does not care what built the model, and a bare
-// cube+sphere is enough to prove the render, crop and cleanup contract.
+// renderer only ever measures what the model draws, so it does not care what built the model, and a
+// bare cube+sphere is enough to prove the render, crop and cleanup contract.
 [TestFixture]
 [Category("ModelHeadshotRenderer")]
 public class ModelHeadshotRendererEditModeTests
@@ -18,8 +18,9 @@ public class ModelHeadshotRendererEditModeTests
     {
         testModel = new GameObject("HeadshotTestModel");
 
-        // Torso: y in [0, 1]. Head: y in [1.0, 1.4]. Overall bounds height 1.4, so the default 40%
-        // top crop (y in [0.84, 1.4]) captures the whole head plus a sliver of torso -- a bust shot.
+        // Torso: y in [0, 1]. Head: y in [1.0, 1.4]. The sphere stands proud of the cube's front
+        // face, so it reads to the renderer's side profile the way a held weapon does on a real
+        // character, and the crop lands under it -- a bust shot.
         GameObject torso = GameObject.CreatePrimitive(PrimitiveType.Cube);
         torso.name = "Torso";
         torso.transform.SetParent(testModel.transform, false);

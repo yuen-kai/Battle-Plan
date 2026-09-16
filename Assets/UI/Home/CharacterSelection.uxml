@@ -63,5 +63,9 @@
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:ScrollView>
+
+        <!-- Raised once both crews are in, so this screen is already gone before the match scene
+             replaces it. Last in the tree because it has to cover every band and panel above. -->
+        <ui:VisualElement name="deploy-curtain" class="deploy-curtain" picking-mode="Ignore" />
     </ui:VisualElement>
 </ui:UXML>

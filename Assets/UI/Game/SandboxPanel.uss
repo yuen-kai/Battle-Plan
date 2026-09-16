@@ -315,9 +315,11 @@
     border-color: var(--toy-primary);
 }
 
+/* 4:3, matching the portrait file, so the character fills the well instead of
+   sitting in the middle of it as a letterboxed strip. */
 .sandbox-pick__portrait {
-    width: 78px;
-    height: 66px;
+    width: 80px;
+    height: 60px;
     -unity-background-scale-mode: scale-to-fit;
     background-color: var(--toy-inset);
 }

@@ -21,7 +21,7 @@ MonoBehaviour:
   unavailableForRoster: 0
   abilityName: Shatter Leap
   abilityDescription: Leaps to a square up to five cells away, dealing area damage.
-  abilitySprite: {fileID: 21300000, guid: ffc251cf527234bcea0828d7535f2a90, type: 3}
+  abilitySprite: {fileID: 21300000, guid: fb489e35aae7a4e77a46bc2639bc4b12, type: 3}
   moveDist: 3
   moveSpeed: 1.1
   diveSpeed: 4

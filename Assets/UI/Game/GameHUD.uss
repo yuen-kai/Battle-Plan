@@ -827,14 +827,25 @@
     opacity: 0.06;
 }
 
+/* 4:3, the shape of a portrait file, so the picture fills the frame instead of
+   being fitted into a box of a different shape and leaving bands of bare plate
+   over and under the character.
+
+   Height is what gives way to get there, not width. A plate that keeps the
+   card's full 78 can only hold a 4:3 picture at 104 wide, and the copy cannot
+   pay that: at 1700 the ability line already has ten pixels less than it wants
+   with the frame at its old 78. So the plate hugs the picture and centres in the
+   row, which costs the copy nothing and crops nothing off the character. The two
+   numbers are tied by hand — USS has no aspect-ratio property — so anything that
+   changes one changes the other. */
 .unit-card__portrait {
     position: relative;
-    width: 78px;
-    min-width: 78px;
+    align-self: center;
+    width: 76px;
+    min-width: 76px;
+    height: 57px;
     -unity-background-scale-mode: scale-to-fit;
     background-color: var(--toy-warm);
-    border-right-width: var(--toy-stroke-thin);
-    border-right-color: var(--toy-edge);
 }
 
 .unit-card__copy {
@@ -1121,12 +1132,6 @@
 .unit-card--enemy .unit-card__select:disabled {
     background-color: var(--toy-transparent);
     opacity: 1;
-}
-
-.unit-card--enemy .unit-card__portrait {
-    width: 52px;
-    min-width: 52px;
-    background-color: var(--toy-warm);
 }
 
 .unit-card--enemy .unit-card__copy {
@@ -1774,9 +1779,15 @@
     min-width: 0;
 }
 
-.compact .unit-card__portrait {
+/* A compact ability card bottoms out at 240 wide, where the ability line has 51
+   pixels to spare and no more, so the frame steps down rather than the copy. Same
+   ratio, same picture size as the old 48-wide frame rendered anyway — it is the
+   plate around it that stops being oversized. Friendly only: the enemy card has
+   room to spare at this breakpoint and keeps the full frame. */
+.compact .unit-card--friendly .unit-card__portrait {
     width: 48px;
     min-width: 48px;
+    height: 36px;
 }
 
 .compact .unit-card__copy {

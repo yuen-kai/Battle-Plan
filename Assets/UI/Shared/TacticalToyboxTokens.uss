@@ -58,6 +58,14 @@
        white. The wells go darker with it, which is the direction they already
        ran. */
     --toy-ground: rgb(180, 193, 197);
+    /* The one colour that must read the same on both sides of a scene load, and so the one value
+       in this file that the in-match HUD deliberately does NOT re-declare (see .game-screen in
+       GameHUD.uss, which re-declares everything else). A screen fades to this before it hands over
+       and the screen that replaces it is already standing on it, which is what turns a cut between
+       two completely different pictures — a bright paper crew screen and the match's near-black
+       deploy card — into a handover nobody sees. It is the match's ground, because that is the side
+       of the load the player is arriving at. */
+    --toy-curtain: rgb(22, 29, 33);
     --toy-surface: rgb(202, 212, 215);
     --toy-surface-raised: rgb(215, 223, 225);
     --toy-surface-hover: rgb(142, 158, 164);

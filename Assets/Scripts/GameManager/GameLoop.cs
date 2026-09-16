@@ -5572,9 +5572,9 @@ public class GameLoop : NetworkBehaviour
     ///
     /// <para>
     /// Pulled out of the fog overlay because the smoke needs the same answer in matches that have
-    /// no fog. Smoke is a separate occluder from fog of war — it stops a shot whether or not fog
-    /// is on — so which of its cells you can see into is a real question in a fogless match too,
-    /// and the screen has to be able to ask it without the dark tiles existing.
+    /// no fog. Smoke is a separate occluder from fog of war — it denies target acquisition whether
+    /// or not fog is on — so which of its cells you can see into is a real question in a fogless
+    /// match too, and the screen has to be able to ask it without the dark tiles existing.
     /// </para>
     /// </summary>
     private bool TryComputeLocalVisibleCells(out HashSet<Vector2Int> visibleCells)

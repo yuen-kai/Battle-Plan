@@ -21,7 +21,7 @@ MonoBehaviour:
   unavailableForRoster: 0
   abilityName: Overcharge
   abilityDescription: Zaps all nearby enemies, dealing big damage and a brief stun.
-  abilitySprite: {fileID: 21300000, guid: 904893c1ebb1243e39d59553a42f4126, type: 3}
+  abilitySprite: {fileID: 21300000, guid: 767a37d8dbea2492e818cc982103863f, type: 3}
   moveDist: 3
   moveSpeed: 1
   diveSpeed: 4

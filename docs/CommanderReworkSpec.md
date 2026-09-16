@@ -88,7 +88,9 @@ Fixed behavior (requirements):
   occupying whole grid cells so occlusion is deterministic and readable. (Fallback shape: a fixed-length
   wall segment perpendicular to the caster→target line — see §14.)
 - **Occlusion rule:** while active, the smoked cells **block shot line-of-sight that passes through
-  them** for both teams (see §9). It does **not** block movement.
+  them** for both teams (see §9) — that is, a unit cannot *acquire* a target across the cloud. It does
+  **not** block movement, and it does **not** stop projectiles: anything already in flight passes
+  through the cloud and lands its damage normally.
 - **Duration:** a deployment lasts the round it's thrown in plus one full additional round — active
   through the rest of the round it lands in and all of the next round, clearing at that next round's
   boundary (see the August 20, 2026 duration update above; this superseded the original single-round
@@ -196,7 +198,8 @@ layer the raycasts already query, or an equivalent addition to the shared LoS te
 once that window elapses — **without permanently mutating map geometry** (`GameLoop.wallLayout`) and
 without changing pathfinding (`GridSystem.FindPath`). Engineering owns the exact structure; the
 requirement is only that "a shot line crossing an active smoke cell fails the same LoS check that walls
-fail."
+fail." That gate is on **target acquisition only** (`Shooting.lineOfSight`, `AreaLock`'s crossing check,
+and the fog sightline test); `Bullet` deliberately does not consult smoke, so projectiles fly through.
 
 ## 10. Two-round cooldown
 

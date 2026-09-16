@@ -187,12 +187,19 @@
 .class-chips {
     flex-direction: row;
     align-items: center;
-    flex-shrink: 1;
+    flex-shrink: 0;
     margin-left: var(--toy-space-md);
 }
 
+/* Each chip is as wide as the word in it and no wider. Shrinking them to share
+   the row out evenly cost every chip the same width regardless of its label, so
+   "All" carried a pad of empty plate either side of it and "Controller" was
+   ellipsed to fit the same box — with a third of the row still unused. The six
+   of them together come to well under half the library head at every
+   breakpoint, and the phone case grows them to fill instead. */
 .roster-screen .class-chip {
-    flex-shrink: 1;
+    flex-grow: 0;
+    flex-shrink: 0;
     min-height: 30px;
     margin: 0 0 0 var(--toy-space-xs);
     padding: 0 var(--toy-space-md);
@@ -201,8 +208,6 @@
     border-left-width: var(--toy-accent-rule);
     border-left-color: var(--toy-edge);
     font-size: var(--toy-type-caption);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
@@ -329,12 +334,15 @@
     border-left-color: var(--toy-disabled-border);
 }
 
+/* Scaled to fit, never stretched. A portrait is 4:3 and this band is wider than
+   that at every breakpoint, so filling it stretched every character sideways.
+   What is left over either side is the plate, which is what the plate is for. */
 .unit-option__portrait {
     flex-grow: 1;
     flex-shrink: 1;
     min-height: 60px;
     background-color: var(--toy-warm);
-    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
 /* Tint the picture rather than fading the tile, so an unavailable unit still
@@ -446,8 +454,12 @@
 
 /* ------------------------------------------------------------------- crew */
 
+/* The crew strip is what the dock measures once it has slots in it. This floor
+   is the label, one slot and the padding, and it only does anything before the
+   slots are built — without it an empty strip hands the height to the confirm
+   column and the dock changes size as the screen comes up. */
 .roster-screen .selection-dock {
-    min-height: 134px;
+    min-height: 128px;
     margin-top: 14px;
     padding: 14px var(--toy-space-panel-compact);
     flex-direction: row;
@@ -473,7 +485,7 @@
     flex-shrink: 1;
     flex-basis: 0;
     min-width: 0;
-    min-height: 76px;
+    min-height: 75px;
     margin: 0 var(--toy-space-sm) 0 0;
     padding: 9px 12px;
     flex-direction: row;
@@ -559,18 +571,27 @@
     color: var(--toy-text-on-accent-quiet);
 }
 
+/* 4:3, because the portrait file is, and 57 tall because that is the slot's
+   whole inside — 75 less the 9 of padding top and bottom. The picture fills the
+   frame edge to edge at those numbers; a square frame let it sit in a letterbox
+   with a band of bare plate over and under it. USS has no aspect-ratio
+   property, so the two numbers have to be kept in step by hand, and every
+   breakpoint below that resizes one resizes both. */
 .selected-slot__portrait {
-    display: none;
-    width: var(--toy-target);
-    min-width: var(--toy-target);
-    height: var(--toy-target);
+    visibility: hidden;
+    width: 76px;
+    min-width: 76px;
+    height: 57px;
     margin-right: var(--toy-space-md);
     background-color: var(--toy-warm);
     -unity-background-scale-mode: scale-to-fit;
 }
 
+/* Hidden, not undisplayed: an empty slot has to measure exactly what a filled
+   one does, or the strip changes shape under you as the crew fills up and the
+   numerals stop lining up with the row above. */
 .selected-slot--filled .selected-slot__portrait {
-    display: flex;
+    visibility: visible;
 }
 
 .selected-slot__copy {
@@ -700,6 +721,18 @@
     height: 168px;
 }
 
+/* A compact slot is 190px wide against 294 at full size, and the name still has
+   to fit beside the picture. The frame steps down with the slot, 4:3 intact. */
+.compact .selected-slot {
+    min-height: 63px;
+}
+
+.compact .selected-slot__portrait {
+    width: 60px;
+    min-width: 60px;
+    height: 45px;
+}
+
 .narrow .roster-frame {
     padding: var(--toy-space-panel-compact);
 }
@@ -748,6 +781,16 @@
 
 .narrow .class-chip {
     padding: 0 var(--toy-space-sm);
+}
+
+/* Below a thousand the dock stacks and the five slots split the whole width, so
+   a slot is down to 130px with a numeral already in it. Same call the phone case
+   makes, for the same reason: the name is what you are checking, so the picture
+   goes rather than being cropped to nothing. Hidden in both states, so an empty
+   slot still measures what a filled one does. */
+.narrow .selected-slot__portrait,
+.narrow .selected-slot--filled .selected-slot__portrait {
+    display: none;
 }
 
 .phone .roster-header {
@@ -872,11 +915,24 @@
 }
 
 .short .selected-slot {
-    min-height: 64px;
+    min-height: 63px;
 }
 
 .short .selected-slot__portrait {
-    width: var(--toy-target-compact);
-    min-width: var(--toy-target-compact);
-    height: var(--toy-target-compact);
+    width: 60px;
+    min-width: 60px;
+    height: 45px;
+}
+
+/* The handover curtain. Transparent and unpickable until the match is actually starting, so it
+   costs this screen nothing while a crew is being picked. Driven from C# rather than by a USS
+   transition because the load has to wait for it, and a transition cannot be waited on. */
+.deploy-curtain {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0;
+    background-color: var(--toy-curtain);
 }

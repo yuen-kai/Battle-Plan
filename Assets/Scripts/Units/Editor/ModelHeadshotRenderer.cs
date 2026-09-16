@@ -5,22 +5,23 @@ using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
 /// <summary>
-/// Crop convention for <see cref="ModelHeadshotRenderer"/>: how much of a model's total
-/// bounding-box height the shot considers, measured down from the top, plus how much breathing room
-/// to leave around the subject it finds there. A field left at its default (zero) is replaced with
-/// the tuned default in <see cref="ModelHeadshotRenderer"/>, so callers can write <c>default</c> for
-/// "the usual headshot" or override just the field they care about.
+/// Crop convention for <see cref="ModelHeadshotRenderer"/>: the deepest the shot is allowed to
+/// reach down a model, plus how much breathing room to leave around the subject it finds. A field
+/// left at its default (zero) is replaced with the tuned default in
+/// <see cref="ModelHeadshotRenderer"/>, so callers can write <c>default</c> for "the usual
+/// headshot" or override just the field they care about.
 /// </summary>
 [Serializable]
 public struct HeadshotFraming
 {
     /// <summary>
-    /// Fraction of the model's total height, from the top down, that the shot considers. Sized to
-    /// clear the lowest thing a character holds: measured across the roster, the bottom of a
-    /// slung launcher tube or a dropped shotgun grip sits just under 62% of the way down from the
-    /// crown, so anything shallower cuts a weapon in half.
+    /// Most of the model's total height the shot will ever take, measured down from the top. The
+    /// crop itself is found per model, from where that model's own gear hangs; this only stops a
+    /// prop that reaches the floor — the pogo stick its rider stands on — from turning a portrait
+    /// into a full-body shot. Set past the deepest real weapon on the roster, which is Salvo's
+    /// launcher blade at just under seven tenths.
     /// </summary>
-    public float TopHeightFraction;
+    public float MaxHeightFraction;
 
     /// <summary>Extra room around the subject, as a fraction of its measured size, so it never touches the frame edge.</summary>
     public float Margin;
@@ -35,8 +36,8 @@ public struct HeadshotFraming
 
     public static readonly HeadshotFraming Default = new()
     {
-        TopHeightFraction = 0.62f,
-        Margin = 0.06f,
+        MaxHeightFraction = 0.7f,
+        Margin = 0.04f,
         Yaw = 22f,
     };
 
@@ -45,7 +46,7 @@ public struct HeadshotFraming
     {
         return new HeadshotFraming
         {
-            TopHeightFraction = TopHeightFraction > 0f ? TopHeightFraction : Default.TopHeightFraction,
+            MaxHeightFraction = MaxHeightFraction > 0f ? MaxHeightFraction : Default.MaxHeightFraction,
             Margin = Margin > 0f ? Margin : Default.Margin,
             Yaw = Mathf.Abs(Yaw) > 0f ? Yaw : Default.Yaw,
         };
@@ -54,17 +55,17 @@ public struct HeadshotFraming
 
 /// <summary>
 /// Renders a "headshot" of a 3D model by standing up a throwaway camera and light, pointing them at
-/// the top slice of the model's own bounding box, and reading the result back into a
-/// <see cref="Texture2D"/>. Used by <c>CharacterBuilder</c> to shoot the roster's portraits from the
-/// characters themselves, so a portrait can never drift from the unit it names — but it only looks
-/// at what renders, so it works on any model.
+/// the model from the crown down to the bottom of whatever it is holding, and reading the result
+/// back into a <see cref="Texture2D"/>. Used by <c>CharacterBuilder</c> to shoot the roster's
+/// portraits from the characters themselves, so a portrait can never drift from the unit it names —
+/// but it only looks at what renders, so it works on any model.
 /// <para>
-/// The shot is framed in two passes. The first renders the considered slice into a small probe
-/// target and measures the alpha, which gives the subject's exact silhouette as the camera sees it;
-/// the second re-aims and re-sizes onto that measurement and renders the portrait. Measuring beats
-/// arithmetic on <c>Renderer.bounds</c> here because a skinned renderer's bounds are the bind
-/// pose's conservative box rather than the pixels it draws — trusting them cropped the crown off
-/// every helmet and left the subject sitting off-centre.
+/// Three renders go into one portrait. A side-on profile finds where the gear hangs, which is where
+/// the crop ends; a small front probe measures the alpha of that crop, which gives the crown and the
+/// horizontal centre exactly as the camera sees them; the third is the portrait. Measuring beats
+/// arithmetic on <c>Renderer.bounds</c> here because a skinned renderer's bounds are the bind pose's
+/// conservative box rather than the pixels it draws — trusting them cropped the crown off every
+/// helmet and left the subject sitting off-centre.
 /// </para>
 /// <para>
 /// Editor-only and stateless: every temporary object (model instance, camera, light, render
@@ -76,17 +77,39 @@ public struct HeadshotFraming
 public static class ModelHeadshotRenderer
 {
     /// <summary>
-    /// Portrait aspect: 5:4, which is roughly what a character measures once the shot has to hold
-    /// a hat, both shoulders and a weapon held across the chest. Every surface that shows a
-    /// portrait scales it to fit rather than cropping it again, so shooting at the subject's own
-    /// proportions is what keeps a tile, a card and a slot all filled by the same file.
+    /// Portrait aspect: 4:3. The crop is decided by the character's own height — crown down to the
+    /// bottom of the gun — so this only sets how much room either side of them comes with it.
+    /// Sentinel is the widest thing on the roster, shield and all, and wants 1.25; this clears that
+    /// with a little to spare while staying near enough to the near-square wells the cards and
+    /// roster slots give a portrait. The 16:9 it replaces spent a third of every file on empty air
+    /// and then showed up as a letterboxed strip everywhere but the one tile it was cut for.
     /// </summary>
     public const int DefaultWidth = 640;
-    public const int DefaultHeight = 512;
+    public const int DefaultHeight = 480;
     public const int DefaultResolution = 512;
 
     /// <summary>Probe target height. Big enough that one row is a fraction of a percent of the subject, small enough to be free.</summary>
     private const int ProbeHeight = 256;
+
+    /// <summary>Side-profile probe height, in rows across the model's whole height. Sets how finely the bottom of a gun can be found.</summary>
+    private const int ProfileHeight = 384;
+
+    /// <summary>
+    /// How far clear of the body's median front surface a row has to reach, as a fraction of the
+    /// model's height, before it counts as something held rather than as the body itself. Small,
+    /// because a pistol grip tucked against the chest barely clears the chest.
+    /// </summary>
+    private const float BodySurfaceTolerance = 0.02f;
+
+    /// <summary>
+    /// How far below the lowest row of held gear the crop lands, as a fraction of the model's
+    /// height. The profile finds where a weapon stops standing clear of the body, which is a row or
+    /// two above where the weapon actually ends once its grip tucks back in.
+    /// </summary>
+    private const float GearClearance = 0.02f;
+
+    /// <summary>Shortest crop allowed, as a fraction of the model's height. A model holding nothing still gets a portrait rather than a slice of face.</summary>
+    private const float MinCropFraction = 0.35f;
 
     /// <summary>Alpha at or above which a probe pixel counts as subject rather than as the edge of an antialiased nothing.</summary>
     private const byte SubjectAlpha = 8;
@@ -147,7 +170,7 @@ public static class ModelHeadshotRenderer
 
             camera = BuildCamera(rigRoot.transform, bounds, resolved.Yaw);
             BuildLights(rigRoot.transform, bounds.center);
-            FrameSubject(camera, bounds, resolved, (float)width / height);
+            FrameSubject(camera, bounds, resolved);
 
             renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             {
@@ -291,33 +314,34 @@ public static class ModelHeadshotRenderer
     }
 
     /// <summary>
-    /// Aims and sizes <paramref name="camera"/> at the subject standing in the top slice of
-    /// <paramref name="bounds"/>: probe the slice, then fit the frame to the silhouette that came
-    /// back, padded by the margin and widened or deepened to <paramref name="aspect"/>.
+    /// Aims and sizes <paramref name="camera"/> at the subject: find where this model's own gear
+    /// hangs, then frame exactly from there to the crown, plus the margin.
     /// <para>
-    /// Height slack goes below the subject rather than being split around it. Air over a character's
-    /// head reads as a mistake, where more of their chest reads as the shot being a portrait.
+    /// The height is the whole shot. Width follows from the target's own aspect and whatever that
+    /// gives is what you get, so shoulders and elbows run off the sides of a close portrait rather
+    /// than the frame pulling back to collect them — pulling back is what buries the gun halfway up
+    /// a full-body shot instead of leaving it sitting on the bottom edge where it belongs.
     /// </para>
     /// </summary>
-    private static void FrameSubject(Camera camera, Bounds bounds, HeadshotFraming framing, float aspect)
+    private static void FrameSubject(Camera camera, Bounds bounds, HeadshotFraming framing)
     {
-        float halfSlice = Mathf.Max(bounds.size.y * Mathf.Clamp01(framing.TopHeightFraction), 0.01f) * 0.5f;
+        float distance = StandoffDistance(bounds);
+        float sliceBottom = FindHeldGearBottom(camera, bounds, framing.MaxHeightFraction, distance);
+        float halfSlice = Mathf.Max((bounds.max.y - sliceBottom) * 0.5f, 0.01f);
         float halfSpan = Mathf.Max(
             0.5f * Mathf.Sqrt(bounds.size.x * bounds.size.x + bounds.size.z * bounds.size.z),
             halfSlice * 0.25f
         );
         Vector3 sliceCenter = new(bounds.center.x, bounds.max.y - halfSlice, bounds.center.z);
 
-        float distance = StandoffDistance(bounds);
         camera.orthographicSize = halfSlice;
         AimAt(camera, sliceCenter, distance);
 
         int probeWidth = Mathf.Clamp(Mathf.CeilToInt(ProbeHeight * halfSpan / halfSlice), 16, 4096);
-        RectInt subject = MeasureSubject(camera, probeWidth, ProbeHeight);
+        RectInt subject = MeasureSilhouette(CapturePixels(camera, probeWidth, ProbeHeight), probeWidth, ProbeHeight);
 
         float offsetX = 0f;
         float offsetY = 0f;
-        float halfWidth = halfSpan;
         float halfHeight = halfSlice;
 
         if (subject.width > 0 && subject.height > 0)
@@ -325,27 +349,135 @@ public static class ModelHeadshotRenderer
             float perPixel = 2f * halfSlice / ProbeHeight;
             offsetX = (subject.x + subject.width * 0.5f - probeWidth * 0.5f) * perPixel;
             offsetY = (subject.y + subject.height * 0.5f - ProbeHeight * 0.5f) * perPixel;
-            halfWidth = subject.width * 0.5f * perPixel;
             halfHeight = subject.height * 0.5f * perPixel;
         }
 
-        float padding = 1f + Mathf.Max(framing.Margin, 0f);
-        halfWidth *= padding;
-        halfHeight *= padding;
-
-        float framedHalfHeight = Mathf.Max(halfHeight, halfWidth / aspect);
-        offsetY -= framedHalfHeight - halfHeight;
-
-        camera.orthographicSize = framedHalfHeight;
+        camera.orthographicSize = halfHeight * (1f + Mathf.Max(framing.Margin, 0f));
         AimAt(camera, sliceCenter + camera.transform.right * offsetX + Vector3.up * offsetY, distance);
     }
 
     /// <summary>
-    /// Renders the camera's current frame into a throwaway probe target and returns the tight pixel
-    /// box of everything the model drew into it, or an empty box if it drew nothing. Pixel rows run
-    /// bottom-up, matching <see cref="Texture2D.GetPixels32"/>.
+    /// World Y of the bottom of whatever this model is holding, which is where its portrait ends.
+    /// Profiled from a side-on probe: for every row of the model's height, how far forward the
+    /// silhouette reaches. A body's front is a smooth, shallow surface and the median row describes
+    /// it, so anything standing clear of that median — a rifle held across the chest, a pistol, a
+    /// launcher tube, and the face — is gear rather than body, and the lowest row of it is the
+    /// bottom of the gun.
+    /// <para>
+    /// Profiling beats naming the weapon: half the roster carries its gun as a separate child
+    /// object, half has it welded into one merged body mesh, and two of them have it baked into a
+    /// skinned mesh alongside the character. All three look identical from the side.
+    /// </para>
+    /// <para>
+    /// Clamped between <see cref="MinCropFraction"/> and <paramref name="capFraction"/> of the
+    /// model's height, so neither a model holding nothing nor a prop that reaches the floor can
+    /// take the shot somewhere absurd.
+    /// </para>
     /// </summary>
-    private static RectInt MeasureSubject(Camera camera, int probeWidth, int probeHeight)
+    private static float FindHeldGearBottom(Camera camera, Bounds bounds, float capFraction, float distance)
+    {
+        float perPixel = bounds.size.y / ProfileHeight;
+        float floorY = bounds.max.y - bounds.size.y * MinCropFraction;
+        float capY = bounds.max.y - bounds.size.y * Mathf.Clamp(capFraction, MinCropFraction, 1f);
+        if (perPixel <= 0f)
+            return capY;
+
+        Quaternion portraitRotation = camera.transform.rotation;
+        int profileWidth = Mathf.Clamp(Mathf.CeilToInt(ProfileHeight * bounds.size.z / bounds.size.y), 8, 4096);
+
+        try
+        {
+            // Looking down -X with world +Z to the right, so a pixel column is a depth and a pixel
+            // row is a height.
+            camera.transform.rotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
+            camera.orthographicSize = bounds.extents.y;
+            AimAt(camera, bounds.center, distance);
+
+            Color32[] pixels = CapturePixels(camera, profileWidth, ProfileHeight);
+            int[] front = new int[ProfileHeight];
+            int occupied = 0;
+
+            for (int row = 0; row < ProfileHeight; row++)
+            {
+                front[row] = -1;
+                int offset = row * profileWidth;
+                for (int column = profileWidth - 1; column >= 0; column--)
+                {
+                    if (pixels[offset + column].a < SubjectAlpha)
+                        continue;
+
+                    front[row] = column;
+                    occupied++;
+                    break;
+                }
+            }
+
+            if (occupied == 0)
+                return capY;
+
+            int[] surface = new int[occupied];
+            for (int row = 0, next = 0; row < ProfileHeight; row++)
+            {
+                if (front[row] >= 0)
+                    surface[next++] = front[row];
+            }
+            Array.Sort(surface);
+            int bodySurface = surface[occupied / 2];
+            int gearSurface = bodySurface + Mathf.CeilToInt(ProfileHeight * BodySurfaceTolerance);
+
+            int capRow = Mathf.Clamp(Mathf.FloorToInt((capY - bounds.min.y) / perPixel), 0, ProfileHeight - 1);
+            for (int row = capRow; row < ProfileHeight; row++)
+            {
+                if (front[row] <= gearSurface)
+                    continue;
+
+                float gearBottom = bounds.min.y + row * perPixel - bounds.size.y * GearClearance;
+                return Mathf.Clamp(gearBottom, capY, floorY);
+            }
+
+            return capY;
+        }
+        finally
+        {
+            camera.transform.rotation = portraitRotation;
+        }
+    }
+
+    /// <summary>Tight pixel box of everything <paramref name="pixels"/> holds, or an empty box if it holds nothing.</summary>
+    private static RectInt MeasureSilhouette(Color32[] pixels, int width, int height)
+    {
+        int minX = width;
+        int minY = height;
+        int maxX = -1;
+        int maxY = -1;
+
+        for (int y = 0; y < height; y++)
+        {
+            int row = y * width;
+            for (int x = 0; x < width; x++)
+            {
+                if (pixels[row + x].a < SubjectAlpha)
+                    continue;
+
+                if (x < minX)
+                    minX = x;
+                if (x > maxX)
+                    maxX = x;
+                if (y < minY)
+                    minY = y;
+                if (y > maxY)
+                    maxY = y;
+            }
+        }
+
+        return maxX < minX ? default : new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    }
+
+    /// <summary>
+    /// Renders the camera's current frame into a throwaway target and hands back the pixels. Rows
+    /// run bottom-up, matching <see cref="Texture2D.GetPixels32"/>.
+    /// </summary>
+    private static Color32[] CapturePixels(Camera camera, int width, int height)
     {
         RenderTexture probe = null;
         Texture2D readback = null;
@@ -353,7 +485,7 @@ public static class ModelHeadshotRenderer
 
         try
         {
-            probe = new RenderTexture(probeWidth, probeHeight, 24, RenderTextureFormat.ARGB32)
+            probe = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             {
                 name = "ModelHeadshotProbe",
                 antiAliasing = 1,
@@ -364,36 +496,10 @@ public static class ModelHeadshotRenderer
             camera.Render();
 
             RenderTexture.active = probe;
-            readback = new Texture2D(probeWidth, probeHeight, TextureFormat.RGBA32, mipChain: false);
-            readback.ReadPixels(new Rect(0f, 0f, probeWidth, probeHeight), 0, 0, recalculateMipMaps: false);
+            readback = new Texture2D(width, height, TextureFormat.RGBA32, mipChain: false);
+            readback.ReadPixels(new Rect(0f, 0f, width, height), 0, 0, recalculateMipMaps: false);
             readback.Apply(updateMipmaps: false);
-
-            Color32[] pixels = readback.GetPixels32();
-            int minX = probeWidth;
-            int minY = probeHeight;
-            int maxX = -1;
-            int maxY = -1;
-
-            for (int y = 0; y < probeHeight; y++)
-            {
-                int row = y * probeWidth;
-                for (int x = 0; x < probeWidth; x++)
-                {
-                    if (pixels[row + x].a < SubjectAlpha)
-                        continue;
-
-                    if (x < minX)
-                        minX = x;
-                    if (x > maxX)
-                        maxX = x;
-                    if (y < minY)
-                        minY = y;
-                    if (y > maxY)
-                        maxY = y;
-                }
-            }
-
-            return maxX < minX ? default : new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1);
+            return readback.GetPixels32();
         }
         finally
         {

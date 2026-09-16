@@ -236,6 +236,9 @@ public static class CharacterBuilder
             ("Char_VoltaicViolet", "#4C3F7A", 0.00f, 0.16f, null, 0f),
             ("Char_BlitzCrimson", "#8E2F36", 0.00f, 0.14f, null, 0f),
             ("Char_TieRed", "#A2242A", 0.00f, 0.18f, null, 0f),
+            // Reads as black next to Char_Black rather than as the same surface as it, so a shoe
+            // still parts from a trouser leg where the two meet.
+            ("Char_BlazerBlack", "#1A1C20", 0.00f, 0.17f, null, 0f),
             // The one emissive surface on the roster, and the reason the gain is this low: bloom
             // thresholds at 1.8, so a coil is meant to sit just under it and bloom on the frames
             // ArcSurge drives rather than glowing through the whole match.
@@ -415,8 +418,8 @@ public static class CharacterBuilder
             ),
             Gear = GearOutrider,
         },
-        // Support gunner. The gun is the longest object on the board and the bandolier crosses the
-        // chest, so the unit reads as a firing position rather than as a person.
+        // Support gunner. The gatling is the longest object on the board and the widest thing any
+        // unit is holding, so the silhouette reads as an emplacement rather than as a person.
         new()
         {
             Name = "Salvo",
@@ -493,8 +496,10 @@ public static class CharacterBuilder
         },
         // Not a soldier, and has to look like it from the first frame: no armour anywhere, a coat
         // skirt below the belt no other unit has, and a head of silver hair where the rest wear
-        // shells. The team colour goes on the tie, which is the only thing he is wearing that a
-        // party would ever have coloured.
+        // shells. He is also the only unit built out of a value break rather than a hue — a white
+        // shirt wedge and white cuffs inside a black suit, which is two steps wider than any
+        // camouflaged body on the board and is what makes a head-and-shoulders tile of him read.
+        // The team colour goes on the tie, the one thing he is wearing a party would have coloured.
         new()
         {
             Name = "President",
@@ -503,11 +508,10 @@ public static class CharacterBuilder
             Pose = Pose.Sidearm,
             Legs = Legs.Human,
             Sleeves = Sleeves.Long,
-            Trousers = true,
             Crest = Crest.Tie,
             RootScale = UnitRootScale,
             Paints = Named(
-                "Char_CoatNavy",
+                "Char_BlazerBlack",
                 "Char_White",
                 "Char_Gunmetal",
                 "Char_Skin",
@@ -894,21 +898,29 @@ public static class CharacterBuilder
                 );
                 break;
 
+            // Knot and blade, and no collar: the collar is shirt and belongs to the body, so the
+            // one team surface on this unit is the single stripe running down the middle of it.
+            // Cut wider than a tie is for the same reason the hats are oversized — this is the
+            // whole of the unit's team read, and a correctly-scaled tie is two pixels of it. The
+            // knot is pitched back rather than left flush with the chest for the same reason the
+            // others wear their colour on the crown: at 73 degrees a surface facing the sky is
+            // worth several facing the horizon, and the crown here is taken up by hair.
             default:
-                m.AddTube(
-                    new[] { new Vector3(0f, Rig.ShoulderY - 0.016f, -0.002f), new Vector3(0f, Rig.ShoulderY + 0.028f, 0f) },
-                    new[] { 0.058f, 0.052f },
-                    roundStart: false,
-                    roundEnd: false,
-                    segments: 14
+                m.AddTaperedPrism(
+                    new Vector3(0f, Rig.ShoulderY - 0.026f, r.ChestHalfZ * 1.16f),
+                    Quaternion.Euler(-24f, 0f, 0f),
+                    new Vector2(0.015f, 0.014f),
+                    new Vector2(0.025f, 0.016f),
+                    0.026f,
+                    0.006f
                 );
                 m.AddTaperedPrism(
-                    new Vector3(0f, Rig.ChestY - 0.024f, r.ChestHalfZ * 1.04f),
+                    new Vector3(0f, Rig.ChestY - 0.020f, r.ChestHalfZ * 1.18f),
                     Quaternion.identity,
-                    new Vector2(0.026f, 0.012f),
-                    new Vector2(0.014f, 0.012f),
+                    new Vector2(0.020f, 0.012f),
+                    new Vector2(0.013f, 0.012f),
                     0.074f,
-                    0.008f
+                    0.007f
                 );
                 break;
         }
@@ -1004,62 +1016,159 @@ public static class CharacterBuilder
         Carbine(m, r, 0.320f, 0.034f);
     }
 
+    /// <summary>Six is what a silhouette can still be counted at; eight close the gaps a cluster is
+    /// read by.</summary>
+    private const int SalvoBarrels = 6;
+
+    private const float SalvoCluster = 0.044f;
+
     private static void GearSalvo(MeshBuilder m, Rig r)
     {
-        // A light machine gun, not a long rifle: stock, fat receiver, side drum, jacketed barrel,
-        // muzzle, bipod. The silhouette has to say "support weapon" from the board before anyone
-        // reads a drum hanging under a carbine.
+        // One read at board distance: a bright drum ringed in black at both ends, with six separate
+        // dark rods out of the front of it. Trim carries the light and Metal and Ink both read as
+        // black — they are four hundredths of luminance apart — so Trim against either is the only
+        // contrast on this weapon that survives being twenty pixels wide.
+        //
+        // The rig cages the middle of the weapon: both hands on it with the elbows out means
+        // anything slung between the grips ends up inside a forearm. Hence the magazine ahead of the
+        // support hand and the handle on top, which is the face a camera at 73 degrees sees.
+        Quaternion stand = Quaternion.LookRotation(r.WeaponAxis, r.WeaponUp);
+        Vector3 right = r.WeaponRot * Vector3.right;
+
+        Vector3 Off(float forward, float rise, float side) =>
+            r.OnWeapon(forward) + r.WeaponUp * rise + right * side;
+
+        // Barrels pass through a solid disc rather than into drilled holes: at this size a clamp
+        // plate is six pixels of ring between two rods, and the holes were never visible.
+        void Plate(float from, float to, float radius) =>
+            m.AddLathe(
+                new[] { new Vector2(from, radius), new Vector2(to, radius) },
+                r.WeaponAxis,
+                right,
+                r.WeaponUp,
+                r.WeaponOrigin,
+                16,
+                capStart: true,
+                capEnd: true
+            );
+
+        // Drive can where a rifle would keep its stock.
         m.Paint = (int)Paint.Ink;
-        Block(m, r, -0.220f, -0.070f, 0.018f, 0.028f);
-        m.AddPrism(r.OnWeapon(-0.020f) - r.WeaponUp * 0.050f, r.WeaponSection, new Vector3(0.018f, 0.034f, 0.024f), 0.008f);
+        Block(m, r, -0.222f, -0.084f, 0.026f, 0.030f);
 
         m.Paint = (int)Paint.Metal;
-        Block(m, r, -0.070f, 0.150f, 0.042f, 0.052f);
-        Barrel(m, r, 0.150f, 0.340f, 0.030f);
-        Barrel(m, r, 0.340f, 0.500f, 0.016f);
+        Block(m, r, -0.094f, 0.150f, 0.042f, 0.048f);
+
+        // Raked apart so the pair reads as held. Both sit under wrists the rig has already placed.
+        m.Paint = (int)Paint.Ink;
+        m.AddPrism(Off(-0.004f, -0.058f, 0f), stand * Quaternion.Euler(-14f, 0f, 0f), new Vector3(0.018f, 0.050f, 0.024f), 0.009f);
+        m.AddPrism(Off(0.104f, -0.060f, 0f), stand * Quaternion.Euler(10f, 0f, 0f), new Vector3(0.017f, 0.050f, 0.022f), 0.008f);
+
+        // Carry handle, standing clear of the receiver so the board camera gets daylight under it.
+        m.AddPrism(Off(0.006f, 0.070f, 0f), stand, new Vector3(0.012f, 0.024f, 0.013f), 0.005f);
+        m.AddPrism(Off(0.122f, 0.070f, 0f), stand, new Vector3(0.012f, 0.024f, 0.013f), 0.005f);
+        m.Paint = (int)Paint.Metal;
+        m.AddPrism(Off(0.064f, 0.100f, 0f), r.WeaponSection, new Vector3(0.014f, 0.074f, 0.011f), 0.005f);
+
+        m.Paint = (int)Paint.Accent;
+        m.AddPrism(Off(0.126f, 0.104f, 0f), r.WeaponSection, new Vector3(0.010f, 0.014f, 0.009f), 0.004f);
+
+        m.Paint = (int)Paint.Ink;
+        Plate(0.144f, 0.164f, 0.082f);
+
+        m.Paint = (int)Paint.Trim;
         m.AddLathe(
-            new[] { new Vector2(0.500f, 0.016f), new Vector2(0.528f, 0.028f), new Vector2(0.548f, 0.022f) },
+            new[]
+            {
+                new Vector2(0.150f, 0.052f),
+                new Vector2(0.168f, 0.076f),
+                new Vector2(0.284f, 0.076f),
+                new Vector2(0.300f, 0.058f),
+            },
             r.WeaponAxis,
-            r.WeaponRot * Vector3.right,
+            right,
+            r.WeaponUp,
+            r.WeaponOrigin,
+            16,
+            capStart: true,
+            capEnd: true
+        );
+
+        // Feed cover along the top of the rotor, so the drum is not the one blank surface on the
+        // weapon and the eye has a line carrying the receiver through to the barrels.
+        m.Paint = (int)Paint.Metal;
+        m.AddPrism(Off(0.225f, 0.078f, 0f), r.WeaponSection, new Vector3(0.014f, 0.058f, 0.010f), 0.005f);
+
+        m.Paint = (int)Paint.Ink;
+        Plate(0.286f, 0.306f, 0.082f);
+
+        // Spindle first: the gaps between barrels have to look into a shaft, not through the gun.
+        m.AddTube(
+            new[] { r.OnWeapon(0.290f), r.OnWeapon(0.540f) },
+            new[] { 0.014f, 0.014f },
+            roundStart: false,
+            roundEnd: false,
+            segments: 10
+        );
+
+        // Half a step around, so one barrel sits square on top where the camera looks straight down.
+        m.Paint = (int)Paint.Metal;
+        for (int i = 0; i < SalvoBarrels; i++)
+        {
+            float around = (i + 0.5f) / SalvoBarrels * Mathf.PI * 2f;
+            Vector3 offset = right * (Mathf.Cos(around) * SalvoCluster) + r.WeaponUp * (Mathf.Sin(around) * SalvoCluster);
+            m.AddTube(
+                new[] { r.OnWeapon(0.298f) + offset, r.OnWeapon(0.536f) + offset },
+                new[] { 0.0135f, 0.0135f },
+                roundStart: false,
+                roundEnd: false,
+                segments: 9
+            );
+        }
+
+        // Set back far enough that the six bores clear it: a bright band with dark rods out of it is
+        // what makes the count legible from above.
+        m.Paint = (int)Paint.Trim;
+        Plate(0.478f, 0.506f, 0.062f);
+
+        m.Paint = (int)Paint.Metal;
+        m.AddLathe(
+            new[] { new Vector2(0.540f, 0.016f), new Vector2(0.560f, 0.006f) },
+            r.WeaponAxis,
+            right,
             r.WeaponUp,
             r.WeaponOrigin,
             10,
             capEnd: true
         );
 
-        // Drum mag. Circle faces the portrait (axis along weapon-right). Parked ahead of the
-        // support hand and hung under the jacket — in the grip it disappeared into the fists.
+        // Seated up into the underside of the rotor, carrying the mass the old side drum did. Kept
+        // dark so the drum stays the only light mass on the weapon, with the straps reading against
+        // it instead of the can reading against the drum.
+        m.Paint = (int)Paint.Metal;
+        m.AddPrism(Off(0.200f, -0.126f, -0.008f), r.WeaponSection, new Vector3(0.032f, 0.058f, 0.052f), 0.012f);
         m.Paint = (int)Paint.Trim;
-        Vector3 drum = r.OnWeapon(0.210f) - r.WeaponUp * 0.122f;
-        Vector3 drumAxis = r.WeaponRot * Vector3.right;
+        foreach (float along in new[] { 0.156f, 0.244f })
+            m.AddPrism(Off(along, -0.126f, -0.008f), r.WeaponSection, new Vector3(0.035f, 0.008f, 0.055f), 0.004f);
+
+        // Belt out of the can's back, hanging loose. Run up to the rotor instead, it wrapped the
+        // can's corner and read as a plastic carry handle; a tail that ends in open air is the only
+        // routing at this size that can only be one thing. Squashed thin across so it reads as a
+        // strip of cartridges rather than as a hose.
+        m.Paint = (int)Paint.Accent;
         m.AddTube(
-            new[] { drum - drumAxis * 0.024f, drum + drumAxis * 0.024f },
-            new[] { 0.108f, 0.108f },
+            new[]
+            {
+                Off(0.152f, -0.148f, 0.012f),
+                Off(0.104f, -0.192f, 0.016f),
+                Off(0.050f, -0.222f, 0.020f),
+            },
+            new[] { 0.014f, 0.014f, 0.013f },
             roundStart: false,
             roundEnd: false,
-            segments: 20
+            segments: 8,
+            squash: new Vector3(0.62f, 1f, 1f)
         );
-        m.Paint = (int)Paint.Ink;
-        m.AddTube(
-            new[] { drum - drumAxis * 0.028f, drum + drumAxis * 0.028f },
-            new[] { 0.042f, 0.042f },
-            segments: 12
-        );
-        m.Paint = (int)Paint.Trim;
-        m.AddTube(
-            new[] { r.OnWeapon(0.090f) - r.WeaponUp * 0.030f, drum + r.WeaponUp * 0.078f },
-            new[] { 0.016f, 0.024f },
-            segments: 8
-        );
-        m.AddPrism(r.OnWeapon(0.040f) + r.WeaponUp * 0.058f, r.WeaponSection, new Vector3(0.010f, 0.028f, 0.012f), 0.004f);
-
-        m.Paint = (int)Paint.Ink;
-        Vector3 hinge = r.OnWeapon(0.400f) - r.WeaponUp * 0.028f;
-        foreach (float side in new[] { -1f, 1f })
-        {
-            Vector3 foot = hinge + r.WeaponRot * new Vector3(side * 0.048f, -0.090f, 0.020f);
-            m.AddTube(new[] { hinge, foot }, new[] { 0.007f, 0.007f }, segments: 6);
-        }
     }
 
     private static void GearVoltaic(MeshBuilder m, Rig r)
@@ -1141,14 +1250,34 @@ public static class CharacterBuilder
 
     private static void GearPresident(MeshBuilder m, Rig r)
     {
+        // Hair rather than the smooth cap a single dome reads as: a crown that hugs the skull, a
+        // sweep standing off the brow, and a pad at each temple, so the silhouette breaks where a
+        // hat's brim would be a continuous line.
         m.Paint = (int)Paint.Trim;
         m.AddEllipsoid(
-            new Vector3(0f, Rig.CrownY - 0.006f, -0.016f),
-            new Vector3(Rig.HeadHalfX * 1.04f, 0.052f, Rig.HeadHalfZ * 0.96f),
-            Quaternion.Euler(-10f, 0f, 0f),
+            new Vector3(0f, Rig.CrownY - 0.014f, -0.012f),
+            new Vector3(Rig.HeadHalfX * 1.04f, 0.054f, Rig.HeadHalfZ * 1.02f),
+            Quaternion.Euler(-8f, 0f, 0f),
             16,
             10
         );
+        m.AddEllipsoid(
+            new Vector3(0f, 0.930f, Rig.HeadHalfZ * 0.66f),
+            new Vector3(Rig.HeadHalfX * 0.80f, 0.030f, 0.038f),
+            Quaternion.Euler(-26f, 0f, 0f),
+            12,
+            8
+        );
+        foreach (float side in new[] { -1f, 1f })
+        {
+            m.AddEllipsoid(
+                new Vector3(side * Rig.HeadHalfX * 0.89f, 0.894f, -0.034f),
+                new Vector3(0.016f, 0.046f, Rig.HeadHalfZ * 0.74f),
+                Quaternion.identity,
+                10,
+                7
+            );
+        }
 
         m.Paint = (int)Paint.Ink;
         foreach (float side in new[] { -1f, 1f })
@@ -1159,6 +1288,52 @@ public static class CharacterBuilder
                 Quaternion.identity,
                 8,
                 5
+            );
+        }
+
+        // The shirt, and the reason this unit reads at all: one panel standing a centimetre off
+        // the chest, cut as the V a jacket makes when it is worn open — a hand's width across at
+        // the collar, a tie's width at the belt. It has to stand that far proud to be white: sat
+        // flush on the torso its surface is tangent to it, and a white tangent to a black under a
+        // light from overhead renders the same grey as the black does.
+        m.Paint = (int)Paint.Kit;
+        m.AddTube(
+            new[] { new Vector3(0f, 0.470f, 0.056f), new Vector3(0f, 0.575f, 0.052f), new Vector3(0f, 0.672f, 0.050f) },
+            new[] { 0.030f, 0.062f, 0.090f },
+            roundStart: false,
+            segments: 16,
+            squash: new Vector3(1f, 1f, 0.34f)
+        );
+        m.AddTube(
+            new[] { new Vector3(0f, 0.652f, 0.004f), new Vector3(0f, 0.704f, 0.002f) },
+            new[] { 0.066f, 0.054f },
+            roundStart: false,
+            roundEnd: false,
+            segments: 14,
+            squash: new Vector3(1.10f, 1f, 1f)
+        );
+        foreach (float side in new[] { -1f, 1f })
+        {
+            m.AddPrism(
+                new Vector3(side * 0.038f, 0.636f, 0.072f),
+                Quaternion.Euler(-12f, 0f, side * -24f),
+                new Vector3(0.015f, 0.028f, 0.011f),
+                0.005f
+            );
+        }
+
+        // Cuffs. A long sleeve ends in a skin ball the same size as the sleeve, so without these
+        // the arm is one black stick with a blob on it — and both hands are what the eye follows
+        // on a unit holding a sidearm out in front of itself.
+        foreach ((Vector3 elbow, Vector3 wrist) in new[] { (r.ElbowL, r.WristL), (r.ElbowR, r.WristR) })
+        {
+            Vector3 along = (wrist - elbow).normalized;
+            m.AddTube(
+                new[] { wrist - along * 0.062f, wrist - along * 0.034f },
+                new[] { r.ForearmR * 1.06f, r.ForearmR * 1.10f },
+                roundStart: false,
+                roundEnd: false,
+                segments: 10
             );
         }
 
