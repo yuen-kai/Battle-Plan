@@ -826,7 +826,7 @@ public class GameHUDController : MonoBehaviour
     /// </summary>
     private IEnumerator RetireDeploymentBehindBriefing()
     {
-        yield return new WaitForSecondsRealtime(EscortRoleBriefing.FadeInSeconds);
+        yield return new WaitForSecondsRealtime(EscortRoleBriefing.EntrySeconds);
         HideDeployment();
         deploymentHandoffCoroutine = null;
     }

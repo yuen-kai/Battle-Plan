@@ -813,20 +813,26 @@ public class GameLoop : NetworkBehaviour
 
     /// <summary>
     /// How long the briefing's curtain is given to reach opaque before the board is torn down
-    /// behind it. Short, because nothing is being read yet — it only has to beat the teardown.
+    /// behind it. Only has to clear <see cref="EscortRoleBriefing.EntrySeconds"/>, with enough over
+    /// it to absorb the RPC that raised the curtain arriving a frame or two late.
     /// </summary>
-    private const float EscortLegCurtainSeconds = 0.45f;
+    private const float EscortLegCurtainSeconds = 0.22f;
 
     /// <summary>
-    /// When the curtain lifts, measured from the briefing's first frame. Comfortably after the
-    /// rebuild above, so what it uncovers is a board that has finished arriving.
+    /// When the curtain lifts, measured from the briefing's first frame. Far enough past the
+    /// rebuild above for its spawns to have landed on every client, so what the curtain uncovers is
+    /// a board that has finished arriving.
     /// </summary>
-    private const float EscortBoardCoverSeconds = 1.05f;
+    private const float EscortBoardCoverSeconds = 0.8f;
 
-    /// <summary>How far behind and above its resting pose the leg's camera eases in from.</summary>
+    /// <summary>
+    /// How far behind and above its resting pose the leg's camera eases in from, and over how long.
+    /// Timed to run a little past the curtain, so the reveal lands on a board still coming to rest
+    /// rather than on one that was already still.
+    /// </summary>
     private const float LegCameraPullBack = 9f;
     private const float LegCameraLift = 4.5f;
-    private const float LegCameraSettleSeconds = 1.9f;
+    private const float LegCameraSettleSeconds = 1.3f;
 
     // -2 not yet resolved, -1 no president in the catalogue.
     private int presidentCatalogIndex = -2;

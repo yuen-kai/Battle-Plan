@@ -172,9 +172,9 @@ public static class CharacterBuilder
 
     /// <summary>
     /// The board UI, the base plate, the vision cone and a stowed shield slab are all part of the
-    /// prefab and none of them are part of the character. Destroyed rather than deactivated: the
-    /// renderer measures with GetComponentsInChildren including inactive, so a hidden shield —
-    /// wider than the unit is tall — would still decide how far back the camera stands.
+    /// prefab and none of them are part of the character. Destroyed rather than deactivated so a
+    /// shield deployed on the prefab — wider than the unit is tall — cannot decide the framing
+    /// either; the renderer ignores what is switched off, but not what is switched on.
     /// </summary>
     private static void StripForPortrait(GameObject model)
     {

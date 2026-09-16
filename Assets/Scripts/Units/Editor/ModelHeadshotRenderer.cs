@@ -6,18 +6,23 @@ using UnityEngine.Rendering.Universal;
 
 /// <summary>
 /// Crop convention for <see cref="ModelHeadshotRenderer"/>: how much of a model's total
-/// bounding-box height the shot frames, measured down from the top, plus how much breathing room
-/// to leave around that crop. A field left at its default (zero) is replaced with the tuned
-/// default in <see cref="ModelHeadshotRenderer"/>, so callers can write <c>default</c> for "the
-/// usual headshot" or override just the field they care about.
+/// bounding-box height the shot considers, measured down from the top, plus how much breathing room
+/// to leave around the subject it finds there. A field left at its default (zero) is replaced with
+/// the tuned default in <see cref="ModelHeadshotRenderer"/>, so callers can write <c>default</c> for
+/// "the usual headshot" or override just the field they care about.
 /// </summary>
 [Serializable]
 public struct HeadshotFraming
 {
-    /// <summary>Fraction of the model's total height, from the top down, that the shot frames.</summary>
+    /// <summary>
+    /// Fraction of the model's total height, from the top down, that the shot considers. Sized to
+    /// clear the lowest thing a character holds: measured across the roster, the bottom of a
+    /// slung launcher tube or a dropped shotgun grip sits just under 62% of the way down from the
+    /// crown, so anything shallower cuts a weapon in half.
+    /// </summary>
     public float TopHeightFraction;
 
-    /// <summary>Extra room around the crop, as a fraction of the crop's own size, so the subject never touches the frame edge.</summary>
+    /// <summary>Extra room around the subject, as a fraction of its measured size, so it never touches the frame edge.</summary>
     public float Margin;
 
     /// <summary>
@@ -30,8 +35,8 @@ public struct HeadshotFraming
 
     public static readonly HeadshotFraming Default = new()
     {
-        TopHeightFraction = 0.4f,
-        Margin = 0.08f,
+        TopHeightFraction = 0.62f,
+        Margin = 0.06f,
         Yaw = 22f,
     };
 
@@ -52,7 +57,15 @@ public struct HeadshotFraming
 /// the top slice of the model's own bounding box, and reading the result back into a
 /// <see cref="Texture2D"/>. Used by <c>CharacterBuilder</c> to shoot the roster's portraits from the
 /// characters themselves, so a portrait can never drift from the unit it names — but it only looks
-/// at renderer bounds, so it works on any model.
+/// at what renders, so it works on any model.
+/// <para>
+/// The shot is framed in two passes. The first renders the considered slice into a small probe
+/// target and measures the alpha, which gives the subject's exact silhouette as the camera sees it;
+/// the second re-aims and re-sizes onto that measurement and renders the portrait. Measuring beats
+/// arithmetic on <c>Renderer.bounds</c> here because a skinned renderer's bounds are the bind
+/// pose's conservative box rather than the pixels it draws — trusting them cropped the crown off
+/// every helmet and left the subject sitting off-centre.
+/// </para>
 /// <para>
 /// Editor-only and stateless: every temporary object (model instance, camera, light, render
 /// texture) is created and torn down inside a single call, and nothing is left in whatever scene
@@ -63,13 +76,20 @@ public struct HeadshotFraming
 public static class ModelHeadshotRenderer
 {
     /// <summary>
-    /// Roster tile aspect: a cell is a fifth of the library (70% of the 1920 frame) and the
-    /// portrait is the tile minus the 42px copy band, which is about 16:9. Shot at that ratio so
-    /// the tile can fill without a second crop.
+    /// Portrait aspect: 5:4, which is roughly what a character measures once the shot has to hold
+    /// a hat, both shoulders and a weapon held across the chest. Every surface that shows a
+    /// portrait scales it to fit rather than cropping it again, so shooting at the subject's own
+    /// proportions is what keeps a tile, a card and a slot all filled by the same file.
     /// </summary>
     public const int DefaultWidth = 640;
-    public const int DefaultHeight = 360;
+    public const int DefaultHeight = 512;
     public const int DefaultResolution = 512;
+
+    /// <summary>Probe target height. Big enough that one row is a fraction of a percent of the subject, small enough to be free.</summary>
+    private const int ProbeHeight = 256;
+
+    /// <summary>Alpha at or above which a probe pixel counts as subject rather than as the edge of an antialiased nothing.</summary>
+    private const byte SubjectAlpha = 8;
 
     // Tucked far below the world so a temp instance can never overlap anything a live scene camera
     // would otherwise be pointed at, even though nothing renders it but our own throwaway camera.
@@ -121,14 +141,13 @@ public static class ModelHeadshotRenderer
             instance.transform.SetPositionAndRotation(IsolatedOrigin, Quaternion.identity);
 
             Bounds bounds = ComputeWorldBounds(instance, IsolatedOrigin);
-            float orthographicSize = ComputeOrthographicSize(bounds, resolved);
-            Vector3 cropCenter = ComputeLookAt(bounds, orthographicSize);
 
             rigRoot = new GameObject("ModelHeadshotRig") { hideFlags = HideFlags.HideAndDontSave };
             rigRoot.transform.position = IsolatedOrigin;
 
-            camera = BuildCamera(rigRoot.transform, cropCenter, bounds, orthographicSize, resolved.Yaw);
-            BuildLights(rigRoot.transform, cropCenter);
+            camera = BuildCamera(rigRoot.transform, bounds, resolved.Yaw);
+            BuildLights(rigRoot.transform, bounds.center);
+            FrameSubject(camera, bounds, resolved, (float)width / height);
 
             renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32)
             {
@@ -243,67 +262,185 @@ public static class ModelHeadshotRenderer
         importer.SaveAndReimport();
     }
 
-    /// <summary>Union of every renderer's world-space bounds; falls back to a small box around <paramref name="fallbackCenter"/> if the model has none.</summary>
+    /// <summary>
+    /// Union of the world-space bounds of everything that will actually draw; falls back to a small
+    /// box around <paramref name="fallbackCenter"/> if the model has none. Disabled renderers and
+    /// renderers with no geometry are skipped because the camera skips them too: the hand-made units
+    /// each carry a switched-off duplicate of their own model, and counting those stretched the box
+    /// a third of a unit past the silhouette in every direction.
+    /// </summary>
     private static Bounds ComputeWorldBounds(GameObject root, Vector3 fallbackCenter)
     {
-        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
-        if (renderers.Length == 0)
-            return new Bounds(fallbackCenter, Vector3.one);
+        Bounds bounds = default;
+        bool any = false;
 
-        Bounds bounds = renderers[0].bounds;
-        for (int i = 1; i < renderers.Length; i++)
-            bounds.Encapsulate(renderers[i].bounds);
-        return bounds;
+        foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+        {
+            if (!renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                continue;
+            if (renderer.bounds.size.sqrMagnitude <= 0f)
+                continue;
+
+            if (any)
+                bounds.Encapsulate(renderer.bounds);
+            else
+                (bounds, any) = (renderer.bounds, true);
+        }
+
+        return any ? bounds : new Bounds(fallbackCenter, Vector3.one);
     }
 
     /// <summary>
-    /// Look-at pinned so the crown sits on the top edge of the frame. Slack from margin or a
-    /// wide silhouette falls below, which is where the name strip covers the gun.
+    /// Aims and sizes <paramref name="camera"/> at the subject standing in the top slice of
+    /// <paramref name="bounds"/>: probe the slice, then fit the frame to the silhouette that came
+    /// back, padded by the margin and widened or deepened to <paramref name="aspect"/>.
+    /// <para>
+    /// Height slack goes below the subject rather than being split around it. Air over a character's
+    /// head reads as a mistake, where more of their chest reads as the shot being a portrait.
+    /// </para>
     /// </summary>
-    private static Vector3 ComputeLookAt(Bounds bounds, float orthographicSize)
+    private static void FrameSubject(Camera camera, Bounds bounds, HeadshotFraming framing, float aspect)
     {
-        return new Vector3(bounds.center.x, bounds.max.y - orthographicSize, bounds.center.z);
+        float halfSlice = Mathf.Max(bounds.size.y * Mathf.Clamp01(framing.TopHeightFraction), 0.01f) * 0.5f;
+        float halfSpan = Mathf.Max(
+            0.5f * Mathf.Sqrt(bounds.size.x * bounds.size.x + bounds.size.z * bounds.size.z),
+            halfSlice * 0.25f
+        );
+        Vector3 sliceCenter = new(bounds.center.x, bounds.max.y - halfSlice, bounds.center.z);
+
+        float distance = StandoffDistance(bounds);
+        camera.orthographicSize = halfSlice;
+        AimAt(camera, sliceCenter, distance);
+
+        int probeWidth = Mathf.Clamp(Mathf.CeilToInt(ProbeHeight * halfSpan / halfSlice), 16, 4096);
+        RectInt subject = MeasureSubject(camera, probeWidth, ProbeHeight);
+
+        float offsetX = 0f;
+        float offsetY = 0f;
+        float halfWidth = halfSpan;
+        float halfHeight = halfSlice;
+
+        if (subject.width > 0 && subject.height > 0)
+        {
+            float perPixel = 2f * halfSlice / ProbeHeight;
+            offsetX = (subject.x + subject.width * 0.5f - probeWidth * 0.5f) * perPixel;
+            offsetY = (subject.y + subject.height * 0.5f - ProbeHeight * 0.5f) * perPixel;
+            halfWidth = subject.width * 0.5f * perPixel;
+            halfHeight = subject.height * 0.5f * perPixel;
+        }
+
+        float padding = 1f + Mathf.Max(framing.Margin, 0f);
+        halfWidth *= padding;
+        halfHeight *= padding;
+
+        float framedHalfHeight = Mathf.Max(halfHeight, halfWidth / aspect);
+        offsetY -= framedHalfHeight - halfHeight;
+
+        camera.orthographicSize = framedHalfHeight;
+        AimAt(camera, sliceCenter + camera.transform.right * offsetX + Vector3.up * offsetY, distance);
     }
 
     /// <summary>
-    /// Half-height of the orthographic view: the larger of the crop's own height and the model's
-    /// full width, so neither a tall crop nor a wide silhouette clips out of frame, plus a margin so
-    /// nothing touches the frame edge.
+    /// Renders the camera's current frame into a throwaway probe target and returns the tight pixel
+    /// box of everything the model drew into it, or an empty box if it drew nothing. Pixel rows run
+    /// bottom-up, matching <see cref="Texture2D.GetPixels32"/>.
     /// </summary>
-    private static float ComputeOrthographicSize(Bounds bounds, HeadshotFraming framing)
+    private static RectInt MeasureSubject(Camera camera, int probeWidth, int probeHeight)
     {
-        float cropHeight = bounds.size.y * Mathf.Clamp01(framing.TopHeightFraction);
-        return Mathf.Max(cropHeight * 0.5f, 0.05f) * (1f + Mathf.Max(framing.Margin, 0f));
+        RenderTexture probe = null;
+        Texture2D readback = null;
+        RenderTexture previousActive = RenderTexture.active;
+
+        try
+        {
+            probe = new RenderTexture(probeWidth, probeHeight, 24, RenderTextureFormat.ARGB32)
+            {
+                name = "ModelHeadshotProbe",
+                antiAliasing = 1,
+            };
+            probe.Create();
+            camera.targetTexture = probe;
+            camera.ResetAspect();
+            camera.Render();
+
+            RenderTexture.active = probe;
+            readback = new Texture2D(probeWidth, probeHeight, TextureFormat.RGBA32, mipChain: false);
+            readback.ReadPixels(new Rect(0f, 0f, probeWidth, probeHeight), 0, 0, recalculateMipMaps: false);
+            readback.Apply(updateMipmaps: false);
+
+            Color32[] pixels = readback.GetPixels32();
+            int minX = probeWidth;
+            int minY = probeHeight;
+            int maxX = -1;
+            int maxY = -1;
+
+            for (int y = 0; y < probeHeight; y++)
+            {
+                int row = y * probeWidth;
+                for (int x = 0; x < probeWidth; x++)
+                {
+                    if (pixels[row + x].a < SubjectAlpha)
+                        continue;
+
+                    if (x < minX)
+                        minX = x;
+                    if (x > maxX)
+                        maxX = x;
+                    if (y < minY)
+                        minY = y;
+                    if (y > maxY)
+                        maxY = y;
+                }
+            }
+
+            return maxX < minX ? default : new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        }
+        finally
+        {
+            RenderTexture.active = previousActive;
+            camera.targetTexture = null;
+
+            if (readback != null)
+                UnityEngine.Object.DestroyImmediate(readback);
+            if (probe != null)
+            {
+                probe.Release();
+                UnityEngine.Object.DestroyImmediate(probe);
+            }
+        }
+    }
+
+    /// <summary>Slides the camera along its own view axis so <paramref name="target"/> sits dead centre of the frame.</summary>
+    private static void AimAt(Camera camera, Vector3 target, float distance)
+    {
+        camera.transform.position = target - camera.transform.forward * distance;
+    }
+
+    /// <summary>How far back the camera stands. Irrelevant to framing under an orthographic projection, so it only has to keep the whole model between the clip planes wherever the shot is aimed.</summary>
+    private static float StandoffDistance(Bounds bounds)
+    {
+        return Mathf.Max(bounds.size.magnitude, 1f) * 2f;
     }
 
     /// <summary>
     /// A camera on the model's +Z side looking back at -Z: a character faces +Z, so standing on that
     /// side and looking back is what frames the front of the face rather than the back of the head.
+    /// Clip planes are sized off the whole model so <see cref="FrameSubject"/> is free to aim it
+    /// anywhere within the silhouette without anything falling out of range.
     /// </summary>
-    private static Camera BuildCamera(
-        Transform rig,
-        Vector3 cropCenter,
-        Bounds bounds,
-        float orthographicSize,
-        float yaw
-    )
+    private static Camera BuildCamera(Transform rig, Bounds bounds, float yaw)
     {
-        float depth = Mathf.Max(bounds.size.z, 0.5f);
-        float distance = depth * 2f + orthographicSize * 2f + 1f;
-
-        Quaternion swing = Quaternion.Euler(0f, yaw, 0f);
         GameObject cameraObject = new("ModelHeadshotCamera") { hideFlags = HideFlags.HideAndDontSave };
         cameraObject.transform.SetParent(rig, worldPositionStays: false);
-        cameraObject.transform.SetPositionAndRotation(
-            cropCenter + swing * Vector3.forward * distance,
-            Quaternion.LookRotation(swing * Vector3.back, Vector3.up)
+        cameraObject.transform.rotation = Quaternion.LookRotation(
+            Quaternion.Euler(0f, yaw, 0f) * Vector3.back,
+            Vector3.up
         );
 
         Camera camera = cameraObject.AddComponent<Camera>();
         camera.orthographic = true;
-        camera.orthographicSize = orthographicSize;
         camera.nearClipPlane = 0.05f;
-        camera.farClipPlane = distance + bounds.extents.z + 5f;
+        camera.farClipPlane = StandoffDistance(bounds) * 2f;
         camera.clearFlags = CameraClearFlags.SolidColor;
         // Transparent clear: portraits composite into UI as sprites, and the existing hand-made
         // PNGs are alpha-cut rather than filled with a flat backdrop.
@@ -329,11 +466,11 @@ public static class ModelHeadshotRenderer
     /// model's Lit-shader materials get real, even light without mutating anything about the
     /// currently open scene's own lighting environment.
     /// </summary>
-    private static void BuildLights(Transform rig, Vector3 cropCenter)
+    private static void BuildLights(Transform rig, Vector3 center)
     {
         GameObject keyObject = new("ModelHeadshotKeyLight") { hideFlags = HideFlags.HideAndDontSave };
         keyObject.transform.SetParent(rig, worldPositionStays: false);
-        keyObject.transform.position = cropCenter;
+        keyObject.transform.position = center;
         keyObject.transform.rotation = Quaternion.Euler(35f, -150f, 0f);
         Light key = keyObject.AddComponent<Light>();
         key.type = LightType.Directional;
@@ -343,7 +480,7 @@ public static class ModelHeadshotRenderer
 
         GameObject fillObject = new("ModelHeadshotFillLight") { hideFlags = HideFlags.HideAndDontSave };
         fillObject.transform.SetParent(rig, worldPositionStays: false);
-        fillObject.transform.position = cropCenter;
+        fillObject.transform.position = center;
         fillObject.transform.rotation = Quaternion.Euler(20f, 150f, 0f);
         Light fill = fillObject.AddComponent<Light>();
         fill.type = LightType.Directional;

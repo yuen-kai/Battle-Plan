@@ -22,12 +22,14 @@ public sealed class EscortRoleBriefing
     // Timeline, in real seconds from the first frame of the briefing. The coin variant's stages
     // run in sequence; the card variant skips straight to the verdict.
     /// <summary>
-    /// Public because the HUD times the deployment card's retirement against it: that card is only
-    /// taken down once this screen's page is opaque over it.
+    /// The screen's entry. The page fading up and the curtain going opaque behind it both run on
+    /// this one clock, so the board is covered the instant it elapses and the two can never fall
+    /// out of step. Public because the HUD times the deployment card's retirement against it: that
+    /// card is only taken down once this screen is opaque over it.
     /// </summary>
-    public const float FadeInSeconds = 0.26f;
+    public const float EntrySeconds = 0.12f;
 
-    private const float FadeOutSeconds = 0.32f;
+    private const float ExitSeconds = 0.14f;
     private const float CoinRiseSeconds = 0.34f;
     private const float CoinWindUpSeconds = 0.16f;
     private const float CoinTossSeconds = 2.3f;
@@ -43,7 +45,7 @@ public sealed class EscortRoleBriefing
     private const float BriefSeconds = 0.42f;
 
     /// <summary>How long the curtain takes to ease away once the board behind it is ready.</summary>
-    private const float CurtainLiftSeconds = 1.05f;
+    private const float CurtainLiftSeconds = 0.3f;
 
     /// <summary>Even, so the toss ends on the face it started on — the one the server chose.</summary>
     private const float HalfTurns = 14f;
@@ -158,8 +160,8 @@ public sealed class EscortRoleBriefing
 
         role = briefedRole;
         float verdictAt = withCoin ? CoinVerdictAt : CardVerdictAt;
-        seconds = Mathf.Max(verdictAt + VerdictSeconds + FadeOutSeconds, seconds);
-        float fadeOutAt = seconds - FadeOutSeconds;
+        seconds = Mathf.Max(verdictAt + VerdictSeconds + ExitSeconds, seconds);
+        float fadeOutAt = seconds - ExitSeconds;
 
         legLabel.text = EscortSeries.DescribeLeg(legNumber);
         roleLabel.text = EscortSeries.RoleHeadline(role);
@@ -176,8 +178,8 @@ public sealed class EscortRoleBriefing
         for (float elapsed = 0f; elapsed < seconds; elapsed = Time.realtimeSinceStartup - startedAt)
         {
             overlay.style.opacity =
-                elapsed < FadeInSeconds ? EaseOutCubic(elapsed / FadeInSeconds)
-                : elapsed >= fadeOutAt ? 1f - EaseOutCubic((elapsed - fadeOutAt) / FadeOutSeconds)
+                elapsed < EntrySeconds ? EaseOutCubic(elapsed / EntrySeconds)
+                : elapsed >= fadeOutAt ? 1f - EaseOutCubic((elapsed - fadeOutAt) / ExitSeconds)
                 : 1f;
 
             if (withCoin)
@@ -206,17 +208,17 @@ public sealed class EscortRoleBriefing
     }
 
     /// <summary>
-    /// The curtain is opaque from the first frame and holds while the board is rebuilt behind it,
-    /// then eases away to leave the page translucent over a board that has finished arriving.
-    ///
-    /// It does not fade in, because it does not have to: the overlay above it is fading up over the
-    /// same frames, and that fade is the one that carries the picture from the outgoing board to
-    /// the cover. A curtain that faded in as well would only make that slower.
+    /// The curtain fades up to opaque on the screen's entry clock, holds there while the board is
+    /// torn down and rebuilt behind it, then eases away to leave the page translucent over a board
+    /// that has finished arriving.
     /// </summary>
     private void StepCurtain(float t, float coverSeconds)
     {
-        float lift = Mathf.Max(FadeInSeconds, coverSeconds);
-        curtain.style.opacity = t < lift ? 1f : 1f - EaseOutCubic((t - lift) / CurtainLiftSeconds);
+        float lift = Mathf.Max(EntrySeconds, coverSeconds);
+        curtain.style.opacity =
+            t < EntrySeconds ? EaseOutCubic(t / EntrySeconds)
+            : t < lift ? 1f
+            : 1f - EaseOutCubic((t - lift) / CurtainLiftSeconds);
     }
 
     /// <summary>
