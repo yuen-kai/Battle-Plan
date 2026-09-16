@@ -16,6 +16,11 @@ Shader "BattlePlan/DebrisChunk"
         _EmberDirection ("Ember Direction", Vector) = (-0.62, 0.48, -0.62, 0)
         _EmberSharpness ("Ember Sharpness", Range(1, 24)) = 7
         _Ember ("Ember", Range(0, 1)) = 1
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -50,7 +55,14 @@ Shader "BattlePlan/DebrisChunk"
                 float4 _EmberDirection;
                 float _EmberSharpness;
                 float _Ember;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -64,12 +76,14 @@ Shader "BattlePlan/DebrisChunk"
                 float4 positionCS : SV_POSITION;
                 float3 normalWS : TEXCOORD0;
                 half4 color : COLOR;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
                 OUT.color = IN.color;
                 return OUT;
@@ -77,6 +91,11 @@ Shader "BattlePlan/DebrisChunk"
 
             half4 frag(Varyings IN) : SV_Target
             {
+                // Solid matter with no alpha field to erode, so the slab cuts it on a hard
+                // silhouette instead of thinning it. The shield's own material is a third opaque,
+                // which left a chunk parked behind it two thirds visible through the glass.
+                clip(BlastShadow(IN.positionWS) - 0.5);
+
                 float3 normalWS = normalize(IN.normalWS);
 
                 float key = saturate(dot(normalWS, normalize(_KeyDirection.xyz)) * 0.5 + 0.5);
@@ -121,7 +140,14 @@ Shader "BattlePlan/DebrisChunk"
                 float4 _EmberDirection;
                 float _EmberSharpness;
                 float _Ember;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct DepthAttributes
             {
@@ -131,17 +157,22 @@ Shader "BattlePlan/DebrisChunk"
             struct DepthVaryings
             {
                 float4 positionCS : SV_POSITION;
+                float3 positionWS : TEXCOORD0;
             };
 
             DepthVaryings DepthVert(DepthAttributes IN)
             {
                 DepthVaryings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 return OUT;
             }
 
             half4 DepthFrag(DepthVaryings IN) : SV_Target
             {
+                // Cut on the same line the forward pass does, or the chunk would go on priming
+                // depth across a slab it is no longer drawn on and punch a hole in the barrier.
+                clip(BlastShadow(IN.positionWS) - 0.5);
                 return 0;
             }
             ENDHLSL

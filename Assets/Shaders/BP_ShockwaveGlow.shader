@@ -18,6 +18,11 @@ Shader "BattlePlan/ShockwaveGlow"
         _Uneven ("Angular Unevenness", Range(0, 1)) = 0.45
         _RagCount ("Unevenness Cells", Float) = 7
         _ShapeSeed ("Seed", Float) = 0
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -53,7 +58,14 @@ Shader "BattlePlan/ShockwaveGlow"
                 half _Uneven;
                 float _RagCount;
                 float _ShapeSeed;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -65,6 +77,7 @@ Shader "BattlePlan/ShockwaveGlow"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             float Hash11(float n)
@@ -90,6 +103,7 @@ Shader "BattlePlan/ShockwaveGlow"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -108,6 +122,8 @@ Shader "BattlePlan/ShockwaveGlow"
                     saturate(0.5 + 0.6 * AngleNoise(turns, _RagCount, _ShapeSeed + 5.9)));
                 // Out before the quad runs out, or the skirt would end on a straight mesh edge.
                 float3 glow = _GlowColor.rgb * (fall * uneven * _Intensity * saturate((1.0 - radius) / 0.12));
+                // Light out of the crater, so a slab standing in it keeps its own skirt of deck dark.
+                glow *= BlastShadow(IN.positionWS);
                 clip(max(glow.r, max(glow.g, glow.b)) - 0.004);
                 return half4(glow, 1);
             }

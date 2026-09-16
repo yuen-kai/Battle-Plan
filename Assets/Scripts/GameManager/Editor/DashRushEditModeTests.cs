@@ -6,8 +6,8 @@ using Unity.Netcode;
 using UnityEditor;
 using UnityEngine;
 
-// DashRush's line-sweep, its ally-boost footprint and the aim preview it shares with the old Shield
-// rush are all pure functions of grid state, so they are exercised directly here the same way
+// DashRush's line-sweep, its ally-boost footprint and the aim preview it shares with the old
+// ShieldRush are all pure functions of grid state, so they are exercised directly here the same way
 // GridSystem's and AbilityKnockback's helpers are elsewhere. The knockback/stun it fires off per
 // enemy found and the speed boost it hands each ally are AbilityKnockback's, Unit.ApplyStun's and
 // Movement's own responsibilities, covered by their own suites; this file only checks that DashRush

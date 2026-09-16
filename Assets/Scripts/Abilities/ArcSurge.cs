@@ -7,14 +7,18 @@ public class ArcSurge : Ability
 {
     private const int MaxTargets = 99;
 
-    public const float StunSeconds = 0.5f;
+    public const float StunSeconds = 1.5f;
 
     [SerializeField]
     private float damage = 70f;
 
-    private const float ChargeSeconds = 1f;
+    private const float ChargeSeconds = .5f;
 
-    private const float RecoverySeconds = 2f;
+    private const float RecoverySeconds = 1f;
+
+    // Every arc is raycast out of the caster's own hands, so a unit inside the radius but behind a
+    // wall is not a target at all.
+    public override AbilityLineOfFire LineOfFire => AbilityLineOfFire.Required;
 
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 3f)
     {
@@ -26,17 +30,50 @@ public class ArcSurge : Ability
 
         yield return new WaitForSeconds(ChargeSeconds);
 
-        List<GameObject> targets = ResolveTargets(transform.position, AreaRadius);
+        List<GameObject> targets = ResolveTargets(
+            transform.position,
+            AreaRadius,
+            out List<BlockedStrike> blocked
+        );
         ApplyZap(targets);
+        foreach (BlockedStrike strike in blocked)
+            GameLoop.Instance?.ReportShieldBlockedDamage(strike.ShieldOwner, strike.Point);
 
-        ShowZapClientRpc(transform.position, HandOrigin(), StrikePoints(targets), AreaRadius);
+        ShowZapClientRpc(
+            transform.position,
+            HandOrigin(),
+            StrikePoints(targets, blocked),
+            AreaRadius
+        );
 
         yield return new WaitForSeconds(RecoverySeconds);
         CompleteInterruptibleAbilityAction();
     }
 
+    public readonly struct BlockedStrike
+    {
+        public readonly Vector3 Point;
+        public readonly GameObject ShieldOwner;
+
+        public BlockedStrike(Vector3 point, GameObject shieldOwner)
+        {
+            Point = point;
+            ShieldOwner = shieldOwner;
+        }
+    }
+
     public List<GameObject> ResolveTargets(Vector3 center, float radiusCells)
     {
+        return ResolveTargets(center, radiusCells, out _);
+    }
+
+    public List<GameObject> ResolveTargets(
+        Vector3 center,
+        float radiusCells,
+        out List<BlockedStrike> blocked
+    )
+    {
+        blocked = new List<BlockedStrike>();
         string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
         float radius = radiusCells * GameLoop.cellSize;
 
@@ -71,11 +108,16 @@ public class ArcSurge : Ability
                 Physics.Raycast(
                     center,
                     directionToCandidate,
+                    out RaycastHit blocker,
                     distanceToCandidate,
-                    LayerMask.GetMask("Walls")
+                    LayerMask.GetMask("Walls") | ShieldRush.GetEnemyShieldMask(gameObject)
                 )
             )
+            {
+                if (ShieldRush.TryGetShieldOwner(blocker.collider, out GameObject shieldOwner))
+                    blocked.Add(new BlockedStrike(blocker.point, shieldOwner));
                 continue;
+            }
 
             reachable.Add(target);
         }
@@ -228,13 +270,16 @@ public class ArcSurge : Ability
         return transform.position + Vector3.up * HandHeightFallback;
     }
 
-    private static Vector3[] StrikePoints(List<GameObject> targets)
+    private static Vector3[] StrikePoints(
+        List<GameObject> targets,
+        List<BlockedStrike> blocked = null
+    )
     {
-        if (targets == null)
+        if (targets == null && blocked == null)
             return System.Array.Empty<Vector3>();
 
-        List<Vector3> points = new(targets.Count);
-        foreach (GameObject target in targets)
+        List<Vector3> points = new((targets?.Count ?? 0) + (blocked?.Count ?? 0));
+        foreach (GameObject target in targets ?? new List<GameObject>())
         {
             if (target == null)
                 continue;
@@ -244,6 +289,12 @@ public class ArcSurge : Ability
                     ? body.bounds.center
                     : target.transform.position + Vector3.up * StrikeHeightFallback
             );
+        }
+
+        if (blocked != null)
+        {
+            foreach (BlockedStrike strike in blocked)
+                points.Add(strike.Point);
         }
         return points.ToArray();
     }

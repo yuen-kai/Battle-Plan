@@ -9,6 +9,11 @@ Shader "BattlePlan/DebrisSpark"
         _MainTex ("Sprite", 2D) = "white" {}
         [HDR] _Tint ("Tint", Color) = (1, 1, 1, 1)
         _Intensity ("Intensity", Range(0, 24)) = 4
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -41,7 +46,14 @@ Shader "BattlePlan/DebrisSpark"
                 float4 _MainTex_ST;
                 half4 _Tint;
                 half _Intensity;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -55,12 +67,14 @@ Shader "BattlePlan/DebrisSpark"
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 half4 color : COLOR;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 OUT.color = IN.color;
                 return OUT;
@@ -70,7 +84,8 @@ Shader "BattlePlan/DebrisSpark"
             {
                 half4 sprite = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
                 half mask = sprite.a * IN.color.a;
-                half3 col = sprite.rgb * IN.color.rgb * _Tint.rgb * _Intensity * mask;
+                half3 col = sprite.rgb * IN.color.rgb * _Tint.rgb * _Intensity * mask
+                    * BlastShadow(IN.positionWS);
                 return half4(col, 1);
             }
             ENDHLSL

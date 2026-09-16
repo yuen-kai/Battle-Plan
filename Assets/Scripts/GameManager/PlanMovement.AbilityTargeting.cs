@@ -332,6 +332,12 @@ public partial class PlanMovement
 
         Vector3? abilityPathEnd = ShowAbilityPathPreview(host, unit, square, unitData, color);
 
+        // A shield is the one plan whose footprint stands up off the deck, so it is previewed as the
+        // slab it will raise rather than only as the cell it faces. Read off the picked square
+        // before the directional resolution below rewrites it, since the facing is what the slab is
+        // built from. Same telegraph the dodge window shows, in this unit's own plan colour.
+        ShieldStancePreview.Create(unit, square, color, host.transform);
+
         if (unit.GetComponent<Smoke>() != null)
         {
             CreateSquareFootprintIndicator(host, square, Smoke.FootprintRadius, color);

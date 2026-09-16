@@ -38,7 +38,7 @@ Running the game slows the user's machine. Treat Play mode as a scarce resource.
 
 **Knowing when to stop (no fixed waits)**
 Never sleep for one long fixed duration and hope the game is done. Instead, poll in a short loop — wait under a second, check, and if not finished wait another second and check again — against observable signals such as:
-- `GameLoop.currentPhase` — "planning" / "dodging" / "executing" / "idle" (poll via `execute_code`).
+- `GameLoop.currentPhase` — `GameLoop.Phase` enum: `Idle` / `Waiting` / `Planning` / `Dodging` / `Executing` (poll via `execute_code`).
 - `DevInput.Dump()` — phase, unit cells/alive, network state, dodge-window membership.
 - `DevE2ETest.Report` / `[E2E]` console lines — the suite logs a final `RESULT:` line on completion.
 - Prefer self-stopping drivers: a dev-only, editor-guarded hook that sets a done flag / logs a sentinel / calls `UnityEditor.EditorApplication.isPlaying = false` when the last step completes.

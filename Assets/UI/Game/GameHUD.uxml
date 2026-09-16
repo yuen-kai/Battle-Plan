@@ -40,6 +40,13 @@
         </ui:VisualElement>
 
         <ui:VisualElement name="escort-alert" class="escort-alert hidden" picking-mode="Ignore">
+            <!-- Two of the shared edge scrims, back to back, so the band is strongest where the
+                 type sits and falls off to the live board above and below it. Still not a plate:
+                 it has no edge to read as one. -->
+            <ui:VisualElement class="escort-alert__veil toybox-ui" picking-mode="Ignore">
+                <ui:VisualElement class="toy-scrim-top escort-alert__veil-above" picking-mode="Ignore" />
+                <ui:VisualElement class="toy-scrim-top escort-alert__veil-below" picking-mode="Ignore" />
+            </ui:VisualElement>
             <ui:Label name="escort-alert-label" class="escort-alert__copy" picking-mode="Ignore" />
             <ui:Label name="escort-alert-detail" class="escort-alert__detail hidden" picking-mode="Ignore" />
         </ui:VisualElement>
@@ -78,6 +85,26 @@
                 <ui:VisualElement class="deployment-overlay__mark" picking-mode="Ignore" />
                 <ui:Label text="Deploying crews" class="deployment-overlay__title title-lg" picking-mode="Ignore" />
                 <ui:Label name="deployment-status" text="Preparing the battlefield and both crews." class="deployment-overlay__status label label--muted" picking-mode="Ignore" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- The leg briefing. Full screen because the roles change hands between legs and the
+             readout that carries the role afterwards is the size of a caption; a player who has
+             to go looking for it has already spent the round that mattered. Leg 1's coin is
+             drawn by Painter2D in EscortRoleBriefing, so the only child here is the word on its
+             face, which cannot be drawn there. -->
+        <ui:VisualElement name="escort-briefing" class="escort-briefing toybox-ui hidden">
+            <ui:VisualElement name="escort-briefing-curtain" class="escort-briefing__curtain" picking-mode="Ignore" />
+            <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+            <ui:VisualElement class="toy-vignette" picking-mode="Ignore" />
+            <ui:VisualElement name="escort-briefing-verdict" class="escort-briefing__verdict" picking-mode="Ignore">
+                <ui:Label name="escort-briefing-leg" text="Leg 1 of 3" class="escort-briefing__leg section-label" picking-mode="Ignore" />
+                <ui:VisualElement name="escort-briefing-rule" class="escort-briefing__rule" picking-mode="Ignore" />
+                <ui:Label name="escort-briefing-role" text="Protect" class="escort-briefing__role" picking-mode="Ignore" />
+                <ui:Label name="escort-briefing-brief" class="escort-briefing__brief" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:VisualElement name="escort-briefing-stage" class="escort-briefing__stage" picking-mode="Ignore">
+                <ui:Label name="escort-briefing-coin-face" class="escort-briefing__coin-face" picking-mode="Ignore" />
             </ui:VisualElement>
         </ui:VisualElement>
 

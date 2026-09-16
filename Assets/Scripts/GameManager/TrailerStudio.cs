@@ -2655,7 +2655,7 @@ public static class TrailerStudio
     static BotPlayer hostBrain;
     static int plannedRound = -1;
     static int dodgedRound = -1;
-    static string lastPhase = "";
+    static GameLoop.Phase? lastPhase;
 
     /// <summary>
     /// How long the planning phase is held open before the plans are submitted.
@@ -2712,7 +2712,7 @@ public static class TrailerStudio
         hostBrain = null;
         plannedRound = -1;
         dodgedRound = -1;
-        lastPhase = "";
+        lastPhase = null;
         heldPlans = null;
         planHoldUntil = 0f;
         planDrawFrom = 0f;
@@ -2853,7 +2853,7 @@ public static class TrailerStudio
         if (loop == null)
             return;
 
-        string phase = GameLoop.currentPhase;
+        GameLoop.Phase phase = GameLoop.currentPhase;
         int round = loop.RoundNumber;
 
         if (phase != lastPhase)
@@ -2862,7 +2862,7 @@ public static class TrailerStudio
             lastPhase = phase;
         }
 
-        if (phase == "planning" && round != plannedRound)
+        if (phase == GameLoop.Phase.Planning && round != plannedRound)
         {
             if (heldPlans == null)
             {
@@ -2886,7 +2886,7 @@ public static class TrailerStudio
                 plannedRound = round;
             }
         }
-        else if (phase == "dodging" && round != dodgedRound)
+        else if (phase == GameLoop.Phase.Dodging && round != dodgedRound)
         {
             AnswerDodge();
             dodgedRound = round;

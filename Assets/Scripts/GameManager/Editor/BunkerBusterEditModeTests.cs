@@ -113,7 +113,7 @@ public class BunkerBusterEditModeTests
             new(7, 7), // dx=2, dy=2 -> distance ~2.83: inside a *square* footprint of radius 2
         };
 
-        List<Vector2Int> hits = BunkerBuster.GetWallCellsWithinRadius(center, 2.2f, walls);
+        List<Vector2Int> hits = Blast.GetWallCellsWithinRadius(center, 2.2f, walls);
 
         CollectionAssert.Contains(hits, center);
         CollectionAssert.Contains(hits, new Vector2Int(7, 5));
@@ -130,7 +130,7 @@ public class BunkerBusterEditModeTests
     {
         List<Vector2Int> walls = new() { new Vector2Int(0, 0), new Vector2Int(1, 1) };
 
-        List<Vector2Int> hits = BunkerBuster.GetWallCellsWithinRadius(Vector2Int.zero, -1f, walls);
+        List<Vector2Int> hits = Blast.GetWallCellsWithinRadius(Vector2Int.zero, -1f, walls);
 
         Assert.That(hits, Is.Empty);
     }
@@ -138,7 +138,7 @@ public class BunkerBusterEditModeTests
     [Test]
     public void GetWallCellsWithinRadius_ReturnsEmptyForANullWallSet()
     {
-        List<Vector2Int> hits = BunkerBuster.GetWallCellsWithinRadius(Vector2Int.zero, 3f, null);
+        List<Vector2Int> hits = Blast.GetWallCellsWithinRadius(Vector2Int.zero, 3f, null);
 
         Assert.That(hits, Is.Empty);
     }
@@ -150,7 +150,7 @@ public class BunkerBusterEditModeTests
         Vector2Int onBoundary = new(5, 3);
         List<Vector2Int> walls = new() { onBoundary };
 
-        List<Vector2Int> hits = BunkerBuster.GetWallCellsWithinRadius(center, 2f, walls);
+        List<Vector2Int> hits = Blast.GetWallCellsWithinRadius(center, 2f, walls);
 
         CollectionAssert.Contains(hits, onBoundary);
     }
@@ -165,7 +165,7 @@ public class BunkerBusterEditModeTests
             MapDefinition.Scratch(new HashSet<Vector2Int> { center, insideBlast, outsideBlast })
         );
 
-        List<Vector2Int> hits = BunkerBuster.GetWallCellsWithinRadius(
+        List<Vector2Int> hits = Blast.GetWallCellsWithinRadius(
             center,
             2.2f,
             GameLoop.wallLayout

@@ -83,7 +83,7 @@ public static class SandboxVerify
                 + $"dummy hp={result.DummyHealthBefore} walls={result.WallCountBefore}"
         );
 
-        while (GameLoop.currentPhase != "planning")
+        while (GameLoop.currentPhase != GameLoop.Phase.Planning)
             yield return null;
 
         if (abilityTarget.HasValue)
@@ -97,9 +97,12 @@ public static class SandboxVerify
         bool sawExecution = false;
         while (guardFrames++ < MaxFrames)
         {
-            if (GameLoop.currentPhase == "executing" || GameLoop.currentPhase == "dodging")
+            if (
+                GameLoop.currentPhase == GameLoop.Phase.Executing
+                || GameLoop.currentPhase == GameLoop.Phase.Dodging
+            )
                 sawExecution = true;
-            if (sawExecution && GameLoop.currentPhase == "planning")
+            if (sawExecution && GameLoop.currentPhase == GameLoop.Phase.Planning)
                 break;
             if (dummyIdentity != null && dummyIdentity.IsStunned)
                 result.DummyStunned = true;

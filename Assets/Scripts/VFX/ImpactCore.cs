@@ -106,6 +106,7 @@ public sealed class ImpactCore : MonoBehaviour
     private readonly List<Mesh> meshes = new();
     private Transform burstPivot;
     private Light popLight;
+    private BlastShadow shadow;
     private float lightPeak;
     private float elapsed;
 
@@ -130,6 +131,7 @@ public sealed class ImpactCore : MonoBehaviour
 
     private void Build(Vector3 position, Color color, float scale, float intensity)
     {
+        shadow = BlastShadow.Collect(position, scale);
         Shader flashShader = Shader.Find(FlashShaderName);
         if (flashShader == null)
         {
@@ -364,6 +366,8 @@ public sealed class ImpactCore : MonoBehaviour
     )
     {
         Material material = new(shader) { name = $"ImpactCore {name} (Runtime)" };
+        // The flash is light off the blast, so a slab between the two keeps its own skirt dark.
+        shadow.Apply(material);
         material.SetVector(CoreColorId, core);
         material.SetVector(MidColorId, mid);
         material.SetVector(EdgeColorId, edge);

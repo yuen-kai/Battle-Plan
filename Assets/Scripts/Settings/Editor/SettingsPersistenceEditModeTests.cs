@@ -700,7 +700,7 @@ public class SettingsPersistenceEditModeTests
 
         string serverSide = Between(
             gameLoop,
-            "currentPhase = \"dodging\";",
+            "currentPhase = Phase.Dodging;",
             "void StartDodgePlanningClientRpc("
         );
         Assert.That(

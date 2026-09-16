@@ -98,7 +98,10 @@ public static class SandboxSession
     public static bool IsBoardEditLive =>
         IsActive
         && BoardEditActive
-        && (GameLoop.currentPhase == "planning" || GameLoop.currentPhase == "idle");
+        && (
+            GameLoop.currentPhase == GameLoop.Phase.Planning
+            || GameLoop.currentPhase == GameLoop.Phase.Idle
+        );
 
     public static SandboxCrew Crew(int teamIndex)
     {

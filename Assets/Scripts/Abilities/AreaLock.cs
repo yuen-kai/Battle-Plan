@@ -18,6 +18,10 @@ public class AreaLock : Ability
     private BeamVFX serverBeam;
     private BeamVFX clientBeam;
 
+    // The beam is a raycast that stops at the first wall it meets and the kill only happens on an
+    // enemy collider it reaches, so a wall between the caster and the aim point is the whole shot.
+    public override AbilityLineOfFire LineOfFire => AbilityLineOfFire.Required;
+
     public override void ResetForRespawn()
     {
         base.ResetForRespawn();
@@ -70,7 +74,7 @@ public class AreaLock : Ability
     }
 
     /// <summary>Beam runs past the target square until it hits a wall (or 50 units).</summary>
-    private static Vector3 ComputeBeamEnd(Vector3 start, Vector3 end)
+    private Vector3 ComputeBeamEnd(Vector3 start, Vector3 end)
     {
         Vector3 direction = (end - start).normalized;
         Vector3 finalEnd = end + direction * 50f;
@@ -80,7 +84,7 @@ public class AreaLock : Ability
                 direction,
                 out RaycastHit hit,
                 Mathf.Infinity,
-                LayerMask.GetMask("Walls")
+                LayerMask.GetMask("Walls") | ShieldRush.GetEnemyShieldMask(gameObject)
             )
         )
         {
@@ -123,7 +127,7 @@ public class AreaLock : Ability
                 direction,
                 out RaycastHit hit,
                 Mathf.Infinity,
-                LayerMask.GetMask("Walls", enemyTeam)
+                LayerMask.GetMask("Walls", enemyTeam) | ShieldRush.GetEnemyShieldMask(gameObject)
             )
         )
         {

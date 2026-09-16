@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// A rush to a cell, same feel as Shield's old rush, but the destructive half of the kit instead
+/// A rush to a cell, same feel as ShieldRush's old rush, but the destructive half of the kit instead
 /// of the defensive one: every enemy standing anywhere on the line it sweeps gets shoved off to the
 /// side and stunned, rather than the caster raising a bullet-blocking shield when it lands. The
 /// crew it launches from is carried along with it -- allies in the 3x3 around the starting cell

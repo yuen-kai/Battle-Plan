@@ -3,6 +3,27 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 
+/// <summary>
+/// How much an ability's effect depends on a clear grid line from its caster to what it is aimed
+/// at. Planning never enforces this — a player may aim anywhere the range allows, and walls are
+/// part of what several of these abilities are for — so it exists to tell the bot which of its
+/// legal shots are worth taking.
+/// </summary>
+public enum AbilityLineOfFire
+{
+    /// <summary>Walls are no obstacle: the effect is lobbed, leapt, or laid on the caster.</summary>
+    Irrelevant,
+
+    /// <summary>
+    /// A wall costs the shot most of its value but not all of it, so it is the last resort rather
+    /// than an illegal aim.
+    /// </summary>
+    Preferred,
+
+    /// <summary>Nothing lands through a wall; aiming past one wastes the ability outright.</summary>
+    Required,
+}
+
 public abstract class Ability : NetworkBehaviour
 {
     private Coroutine execution;
@@ -59,6 +80,8 @@ public abstract class Ability : NetworkBehaviour
     }
 
     public virtual bool CancelsAlliedOrders => false;
+
+    public virtual AbilityLineOfFire LineOfFire => AbilityLineOfFire.Irrelevant;
 
     private void Interrupt()
     {

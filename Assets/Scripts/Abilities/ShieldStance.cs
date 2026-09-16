@@ -3,10 +3,10 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// The defensive half of what used to be Shield's kit, with the rush and the ally speed buff both
+/// The defensive half of what used to be ShieldRush's kit, with the rush and the ally speed buff both
 /// stripped out: the shield raises facing whichever adjacent direction the caster targeted (same
 /// direction-pick input as DashRush's dash), holds for <see cref="AbilityDurationSeconds"/>, then
-/// lowers. Reuses Shield's static footprint/collision helpers directly rather than duplicating
+/// lowers. Reuses ShieldRush's static footprint/collision helpers directly rather than duplicating
 /// them, since those are pure functions of a shield transform and a team index that don't care
 /// which ability raised it.
 ///
@@ -16,12 +16,12 @@ using UnityEngine;
 /// track targets while the shield is up, and a shield that simply inherited that rotation would
 /// swing with every retarget. Counter-rotating rather than detaching to world space is deliberate:
 /// the shield's footprint is sized as a fraction of the caster's own scale (see
-/// <see cref="Shield.TryExpandShieldFootprint"/>), and reparenting it in and out of that scale
+/// <see cref="ShieldRush.TryExpandShieldFootprint"/>), and reparenting it in and out of that scale
 /// compounds the width/height every time it is raised.
 /// </summary>
 public class ShieldStance : Ability
 {
-    public const float AbilityDurationSeconds = Shield.AbilityDurationSeconds;
+    public const float AbilityDurationSeconds = ShieldRush.AbilityDurationSeconds;
 
     private Transform shieldTransform;
     private bool shieldFootprintExpanded;
@@ -30,7 +30,7 @@ public class ShieldStance : Ability
     private bool capturedLoweredTransform;
 
     // NetworkVariables (not ClientRpc) so shield state survives fog NetworkHide/NetworkShow, same
-    // reasoning as Shield.shieldActive.
+    // reasoning as ShieldRush.shieldActive.
     private NetworkVariable<bool> shieldActive = new(false);
     private NetworkVariable<Vector2Int> shieldDirection = new(Vector2Int.zero);
 
@@ -110,7 +110,7 @@ public class ShieldStance : Ability
             return;
 
         Unit identity = GetComponent<Unit>();
-        Shield.TryApplyCollisionLayer(shieldTransform, identity != null ? identity.TeamIndex : -1);
+        ShieldRush.TryApplyCollisionLayer(shieldTransform, identity != null ? identity.TeamIndex : -1);
 
         Vector2Int direction = shieldDirection.Value;
         if (active && direction != Vector2Int.zero)
@@ -149,6 +149,71 @@ public class ShieldStance : Ability
     }
 
     /// <summary>
+    /// The mesh and world pose the slab takes when raised toward <paramref name="abilitySquare"/>,
+    /// resolved through the same offset and facing maths <see cref="ApplyShieldState"/> raises it
+    /// with, so a preview stands exactly where the shield will. Answerable on every peer: the
+    /// lowered transform and the footprint expansion are both captured at spawn, before this
+    /// component disables itself off the server.
+    /// </summary>
+    public bool TryGetRaisedSlab(Vector3 abilitySquare, out RaisedSlab slab)
+    {
+        slab = default;
+        if (shieldTransform == null)
+            shieldTransform = transform.Find("Shield");
+        CaptureLoweredTransform();
+        EnsureExpandedShieldFootprint();
+        if (shieldTransform == null || shieldTransform.parent == null)
+            return false;
+
+        Vector2Int casterCell = GridSystem.ConvertToGridCoords(
+            GridSystem.GetNearestGridCell(gameObject)
+        );
+        if (
+            !GridSystem.TryGetAdjacentDirection(
+                casterCell,
+                GridSystem.ConvertToGridCoords(abilitySquare),
+                out Vector2Int direction
+            )
+        )
+        {
+            return false;
+        }
+
+        Mesh mesh = shieldTransform.GetComponent<MeshFilter>()?.sharedMesh;
+        if (mesh == null)
+            return false;
+
+        Quaternion rotation = Quaternion.LookRotation(
+            new Vector3(direction.x, 0f, direction.y),
+            Vector3.up
+        );
+        slab = new RaisedSlab(
+            mesh,
+            shieldTransform.parent.position + rotation * ScaledLoweredOffset(),
+            rotation,
+            Vector3.Scale(shieldTransform.parent.lossyScale, shieldTransform.localScale)
+        );
+        return true;
+    }
+
+    /// <summary>Where a raised shield stands, and the geometry that stands there.</summary>
+    public readonly struct RaisedSlab
+    {
+        public readonly Mesh Mesh;
+        public readonly Vector3 Position;
+        public readonly Quaternion Rotation;
+        public readonly Vector3 Scale;
+
+        public RaisedSlab(Mesh mesh, Vector3 position, Quaternion rotation, Vector3 scale)
+        {
+            Mesh = mesh;
+            Position = position;
+            Rotation = rotation;
+            Scale = scale;
+        }
+    }
+
+    /// <summary>
     /// The shield's authored resting offset with the caster's scale applied but its rotation removed,
     /// so it can be re-aimed at an arbitrary world direction. Read from the captured lowered position
     /// rather than hardcoded, so moving the shield on the prefab moves the raised one with it.
@@ -184,7 +249,8 @@ public class ShieldStance : Ability
 
     private void EnsureExpandedShieldFootprint()
     {
-        if (!shieldFootprintExpanded && Shield.TryExpandShieldFootprint(shieldTransform))
+        if (!shieldFootprintExpanded && ShieldRush.TryExpandShieldFootprint(shieldTransform))
             shieldFootprintExpanded = true;
+        ShieldMesh.Apply(shieldTransform);
     }
 }

@@ -57,6 +57,11 @@ Shader "BattlePlan/ShockwaveDust"
         _Sky ("Sky Fill", Range(0, 0.6)) = 0.02
         _Micro ("Micro Value Break", Range(0, 0.3)) = 0.05
         _TintReach ("Key Tint Reach", Range(0, 2)) = 1.05
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -114,7 +119,14 @@ Shader "BattlePlan/ShockwaveDust"
                 half _Sky;
                 half _Micro;
                 half _TintReach;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -126,6 +138,7 @@ Shader "BattlePlan/ShockwaveDust"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             // Sine-free so the field is identical on every GPU and does not band at large inputs.
@@ -208,6 +221,7 @@ Shader "BattlePlan/ShockwaveDust"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -260,6 +274,9 @@ Shader "BattlePlan/ShockwaveDust"
                 mask *= saturate(
                     (intactField - _Erode) / max(fwidth(intactField) * _EdgePixels, 1e-5)
                 );
+                // A raised slab stops a pressure front the way it stops a bullet: the dust piles
+                // against its near face and nothing arrives on the ground behind it.
+                mask *= BlastShadow(IN.positionWS);
                 clip(mask - 0.004);
 
                 float height;

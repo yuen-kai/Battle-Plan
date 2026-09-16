@@ -21,6 +21,11 @@ public class BunkerBuster : Ability
     public GameObject rocketPrefab;
     public GameObject rocketExplosionPrefab;
 
+    // The rocket detonates on the first wall in its path and the blast takes that wall down with
+    // it, which is what this ability is named for — so a blocked shot is never a wasted one, and
+    // the aim only wants a clear line where it can have one for free.
+    public override AbilityLineOfFire LineOfFire => AbilityLineOfFire.Preferred;
+
     public override AbilityPathKind BuildPlannedPath(
         Vector3 targetSquare,
         UnitData data,
@@ -74,6 +79,8 @@ public class BunkerBuster : Ability
         Unit identity = GetComponent<Unit>();
         if (identity == null || identity.TeamIndex < 0)
             return walls;
+
+        walls |= ShieldRush.GetEnemyShieldMask(identity.TeamIndex);
 
         string enemyTeam = GameLoop.GetTeamName(GameLoop.GetEnemyTeamIndex(identity.TeamIndex));
         if (string.IsNullOrEmpty(enemyTeam))
@@ -149,7 +156,6 @@ public class BunkerBuster : Ability
                 )
             )
             {
-                impactPoint = hit.point;
                 activeRocket.transform.position = impactPoint;
                 break;
             }
@@ -160,24 +166,32 @@ public class BunkerBuster : Ability
             yield return null;
         }
 
-        CameraEffects.Instance?.CameraShakeClientRpc(0.7f, 0.18f);
-        ExplosionFxClientRpc(impactPoint, AreaRadius);
-        DetonateRocket(impactPoint, AreaRadius);
-        DestroyWallsInBlast(impactPoint, AreaRadius);
+        Blast.Explode(
+            impactPoint,
+            AreaRadius * GameLoop.cellSize,
+            GameLoop.GetEnemyTeam(gameObject.tag),
+            ShieldRush.GetEnemyShieldMask(gameObject),
+            damage,
+            () =>
+            {
+                CameraEffects.Instance?.CameraShakeClientRpc(0.7f, 0.18f);
+                ExplosionFxClientRpc(impactPoint, AreaRadius);
+                if (rocketExplosionPrefab == null)
+                    return;
 
-        if (rocketExplosionPrefab != null)
-        {
-            GameObject explosionEffect = NetworkHelper.Spawn(
-                rocketExplosionPrefab,
-                impactPoint,
-                Quaternion.identity
-            );
-            ParticleSystem particles = explosionEffect.GetComponent<ParticleSystem>();
-            NetworkHelper.Instance.Despawn(
-                explosionEffect,
-                particles != null ? particles.main.duration : 1f
-            );
-        }
+                GameObject explosionEffect = NetworkHelper.Spawn(
+                    rocketExplosionPrefab,
+                    impactPoint,
+                    Quaternion.identity
+                );
+                ParticleSystem particles = explosionEffect.GetComponent<ParticleSystem>();
+                NetworkHelper.Instance.Despawn(
+                    explosionEffect,
+                    particles != null ? particles.main.duration : 1f
+                );
+            },
+            destroysWalls: true
+        );
         DespawnActiveRocket();
 
         yield return new WaitForSeconds(RecoverySeconds);
@@ -212,79 +226,5 @@ public class BunkerBuster : Ability
 
         DebrisBurst.Spawn(explosionPosition, scorch, blast * 0.65f, 32);
         Aftermath.Spawn(explosionPosition, scorch, blast * 0.6f, AftermathKind.Scorch);
-    }
-
-    private void DetonateRocket(Vector3 explosionPosition, float AreaRadius)
-    {
-        string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
-
-        Physics.SyncTransforms();
-
-        Collider[] enemiesInRange = Physics.OverlapSphere(
-            explosionPosition,
-            AreaRadius * GameLoop.cellSize,
-            LayerMask.GetMask(enemyTeam)
-        );
-
-        foreach (Collider enemy in enemiesInRange)
-        {
-            Vector3 directionToEnemy = (enemy.transform.position - explosionPosition).normalized;
-            float distanceToEnemy = Vector3.Distance(explosionPosition, enemy.transform.position);
-            if (
-                Physics.Raycast(
-                    explosionPosition,
-                    directionToEnemy,
-                    out RaycastHit hit,
-                    distanceToEnemy,
-                    LayerMask.GetMask("Walls", enemyTeam)
-                )
-            )
-            {
-                if (hit.collider != enemy)
-                    continue;
-            }
-
-            enemy.transform.GetComponent<Health>()?.TakeDamage(damage);
-        }
-    }
-
-    private void DestroyWallsInBlast(Vector3 explosionPosition, float areaRadius)
-    {
-        Vector2Int impactCell = GridSystem.ConvertToGridCoords(explosionPosition);
-        foreach (
-            Vector2Int cell in GetWallCellsWithinRadius(
-                impactCell,
-                areaRadius,
-                GameLoop.wallLayout
-            )
-        )
-        {
-            GameLoop.Instance.TryDestroyWallCell(cell);
-        }
-    }
-
-    public static List<Vector2Int> GetWallCellsWithinRadius(
-        Vector2Int center,
-        float radiusCells,
-        IEnumerable<Vector2Int> wallCells
-    )
-    {
-        List<Vector2Int> hits = new();
-        if (wallCells == null || radiusCells < 0f)
-            return hits;
-
-        float radiusSquared = radiusCells * radiusCells;
-        int scanExtent = Mathf.CeilToInt(radiusCells);
-
-        foreach (Vector2Int cell in wallCells)
-        {
-            int dx = cell.x - center.x;
-            int dy = cell.y - center.y;
-            if (Mathf.Abs(dx) > scanExtent || Mathf.Abs(dy) > scanExtent)
-                continue;
-            if (dx * dx + dy * dy <= radiusSquared)
-                hits.Add(cell);
-        }
-        return hits;
     }
 }

@@ -193,7 +193,7 @@ public class DevE2ETestRunner : MonoBehaviour
         }
     }
 
-    static string Phase => GameLoop.currentPhase;
+    static GameLoop.Phase CurrentPhase => GameLoop.currentPhase;
 
     static GameObject U(int team, int index)
     {
@@ -314,28 +314,42 @@ public class DevE2ETestRunner : MonoBehaviour
     IEnumerator RunRoundToCompletion(string label, bool expectDodge, System.Action onDodge)
     {
         DevInput.SubmitPlans();
-        yield return WaitFor(() => Phase != "planning", 30f, label + ": planning to end");
+        yield return WaitFor(
+            () => CurrentPhase != GameLoop.Phase.Planning,
+            30f,
+            label + ": planning to end"
+        );
 
         if (expectDodge)
         {
-            yield return WaitFor(() => Phase == "dodging", 30f, label + ": dodge phase");
-            Check(!timedOut && Phase == "dodging", label + ": dodge phase started");
-            if (Phase == "dodging")
+            yield return WaitFor(
+                () => CurrentPhase == GameLoop.Phase.Dodging,
+                30f,
+                label + ": dodge phase"
+            );
+            Check(
+                !timedOut && CurrentPhase == GameLoop.Phase.Dodging,
+                label + ": dodge phase started"
+            );
+            if (CurrentPhase == GameLoop.Phase.Dodging)
                 onDodge?.Invoke();
             else
                 DevInput.SubmitDodge(); // best effort so the round can still resolve
         }
         else
         {
-            Check(Phase != "dodging", label + ": exhausted ability did not open a dodge phase");
+            Check(
+                CurrentPhase != GameLoop.Phase.Dodging,
+                label + ": exhausted ability did not open a dodge phase"
+            );
         }
 
         yield return WaitFor(
-            () => Phase == "planning" || Phase == "idle",
+            () => CurrentPhase == GameLoop.Phase.Planning || CurrentPhase == GameLoop.Phase.Idle,
             120f,
             label + ": round end"
         );
-        Check(!timedOut, label + $": round resolved (phase={Phase})");
+        Check(!timedOut, label + $": round resolved (phase={CurrentPhase})");
     }
 
     // ---- the suite -----------------------------------------------------------------------------
@@ -366,7 +380,7 @@ public class DevE2ETestRunner : MonoBehaviour
                 && GameLoop.allTeamUnitObjects.Count == 2
                 && GameLoop.GetTeamUnits(0).Length == RosterRules.UnitsPerPlayer
                 && GameLoop.GetTeamUnits(1).Length == RosterRules.UnitsPerPlayer
-                && Phase == "planning",
+                && CurrentPhase == GameLoop.Phase.Planning,
             120f,
             "match start (host + MPPM clone join + Game scene + first planning phase)"
         );
@@ -444,7 +458,11 @@ public class DevE2ETestRunner : MonoBehaviour
         DevInput.SetPath(1, 1, 8, 6, 8, 7, 8, 8);
 
         DevInput.SubmitPlans();
-        yield return WaitFor(() => Phase == "executing", 30f, "R1 execution start");
+        yield return WaitFor(
+            () => CurrentPhase == GameLoop.Phase.Executing,
+            30f,
+            "R1 execution start"
+        );
         Check(!timedOut, "R1 planning ended on SubmitPlans, execution started");
 
         // Speed control mid-execution.
@@ -453,7 +471,7 @@ public class DevE2ETestRunner : MonoBehaviour
             Mathf.Approximately(Time.timeScale, 30f),
             "R1 SetSpeed(30) applied to Time.timeScale"
         );
-        yield return WaitFor(() => Phase == "planning", 120f, "R1 round end");
+        yield return WaitFor(() => CurrentPhase == GameLoop.Phase.Planning, 120f, "R1 round end");
         Check(!timedOut, "R1 round resolved");
         DevInput.SetSpeed(6f);
         Check(Mathf.Approximately(Time.timeScale, 6f), "R1 SetSpeed(6) restored");
@@ -604,7 +622,11 @@ public class DevE2ETestRunner : MonoBehaviour
         // the very start of execution, before any of that round's own movement has resolved.
         DevInput.SetPath(0, 2, 11, 4, 12, 4, 12, 5);
         DevInput.SubmitPlans();
-        yield return WaitFor(() => Phase == "planning", 120f, "R4 setup: enemy moves onto the rush's path");
+        yield return WaitFor(
+            () => CurrentPhase == GameLoop.Phase.Planning,
+            120f,
+            "R4 setup: enemy moves onto the rush's path"
+        );
         Check(!timedOut, "R4 setup round resolved");
 
         List<Vector2Int> sweptCells = DashRush.GetSweptCells(
@@ -627,7 +649,11 @@ public class DevE2ETestRunner : MonoBehaviour
         DevInput.SetAbility(1, 0, rushDirectionTarget.x, rushDirectionTarget.y);
 
         DevInput.SubmitPlans();
-        yield return WaitFor(() => Phase == "executing", 30f, "R4 execution start");
+        yield return WaitFor(
+            () => CurrentPhase == GameLoop.Phase.Executing,
+            30f,
+            "R4 execution start"
+        );
         Check(!timedOut, "R4 planning ended, DashRush execution started");
 
         yield return WaitFor(
@@ -654,8 +680,12 @@ public class DevE2ETestRunner : MonoBehaviour
             "R4 knockback stun cleared on its own after its wall-clock duration"
         );
 
-        yield return WaitFor(() => Phase == "planning" || Phase == "idle", 120f, "R4 round end");
-        Check(!timedOut, $"R4 round resolved (phase={Phase})");
+        yield return WaitFor(
+            () => CurrentPhase == GameLoop.Phase.Planning || CurrentPhase == GameLoop.Phase.Idle,
+            120f,
+            "R4 round end"
+        );
+        Check(!timedOut, $"R4 round resolved (phase={CurrentPhase})");
 
         Check(
             Cell(rRamrod) == expectedRushDestination,
@@ -720,23 +750,29 @@ public class DevE2ETestRunner : MonoBehaviour
         // simultaneous fire makes the survivor legitimately non-deterministic.
         DevInput.SetSpeed(30f);
         int guard = 0;
-        while (Phase != "idle" && guard < 12)
+        while (CurrentPhase != GameLoop.Phase.Idle && guard < 12)
         {
             guard++;
             yield return WaitFor(
-                () => Phase == "planning" || Phase == "idle",
+                () =>
+                    CurrentPhase == GameLoop.Phase.Planning || CurrentPhase == GameLoop.Phase.Idle,
                 60f,
                 $"chase round {guard}: planning"
             );
-            if (Phase == "idle" || timedOut)
+            if (CurrentPhase == GameLoop.Phase.Idle || timedOut)
                 break;
             QueueChasePlans();
             DevInput.SubmitPlans();
-            yield return WaitFor(() => Phase != "planning", 30f, $"chase round {guard}: execution");
-            if (Phase == "dodging")
+            yield return WaitFor(
+                () => CurrentPhase != GameLoop.Phase.Planning,
+                30f,
+                $"chase round {guard}: execution"
+            );
+            if (CurrentPhase == GameLoop.Phase.Dodging)
                 DevInput.SubmitDodge();
             yield return WaitFor(
-                () => Phase == "planning" || Phase == "idle",
+                () =>
+                    CurrentPhase == GameLoop.Phase.Planning || CurrentPhase == GameLoop.Phase.Idle,
                 120f,
                 $"chase round {guard}: round end"
             );
@@ -746,9 +782,9 @@ public class DevE2ETestRunner : MonoBehaviour
         int blueLeft = GameLoop.teamSize("BlueTeam");
         int redLeft = GameLoop.teamSize("RedTeam");
         Check(
-            Phase == "idle" && (blueLeft == 0 || redLeft == 0),
+            CurrentPhase == GameLoop.Phase.Idle && (blueLeft == 0 || redLeft == 0),
             "Elimination result reached: at least one team wiped, game loop ended",
-            $"phase={Phase} blue={blueLeft} red={redLeft} (chase rounds used: {guard})"
+            $"phase={CurrentPhase} blue={blueLeft} red={redLeft} (chase rounds used: {guard})"
         );
         MatchResult? finalResult = GameLoop.Instance?.LastMatchResult;
         bool simultaneousWipe = blueLeft == 0 && redLeft == 0;

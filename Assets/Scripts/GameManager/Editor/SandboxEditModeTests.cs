@@ -417,27 +417,27 @@ public class SandboxEditModeTests
     [Test]
     public void BoardEditMode_IsLiveOnlyBetweenRounds()
     {
-        string restorePhase = GameLoop.currentPhase;
+        GameLoop.Phase restorePhase = GameLoop.currentPhase;
         try
         {
             SandboxSession.Begin();
             SandboxSession.BoardEditActive = true;
 
-            GameLoop.currentPhase = "planning";
+            GameLoop.currentPhase = GameLoop.Phase.Planning;
             Assert.That(SandboxSession.IsBoardEditLive, Is.True);
-            GameLoop.currentPhase = "idle";
+            GameLoop.currentPhase = GameLoop.Phase.Idle;
             Assert.That(SandboxSession.IsBoardEditLive, Is.True);
 
-            GameLoop.currentPhase = "dodging";
+            GameLoop.currentPhase = GameLoop.Phase.Dodging;
             Assert.That(
                 SandboxSession.IsBoardEditLive,
                 Is.False,
                 "A dodge wants the pointer for a dive, so leaving the mode armed cannot cost one."
             );
-            GameLoop.currentPhase = "executing";
+            GameLoop.currentPhase = GameLoop.Phase.Executing;
             Assert.That(SandboxSession.IsBoardEditLive, Is.False);
 
-            GameLoop.currentPhase = "planning";
+            GameLoop.currentPhase = GameLoop.Phase.Planning;
             SandboxSession.BoardEditActive = false;
             Assert.That(SandboxSession.IsBoardEditLive, Is.False);
         }

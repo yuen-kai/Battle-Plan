@@ -54,6 +54,10 @@ public class GameHUDController : MonoBehaviour
     private Label escortAlertLabel;
     private Label escortAlertDetail;
     private Coroutine escortAlertCoroutine;
+    private VisualElement escortBriefingOverlay;
+    private EscortRoleBriefing escortBriefing;
+    private Coroutine escortBriefingCoroutine;
+    private Coroutine deploymentHandoffCoroutine;
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
@@ -104,6 +108,8 @@ public class GameHUDController : MonoBehaviour
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
     public string EscortAlertText => escortAlertLabel?.text ?? string.Empty;
+    public string EscortBriefingRoleText => escortBriefing?.RoleText ?? string.Empty;
+    public bool EscortBriefingVisible => escortBriefingCoroutine != null;
     public string EscortAlertDetailText => escortAlertDetail?.text ?? string.Empty;
     public string EscortStatusText =>
         $"{escortStatusKey?.text ?? string.Empty} · {escortStatusLabel?.text ?? string.Empty}";
@@ -164,6 +170,9 @@ public class GameHUDController : MonoBehaviour
             StopCoroutine(rejoinNoticeCoroutine);
             rejoinNoticeCoroutine = null;
         }
+        HideEscortRoleBriefing();
+        escortBriefing?.Dispose();
+        escortBriefing = null;
         flash?.RemoveFromClassList("hud-flash--active");
 
         foreach (UnitCardElement card in cards)
@@ -204,6 +213,10 @@ public class GameHUDController : MonoBehaviour
         escortAlert = RequireElement<VisualElement>("escort-alert");
         escortAlertLabel = RequireElement<Label>("escort-alert-label");
         escortAlertDetail = RequireElement<Label>("escort-alert-detail");
+        escortBriefingOverlay = RequireElement<VisualElement>("escort-briefing");
+        escortBriefing = new EscortRoleBriefing(escortBriefingOverlay);
+        if (!escortBriefing.IsUsable)
+            Debug.LogError("[GameHUDController] The escort leg briefing is missing parts.");
         rejoinNotice = RequireElement<VisualElement>("rejoin-notice");
         rejoinNoticeTitle = RequireElement<Label>("rejoin-notice-title");
         rejoinNoticeStatus = RequireElement<Label>("rejoin-notice-status");
@@ -757,6 +770,7 @@ public class GameHUDController : MonoBehaviour
         {
             escortStatusReadout?.AddToClassList("hidden");
             HideEscortAlert();
+            HideEscortRoleBriefing();
             return;
         }
 
@@ -764,6 +778,72 @@ public class GameHUDController : MonoBehaviour
             GameLoop.Instance != null ? GameLoop.Instance.EscortStatus : EscortState.Empty,
             GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1
         );
+    }
+
+    /// <summary>
+    /// Opens a leg with the role this seat holds. Leg 1 tosses the coin that drew it; later legs
+    /// already know, so they hold up the card alone. The deployment overlay is retired here rather
+    /// than waiting for the first phase message, which does not arrive until the briefing is over.
+    /// </summary>
+    public void ShowEscortRoleBriefing(
+        EscortRole role,
+        int legNumber,
+        bool coinFlip,
+        float seconds,
+        float coverSeconds
+    )
+    {
+        if (escortBriefing == null || !escortBriefing.IsUsable)
+            return;
+
+        if (escortBriefingCoroutine != null)
+            StopCoroutine(escortBriefingCoroutine);
+        if (deploymentHandoffCoroutine != null)
+            StopCoroutine(deploymentHandoffCoroutine);
+
+        deploymentHandoffCoroutine = StartCoroutine(RetireDeploymentBehindBriefing());
+        escortBriefingCoroutine = StartCoroutine(
+            RunEscortRoleBriefing(role, legNumber, coinFlip, seconds, coverSeconds)
+        );
+    }
+
+    private IEnumerator RunEscortRoleBriefing(
+        EscortRole role,
+        int legNumber,
+        bool coinFlip,
+        float seconds,
+        float coverSeconds
+    )
+    {
+        yield return escortBriefing.Play(role, legNumber, coinFlip, seconds, coverSeconds);
+        escortBriefingCoroutine = null;
+    }
+
+    /// <summary>
+    /// Takes the deployment card down only once the briefing's page is opaque over it. Retiring it
+    /// on the frame the briefing opens showed the board through the briefing's own fade-in, which
+    /// on the opening leg is the board still arriving.
+    /// </summary>
+    private IEnumerator RetireDeploymentBehindBriefing()
+    {
+        yield return new WaitForSecondsRealtime(EscortRoleBriefing.FadeInSeconds);
+        HideDeployment();
+        deploymentHandoffCoroutine = null;
+    }
+
+    public void HideEscortRoleBriefing()
+    {
+        if (escortBriefingCoroutine != null)
+        {
+            StopCoroutine(escortBriefingCoroutine);
+            escortBriefingCoroutine = null;
+        }
+        if (deploymentHandoffCoroutine != null)
+        {
+            StopCoroutine(deploymentHandoffCoroutine);
+            deploymentHandoffCoroutine = null;
+        }
+        escortBriefing?.Hide();
     }
 
     /// <summary>Throws the leg clock's last call across the board.</summary>
@@ -849,9 +929,14 @@ public class GameHUDController : MonoBehaviour
             state.LegNumber,
             GameLoop.GetEnemyTeamIndex(localTeamIndex)
         );
-        string role = localEscorts && enemyEscorts ? "Both escort"
-            : localEscorts ? "You escort"
-            : "You defend";
+        // The same three words the leg briefing put across the screen, so the readout a player
+        // checks mid-leg is the one they were shown at the top of it.
+        string role = EscortSeries.RoleFor(state.LegNumber, localTeamIndex) switch
+        {
+            EscortRole.Protect => "You protect",
+            EscortRole.Defend => "You defend",
+            _ => "Both protect",
+        };
         escortStatusKey.text =
             $"Leg {Mathf.Clamp(state.LegNumber, 1, EscortSeries.DeciderLeg)}"
             + $"/{EscortSeries.DeciderLeg} · {role}";
@@ -1013,6 +1098,7 @@ public class GameHUDController : MonoBehaviour
         CloseSettingsOverlay(false);
         HideDeployment();
         HideEscortAlert();
+        HideEscortRoleBriefing();
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);

@@ -187,11 +187,8 @@ public class Shooting : NetworkBehaviour
 
     private IEnumerator RotateToFaceTarget(GameObject target)
     {
-        yield return StartCoroutine(
-            transform
-                .GetComponent<Movement>()
-                .RotateToFaceTarget(GetHorizontalTargetPosition(target), unitData.rotationSpeed)
-        );
+        yield return GetComponent<Movement>()
+            .RotateToFaceTarget(GetHorizontalTargetPosition(target), unitData.rotationSpeed);
     }
 
     private Vector3 GetHorizontalTargetPosition(GameObject target)
@@ -223,7 +220,7 @@ public class Shooting : NetworkBehaviour
             GameObject target = FindNearestEnemy();
             if (target)
             {
-                yield return StartCoroutine(RotateToFaceTarget(target));
+                yield return RotateToFaceTarget(target);
                 ForceRevealForTargetLock(target);
             }
 
@@ -244,7 +241,7 @@ public class Shooting : NetworkBehaviour
                     if (target)
                     {
                         remainingTargetLockTime = unitData.targetLockDuration;
-                        yield return StartCoroutine(RotateToFaceTarget(target));
+                        yield return RotateToFaceTarget(target);
                         ForceRevealForTargetLock(target);
                     }
                     if (!allowShooting)
@@ -293,7 +290,7 @@ public class Shooting : NetworkBehaviour
 
             if (allowShooting)
             {
-                yield return StartCoroutine(Reload());
+                yield return Reload();
             }
         }
 

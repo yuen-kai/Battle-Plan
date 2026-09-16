@@ -126,38 +126,12 @@ public class ShatterLeap : Ability
 
     public List<GameObject> FindEnemiesInLandingRadius(Vector3 landingPosition, float areaRadius)
     {
-        List<GameObject> found = new();
-        string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
-
-        Physics.SyncTransforms();
-
-        Collider[] enemiesInRange = Physics.OverlapSphere(
+        return Blast.FindTargets(
             landingPosition,
             areaRadius * GameLoop.cellSize,
-            LayerMask.GetMask(enemyTeam)
+            GameLoop.GetEnemyTeam(gameObject.tag),
+            ShieldRush.GetEnemyShieldMask(gameObject)
         );
-
-        foreach (Collider enemy in enemiesInRange)
-        {
-            Vector3 directionToEnemy = (enemy.transform.position - landingPosition).normalized;
-            float distanceToEnemy = Vector3.Distance(landingPosition, enemy.transform.position);
-            if (
-                Physics.Raycast(
-                    landingPosition,
-                    directionToEnemy,
-                    out RaycastHit hit,
-                    distanceToEnemy,
-                    LayerMask.GetMask("Walls", enemyTeam)
-                )
-            )
-            {
-                if (hit.collider != enemy)
-                    continue;
-            }
-
-            found.Add(enemy.gameObject);
-        }
-        return found;
     }
 
     public void ApplyLandingDamage(List<GameObject> targets)

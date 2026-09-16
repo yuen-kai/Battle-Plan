@@ -79,6 +79,7 @@ public sealed class SandboxPanel
         layer.Q<Button>("sandbox-clear").clicked += ClearCrews;
         layer.Q<Button>("sandbox-recharge").clicked += () =>
             GameLoop.Instance?.SandboxClearAbilityCooldowns();
+        layer.Q<Button>("sandbox-copy").clicked += CopyRound;
         layer.Q<Button>("sandbox-picker-close").clicked += ClosePicker;
         teamBlue.clicked += () => SetQuickAddTeam(GameLoop.HostTeamIndex);
         teamRed.clicked += () => SetQuickAddTeam(GameLoop.OpponentTeamIndex);
@@ -377,6 +378,19 @@ public sealed class SandboxPanel
         SandboxLauncher.SaveSetup();
         GameLoop.Instance?.SetFogOfWarEnabled(enabled);
         appliedSignature = null;
+    }
+
+    /// <summary>
+    /// Puts the round on the clipboard: the board as it stands and the orders standing on it, in
+    /// text a coding agent can be handed to write a test case from. Logged as well, so a paste that
+    /// goes astray is still recoverable from the console.
+    /// </summary>
+    private void CopyRound()
+    {
+        string summary = SandboxRoundSummary.Build();
+        GUIUtility.systemCopyBuffer = summary;
+        Debug.Log(summary);
+        GameHUDController.Instance?.SetTargetFeedback("Round copied to the clipboard.", false);
     }
 
     private void ToggleBoardEdit()

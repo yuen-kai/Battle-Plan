@@ -33,6 +33,11 @@ Shader "BattlePlan/AftermathSmoke"
         _Rim ("Rim Falloff", Range(0, 1)) = 0.66
         _LightAngle ("Light Angle (radians)", Float) = 0
         _Seed ("Seed", Float) = 0
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -82,7 +87,14 @@ Shader "BattlePlan/AftermathSmoke"
                 half _Rim;
                 float _LightAngle;
                 float _Seed;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             // Light comes from screen upper-left for every mass in the plume. A shared direction is
             // what makes a cluster read as one volume instead of as unrelated shaded balls, so
@@ -99,6 +111,7 @@ Shader "BattlePlan/AftermathSmoke"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             float SmokeHash1(float n)
@@ -147,6 +160,7 @@ Shader "BattlePlan/AftermathSmoke"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -196,7 +210,8 @@ Shader "BattlePlan/AftermathSmoke"
                 float detail = SmokeFbm(p * _NoiseScale + _Seed * 2.3);
                 float field = unioned - _Erode - _Tear * (detail - 0.34);
 
-                half alpha = saturate(field / max(_EdgeWidth, 1e-3)) * _Opacity;
+                half alpha = saturate(field / max(_EdgeWidth, 1e-3)) * _Opacity
+                    * BlastShadow(IN.positionWS);
                 clip(alpha - 0.015);
 
                 float rollSin, rollCos;

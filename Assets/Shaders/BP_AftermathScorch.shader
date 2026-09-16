@@ -53,6 +53,11 @@ Shader "BattlePlan/AftermathScorch"
         _RayFrequency ("Ejecta Frequency", Float) = 3.4
         _FringeCut ("Ejecta Cut", Range(0.3, 0.9)) = 0.605
         _Seed ("Seed", Float) = 0
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -111,7 +116,14 @@ Shader "BattlePlan/AftermathScorch"
                 float _RayFrequency;
                 half _FringeCut;
                 float _Seed;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -123,6 +135,7 @@ Shader "BattlePlan/AftermathScorch"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             float ScorchHash1(float n)
@@ -171,6 +184,7 @@ Shader "BattlePlan/AftermathScorch"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -255,6 +269,7 @@ Shader "BattlePlan/AftermathScorch"
                 density = max(density, fringe * _Opacity * _SpatterAmount);
                 density = max(density, soot * _Opacity * _Soot);
 
+                density *= BlastShadow(IN.positionWS);
                 clip(density - 0.004);
 
                 half3 burn = lerp(_EdgeColor.rgb, _MarkColor.rgb, core);

@@ -28,6 +28,11 @@ Shader "BattlePlan/AftermathEmber"
         _Solidity ("Spine Solidity", Range(1, 6)) = 2.6
         _TailAlpha ("Tail Coverage", Range(0, 1)) = 0.34
         _CoreCut ("Core Cut", Range(0.1, 0.95)) = 0.58
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -64,7 +69,14 @@ Shader "BattlePlan/AftermathEmber"
                 half _Solidity;
                 half _TailAlpha;
                 half _CoreCut;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -76,12 +88,14 @@ Shader "BattlePlan/AftermathEmber"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -102,7 +116,8 @@ Shader "BattlePlan/AftermathEmber"
                 // The spine covers the board outright and the streak thins to a smear behind it,
                 // so the head keeps its hue and the trail still reads as motion rather than as a
                 // second solid object.
-                float coverage = saturate(body * _Solidity) * lerp(_TailAlpha, 1.0, along * along);
+                float coverage = saturate(body * _Solidity) * lerp(_TailAlpha, 1.0, along * along)
+                    * BlastShadow(IN.positionWS);
 
                 // Fragments cool along the trail: the head is where the material still burns.
                 float heat = body * lerp(0.28, 1.0, along * along);

@@ -17,6 +17,21 @@ public class Health : NetworkBehaviour
 
     private GuardOrbVisual guardOrb;
 
+    /// <summary>
+    /// How long a crit announcement stays good for on a peer that received it.
+    /// <para>
+    /// A crit is an event belonging to one hit, so it travels as an RPC rather than as state, and
+    /// it is sent before the health write so it is queued into the tick ahead of the
+    /// <c>NetworkVariable</c> delta whose callback draws the number. The window is what makes that
+    /// ordering survivable either way: an announcement that somehow arrives after its own hit
+    /// expires instead of recolouring whatever lands next. It is also why fog costs nothing here —
+    /// a hidden unit drops the RPC and shows an ordinary number, on a peer that cannot see it.
+    /// </para>
+    /// </summary>
+    private const float CritAnnouncementSeconds = 0.5f;
+
+    private float critAnnouncedUntil = float.NegativeInfinity;
+
     private Transform unitCanvas;
     private Transform healthBar;
     private Transform healthFill;
@@ -149,10 +164,13 @@ public class Health : NetworkBehaviour
             damageReductionActive.Value = false;
     }
 
-    public void TakeDamage(float damage)
+    public void TakeDamage(float damage, bool crit = false)
     {
         if (!IsServer || !isAlive.Value)
             return;
+
+        if (crit)
+            AnnounceCrit();
 
         // The tutorial teaches; it does not kill. Hits still land and still read on the health bar,
         // but neither crew can be eliminated, so a fumbled dodge cannot end the lesson script early
@@ -178,6 +196,45 @@ public class Health : NetworkBehaviour
         // Leave the NetworkObject active through this frame's network update so the final
         // NetworkVariable values can be sent before round-end arbitration.
         StartCoroutine(DeactivateOnServerNextFrame());
+    }
+
+    /// <summary>
+    /// Tells every peer that the hit about to land was a crit.
+    /// <para>
+    /// The server marks itself rather than waiting on its own loopback, because a
+    /// <c>NetworkVariable</c> write fires <c>OnValueChanged</c> synchronously on the peer that
+    /// writes it: a host draws its number inside <see cref="TakeDamage"/>, before an RPC sent from
+    /// the same line could come back to it, and a mark that late would colour the following hit
+    /// instead of this one. Remote peers have the ordering the other way round and in their favour
+    /// — the RPC is queued here, ahead of a health delta the tick has not sent yet.
+    /// </para>
+    /// </summary>
+    private void AnnounceCrit()
+    {
+        critAnnouncedUntil = Time.time + CritAnnouncementSeconds;
+
+        // Edit-mode harnesses damage a Health that was never spawned, and NGO logs an error for
+        // an RPC sent off a session that is not running. The mark above is the half of this that
+        // those callers need; the send is the half only a live session has anyone to send to.
+        if (IsSpawned)
+            AnnounceCritClientRpc();
+    }
+
+    [ClientRpc]
+    private void AnnounceCritClientRpc()
+    {
+        if (IsServer)
+            return;
+
+        critAnnouncedUntil = Time.time + CritAnnouncementSeconds;
+    }
+
+    /// <summary>Consumes a pending crit announcement, so it can only colour one number.</summary>
+    private bool TakeCritAnnouncement()
+    {
+        bool announced = Time.time <= critAnnouncedUntil;
+        critAnnouncedUntil = float.NegativeInfinity;
+        return announced;
     }
 
 #if UNITY_EDITOR
@@ -271,18 +328,24 @@ public class Health : NetworkBehaviour
         if (newValue > 0f)
             HitReaction.Play(gameObject, HitOrigin(), severity);
 
-        DamagePopup.Spawn(transform.position, damage, ToneFor(severity, newValue <= 0f));
+        DamagePopup.Spawn(
+            transform.position,
+            damage,
+            ToneFor(severity, newValue <= 0f),
+            TakeCritAnnouncement()
+        );
     }
 
     /// <summary>
     /// Where a hit came from, for knockback direction only — never for anything authoritative.
     /// <para>
     /// Damage reaches this peer as a <c>NetworkVariable</c> callback carrying a number and nothing
-    /// else, and the two honest ways to learn the attacker — widening <see cref="TakeDamage"/> or
-    /// replicating the source — are both new authoritative state bought for a visual. The unit's
-    /// own facing is the nearest thing already replicated: <see cref="Shooting"/> turns a unit to
-    /// look at whatever it is engaging, so in a firefight the return fire is coming from in front
-    /// of it, and where it is not the direction is merely arbitrary rather than wrong.
+    /// else. A crit escapes that by riding <see cref="AnnounceCrit"/>, which is one bit on the few
+    /// hits that earn it; a position is a vector on every hit, and replicating one to point a
+    /// knockback costs more than the direction is worth. The unit's own facing is the nearest
+    /// thing already replicated: <see cref="Shooting"/> turns a unit to look at whatever it is
+    /// engaging, so in a firefight the return fire is coming from in front of it, and where it is
+    /// not the direction is merely arbitrary rather than wrong.
     /// </para>
     /// </summary>
     private Vector3 HitOrigin() => transform.position + transform.forward * GameLoop.cellSize;

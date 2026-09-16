@@ -2,6 +2,13 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+public enum EscortRole : byte
+{
+    Protect = 0,
+    Defend = 1,
+    Both = 2,
+}
+
 public enum EscortLegReason : byte
 {
     None = 0,
@@ -84,13 +91,27 @@ public static class EscortSeries
     public static int LegNumber { get; private set; } = 1;
     public static int CompletedLegs => Mathf.Max(0, LegNumber - 1);
 
+    /// <summary>
+    /// Which crew walks a president on leg 1. Drawn at random when the series opens, because the
+    /// crew that protects first also chooses the ground the second leg is fought over, and handing
+    /// that to whoever happened to host the lobby is an advantage nobody agreed to. Outside a live
+    /// series it reads as the host, which is the leg the lobby preview draws.
+    /// </summary>
+    public static int FirstEscortTeamIndex { get; private set; } = GameLoop.HostTeamIndex;
+
     public static int GetLegWins(int teamIndex) =>
         teamIndex >= 0 && teamIndex < legWins.Length ? legWins[teamIndex] : 0;
 
-    public static void Begin()
+    public static void Begin() => Begin(Random.Range(0, GameLoop.TeamCount));
+
+    public static void Begin(int firstEscortTeamIndex)
     {
         IsActive = true;
         LegNumber = 1;
+        FirstEscortTeamIndex =
+            firstEscortTeamIndex == GameLoop.OpponentTeamIndex
+                ? GameLoop.OpponentTeamIndex
+                : GameLoop.HostTeamIndex;
         System.Array.Clear(legWins, 0, legWins.Length);
     }
 
@@ -98,6 +119,7 @@ public static class EscortSeries
     {
         IsActive = false;
         LegNumber = 1;
+        FirstEscortTeamIndex = GameLoop.HostTeamIndex;
         System.Array.Clear(legWins, 0, legWins.Length);
     }
 
@@ -108,10 +130,19 @@ public static class EscortSeries
         LegNumber++;
     }
 
-    public static void SyncFromServer(int legNumber, int hostLegWins, int opponentLegWins)
+    public static void SyncFromServer(
+        int legNumber,
+        int hostLegWins,
+        int opponentLegWins,
+        int firstEscortTeamIndex
+    )
     {
         IsActive = true;
         LegNumber = Mathf.Max(1, legNumber);
+        FirstEscortTeamIndex =
+            firstEscortTeamIndex == GameLoop.OpponentTeamIndex
+                ? GameLoop.OpponentTeamIndex
+                : GameLoop.HostTeamIndex;
         legWins[GameLoop.HostTeamIndex] = Mathf.Max(0, hostLegWins);
         legWins[GameLoop.OpponentTeamIndex] = Mathf.Max(0, opponentLegWins);
     }
@@ -125,11 +156,58 @@ public static class EscortSeries
 
         return legNumber switch
         {
-            1 => teamIndex == GameLoop.HostTeamIndex,
-            2 => teamIndex == GameLoop.OpponentTeamIndex,
+            1 => teamIndex == FirstEscortTeamIndex,
+            2 => teamIndex != FirstEscortTeamIndex,
             _ => true,
         };
     }
+
+    public static EscortRole RoleFor(int legNumber, int teamIndex)
+    {
+        if (!IsEscortingTeam(legNumber, teamIndex))
+            return EscortRole.Defend;
+
+        return IsEscortingTeam(legNumber, GameLoop.GetEnemyTeamIndex(teamIndex))
+            ? EscortRole.Both
+            : EscortRole.Protect;
+    }
+
+    /// <summary>
+    /// Where the series has got to, in the words the briefing's eyebrow and the phase banner both
+    /// use. One source, because a leg boundary now shows them within a second of each other.
+    /// </summary>
+    public static string DescribeLeg(int legNumber) =>
+        IsDecider(legNumber) ? "Decider leg" : $"Leg {Mathf.Max(1, legNumber)} of {DeciderLeg}";
+
+    /// <summary>The one word the briefing puts across the screen. The font capitalises.</summary>
+    public static string RoleHeadline(EscortRole role) =>
+        role switch
+        {
+            EscortRole.Protect => "Protect",
+            EscortRole.Defend => "Defend",
+            _ => "Both",
+        };
+
+    /// <summary>The line under it, which says what winning the leg means for that role.</summary>
+    public static string RoleBrief(EscortRole role) =>
+        role switch
+        {
+            EscortRole.Protect =>
+                "Walk your president into the enemy extraction zone before the leg clock runs out.",
+            EscortRole.Defend =>
+                "Prevent their president from reaching the extraction zone.",
+            _ =>
+                "Both crews escort. Whichever president covers more ground takes the series.",
+        };
+
+    /// <summary>The role the other crew is handed while this one takes <paramref name="role"/>.</summary>
+    public static EscortRole OpposingRole(EscortRole role) =>
+        role switch
+        {
+            EscortRole.Protect => EscortRole.Defend,
+            EscortRole.Defend => EscortRole.Protect,
+            _ => EscortRole.Both,
+        };
 
     public static bool IsDecider(int legNumber) => legNumber >= DeciderLeg;
 

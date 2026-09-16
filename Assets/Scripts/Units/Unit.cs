@@ -108,10 +108,11 @@ public class Unit : NetworkBehaviour
 
         movement.PauseMovement();
         movement.moving = false;
+        transform.position =
+            GridSystem.GetNearestGridCell(transform.position) + Helper.heightOffset(transform);
+        Physics.SyncTransforms();
         shooting.StandDown();
-
-        if (Application.isPlaying)
-            stunCoroutine = StartCoroutine(ResumeAfterStun(duration));
+        stunCoroutine = StartCoroutine(ResumeAfterStun(duration));
     }
 
     private IEnumerator ResumeAfterStun(float duration)
@@ -126,7 +127,7 @@ public class Unit : NetworkBehaviour
         if (IsServer && stunState.Value.Active)
             stunState.Value = default;
 
-        TryResumeShooting();
+        TryResumeShooting(true);
     }
 
     public static bool IsStunnedAt(StunState state, double serverTime)

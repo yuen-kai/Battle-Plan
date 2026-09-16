@@ -221,23 +221,34 @@ public class Bullet : MonoBehaviour
     private void ResolveImpact(GameObject hitObject, Vector3 impactPosition)
     {
         bool isEnemy = hitObject.CompareTag(enemyTeam);
+        if (isAuthoritative && ShieldRush.IsShieldLayer(hitObject.layer))
+            GameLoop.Instance?.ReportShieldBlockedDamage(
+                hitObject.GetComponentInParent<Unit>()?.gameObject,
+                impactPosition
+            );
         bool isFirstEnemyHit = isEnemy && hitTargets.Add(hitObject);
 
         if (explodesOnImpact)
         {
-            if (isAuthoritative)
+            if (
+                isAuthoritative
+                && isFirstEnemyHit
+                && !IsPathBlockedBySmoke(hitObject.transform.position)
+            )
             {
-                if (
-                    isFirstEnemyHit
-                    && !IsPathBlockedBySmoke(hitObject.transform.position)
-                )
-                {
-                    ApplyDirectHitDamage(hitObject);
-                }
-                ResolveAreaImpact(impactPosition);
+                ApplyDirectHitDamage(hitObject);
             }
 
-            PlayImpactExplosion(impactPosition);
+            Blast.Explode(
+                impactPosition,
+                aoeRadius,
+                enemyTeam,
+                ShieldRush.GetEnemyShieldMask(GetShooterTeamIndex(enemyTeam)),
+                damage,
+                () => PlayImpactExplosion(impactPosition),
+                authoritative: isAuthoritative && !IsPathBlockedBySmoke(impactPosition),
+                alreadyHit: hitTargets
+            );
 
             Destroy(gameObject);
             return;
@@ -281,47 +292,19 @@ public class Bullet : MonoBehaviour
 
     private void ApplyDirectHitDamage(GameObject hitObject)
     {
-        float finalDamage = !CheckBackstab(hitObject) ? damage : damage * backstabMultiplier;
-        hitObject.GetComponent<Health>()?.TakeDamage(finalDamage);
+        bool crit = IsCrit(hitObject);
+        float finalDamage = crit ? damage * backstabMultiplier : damage;
+        hitObject.GetComponent<Health>()?.TakeDamage(finalDamage, crit);
     }
 
-    private void ResolveAreaImpact(Vector3 impactPosition)
+    /// <summary>
+    /// Whether this hit earned the shooter's multiplier. A rear hit from a weapon whose multiplier
+    /// is one deals exactly the damage a frontal one would, so it is an ordinary hit and must not
+    /// announce itself as anything else.
+    /// </summary>
+    private bool IsCrit(GameObject hitObject)
     {
-        if (aoeRadius <= 0f || IsPathBlockedBySmoke(impactPosition))
-            return;
-
-        Physics.SyncTransforms();
-
-        Collider[] enemiesInRange = Physics.OverlapSphere(
-            impactPosition,
-            aoeRadius,
-            LayerMask.GetMask(enemyTeam)
-        );
-
-        foreach (Collider enemyCollider in enemiesInRange)
-        {
-            GameObject enemyObject = enemyCollider.gameObject;
-            if (!hitTargets.Add(enemyObject))
-                continue;
-
-            Vector3 directionToEnemy = (enemyObject.transform.position - impactPosition).normalized;
-            float distanceToEnemy = Vector3.Distance(impactPosition, enemyObject.transform.position);
-            if (
-                Physics.Raycast(
-                    impactPosition,
-                    directionToEnemy,
-                    out RaycastHit hit,
-                    distanceToEnemy,
-                    LayerMask.GetMask("Walls", enemyTeam)
-                )
-                && hit.collider.gameObject != enemyObject
-            )
-            {
-                continue;
-            }
-
-            enemyObject.GetComponent<Health>()?.TakeDamage(damage);
-        }
+        return backstabMultiplier > 1f && CheckBackstab(hitObject);
     }
 
     private bool IsPathBlockedBySmoke(Vector3 destination)

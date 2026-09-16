@@ -35,6 +35,13 @@ public class EscortSeriesEditModeTests
     public void UseTheDefaultBoard()
     {
         MapCatalog.SetActive(MapId.Concourse);
+        EscortSeries.End();
+    }
+
+    [TearDown]
+    public void CloseTheSeries()
+    {
+        EscortSeries.End();
     }
 
     // === WHO ESCORTS ===
@@ -49,12 +56,129 @@ public class EscortSeriesEditModeTests
     [Test]
     public void EachCrewEscortsOnceThenBothDoInTheDecider()
     {
-        Assert.That(EscortSeries.IsEscortingTeam(1, GameLoop.HostTeamIndex), Is.True);
-        Assert.That(EscortSeries.IsEscortingTeam(1, GameLoop.OpponentTeamIndex), Is.False);
-        Assert.That(EscortSeries.IsEscortingTeam(2, GameLoop.HostTeamIndex), Is.False);
-        Assert.That(EscortSeries.IsEscortingTeam(2, GameLoop.OpponentTeamIndex), Is.True);
-        Assert.That(EscortSeries.IsEscortingTeam(3, GameLoop.HostTeamIndex), Is.True);
-        Assert.That(EscortSeries.IsEscortingTeam(3, GameLoop.OpponentTeamIndex), Is.True);
+        foreach (int first in new[] { GameLoop.HostTeamIndex, GameLoop.OpponentTeamIndex })
+        {
+            int second = GameLoop.GetEnemyTeamIndex(first);
+            EscortSeries.Begin(first);
+
+            Assert.That(EscortSeries.IsEscortingTeam(1, first), Is.True);
+            Assert.That(EscortSeries.IsEscortingTeam(1, second), Is.False);
+            Assert.That(EscortSeries.IsEscortingTeam(2, first), Is.False);
+            Assert.That(EscortSeries.IsEscortingTeam(2, second), Is.True);
+            Assert.That(EscortSeries.IsEscortingTeam(3, first), Is.True);
+            Assert.That(EscortSeries.IsEscortingTeam(3, second), Is.True);
+        }
+    }
+
+    [Test]
+    public void TheDrawSendsEitherCrewOutFirstAndOutsideASeriesReadsAsTheHost()
+    {
+        Assert.That(
+            EscortSeries.FirstEscortTeamIndex,
+            Is.EqualTo(GameLoop.HostTeamIndex),
+            "The lobby preview draws leg 1 with no series open, so it must have a fixed answer."
+        );
+
+        HashSet<int> drawn = new();
+        for (int attempt = 0; attempt < 200; attempt++)
+        {
+            EscortSeries.Begin();
+            drawn.Add(EscortSeries.FirstEscortTeamIndex);
+        }
+
+        CollectionAssert.AreEquivalent(
+            new[] { GameLoop.HostTeamIndex, GameLoop.OpponentTeamIndex },
+            drawn,
+            "Leg 1's escort is a coin toss, so 200 draws must have produced both crews."
+        );
+    }
+
+    [Test]
+    public void TheDrawSurvivesTheHopToTheClient()
+    {
+        EscortSeries.Begin(GameLoop.OpponentTeamIndex);
+        EscortSeries.RecordLeg(GameLoop.OpponentTeamIndex);
+
+        EscortState replicated = new(
+            EscortSeries.LegNumber,
+            EscortSeries.GetLegWins(GameLoop.HostTeamIndex),
+            EscortSeries.GetLegWins(GameLoop.OpponentTeamIndex),
+            EscortSeries.RoundsPerLeg,
+            EscortSeries.FirstEscortTeamIndex
+        );
+
+        EscortSeries.End();
+        EscortSeries.SyncFromServer(
+            replicated.LegNumber,
+            replicated.HostLegWins,
+            replicated.OpponentLegWins,
+            replicated.FirstEscortTeamIndex
+        );
+
+        Assert.That(EscortSeries.FirstEscortTeamIndex, Is.EqualTo(GameLoop.OpponentTeamIndex));
+        Assert.That(EscortSeries.LegNumber, Is.EqualTo(2));
+        Assert.That(EscortSeries.IsEscortingTeam(GameLoop.HostTeamIndex), Is.True);
+    }
+
+    // === WHAT EACH SEAT IS TOLD ===
+
+    [Test]
+    public void EverySeatIsHandedExactlyOneRolePerLeg()
+    {
+        EscortSeries.Begin(GameLoop.OpponentTeamIndex);
+
+        Assert.That(
+            EscortSeries.RoleFor(1, GameLoop.OpponentTeamIndex),
+            Is.EqualTo(EscortRole.Protect)
+        );
+        Assert.That(
+            EscortSeries.RoleFor(1, GameLoop.HostTeamIndex),
+            Is.EqualTo(EscortRole.Defend)
+        );
+        Assert.That(
+            EscortSeries.RoleFor(2, GameLoop.OpponentTeamIndex),
+            Is.EqualTo(EscortRole.Defend)
+        );
+        Assert.That(
+            EscortSeries.RoleFor(2, GameLoop.HostTeamIndex),
+            Is.EqualTo(EscortRole.Protect)
+        );
+        Assert.That(
+            EscortSeries.RoleFor(EscortSeries.DeciderLeg, GameLoop.HostTeamIndex),
+            Is.EqualTo(EscortRole.Both)
+        );
+        Assert.That(
+            EscortSeries.RoleFor(EscortSeries.DeciderLeg, GameLoop.OpponentTeamIndex),
+            Is.EqualTo(EscortRole.Both)
+        );
+    }
+
+    [Test]
+    public void TheCoinsTwoFacesAreTheTwoRolesAndEveryRoleHasCopy()
+    {
+        Assert.That(
+            EscortSeries.OpposingRole(EscortRole.Protect),
+            Is.EqualTo(EscortRole.Defend)
+        );
+        Assert.That(
+            EscortSeries.OpposingRole(EscortRole.Defend),
+            Is.EqualTo(EscortRole.Protect)
+        );
+        Assert.That(
+            EscortSeries.OpposingRole(EscortRole.Both),
+            Is.EqualTo(EscortRole.Both),
+            "Both crews escort the decider, so the card has no other side to show."
+        );
+
+        foreach (EscortRole role in System.Enum.GetValues(typeof(EscortRole)))
+        {
+            Assert.That(EscortSeries.RoleHeadline(role), Is.Not.Empty);
+            Assert.That(EscortSeries.RoleBrief(role), Is.Not.Empty);
+        }
+
+        Assert.That(EscortSeries.RoleHeadline(EscortRole.Protect), Is.EqualTo("Protect"));
+        Assert.That(EscortSeries.RoleHeadline(EscortRole.Defend), Is.EqualTo("Defend"));
+        Assert.That(EscortSeries.RoleHeadline(EscortRole.Both), Is.EqualTo("Both"));
     }
 
     // === SERIES ARITHMETIC ===
@@ -624,7 +748,7 @@ public class EscortSeriesEditModeTests
     public void TheRallyAnimationFitsInsideTheRoundItIsCastIn()
     {
         // The recall holds the round open for as long as it runs, so the rally stays inside the
-        // range the existing abilities already hold for (Shield's 4.5s is the longest).
+        // range the existing abilities already hold for (ShieldRush's 4.5s is the longest).
         Assert.That(PresidentialRecall.BeckonSeconds, Is.GreaterThan(0f));
         Assert.That(
             PresidentialRecall.MaxRecallSeconds(RosterRules.UnitsPerPlayer - 1),

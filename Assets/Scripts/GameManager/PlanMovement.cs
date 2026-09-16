@@ -171,6 +171,17 @@ public partial class PlanMovement : MonoBehaviour
         && lockInAvailable;
 
     /// <summary>
+    /// Whether this screen is currently ordering <paramref name="unit"/> somewhere: a route still
+    /// under the finger counts, and so does one already sent. Read by the dodge window's shield
+    /// preview, since a dive cancels the diver's own ability and takes the slab it would have
+    /// raised with it.
+    /// </summary>
+    public bool HasMovementOrderFor(GameObject unit) =>
+        unit != null
+        && plans.TryGetValue(unit, out (bool, List<Vector3>) plan)
+        && GameLoop.IsValidDodgeMovementPlan(plan.Item1, plan.Item2);
+
+    /// <summary>
     /// The unit whose orders are being worked on, which is nobody once they are committed. A locked
     /// board is a record rather than a workspace, so every plan on it draws the same way instead of
     /// leaving whichever card was touched last lit up as though it were still the one in hand.

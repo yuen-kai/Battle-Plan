@@ -21,6 +21,11 @@ Shader "BattlePlan/DebrisScorch"
         _Edge ("Edge", Range(1, 40)) = 12
         _Cool ("Cool", Float) = 0
         _Bite ("Ash Bite", Range(0, 0.5)) = 0.26
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -61,7 +66,14 @@ Shader "BattlePlan/DebrisScorch"
                 float _Edge;
                 float _Cool;
                 float _Bite;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -73,12 +85,14 @@ Shader "BattlePlan/DebrisScorch"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 return OUT;
             }
@@ -97,6 +111,9 @@ Shader "BattlePlan/DebrisScorch"
                 // thinner ash between them rather than one flat token laid on the board.
                 float density = saturate((mark.a - _Cut) * _Edge) * _Density;
                 density = saturate(density * (0.52 + mark.g * 0.72));
+                // Nothing scorches ground the fireball never touched. Fading the density rather
+                // than clipping it leaves this multiply pass at its identity behind the slab.
+                density *= BlastShadow(IN.positionWS);
                 float3 tone = lerp(_CharTone.xyz, _AshTone.xyz, cooled);
                 return half4(lerp(float3(1, 1, 1), tone, density), 1);
             }

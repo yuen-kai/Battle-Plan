@@ -30,6 +30,11 @@ Shader "BattlePlan/ShockwaveCore"
         _Seed ("Bite Seed", Float) = 0
         _ShapeSeed ("Rim Seed", Float) = 0
         _EdgePixels ("Edge Pixels", Range(0.5, 4)) = 1.4
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -71,7 +76,14 @@ Shader "BattlePlan/ShockwaveCore"
                 float _Seed;
                 float _ShapeSeed;
                 half _EdgePixels;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -83,6 +95,7 @@ Shader "BattlePlan/ShockwaveCore"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             float Hash11(float n)
@@ -126,6 +139,7 @@ Shader "BattlePlan/ShockwaveCore"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -146,6 +160,7 @@ Shader "BattlePlan/ShockwaveCore"
 
                 float aa = max(fwidth(radius), 1e-6) * _EdgePixels;
                 half mask = saturate((edge - radius) / aa);
+                mask *= BlastShadow(IN.positionWS);
                 clip(mask - 0.004);
 
                 float t = saturate(radius / edge);

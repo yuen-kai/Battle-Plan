@@ -636,10 +636,13 @@ public sealed class BotPlayer
                 continue;
             }
 
+            AbilityLineOfFire lineOfFire = candidate.unit.GetComponent<Ability>().LineOfFire;
+
             if (!candidate.data.selectAbilitySquare)
             {
                 bool enemyClose = visibleEnemyCells.Any(cell =>
                     GridDistance(start, cell) <= Mathf.CeilToInt(candidate.data.targetRange)
+                    && HasUsableLineOfFire(start, cell, lineOfFire)
                 );
                 if (!enemyClose)
                     continue;
@@ -649,12 +652,11 @@ public sealed class BotPlayer
                 return;
             }
 
-            foreach (
-                Vector2Int visibleTarget in visibleEnemyCells
-                    .OrderBy(cell => GridDistance(start, cell))
-                    .ThenBy(cell => cell.x)
-                    .ThenBy(cell => cell.y)
-            )
+            foreach (Vector2Int visibleTarget in OrderAimCandidates(
+                start,
+                visibleEnemyCells,
+                lineOfFire
+            ))
             {
                 if (GridDistance(start, visibleTarget) > candidate.data.abilitySquareRange)
                     continue;
@@ -676,6 +678,54 @@ public sealed class BotPlayer
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// Visible enemy cells in the order an aimed ability should try them.
+    /// <para>
+    /// A cell can be visible to the team and still sit behind a wall from the caster, because the
+    /// team's sight is the union of every unit's, and aiming something that stops at a wall past
+    /// one wastes the round's only ability. So a required line drops those cells outright.
+    /// </para>
+    /// <para>
+    /// A preferred line only breaks ties between cells the same distance away. It is not allowed
+    /// to reach past a nearer target for a clear shot at a further one, because what is being
+    /// compared are two different aims rather than two targets: this planner measures range with
+    /// <c>abilitySquareRange</c>, which is how far a player may aim, and an ability's effect can
+    /// travel a good deal less than that — Breach may aim across the whole board and its rocket
+    /// flies eight cells. Nearest-first is what keeps an aim inside that.
+    /// </para>
+    /// </summary>
+    public static IEnumerable<Vector2Int> OrderAimCandidates(
+        Vector2Int casterCell,
+        IEnumerable<Vector2Int> enemyCells,
+        AbilityLineOfFire lineOfFire
+    )
+    {
+        return enemyCells
+            .Where(cell => HasUsableLineOfFire(casterCell, cell, lineOfFire))
+            .OrderBy(cell => GridDistance(casterCell, cell))
+            .ThenByDescending(cell =>
+                lineOfFire == AbilityLineOfFire.Preferred
+                && GridSystem.HasGridLineOfSight(casterCell, cell)
+            )
+            .ThenBy(cell => cell.x)
+            .ThenBy(cell => cell.y);
+    }
+
+    /// <summary>
+    /// Whether an ability can do anything at all to <paramref name="target"/> from
+    /// <paramref name="casterCell"/>. A preferred line still fires through a wall — it only scores
+    /// worse, which is <see cref="OrderAimCandidates"/>'s job, not this one's.
+    /// </summary>
+    public static bool HasUsableLineOfFire(
+        Vector2Int casterCell,
+        Vector2Int target,
+        AbilityLineOfFire lineOfFire
+    )
+    {
+        return lineOfFire != AbilityLineOfFire.Required
+            || GridSystem.HasGridLineOfSight(casterCell, target);
     }
 
     /// <summary>

@@ -25,6 +25,11 @@ Shader "BattlePlan/ImpactCoreBurst"
         _FadeStart ("Fade Start", Range(0, 1)) = 1
         _Opacity ("Opacity", Range(0, 1)) = 1
         [Enum(UnityEngine.Rendering.CompareFunction)] _ZTestMode ("ZTest", Float) = 8
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -59,7 +64,14 @@ Shader "BattlePlan/ImpactCoreBurst"
                 float _FadeStart;
                 float _Opacity;
                 float _ZTestMode;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -71,12 +83,14 @@ Shader "BattlePlan/ImpactCoreBurst"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -98,7 +112,8 @@ Shader "BattlePlan/ImpactCoreBurst"
                 // right up to the rim, so the silhouette terminates within a pixel instead of
                 // trailing off over a gradient. Lower values buy a soft shoulder for light spill.
                 float fade = saturate((1.0 - radius) / max(1.0 - _FadeStart, 1e-3));
-                float alpha = _Opacity * fade * fade * (3.0 - 2.0 * fade);
+                float alpha = _Opacity * fade * fade * (3.0 - 2.0 * fade)
+                    * BlastShadow(IN.positionWS);
                 clip(alpha - 0.002);
 
                 return half4(tint, alpha);

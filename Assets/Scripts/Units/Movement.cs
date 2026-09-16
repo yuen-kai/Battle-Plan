@@ -357,7 +357,6 @@ public class Movement : NetworkBehaviour
                 rotationSpeed * Time.deltaTime
             );
         }
-
         transform.rotation = targetRotation;
     }
 

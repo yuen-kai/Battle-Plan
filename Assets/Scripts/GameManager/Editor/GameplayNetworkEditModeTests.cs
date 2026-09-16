@@ -671,7 +671,7 @@ public class GameplayNetworkEditModeTests
         const string prefabPath = "Assets/Prefabs/Units/Ramrod.prefab";
         GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
         Assert.That(prefab, Is.Not.Null, $"Could not load {prefabPath}.");
-        Assert.That(Shield.ShieldWidthIncreaseCellsPerSide, Is.EqualTo(1));
+        Assert.That(ShieldRush.ShieldWidthIncreaseCellsPerSide, Is.EqualTo(1));
 
         GameObject instance = Object.Instantiate(prefab);
         try
@@ -688,7 +688,7 @@ public class GameplayNetworkEditModeTests
                 shieldCollider.size.x * shield.lossyScale.x
             );
 
-            Assert.That(Shield.TryExpandShieldFootprint(shield), Is.True);
+            Assert.That(ShieldRush.TryExpandShieldFootprint(shield), Is.True);
 
             float widthAfter = Mathf.Abs(
                 shieldCollider.size.x * shield.lossyScale.x
@@ -696,7 +696,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 widthAfter - widthBefore,
                 Is.EqualTo(
-                        Shield.ShieldWidthIncreaseCellsPerSide * 2f * GameLoop.cellSize
+                        ShieldRush.ShieldWidthIncreaseCellsPerSide * 2f * GameLoop.cellSize
                     )
                     .Within(0.001f)
             );
@@ -710,14 +710,14 @@ public class GameplayNetworkEditModeTests
     [TestCase(
         GameLoop.HostTeamIndex,
         "BlueTeam",
-        Shield.BlueShieldLayerName,
+        ShieldRush.BlueShieldLayerName,
         "Assets/Prefabs/Projectiles/BulletBlue.prefab",
         "Assets/Prefabs/Projectiles/BulletRed.prefab"
     )]
     [TestCase(
         GameLoop.OpponentTeamIndex,
         "RedTeam",
-        Shield.RedShieldLayerName,
+        ShieldRush.RedShieldLayerName,
         "Assets/Prefabs/Projectiles/BulletRed.prefab",
         "Assets/Prefabs/Projectiles/BulletBlue.prefab"
     )]
@@ -765,7 +765,7 @@ public class GameplayNetworkEditModeTests
                 "A shield must block the swept projectile query without being treated as a unit."
             );
             Assert.That(
-                Shield.TryApplyCollisionLayer(shield, teamIndex),
+                ShieldRush.TryApplyCollisionLayer(shield, teamIndex),
                 Is.True,
                 "Replicated shield state must restore the dedicated team-shield layer."
             );
@@ -773,7 +773,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(shield.gameObject.activeInHierarchy, Is.True);
             Assert.That(
                 shield.gameObject.layer,
-                Is.EqualTo(Shield.GetCollisionLayerForTeam(teamIndex))
+                Is.EqualTo(ShieldRush.GetCollisionLayerForTeam(teamIndex))
             );
             Assert.That(
                 shield.gameObject.layer,

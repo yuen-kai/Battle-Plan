@@ -204,7 +204,7 @@ public sealed class TrailerShootRunner : MonoBehaviour
         yield return WaitFor(
             () =>
                 GameLoop.Instance != null
-                && GameLoop.currentPhase == "planning"
+                && GameLoop.currentPhase == GameLoop.Phase.Planning
                 && GameLoop.GetTeamUnits(0).Length == RosterRules.UnitsPerPlayer
                 && GameLoop.GetTeamUnits(1).Length == RosterRules.UnitsPerPlayer,
             90f,

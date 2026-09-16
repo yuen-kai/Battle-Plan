@@ -34,6 +34,11 @@ Shader "BattlePlan/AftermathCoalScatter"
         _DeathEnd ("Last Coal Out", Float) = 1.52
         _DeathSpan ("Wink Out Time", Range(0.02, 0.5)) = 0.14
         _Seed ("Seed", Float) = 0
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -77,7 +82,14 @@ Shader "BattlePlan/AftermathCoalScatter"
                 float _DeathEnd;
                 half _DeathSpan;
                 float _Seed;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -89,6 +101,7 @@ Shader "BattlePlan/AftermathCoalScatter"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             float ScatterHash1(float n)
@@ -124,6 +137,7 @@ Shader "BattlePlan/AftermathCoalScatter"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -179,7 +193,8 @@ Shader "BattlePlan/AftermathCoalScatter"
                     }
                 }
 
-                float coverage = saturate(shape / max(fwidth(shape) * _EdgePixels, 1e-5));
+                float coverage = saturate(shape / max(fwidth(shape) * _EdgePixels, 1e-5))
+                    * BlastShadow(IN.positionWS);
                 clip(coverage - 0.02);
 
                 half3 color = lerp(_RimColor.rgb, _EmberColor.rgb, saturate(shape / max(_RimSpan, 1e-3)));

@@ -14,6 +14,7 @@
 
                 <ui:Button name="sandbox-move" text="Move units" class="button sandbox-button sandbox-button--wide" tooltip="Drag any unit to another square instead of planning" />
                 <ui:Button name="sandbox-recharge" text="Clear cooldowns" class="button sandbox-button sandbox-button--wide" tooltip="Hand every ability back" />
+                <ui:Button name="sandbox-copy" text="Copy round" class="button sandbox-button sandbox-button--wide" tooltip="Copy this board and its orders to the clipboard" />
 
                 <ui:Toggle name="sandbox-fog" label="Fog of war" class="sandbox-toggle" tooltip="Run the board under fog, as a real match does" />
 

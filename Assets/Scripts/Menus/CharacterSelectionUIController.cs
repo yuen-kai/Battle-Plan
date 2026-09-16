@@ -733,6 +733,10 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         sceneLoadRequested = true;
         GameLoop.ResetMatchState();
+        // A finished escort series stays on the statics so the scene load between its legs can
+        // carry the score across. This is the other kind of scene load — a new match — so the
+        // series is closed here and the next one opens on leg 1 with a fresh coin.
+        EscortSeries.End();
         GameLoop.ConfigureTeam(GameLoop.HostTeamIndex, hostId, hostRoster);
         GameLoop.ConfigureTeam(GameLoop.OpponentTeamIndex, opponentId, opponentRoster);
         NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);

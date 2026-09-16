@@ -93,14 +93,22 @@ public class BulletExtensionsEditModeTests
         method.Invoke(bullet, new object[] { hitObject });
     }
 
-    private static void InvokeResolveAreaImpact(Bullet bullet, Vector3 impactPosition)
+    private static void ExplodeAsBulletWould(
+        Vector3 impactPosition,
+        float aoeRadius,
+        float damage,
+        HashSet<GameObject> alreadyHit
+    )
     {
-        MethodInfo method = typeof(Bullet).GetMethod(
-            "ResolveAreaImpact",
-            BindingFlags.NonPublic | BindingFlags.Instance
+        Blast.Explode(
+            impactPosition,
+            aoeRadius,
+            EnemyTeamLayer,
+            ShieldRush.GetEnemyShieldMask(Bullet.GetShooterTeamIndex(EnemyTeamLayer)),
+            damage,
+            null,
+            alreadyHit: alreadyHit
         );
-        Assert.That(method, Is.Not.Null, "Missing Bullet.ResolveAreaImpact.");
-        method.Invoke(bullet, new object[] { impactPosition });
     }
 
     private static HashSet<GameObject> GetHitTargets(Bullet bullet)
@@ -183,10 +191,119 @@ public class BulletExtensionsEditModeTests
         );
     }
 
-    // === Item 1: AoE splash mirrors Grenade.ExplodeGrenade's overlap + line-of-sight pattern ===
+    private static bool InvokeIsCrit(Bullet bullet, GameObject hitObject)
+    {
+        MethodInfo method = typeof(Bullet).GetMethod(
+            "IsCrit",
+            BindingFlags.NonPublic | BindingFlags.Instance
+        );
+        Assert.That(method, Is.Not.Null, "Missing Bullet.IsCrit.");
+        return (bool)method.Invoke(bullet, new object[] { hitObject });
+    }
+
+    private static Bullet CreateRearShooter(GameObject owner, float backstabMultiplier, bool pierces)
+    {
+        Bullet bullet = CreateBullet(owner, Vector3.zero);
+        bullet.Initialize(
+            velocity: Vector3.zero,
+            shotDamage: 10f,
+            shotBackstabMultiplier: backstabMultiplier,
+            shotRange: 100f,
+            shotBackstabAngle: 90f,
+            damageableTeam: EnemyTeamLayer,
+            authoritative: true,
+            shotExplodesOnImpact: false,
+            shotAoeRadius: 0f,
+            shotPierces: pierces
+        );
+        return bullet;
+    }
+
+    /// <summary>A target facing away from the shooter at the origin, so every hit is a rear hit.</summary>
+    private GameObject CreateTargetWithItsBackTurned(string name)
+    {
+        GameObject target = Track(new GameObject(name));
+        target.transform.position = new Vector3(0f, 0f, 5f);
+        target.transform.rotation = Quaternion.LookRotation(Vector3.forward);
+        return target;
+    }
 
     [Test]
-    public void ResolveAreaImpact_DamagesClearEnemiesButSkipsOnesBlockedByAWall()
+    public void IsCrit_NeedsAMultiplierAndNotJustARearHit()
+    {
+        GameObject target = CreateTargetWithItsBackTurned("RearHitTarget");
+
+        Bullet multiplied = CreateRearShooter(
+            Track(new GameObject("MultipliedShot")),
+            backstabMultiplier: 2f,
+            pierces: false
+        );
+        Assert.That(
+            InvokeIsCrit(multiplied, target),
+            Is.True,
+            "A rear hit from a weapon that multiplies it is the crit the red number is for."
+        );
+
+        Bullet flat = CreateRearShooter(
+            Track(new GameObject("FlatShot")),
+            backstabMultiplier: 1f,
+            pierces: false
+        );
+        Assert.That(
+            InvokeIsCrit(flat, target),
+            Is.False,
+            "Most units carry a multiplier of one, so a rear hit from them deals exactly what a "
+                + "frontal one does and must not announce itself as a crit."
+        );
+    }
+
+    [Test]
+    public void IsCrit_IsFalseForAFrontalHitFromAMultipliedWeapon()
+    {
+        GameObject target = Track(new GameObject("FrontHitTarget"));
+        target.transform.position = new Vector3(0f, 0f, 5f);
+        target.transform.rotation = Quaternion.LookRotation(Vector3.back);
+
+        Bullet bullet = CreateRearShooter(
+            Track(new GameObject("FrontalShot")),
+            backstabMultiplier: 2f,
+            pierces: false
+        );
+
+        Assert.That(InvokeIsCrit(bullet, target), Is.False);
+    }
+
+    /// <summary>
+    /// The multiplier and the red number have to come from one decision. Reading the crit twice —
+    /// once to scale the damage and once to colour it — is how a number that says thirty ends up
+    /// drawn in the colour of a hit for ten.
+    /// </summary>
+    [Test]
+    public void ApplyDirectHitDamage_ScalesAndAnnouncesFromTheSameDecision()
+    {
+        GameObject target = CreateTargetWithItsBackTurned("CritTarget");
+        Health health = AddLivingHealth(target, startingHealth: 100f);
+
+        Bullet bullet = CreateRearShooter(
+            Track(new GameObject("CritShot")),
+            backstabMultiplier: 2f,
+            pierces: false
+        );
+
+        Assert.That(InvokeIsCrit(bullet, target), Is.True);
+        InvokeApplyDirectHitDamage(bullet, target);
+
+        Assert.That(
+            health.CurrentHealth,
+            Is.EqualTo(80f).Within(0.001f),
+            "The hit IsCrit called a crit must be the one that took the multiplier."
+        );
+    }
+
+    // === Item 1: AoE splash shares Blast.Explode's overlap + line-of-sight pattern ===
+
+    [Test]
+    public void Explode_DamagesClearEnemiesButSkipsOnesBlockedByAWall()
     {
         int enemyLayer = LayerMask.NameToLayer(EnemyTeamLayer);
         int wallLayer = LayerMask.NameToLayer(WallsLayer);
@@ -209,29 +326,14 @@ public class BulletExtensionsEditModeTests
 
         Physics.SyncTransforms();
 
-        GameObject bulletObject = Track(new GameObject("AoeTestBullet"));
-        Bullet bullet = CreateBullet(bulletObject, impactPosition);
-        bullet.Initialize(
-            velocity: Vector3.zero,
-            shotDamage: 10f,
-            shotBackstabMultiplier: 1f,
-            shotRange: 100f,
-            shotBackstabAngle: 90f,
-            damageableTeam: EnemyTeamLayer,
-            authoritative: true,
-            shotExplodesOnImpact: true,
-            shotAoeRadius: 5f,
-            shotPierces: false
-        );
-
-        InvokeResolveAreaImpact(bullet, impactPosition);
+        ExplodeAsBulletWould(impactPosition, 5f, 10f, new HashSet<GameObject>());
 
         Assert.That(clearEnemyHealth.CurrentHealth, Is.EqualTo(90f).Within(0.001f));
         Assert.That(blockedEnemyHealth.CurrentHealth, Is.EqualTo(100f).Within(0.001f));
     }
 
     [Test]
-    public void ResolveAreaImpact_DoesNotDoubleCountATargetAlreadyCreditedAsTheDirectHit()
+    public void Explode_DoesNotDoubleCountATargetAlreadyCreditedAsTheDirectHit()
     {
         int enemyLayer = LayerMask.NameToLayer(EnemyTeamLayer);
         Assert.That(enemyLayer, Is.GreaterThanOrEqualTo(0));
@@ -261,7 +363,7 @@ public class BulletExtensionsEditModeTests
         InvokeApplyDirectHitDamage(bullet, directHitEnemy);
         Physics.SyncTransforms();
 
-        InvokeResolveAreaImpact(bullet, impactPosition);
+        ExplodeAsBulletWould(impactPosition, 5f, 10f, GetHitTargets(bullet));
 
         Assert.That(directHitHealth.CurrentHealth, Is.EqualTo(90f).Within(0.001f));
     }

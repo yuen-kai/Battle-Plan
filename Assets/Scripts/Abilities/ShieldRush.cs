@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-public class Shield : Ability
+public class ShieldRush : Ability
 {
     public const float AbilityDurationSeconds = 4.5f;
     public const int ShieldWidthIncreaseCellsPerSide = 1;
@@ -216,6 +216,46 @@ public class Shield : Ability
         return layerName != null ? LayerMask.NameToLayer(layerName) : -1;
     }
 
+    /// <summary>
+    /// Raycast mask for the shield layer belonging to <paramref name="teamIndex"/>'s enemy, so a
+    /// line of fire stops on a raised enemy shield the way it stops on a wall. Never includes the
+    /// caster's own shield layer: a unit is not blinded or blocked by the slab it raised.
+    /// </summary>
+    public static int GetEnemyShieldMask(int teamIndex)
+    {
+        int shieldLayer = GetCollisionLayerForTeam(GameLoop.GetEnemyTeamIndex(teamIndex));
+        return shieldLayer < 0 ? 0 : 1 << shieldLayer;
+    }
+
+    public static int GetEnemyShieldMask(GameObject caster)
+    {
+        Unit identity = caster != null ? caster.GetComponent<Unit>() : null;
+        return GetEnemyShieldMask(identity != null ? identity.TeamIndex : -1);
+    }
+
+    public static bool IsShieldLayer(int layer)
+    {
+        return layer == LayerMask.NameToLayer(BlueShieldLayerName)
+            || layer == LayerMask.NameToLayer(RedShieldLayerName);
+    }
+
+    public static bool TryGetShieldOwner(Collider blocker, out GameObject owner)
+    {
+        owner = null;
+        if (blocker == null || !IsShieldLayer(blocker.gameObject.layer))
+            return false;
+
+        Unit identity = blocker.GetComponentInParent<Unit>();
+        owner = identity != null ? identity.gameObject : null;
+        return owner != null;
+    }
+
+    public static void ReportBlockedDamage(Collider blocker, Vector3 impactPoint)
+    {
+        if (TryGetShieldOwner(blocker, out GameObject owner))
+            GameLoop.Instance?.ReportShieldBlockedDamage(owner, impactPoint);
+    }
+
     public static bool TryApplyCollisionLayer(Transform shield, int teamIndex)
     {
         if (shield == null)
@@ -257,5 +297,7 @@ public class Shield : Ability
     {
         if (!shieldFootprintExpanded && TryExpandShieldFootprint(shieldTransform))
             shieldFootprintExpanded = true;
+        // After the expansion, never before: the roundover is sized from the slab's final scale.
+        ShieldMesh.Apply(shieldTransform);
     }
 }
