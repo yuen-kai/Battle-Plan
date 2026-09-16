@@ -188,20 +188,6 @@
     padding: var(--toy-space-panel);
 }
 
-/* Both the scroller and the container it sits in, matched as descendants rather
-   than direct children — the ScrollView nests them, so a child combinator misses
-   and leaves an unskinned strip along the foot of the plate that reads as a
-   rendering bug. */
-.join-content .unity-scroller--horizontal,
-.join-content .unity-scroll-view__horizontal-scroller {
-    display: none;
-}
-
-.join-content .unity-scroller--vertical {
-    width: var(--toy-scroll-size);
-    background-color: var(--toy-inset);
-}
-
 /* Grows so the action at the foot of the panel has free space to be pushed
    into. When the options outgrow the viewport there is none, the auto margin
    collapses, and the button flows with everything else.

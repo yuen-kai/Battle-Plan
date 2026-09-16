@@ -214,16 +214,6 @@
     min-height: 0;
 }
 
-/* Content reads from the top and stops. */
-.dossier-scroll .unity-scroll-view__content-container {
-    padding-right: var(--toy-space-md);
-}
-
-.dossier-scroll > .unity-scroll-view__vertical-scroller {
-    width: var(--toy-scroll-size);
-    background-color: var(--toy-inset);
-}
-
 /* Every orange tick in the panel hangs in the padding so the text beside it starts on the same edge
    as the copy underneath. Left in the flow, the rule and its shoulder indent each heading twelve
    pixels off the column it introduces, and the eyebrow off the name it belongs to. */

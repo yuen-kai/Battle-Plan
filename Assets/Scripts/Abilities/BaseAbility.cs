@@ -99,6 +99,13 @@ public abstract class Ability : NetworkBehaviour
     {
         yield return null;
         interruptibleExecution = null;
+
+        // Named after the ability rather than asked for by each one, so a new ability animates the
+        // moment a clip called after it exists and does nothing at all until then. Every rig
+        // ignores a state it has not got, which is what the abilities on the hand-authored units
+        // rely on.
+        GetComponent<AnimationHandler>()?.PlayAnimation(GetType().Name);
+
         yield return ExecuteAbility(abilitySquare, areaRadius);
         execution = null;
     }

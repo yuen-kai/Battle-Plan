@@ -31,13 +31,41 @@ public static class CharacterContactSheet
         ("HandMade", new[] { "Soldier", "Commander", "Sniper", "Ramrod" }),
     };
 
-    [MenuItem("Battle Plan/Art/Character Contact Sheet", false, 14)]
+    [MenuItem("Battle Plan/Art/Character Contact Sheet", false, 16)]
     public static void Render()
     {
         Directory.CreateDirectory(OutputFolder);
         foreach ((string name, string[] units) in Sheets)
             Sheet(name, units);
         Debug.Log($"[Characters] Contact sheets written to {OutputFolder}.");
+    }
+
+    /// <summary>
+    /// Shoots one unit onto a sheet of its own, so iterating on a single character does not mean
+    /// re-rendering the twelve next to it and then hunting for the right cell.
+    /// </summary>
+    [MenuItem("Battle Plan/Art/Contact Sheet For Selected Character", true, 17)]
+    private static bool ValidateRenderSelected() =>
+        Selection.activeObject != null
+        && AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Prefabs/Units/{Selection.activeObject.name}.prefab") != null;
+
+    [MenuItem("Battle Plan/Art/Contact Sheet For Selected Character", false, 17)]
+    private static void RenderSelected() => Render(Selection.activeObject.name);
+
+    /// <summary>Shoots one unit by prefab name. Returns the path written, or null.</summary>
+    public static string Render(string unit)
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Prefabs/Units/{unit}.prefab") == null)
+        {
+            Debug.LogError($"[Characters] No unit prefab called {unit}.");
+            return null;
+        }
+
+        Directory.CreateDirectory(OutputFolder);
+        Sheet(unit, new[] { unit });
+        string path = OutputFolder + unit + ".png";
+        Debug.Log($"[Characters] Wrote {path}.");
+        return path;
     }
 
     private static void Sheet(string name, string[] units)
@@ -162,7 +190,9 @@ public static class CharacterContactSheet
         List<Renderer> renderers = new();
         foreach (Renderer candidate in root.GetComponentsInChildren<Renderer>(true))
         {
-            if (candidate is MeshRenderer && candidate.gameObject.activeInHierarchy)
+            // Skinned as well as static: the generated units bind their surfaces to a skeleton, so
+            // filtering to MeshRenderer here frames the sheet on the base puck and nothing else.
+            if (candidate is MeshRenderer or SkinnedMeshRenderer && candidate.gameObject.activeInHierarchy)
                 renderers.Add(candidate);
         }
 

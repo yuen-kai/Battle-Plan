@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
 
 /// <summary>
@@ -283,16 +285,398 @@ public class CharacterModelEditModeTests
     public void TheModelStaysInsideItsTriangleBudget(string unit)
     {
         int triangles = 0;
-        foreach (MeshFilter filter in Model(unit).GetComponentsInChildren<MeshFilter>(true))
+        foreach ((Transform _, Mesh mesh, Renderer _) in Surfaces(Model(unit)))
         {
-            Mesh mesh = filter.sharedMesh;
-            Assert.That(mesh, Is.Not.Null, $"{unit}/{filter.name} has no mesh.");
             for (int submesh = 0; submesh < mesh.subMeshCount; submesh++)
                 triangles += (int)mesh.GetIndexCount(submesh) / 3;
         }
 
         Assert.That(triangles, Is.LessThanOrEqualTo(TriangleBudget));
         Assert.That(triangles, Is.GreaterThan(400), "A body this cheap is a box with a head on it.");
+    }
+
+    /// <summary>
+    /// The rig, joint by joint against <see cref="CharacterSkeleton"/>. Clips bind by path, so a
+    /// renamed or reparented joint does not fail — it silently stops driving the character, which
+    /// is the failure mode worth a test.
+    /// </summary>
+    [TestCaseSource(nameof(Units))]
+    public void TheRigHangsUnderTheModelRootWhereTheClipsLookForIt(string unit)
+    {
+        Transform body = Model(unit);
+
+        foreach (CharacterBone bone in CharacterSkeleton.All)
+        {
+            string path = CharacterSkeleton.Path(bone);
+            Assert.That(body.Find(path), Is.Not.Null, $"{unit} has no joint at {path}.");
+        }
+    }
+
+    /// <summary>
+    /// Every vertex locked to exactly one bone at full weight. A blended vertex would pinch the two
+    /// interpenetrating solids it straddles, and one naming a bone the mesh has no bind pose for
+    /// collapses to the model's origin — a spike out from between the unit's feet.
+    /// </summary>
+    [TestCaseSource(nameof(Units))]
+    public void EverySurfaceIsRigidlyBoundToOneBoneEach(string unit)
+    {
+        Transform body = Model(unit);
+        int bones = CharacterSkeleton.All.Length;
+
+        foreach (string name in new[] { "Mesh", "TeamKit" })
+        {
+            SkinnedMeshRenderer surface = body.Find(name).GetComponent<SkinnedMeshRenderer>();
+            Assert.That(surface, Is.Not.Null, $"{unit}/{name} is not skinned.");
+            Assert.That(surface.bones.Length, Is.EqualTo(bones), $"{unit}/{name} is bound to the wrong rig.");
+            Assert.That(surface.rootBone, Is.Not.Null, $"{unit}/{name} has no root bone.");
+
+            Mesh mesh = surface.sharedMesh;
+            Assert.That(mesh.bindposes.Length, Is.EqualTo(bones), $"{unit}/{name} is missing bind poses.");
+
+            BoneWeight[] weights = mesh.boneWeights;
+            Assert.That(weights.Length, Is.EqualTo(mesh.vertexCount), $"{unit}/{name} has unweighted vertices.");
+
+            foreach (BoneWeight weight in weights)
+            {
+                Assert.That(weight.weight0, Is.EqualTo(1f).Within(0.0001f), $"{unit}/{name} has a blended vertex.");
+                Assert.That(weight.weight1, Is.EqualTo(0f).Within(0.0001f), $"{unit}/{name} has a vertex on two bones.");
+                Assert.That(weight.boneIndex0, Is.InRange(0, bones - 1), $"{unit}/{name} names a bone off the rig.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The states <c>AnimationHandler</c> asks for by name. It cross-fades onto whatever the
+    /// controller has and no-ops on what it has not, so a missing state is not an error in the
+    /// console — it is a unit that never animates and nobody notices for a month.
+    /// </summary>
+    [TestCaseSource(nameof(Units))]
+    public void TheControllerCarriesTheStatesTheGameAsksFor(string unit)
+    {
+        AnimatorStateMachine machine = Controller(unit).layers[0].stateMachine;
+        List<string> states = machine.states.Select(child => child.state.name).ToList();
+
+        foreach (string state in new[] { "Idle", "Moving", "Aiming", "Shoot", "Dodge", "DiveRecovery" })
+            Assert.That(states, Contains.Item(state), $"{unit} has no {state} state.");
+
+        Assert.That(machine.defaultState.name, Is.EqualTo("Idle"), "A unit stands idle until it is told otherwise.");
+    }
+
+    /// <summary>
+    /// Every curve in every clip resolves against the prefab it is written to drive, which is the
+    /// test here that earns its keep: a clip with the wrong binding path or the wrong property name
+    /// imports clean, plays clean, reports its full length, and moves nothing whatsoever.
+    /// </summary>
+    [TestCaseSource(nameof(Units))]
+    public void EveryCurveDrivesAJointThatExists(string unit)
+    {
+        Transform body = Model(unit);
+        int curves = 0;
+
+        foreach (ChildAnimatorState child in Controller(unit).layers[0].stateMachine.states)
+        {
+            AnimationClip clip = child.state.motion as AnimationClip;
+            Assert.That(clip, Is.Not.Null, $"{unit}/{child.state.name} has no clip on it.");
+            Assert.That(clip.length, Is.GreaterThan(0.1f), $"{unit}/{child.state.name} is an empty clip.");
+
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+            {
+                Assert.That(binding.type, Is.EqualTo(typeof(Transform)), $"{clip.name} drives a {binding.type}.");
+                Assert.That(body.Find(binding.path), Is.Not.Null, $"{clip.name} drives {binding.path}, which {unit} has not got.");
+                curves++;
+            }
+        }
+
+        Assert.That(curves, Is.GreaterThan(40), $"{unit} is barely animated at {curves} curves.");
+    }
+
+    /// <summary>
+    /// A unit's gun has to be on the line its own shot travels.
+    ///
+    /// <para>
+    /// <c>Shooting</c> spawns a round at <c>transform.position</c> — the unit's root, the centre of
+    /// the body — and sends it straight down the unit's forward axis. The rig draws the weapons
+    /// somewhere else entirely: hung off a hand, out to one side and canted across the body. Left
+    /// alone that is a unit firing out of its chest while its gun points somewhere else, which from
+    /// the board camera, nearly overhead, is exactly the part that shows.
+    /// </para>
+    ///
+    /// <para>
+    /// So the aiming pose turns the chest until the bore crosses the centre line and the wrist until
+    /// it runs straight down it. Both are solved rather than dialled in, which is why this asserts
+    /// hundredths of a degree rather than something forgiving — anything looser would pass on a
+    /// solve that had quietly stopped converging.
+    /// </para>
+    /// </summary>
+    [TestCaseSource(nameof(Units))]
+    public void EveryUnitAimsAlongTheLineItsOwnShotTravels(string unit)
+    {
+        GameObject spawned = Object.Instantiate(Root(unit));
+        try
+        {
+            Transform body = spawned.transform.Find("Body");
+            AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                $"Assets/Animation/Characters/{unit}_Aiming.anim"
+            );
+            Assert.That(clip, Is.Not.Null, $"{unit} has no Aiming clip.");
+
+            // Which hand holds the weapon is whichever one the clip turns: the aim correction is
+            // applied to the hand the geometry follows and to no other. Read rather than restated,
+            // so the bow being in the other hand cannot go stale here.
+            Transform hand = WeaponHand(body, clip);
+            Transform weapon = body.Find(CharacterSkeleton.Path(CharacterBone.Weapon));
+
+            // A stand-in for the weapon, rigidly on that hand, sitting on the bore and aimed down it.
+            Transform bore = new GameObject("Bore").transform;
+            bore.SetParent(hand, false);
+            bore.position = weapon.position;
+            bore.rotation = Quaternion.LookRotation(weapon.up, Vector3.up);
+
+            for (int step = 0; step <= 12; step++)
+            {
+                clip.SampleAnimation(body.gameObject, clip.length * step / 12f);
+
+                Vector3 on = body.InverseTransformPoint(bore.position);
+                Vector3 down = body.InverseTransformDirection(bore.forward).normalized;
+
+                Assert.That(on.x, Is.EqualTo(0f).Within(0.002f), $"{unit}'s bore is off its own centre line.");
+                Assert.That(
+                    Mathf.Atan2(down.x, down.z) * Mathf.Rad2Deg,
+                    Is.EqualTo(0f).Within(0.05f),
+                    $"{unit}'s gun points across the line its shot travels."
+                );
+                Assert.That(
+                    Mathf.Asin(Mathf.Clamp(down.y, -1f, 1f)) * Mathf.Rad2Deg,
+                    Is.EqualTo(0f).Within(0.05f),
+                    $"{unit}'s gun is not level, but its shot is."
+                );
+            }
+        }
+        finally
+        {
+            Object.DestroyImmediate(spawned);
+        }
+    }
+
+    private static Transform WeaponHand(Transform body, AnimationClip clip)
+    {
+        foreach (CharacterBone hand in new[] { CharacterBone.HandR, CharacterBone.HandL })
+        {
+            string path = CharacterSkeleton.Path(hand);
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+            {
+                if (binding.path == path && binding.propertyName.StartsWith("localEuler"))
+                    return body.Find(path);
+            }
+        }
+
+        Assert.Fail($"{clip.name} turns neither hand, so nothing is aiming the weapon.");
+        return null;
+    }
+
+    /// <summary>
+    /// No clip may rotate a bone that rests turned, which is the rule the rig is built around and
+    /// the one worth a test of its own.
+    ///
+    /// <para>
+    /// An Euler curve carries an absolute local rotation rather than an offset from rest, so a clip
+    /// keying zero on a bone that rests aimed somewhere does not leave it alone — it snaps it
+    /// square. On the weapon pivot, which rests aimed down the barrel, that tore Salvo's six
+    /// barrels off the gun and left them hanging in the air beside it, reading as a second weapon.
+    /// The rig answers it by splitting the aim onto a parent no clip touches; this is what keeps it
+    /// answered.
+    /// </para>
+    /// </summary>
+    [TestCaseSource(nameof(Units))]
+    public void NoClipRotatesABoneThatRestsTurned(string unit)
+    {
+        Transform body = Model(unit);
+
+        foreach (CharacterBone bone in CharacterSkeleton.All)
+        {
+            Transform joint = body.Find(CharacterSkeleton.Path(bone));
+            bool square = Quaternion.Angle(joint.localRotation, Quaternion.identity) < 0.01f;
+
+            Assert.That(
+                square,
+                Is.EqualTo(CharacterSkeleton.IsPosed(bone)),
+                $"{unit}/{bone} rests {(square ? "square" : "turned")}, which contradicts CharacterSkeleton.IsPosed."
+            );
+        }
+
+        foreach (ChildAnimatorState child in Controller(unit).layers[0].stateMachine.states)
+        {
+            AnimationClip clip = child.state.motion as AnimationClip;
+            foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+            {
+                if (!binding.propertyName.StartsWith("localEuler"))
+                    continue;
+
+                Transform driven = body.Find(binding.path);
+                Assert.That(
+                    Quaternion.Angle(driven.localRotation, Quaternion.identity),
+                    Is.LessThan(0.01f),
+                    $"{clip.name} rotates {binding.path}, which rests turned; the curve would discard its aim."
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Salvo's six barrels turn while it is firing and only while it is firing.
+    ///
+    /// <para>
+    /// Aiming is the state that matters here and the reason it is asserted rather than assumed:
+    /// <c>AnimationHandler.TriggerAnimation</c> hands back to whatever was being held once a round
+    /// is away, which through a magazine is Aiming. A rotor turning in that clip is a rotor that
+    /// never stops again once the unit has fired its first shot.
+    /// </para>
+    /// </summary>
+    [Test]
+    public void SalvosRotorTurnsOnlyWhileItIsFiring()
+    {
+        Assert.That(RotorTravel("Salvo", "Shoot"), Is.GreaterThan(360f), "The barrels barely move while firing.");
+        Assert.That(RotorTravel("Salvo", "SuppressingFire"), Is.GreaterThan(720f), "A held burst should spin the rotor up.");
+
+        foreach (string state in new[] { "Idle", "Moving", "Aiming", "Dodge", "DiveRecovery" })
+            Assert.That(RotorTravel("Salvo", state), Is.EqualTo(0f), $"The rotor turns in {state}, so it never stops.");
+
+        // Nothing holds the rotor at an angle, so a firing clip that stops part-way through a turn
+        // gets counter-spun back to square by whatever plays next.
+        foreach (string state in new[] { "Shoot", "SuppressingFire" })
+        {
+            Assert.That(
+                RotorTravel("Salvo", state) % 360f,
+                Is.EqualTo(0f).Within(0.5f),
+                $"{state} leaves the rotor part-way through a turn; coming to rest will spin it backwards."
+            );
+        }
+
+        foreach (string unit in Units)
+        {
+            if (unit != "Salvo")
+                Assert.That(RotorTravel(unit, "Shoot"), Is.EqualTo(0f), $"{unit} has no rotor but turns one.");
+        }
+    }
+
+    /// <summary>
+    /// What the weapon does to the body that fires it. A rotary gun's shove arrives continuously
+    /// rather than in rounds, so Salvo has to buzz where the rest of the roster kicks — and by a
+    /// wide enough margin that nobody retunes it back by accident.
+    /// </summary>
+    [Test]
+    public void ARotaryGunBuzzesWhereTheRosterKicks()
+    {
+        float salvo = Recoil("Salvo");
+
+        // Six degrees as it ships, against eleven for the bow and thirty-one for the launcher.
+        Assert.That(salvo, Is.LessThan(8f), $"Salvo kicks {salvo:0.0} degrees; a rotary gun does not kick.");
+
+        foreach (string unit in Units)
+        {
+            if (unit == "Salvo")
+                continue;
+
+            Assert.That(
+                Recoil(unit),
+                Is.GreaterThan(salvo * 1.5f),
+                $"{unit} recoils no harder than the rotary gun does."
+            );
+        }
+    }
+
+    /// <summary>
+    /// Total degrees the rotor is turned through by one clip, read off its curves.
+    ///
+    /// <para>
+    /// Taken as the widest of the three axes rather than the first one found. Setting any one
+    /// Euler component makes Unity write the whole triple, so a rotor spun about Y alone still
+    /// ships flat X and Z curves — and X is the one that comes back first.
+    /// </para>
+    /// </summary>
+    private static float RotorTravel(string unit, string state)
+    {
+        AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+            $"Assets/Animation/Characters/{unit}_{state}.anim"
+        );
+        Assert.That(clip, Is.Not.Null, $"{unit} has no {state} clip.");
+
+        string rotor = CharacterSkeleton.Path(CharacterBone.Rotor);
+        float turned = 0f;
+        foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+        {
+            if (binding.path != rotor || !binding.propertyName.StartsWith("localEuler"))
+                continue;
+
+            (float low, float _, float high, float __) = Extremes(AnimationUtility.GetEditorCurve(clip, binding));
+            turned = Mathf.Max(turned, high - low);
+        }
+        return turned;
+    }
+
+    /// <summary>How far the body — never the rotor — is thrown by the unit's own shot.</summary>
+    private static float Recoil(string unit)
+    {
+        AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>($"Assets/Animation/Characters/{unit}_Shoot.anim");
+        Assert.That(clip, Is.Not.Null, $"{unit} has no Shoot clip.");
+
+        string rotor = CharacterSkeleton.Path(CharacterBone.Rotor);
+        float worst = 0f;
+        foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+        {
+            if (!binding.propertyName.StartsWith("localEuler") || binding.path == rotor)
+                continue;
+
+            (float low, float _, float high, float __) = Extremes(AnimationUtility.GetEditorCurve(clip, binding));
+            worst = Mathf.Max(worst, high - low);
+        }
+        return worst;
+    }
+
+    /// <summary>
+    /// How far a curve travels either side of where it starts, and when.
+    ///
+    /// <para>
+    /// Measured against its own first key rather than against zero, which matters now that the
+    /// firing clips hold a pose: a wrist rolled two degrees back is keyed as a constant 358, and
+    /// read against zero that is a body flinging itself through most of a full turn.
+    /// </para>
+    /// </summary>
+    private static (float Low, float LowAt, float High, float HighAt) Extremes(AnimationCurve curve)
+    {
+        if (curve.length == 0)
+            return (0f, 0f, 0f, 0f);
+
+        float low = curve[0].value;
+        float high = curve[0].value;
+        float lowAt = curve[0].time;
+        float highAt = curve[0].time;
+
+        for (int i = 0; i < curve.length; i++)
+        {
+            Keyframe key = curve[i];
+            if (key.value < low)
+            {
+                low = key.value;
+                lowAt = key.time;
+            }
+            if (key.value > high)
+            {
+                high = key.value;
+                highAt = key.time;
+            }
+        }
+        return (low, lowAt, high, highAt);
+    }
+
+    private static AnimatorController Controller(string unit)
+    {
+        Animator animator = Model(unit).GetComponent<Animator>();
+        Assert.That(animator, Is.Not.Null, $"{unit} has no Animator on its model root.");
+
+        AnimatorController controller = animator.runtimeAnimatorController as AnimatorController;
+        Assert.That(controller, Is.Not.Null, $"{unit} has no animator controller assigned.");
+        return controller;
     }
 
     /// <summary>
@@ -343,11 +727,42 @@ public class CharacterModelEditModeTests
         Transform surface = Model(unit).Find(name);
         Assert.That(surface, Is.Not.Null, $"{unit} has no {name}.");
 
-        MeshFilter filter = surface.GetComponent<MeshFilter>();
-        Assert.That(filter, Is.Not.Null, $"{unit}/{name} has no mesh filter.");
-        Assert.That(filter.sharedMesh, Is.Not.Null, $"{unit}/{name} has no mesh.");
-        return filter.sharedMesh;
+        Mesh mesh = MeshOf(surface.GetComponent<Renderer>());
+        Assert.That(mesh, Is.Not.Null, $"{unit}/{name} has no mesh.");
+        return mesh;
     }
+
+    /// <summary>
+    /// Every drawn surface in the model, as the node that carries it and the mesh it draws. Both
+    /// rig generations land here: the generated characters are skinned now, so walking
+    /// <c>MeshFilter</c> would find nothing at all, and what these tests are about is the shape
+    /// that ships rather than which renderer ships it.
+    ///
+    /// <para>
+    /// The node's own matrix is still the right one to read vertices through. Every bone rests
+    /// unrotated at its joint, so a bind-posed skinned vertex is exactly where
+    /// <c>CharacterBuilder</c> drew it in the model root's space.
+    /// </para>
+    /// </summary>
+    private static List<(Transform Node, Mesh Mesh, Renderer Renderer)> Surfaces(Transform body)
+    {
+        List<(Transform, Mesh, Renderer)> found = new();
+        foreach (Renderer renderer in body.GetComponentsInChildren<Renderer>(true))
+        {
+            Mesh mesh = MeshOf(renderer);
+            if (mesh != null)
+                found.Add((renderer.transform, mesh, renderer));
+        }
+        return found;
+    }
+
+    private static Mesh MeshOf(Renderer renderer) =>
+        renderer switch
+        {
+            null => null,
+            SkinnedMeshRenderer skinned => skinned.sharedMesh,
+            _ => renderer.GetComponent<MeshFilter>()?.sharedMesh,
+        };
 
     /// <summary>
     /// Every vertex the model paints with <paramref name="colour"/>, in unit-root space. Submeshes
@@ -359,14 +774,9 @@ public class CharacterModelEditModeTests
         Matrix4x4 toRoot = body.parent.worldToLocalMatrix;
         List<Vector3> points = new();
 
-        foreach (MeshFilter filter in body.GetComponentsInChildren<MeshFilter>(true))
+        foreach ((Transform node, Mesh mesh, Renderer surface) in Surfaces(body))
         {
-            Mesh mesh = filter.sharedMesh;
-            Renderer surface = filter.GetComponent<Renderer>();
-            if (mesh == null || surface == null)
-                continue;
-
-            Matrix4x4 matrix = toRoot * filter.transform.localToWorldMatrix;
+            Matrix4x4 matrix = toRoot * node.localToWorldMatrix;
             Vector3[] vertices = mesh.vertices;
             Material[] materials = surface.sharedMaterials;
 
@@ -413,16 +823,13 @@ public class CharacterModelEditModeTests
         bool cut = false;
         Bounds footprint = default;
 
-        foreach (MeshFilter filter in body.GetComponentsInChildren<MeshFilter>(true))
+        foreach ((Transform node, Mesh mesh, Renderer _) in Surfaces(body))
         {
-            if (filter.sharedMesh == null)
-                continue;
-
-            Matrix4x4 matrix = toRoot * filter.transform.localToWorldMatrix;
-            Vector3[] vertices = filter.sharedMesh.vertices;
-            for (int submesh = 0; submesh < filter.sharedMesh.subMeshCount; submesh++)
+            Matrix4x4 matrix = toRoot * node.localToWorldMatrix;
+            Vector3[] vertices = mesh.vertices;
+            for (int submesh = 0; submesh < mesh.subMeshCount; submesh++)
             {
-                int[] triangles = filter.sharedMesh.GetTriangles(submesh);
+                int[] triangles = mesh.GetTriangles(submesh);
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     Vector3 a = matrix.MultiplyPoint3x4(vertices[triangles[i]]);
@@ -466,13 +873,10 @@ public class CharacterModelEditModeTests
         bool measured = false;
         Bounds bounds = default;
 
-        foreach (MeshFilter filter in body.GetComponentsInChildren<MeshFilter>(true))
+        foreach ((Transform node, Mesh mesh, Renderer _) in Surfaces(body))
         {
-            if (filter.sharedMesh == null)
-                continue;
-
-            Matrix4x4 matrix = toRoot * filter.transform.localToWorldMatrix;
-            Bounds local = filter.sharedMesh.bounds;
+            Matrix4x4 matrix = toRoot * node.localToWorldMatrix;
+            Bounds local = mesh.bounds;
             for (int corner = 0; corner < 8; corner++)
             {
                 Vector3 point = matrix.MultiplyPoint3x4(

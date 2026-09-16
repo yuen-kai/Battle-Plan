@@ -8,7 +8,7 @@
 
         <ui:VisualElement name="enemy-status-strip" class="enemy-status-strip">
             <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
-            <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
+            <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
 
             <ui:VisualElement name="hud-top" class="hud-top toybox-ui" picking-mode="Ignore">
                 <ui:VisualElement name="rejoin-notice" class="rejoin-notice toy-readout hidden" picking-mode="Ignore">
@@ -65,14 +65,13 @@
             <ui:Label name="target-feedback-label" class="target-feedback hidden" picking-mode="Ignore" />
 
             <ui:VisualElement name="hud-dock-row" class="hud-dock__row">
-                <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" />
+                <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
                 <ui:VisualElement class="hud-header-actions">
                     <ui:VisualElement name="planning-commit" class="planning-commit hidden">
                         <ui:Label name="planning-commit-status" text="READY" class="planning-commit__status" picking-mode="Ignore" />
                         <ui:Button name="lock-in-button" text="Lock in" class="button button--primary planning-commit__button" tooltip="Lock current orders" />
                     </ui:VisualElement>
                     <ui:Button name="exit-match-button" text="Exit" class="button hud-exit-button hidden" tooltip="Leave and return to the title screen" />
-                    <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
                     <ui:Button name="settings-button" text="Settings" class="button hud-settings-button" tooltip="Audio and display settings" />
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -108,63 +107,11 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:VisualElement name="controls-overlay" class="modal-shade controls-overlay toybox-ui hidden">
-            <ui:VisualElement class="modal controls-panel" focusable="true" tabindex="-1">
-                <ui:Label text="Match controls" class="title-lg" picking-mode="Ignore" />
-                <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:ScrollView name="controls-scroll" mode="Vertical" class="controls-scroll" focusable="true" tabindex="0">
-                    <ui:VisualElement class="control-section">
-                        <ui:Label text="Round flow" class="control-section__label" picking-mode="Ignore" />
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Planning" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Both players plan at the same time. Enemy orders stay hidden until execution." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Tap or click a unit on the board, then drag across highlighted squares to set its route. Press that unit's ability card in the dock to spend its round on the ability instead." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="An ability replaces that unit's movement for the round. The dial on the unit's base plate and the disc on its card both count the rounds until it is back." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Lock in" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Lock in when ready. You can unlock while waiting; unlocked orders submit when the planning timer ends." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Dodge" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="If threatened during Dodge, drag each flashing unit to safety." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Fog hides enemy positions and orders. Enemy health and ability cooldowns remain public on contact cards." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
-                            <ui:Label text="Camera" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Pinch with two fingers to zoom and drag with two fingers to pan. On desktop, use the mouse wheel to zoom, right- or middle-drag to pan, or use WASD / arrow keys." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="control-section">
-                        <ui:Label text="Win conditions" class="control-section__label" picking-mode="Ignore" />
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Wipe out the enemy crew." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
-                            <ui:Label text="King of the Hill" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Hold the hill for three consecutive rounds. A contested round resets the streak." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:ScrollView>
-                <ui:Button name="controls-close-button" text="Return to match" class="button button--primary modal-close" />
-            </ui:VisualElement>
-        </ui:VisualElement>
-
         <ui:VisualElement name="settings-overlay" class="modal-shade settings-overlay toybox-ui hidden">
             <ui:VisualElement name="settings-panel" class="modal settings-panel" focusable="true" tabindex="-1">
                 <ui:Label text="Settings" class="title-lg" picking-mode="Ignore" />
                 <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:ScrollView name="settings-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="settings-scroll">
+                <ui:ScrollView name="settings-scroll" mode="Vertical" class="settings-scroll" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
                     <ui:Label text="Volume" class="section-label settings-section-label settings-section-label--first" picking-mode="Ignore" />
                     <ui:VisualElement class="setting-row">
                         <ui:Label text="Master" class="setting-row__label" picking-mode="Ignore" />
@@ -195,7 +142,7 @@
         <ui:VisualElement name="results-overlay" class="modal-shade results-overlay toybox-ui hidden">
             <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
             <ui:VisualElement name="results-panel" class="modal results-panel" focusable="true" tabindex="-1">
-                <ui:ScrollView name="results-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="results-scroll" focusable="true" tabindex="0">
+                <ui:ScrollView name="results-scroll" mode="Vertical" class="results-scroll" focusable="true" tabindex="0" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
                     <ui:Label text="Battle report" class="section-label" picking-mode="Ignore" />
                     <ui:VisualElement class="results-mark" picking-mode="Ignore" />
                     <ui:Label name="results-status" text="Match complete" class="results-status" picking-mode="Ignore" />

@@ -1,46 +1,63 @@
 /* The crew screen: Overwatch's hero select, adapted to picking five.
 
-   Three bands over a lit 3D stage. The title and the match readout float at the
-   top with a single hairline under them. The portrait grid is the middle band,
-   with the board thumbnail beside it, because a 1v1 tactics match is chosen on
-   the map as much as on the crew. Your five slots run along the bottom, which is
-   where the team strip lives in the game this is borrowing from.
+   Two blocks over a lit 3D stage. The screen's statement sits at the top in
+   type alone, with nothing beside it — no plate, no readout, no second column —
+   so the stage is unobstructed across the full width under it. Everything you
+   operate is one console anchored to the bottom edge: the portrait grid, the
+   match rail beside it, and your five slots under both, separated by hairlines
+   rather than by gaps. Three floating plates with stage showing between them is
+   what made this screen read as three unrelated screenshots.
+
+   The console is opaque, which is the one place this screen departs from the
+   library's "a panel is a tint over the world". The world behind it is a
+   character eight metres tall, and at the shared 0.9 it came through the
+   portrait grid as a pale mass nobody could place. Above the console the stage
+   is fully visible and the characters are framed in it; below, they are simply
+   behind a solid object.
 
    The screen paints nothing of its own: .screen's --toy-ground is overridden
    immediately below so the stage camera shows through. That is why the vignette
-   and the bottom scrim are in the markup rather than being decoration — without
-   them the header is white type on whatever the stage happens to be lit to. */
+   and the two scrims are in the markup rather than being decoration — without
+   them the header is navy type on whatever the stage happens to be lit to. */
 
 .roster-screen {
     background-color: var(--toy-transparent);
 }
 
 /* The scrim texture is a 4x256 alpha ramp with no intrinsic height, so it
-   collapses to nothing unless it is given one. It reaches far above the dock so
-   the stage falls away into the crew strip instead of stopping at a panel edge. */
+   collapses to nothing unless it is given one. Most of its height is spent
+   behind the console, where nothing can see it; what it is sized for is the
+   last of its tail reaching the crews' boots, so they settle onto the console's
+   top edge instead of being cut off at it. */
 .roster-screen .toy-scrim-bottom {
-    height: 44%;
+    height: 70%;
 }
 
 /* The header is the one block on this screen with no plate under it, and the
-   comment above claimed the vignette covered it. It does not: the title, the
-   eyebrow and the instruction were reading against whatever the crew was lit to
-   behind them, and against the dark half of the stage the instruction measured
-   1.45:1.
+   vignette does not cover it: its alpha is 36/255 at the frame edge and zero
+   across the middle, so the title, the eyebrow and the instruction were reading
+   against whatever the crew was lit to behind them.
 
-   Unlike the other two masks this one is a plateau rather than a ramp — it
-   holds full cover for its first 45% and only then falls off. A pure gradient
-   deep enough to carry the instruction would still have been a gradient
-   *behind* it, which is a backdrop whose contrast changes down the line. The
-   height is set so the plateau ends level with the hairline the header closes
-   on and the falloff is spent before the portrait grid, which keeps the stage
-   open between the two bands. */
-.roster-screen .toy-scrim-top {
-    height: 30%;
+   A left mask and not a top one, because the type is all in one corner. Ruled
+   across the top it had to be deep enough to carry the instruction, which meant
+   it also lay over the crews standing in the middle of the frame and bleached
+   their heads to the colour of the page. Down the left it covers every line of
+   type at full strength and stops before the first character. Its width is the
+   title block's own plus a falloff. */
+.roster-screen .roster-scrim {
+    width: 640px;
 }
 
-.roster-frame {
-    padding: 28px 38px 22px 38px;
+/* No horizontal or bottom inset: the console runs to three edges of the frame,
+   so the gutter belongs to the two blocks and not to the page. Inset, the
+   console read as a card floating on the stage with a 24px sliver of backdrop
+   under it, which is the one edge a bottom bar must not have.
+
+   Two classes deep on purpose, unlike the rest of the composition rules here:
+   the shared `.compact .screen-frame` is itself two deep and would otherwise
+   put the whole inset back on every aspect narrower than 16:9. */
+.roster-screen .roster-frame {
+    padding: 30px 0 0 0;
 }
 
 .roster-frame .unity-scroll-view__content-container {
@@ -48,131 +65,91 @@
     justify-content: flex-start;
 }
 
-.roster-frame > .unity-scroll-view__vertical-scroller {
-    width: var(--toy-scroll-size);
-    background-color: var(--toy-inset);
-}
-
 /* ------------------------------------------------------------------ header */
 
-/* One hairline carries the whole top of the screen. The heading used to be a
-   second dark plate beside the match readout, which turned the header into a
-   two-column form and covered the stage across the full width. */
+/* Type only, and nothing under it. The match readout used to sit at the far end
+   of this row as a second plate, which turned the header into a two-column form
+   and covered the top corner of the stage; it now lives in the console's match
+   rail, beside the board it describes.
+
+   The rule that used to close the header went with it. Ruled the full width of
+   the frame it was the strongest horizontal in the composition and it separated
+   the title from nothing — the console is the next thing down, and it draws its
+   own top edge. It also capped the stage at 190px, which is not enough height
+   for a character to be anything but a cropped head. */
 .roster-header {
-    min-height: 116px;
-    flex-direction: row;
     align-items: flex-start;
-    margin-bottom: var(--toy-space-lg);
-    padding-bottom: var(--toy-space-panel-compact);
-    border-bottom-width: var(--toy-stroke-thin);
-    border-bottom-color: var(--toy-divider);
+    margin-right: 38px;
+    margin-left: 38px;
+    padding-bottom: var(--toy-space-sm);
 }
 
-.roster-heading {
-    width: 58%;
-    padding-top: 2px;
-}
-
-/* Nothing sits between the title and the stage, so it carries a wash of the
-   scrim colour: the vignette handles a bright frame at the corners, not behind
-   46px of condensed caps sitting a third of the way in. */
+/* Half the blur the shared title carries. The left mask now holds the whole
+   type block off the stage, so the halo is only closing the gap under a
+   descender; at 14px it was a haze around 46px of condensed caps and it read as
+   the type being out of focus. */
 .roster-title {
-    margin-bottom: 5px;
-    text-shadow: 0 2px 14px var(--toy-scrim);
+    margin-bottom: 6px;
+    text-shadow: 0 1px 7px var(--toy-scrim);
 }
 
-/* The instruction also carries .label, and `.toybox-ui .label` outranks a lone
-   class selector: sized from one, the line comes back at body size and reads as
-   a second heading under the title instead of the aside it is. */
-/* Lifted off muted and given the stage halo. This line has no plate under it —
-   it sits on lit geometry that changes colour as the crew turns — and at muted
-   it disappeared entirely against the brighter half of the backdrop. */
-.toybox-ui.roster-screen .roster-heading .roster-instruction {
-    max-width: 580px;
-    font-size: var(--toy-type-label);
-    color: var(--toy-text-copy);
-    white-space: normal;
-}
-
-/* Both of these sit on the stage with no plate under them, so they carry full
-   ink rather than the muted step a heading gets inside a panel. */
-.toybox-ui.roster-screen .roster-heading .section-label {
+/* The eyebrow sits on the stage with no plate under it, so it carries full ink
+   rather than the muted step a heading gets inside a panel. Navy on the
+   scrimmed periwinkle measures 3.8:1 unhelped, which is why the scrim above is
+   not optional on this screen. */
+.toybox-ui.roster-screen .roster-header .section-label {
     color: var(--toy-text);
 }
 
-/* The match readout. Keys and values are both display face because this is an
-   instrument panel, not prose, and a hairline per row is the only structure it
-   needs: boxing each pair produced a table nobody reads. */
-.roster-screen .match-summary {
-    width: 320px;
-    margin-left: auto;
-    align-self: flex-start;
-    padding: var(--toy-space-md) var(--toy-space-control-x) 14px var(--toy-space-control-x);
-}
+/* A hole in the layout rather than an element. It eats the vertical slack so
+   the header floats at the top and the console sits on the bottom edge; what
+   shows through it is the stage, and how tall it is decides how much of a
+   character you see. The crews stand on the console's top edge and reach up
+   into the header band beside the title.
 
-.roster-count-label {
-    margin-bottom: var(--toy-space-sm);
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-title);
-    -unity-font-style: normal;
-    color: var(--toy-primary-copy);
-    letter-spacing: var(--toy-track-title);
-}
-
-.summary-row {
-    min-height: 30px;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    border-top-width: var(--toy-stroke-thin);
-    border-top-color: var(--toy-divider);
-}
-
-.summary-row__key {
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-caption);
-    -unity-font-style: normal;
-    color: var(--toy-text-muted);
-    letter-spacing: var(--toy-track-label);
-}
-
-.summary-row__value {
-    margin-left: var(--toy-space-panel-compact);
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-body-lg);
-    -unity-font-style: normal;
-    color: var(--toy-text);
-    letter-spacing: var(--toy-track-title);
-}
-
-/* A hole in the layout rather than an element. It eats the vertical slack so the
-   header floats at the top and the working panels sit at the bottom; what shows
-   through it is the stage. */
+   Whatever is left and no more: it carries no floor of its own, so a catalog
+   that needs a third row of tiles takes the height out of the stage rather than
+   pushing the confirm button off the bottom of the screen, and a 32:9 letterbox
+   simply has no stage. A floor here is also what left a strip of backdrop under
+   the console on every aspect where the slack had nowhere else to go. */
 .roster-model-stage {
     flex-grow: 1;
-    min-height: 120px;
 }
 
-/* ----------------------------------------------------------------- library */
+/* ----------------------------------------------------------------- console */
 
-.roster-body {
-    flex-grow: 1;
+/* One plate for everything you operate. Opaque for the reason given at the top
+   of the file. The horizontal padding is the frame gutter the header carries as
+   a margin, so the word "Units" stands on the same line as the eyebrow above
+   it; the vertical is tighter, because the console holds two bands of its own
+   and a shared 24 outside both read as a margin around a margin. */
+.roster-screen .roster-console {
     flex-shrink: 0;
-    height: 380px;
-    min-height: 380px;
-    max-height: 640px;
+    padding: var(--toy-space-panel-compact) 38px 22px 38px;
+    background-color: var(--toy-surface);
+}
+
+/* No height of its own. The band is as tall as the taller of the two columns,
+   which is the grid, which is as tall as the rows it happens to have — so a
+   thirteenth unit lengthens the console and shortens the stage instead of being
+   cut in half by a fixed band. Every breakpoint below therefore sets a column
+   count and a cell height and nothing else. */
+.roster-body {
+    flex-shrink: 0;
     flex-direction: row;
 }
 
-/* The grid is the one thing this screen exists to do, so it is the plate that
-   wears the keyed rule. */
-.roster-screen .unit-library {
-    width: 70%;
-    margin-right: 14px;
-    padding: var(--toy-space-panel-compact);
+/* The grid and the rail are divided by a line, not by a gap. The gap is what
+   let the stage show between two panels that describe the same match. */
+.unit-library {
+    width: 74%;
+    padding-right: var(--toy-space-lg);
+    border-right-width: var(--toy-stroke-thin);
+    border-right-color: var(--toy-divider);
 }
 
 .library-head {
+    min-height: 30px;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -211,9 +188,12 @@
     white-space: nowrap;
 }
 
+/* Sized by its content, not by the space left over: this is a grid that
+   happens to sit in a ScrollView so a catalog taller than the screen can still
+   be reached, not a scroll pane with a grid in it. */
 .roster-options {
-    flex-grow: 1;
-    min-height: 0;
+    flex-grow: 0;
+    flex-shrink: 0;
 }
 
 .roster-options .unity-scroll-view__content-container {
@@ -223,13 +203,21 @@
     align-content: flex-start;
 }
 
-/* An instantiated template arrives wrapped in a container, and it is the wrapper
-   the grid lays out: five to a row at a fifth of the width each, with the gutter
-   as its own padding so the fifths still add up to the width of the panel. */
+/* An instantiated template arrives wrapped in a container, and it is the
+   wrapper the grid lays out. Six to a row at a sixth of the width each, with
+   the gutter as the wrapper's own padding so the sixths still add up to the
+   width of the panel.
+
+   Six and not five because the shipped catalog is twelve units, and twelve at
+   five to a row is two full rows and a row of two. Every column count in this
+   file divides twelve — six here, four on the narrower two, three on a phone —
+   because a ragged last row and a band cutting the second row through its name
+   plates are the two things this grid looked unfinished for. Add a thirteenth
+   unit and it is a row of one; nothing clips, the console just grows. */
 .unit-cell {
     flex-shrink: 0;
-    width: 20%;
-    height: 194px;
+    width: 16.66%;
+    height: 196px;
     padding: 0 var(--toy-space-md) var(--toy-space-md) 0;
 }
 
@@ -334,9 +322,10 @@
     border-left-color: var(--toy-disabled-border);
 }
 
-/* Scaled to fit, never stretched. A portrait is 4:3 and this band is wider than
-   that at every breakpoint, so filling it stretched every character sideways.
-   What is left over either side is the plate, which is what the plate is for. */
+/* Scaled to fit, never stretched, and the frame's aspect does not have to match
+   the file's: the portraits are cut-outs on transparency, so what fills the rest
+   of the frame is the bone plate the character is standing on and there is no
+   letterbox to see. */
 .unit-option__portrait {
     flex-grow: 1;
     flex-shrink: 1;
@@ -381,24 +370,28 @@
 /* Title plate under the portrait. Extra bottom inset lifts Oswald's caps,
    which sit low in the line box, onto the optical centre of the band. */
 .unit-option__copy {
-    height: 44px;
+    height: 38px;
     flex-shrink: 0;
-    padding: 0 10px 5px 10px;
+    padding: 0 8px 4px 8px;
     overflow: hidden;
     border-top-width: var(--toy-stroke-thin);
     border-top-color: var(--toy-edge);
 }
 
 /* The stack counter, flush into the corner. Inset from the edge it reads as a
-   sticker on the picture; flush it reads as part of the frame. Never give this
-   a display property — the controller hides it with the shared .hidden class,
-   which this rule would outrank. */
+   sticker on the picture; flush it reads as part of the frame. It only appears
+   on a unit taken more than once — one copy is already announced by the plate
+   inverting and the name plate turning blue, and a word saying so over every
+   picked portrait was the loudest mark on the screen. Never give this a display
+   property: the controller hides it with the shared .hidden class, which this
+   rule would outrank. */
 .unit-option__status {
     position: absolute;
     top: 0;
     right: 0;
+    min-width: 30px;
     min-height: 22px;
-    padding: 3px 9px;
+    padding: 2px 7px;
     background-color: var(--toy-primary);
     color: var(--toy-text-on-accent);
     -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
@@ -415,24 +408,30 @@
     border-color: var(--toy-disabled-border);
 }
 
-/* --------------------------------------------------------------- the board */
+/* -------------------------------------------------------------- match rail */
 
-.roster-screen .map-column {
+/* The board and the rules that will be played on it, in one column: a 1v1
+   tactics match is chosen on the map as much as on the crew, and splitting the
+   two across opposite corners of the screen meant neither read as the answer to
+   "what am I picking for". */
+.match-rail {
     flex-grow: 1;
     min-width: 250px;
-    justify-content: center;
-    align-items: center;
-    padding: var(--toy-space-panel-compact);
+    padding-left: var(--toy-space-lg);
 }
 
-.map-label {
+.match-rail__label {
     align-self: flex-start;
 }
 
+/* Sized 3:2 by hand, because that is the thumbnail's own shape and USS has no
+   aspect-ratio property. Stretched to the rail it letterboxed on the grey the
+   file already has baked into it, which read as a screenshot of a screenshot. */
 .map-preview {
-    width: 100%;
-    max-width: 410px;
-    height: 210px;
+    width: 372px;
+    max-width: 100%;
+    height: 248px;
+    align-self: center;
     background-image: url("project://database/Assets/Images/MapPreview.png");
     -unity-background-scale-mode: scale-to-fit;
     background-color: var(--toy-inset);
@@ -452,19 +451,50 @@
     letter-spacing: var(--toy-track-label);
 }
 
+/* The match readout. Keys and values are both display face because this is an
+   instrument panel, not prose, and a hairline per row is the only structure it
+   needs: boxing each pair produced a table nobody reads. */
+.match-summary {
+    margin-top: var(--toy-space-control-x);
+}
+
+.summary-row {
+    min-height: 32px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border-top-width: var(--toy-stroke-thin);
+    border-top-color: var(--toy-divider);
+}
+
+.summary-row__key {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-caption);
+    -unity-font-style: normal;
+    color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
+}
+
+.summary-row__value {
+    margin-left: var(--toy-space-panel-compact);
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-body-lg);
+    -unity-font-style: normal;
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-title);
+}
+
 /* ------------------------------------------------------------------- crew */
 
-/* The crew strip is what the dock measures once it has slots in it. This floor
-   is the label, one slot and the padding, and it only does anything before the
-   slots are built — without it an empty strip hands the height to the confirm
-   column and the dock changes size as the screen comes up. */
+/* Under both bands, divided from them by the same hairline the rail uses. */
 .roster-screen .selection-dock {
-    min-height: 128px;
-    margin-top: 14px;
-    padding: 14px var(--toy-space-panel-compact);
+    margin-top: var(--toy-space-panel-compact);
+    padding-top: var(--toy-space-panel-compact);
     flex-direction: row;
     justify-content: space-between;
     align-items: flex-end;
+    border-top-width: var(--toy-stroke-thin);
+    border-top-color: var(--toy-divider);
 }
 
 .selection-column {
@@ -472,20 +502,33 @@
     min-width: 0;
 }
 
+/* A fixed band over the slots so "Your crew" keeps the same gap to them
+   whichever breakpoint the dock is at. */
+.selection-head {
+    min-height: 26px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.selection-head__label {
+    margin-bottom: 0;
+}
+
 .selected-roster {
     flex-direction: row;
     flex-wrap: wrap;
+    margin-top: var(--toy-space-sm);
 }
 
 /* The five slots divide the strip between them rather than carrying a width per
-   breakpoint: the dock is the full width of the screen at every size, and a
+   breakpoint: the dock is the full width of the console at every size, and a
    fixed slot left either a ragged gap at 1920 or an overflow at 1000. */
 .selected-slot {
     flex-grow: 1;
     flex-shrink: 1;
     flex-basis: 0;
     min-width: 0;
-    min-height: 75px;
+    min-height: 78px;
     margin: 0 var(--toy-space-sm) 0 0;
     padding: 9px 12px;
     flex-direction: row;
@@ -571,17 +614,17 @@
     color: var(--toy-text-on-accent-quiet);
 }
 
-/* 4:3, because the portrait file is, and 57 tall because that is the slot's
-   whole inside — 75 less the 9 of padding top and bottom. The picture fills the
+/* 4:3, because the portrait file is, and 60 tall because that is the slot's
+   whole inside — 78 less the 9 of padding top and bottom. The picture fills the
    frame edge to edge at those numbers; a square frame let it sit in a letterbox
    with a band of bare plate over and under it. USS has no aspect-ratio
    property, so the two numbers have to be kept in step by hand, and every
    breakpoint below that resizes one resizes both. */
 .selected-slot__portrait {
     visibility: hidden;
-    width: 76px;
-    min-width: 76px;
-    height: 57px;
+    width: 80px;
+    min-width: 80px;
+    height: 60px;
     margin-right: var(--toy-space-md);
     background-color: var(--toy-warm);
     -unity-background-scale-mode: scale-to-fit;
@@ -603,7 +646,7 @@
 
 .selected-slot__name {
     -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-body);
+    font-size: var(--toy-type-body-lg);
     -unity-font-style: normal;
     color: var(--toy-text-copy);
     letter-spacing: var(--toy-track-label);
@@ -670,7 +713,7 @@
    against the left edge of a 280px plate. */
 .roster-screen .confirm-button {
     width: 100%;
-    min-height: 60px;
+    min-height: 64px;
     margin: 0;
     justify-content: center;
 }
@@ -689,73 +732,92 @@
    Breakpoints. Every rule below is one class deep, which ties with the
    composition rules above and wins on order. Naming the screen class here too
    would bind each override to which element the controller happens to put the
-   breakpoint class on, and that is not the element the screen class is on. */
+   breakpoint class on, and that is not the element the screen class is on.
 
-.compact .roster-frame {
-    padding-left: var(--toy-space-panel);
-    padding-right: var(--toy-space-panel);
+   The grid loses a column at each step rather than shrinking twelve tiles into
+   the same row: a portrait under about 150px wide stops being a portrait. */
+
+.compact .roster-scrim {
+    width: 560px;
 }
 
 .compact .roster-header {
-    min-height: 104px;
+    margin-right: var(--toy-space-panel);
+    margin-left: var(--toy-space-panel);
 }
 
-.compact .roster-heading {
-    width: 55%;
-}
-
-.compact .match-summary {
-    width: 286px;
-}
-
-.compact .roster-model-stage {
-    min-height: 90px;
-}
-
-.compact .roster-body {
-    height: 300px;
-    min-height: 300px;
+.compact .roster-console {
+    padding-right: var(--toy-space-panel);
+    padding-left: var(--toy-space-panel);
 }
 
 .compact .unit-cell {
-    height: 168px;
+    width: 25%;
+    height: 204px;
 }
 
-/* A compact slot is 190px wide against 294 at full size, and the name still has
-   to fit beside the picture. The frame steps down with the slot, 4:3 intact. */
+.compact .map-preview {
+    width: 318px;
+    height: 212px;
+}
+
 .compact .selected-slot {
-    min-height: 63px;
+    min-height: 68px;
 }
 
 .compact .selected-slot__portrait {
-    width: 60px;
-    min-width: 60px;
-    height: 45px;
+    width: 64px;
+    min-width: 64px;
+    height: 48px;
 }
 
-.narrow .roster-frame {
-    padding: var(--toy-space-panel-compact);
+.narrow .roster-scrim {
+    width: 440px;
+}
+
+.narrow .roster-header {
+    margin-right: var(--toy-space-panel-compact);
+    margin-left: var(--toy-space-panel-compact);
+}
+
+.narrow .roster-console {
+    padding-right: var(--toy-space-panel-compact);
+    padding-left: var(--toy-space-panel-compact);
 }
 
 .narrow .roster-title {
     font-size: var(--toy-type-title-lg);
 }
 
-.narrow .roster-model-stage {
-    min-height: 76px;
-}
-
+/* Under a thousand the rail goes below the grid rather than beside it, and the
+   board thumbnail goes with the second column: the rules are the part of the
+   rail you still need when there is no room to show the map. */
 .narrow .roster-body {
-    height: 300px;
-    min-height: 300px;
+    height: auto;
+    flex-direction: column;
 }
 
 .narrow .unit-library {
     width: 100%;
-    margin-right: 0;
+    padding-right: 0;
+    border-right-width: 0;
 }
 
-.narrow .map-column {
+.narrow .unit-cell {
+    width: 25%;
+    height: 184px;
+}
+
+.narrow .match-rail {
+    min-width: 0;
+    margin-top: var(--toy-space-md);
+    padding-top: var(--toy-space-md);
+    padding-left: 0;
+    border-top-width: var(--toy-stroke-thin);
+    border-top-color: var(--toy-divider);
+}
+
+.narrow .map-preview {
     display: none;
 }
 
@@ -793,33 +855,12 @@
     display: none;
 }
 
-.phone .roster-header {
-    min-height: 0;
-    flex-direction: column;
-    padding-bottom: var(--toy-space-md);
-}
-
-.phone .roster-heading {
-    width: 100%;
-}
-
-.phone .match-summary {
-    width: 100%;
-    margin-top: var(--toy-space-md);
-    margin-left: 0;
-    align-self: stretch;
-}
-
-.phone .roster-model-stage {
-    min-height: 42px;
-}
-
-.phone .roster-body {
-    height: 300px;
-    min-height: 300px;
+.phone .roster-scrim {
+    width: 320px;
 }
 
 .phone .library-head {
+    min-height: 0;
     flex-direction: column;
     align-items: stretch;
 }
@@ -837,7 +878,8 @@
 }
 
 .phone .unit-cell {
-    height: 150px;
+    width: 33.33%;
+    height: 168px;
     padding-right: var(--toy-space-sm);
     padding-bottom: var(--toy-space-sm);
 }
@@ -873,55 +915,43 @@
 
 .short .roster-frame {
     padding-top: var(--toy-space-control-top);
-    padding-bottom: var(--toy-space-control-top);
+}
+
+.short .roster-console {
+    padding-top: var(--toy-space-md);
+    padding-bottom: var(--toy-space-md);
 }
 
 .short .roster-header {
-    min-height: 0;
-    margin-bottom: var(--toy-space-md);
-    padding-bottom: var(--toy-space-md);
+    padding-bottom: var(--toy-space-sm);
 }
 
 .short .roster-title {
     font-size: var(--toy-type-title-lg);
 }
 
-.short .roster-instruction {
-    display: none;
-}
-
-.short .roster-model-stage {
-    display: none;
-}
-
-.short .roster-body {
-    height: 288px;
-    min-height: 288px;
-}
-
 .short .unit-cell {
-    height: 156px;
+    height: 186px;
 }
 
 .short .map-preview {
-    height: 165px;
+    width: 288px;
+    height: 192px;
 }
 
 .short .selection-dock {
-    min-height: 116px;
-    margin-top: var(--toy-space-sm);
-    padding-top: 10px;
-    padding-bottom: 10px;
+    margin-top: var(--toy-space-md);
+    padding-top: var(--toy-space-md);
 }
 
 .short .selected-slot {
-    min-height: 63px;
+    min-height: 66px;
 }
 
 .short .selected-slot__portrait {
-    width: 60px;
-    min-width: 60px;
-    height: 45px;
+    width: 64px;
+    min-width: 64px;
+    height: 48px;
 }
 
 /* The handover curtain. Transparent and unpickable until the match is actually starting, so it

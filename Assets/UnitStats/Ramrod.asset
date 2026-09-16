@@ -30,7 +30,7 @@ MonoBehaviour:
   redBulletPrefab: {fileID: 5620557307623549959, guid: a51a57840134b4a64a3d9d519b3325f3, type: 3}
   timeBetweenShots: 0.01
   magazineSize: 10
-  reloadTime: 2
+  reloadTime: 3
   bulletSpread: 25
   fireRateRampShots: 0
   fireRateRampStartDelay: 0

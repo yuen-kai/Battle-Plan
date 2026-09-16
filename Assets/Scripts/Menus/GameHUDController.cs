@@ -85,10 +85,6 @@ public class GameHUDController : MonoBehaviour
     private int reportRoundIndex;
     private int reportLocalTeamIndex;
     private Button exitMatchButton;
-    private Button controlsButton;
-    private VisualElement controlsOverlay;
-    private VisualElement controlsPanel;
-    private Button controlsCloseButton;
     private Button settingsButton;
     private VisualElement settingsOverlay;
     private VisualElement settingsPanel;
@@ -143,7 +139,6 @@ public class GameHUDController : MonoBehaviour
         ConsoleUiNavigation.ConfigureButtons(root);
         MobileDisplay.ConfigureScreen(document, ApplySafeAreaInsets);
         HideResults();
-        CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
         ClearTargetFeedback();
         HideRejoinNotice();
@@ -243,10 +238,6 @@ public class GameHUDController : MonoBehaviour
         planningCommitStatus = root.Q<Label>("planning-commit-status");
         lockInButton = root.Q<Button>("lock-in-button");
         exitMatchButton = root.Q<Button>("exit-match-button");
-        controlsButton = root.Q<Button>("controls-button");
-        controlsOverlay = root.Q<VisualElement>("controls-overlay");
-        controlsPanel = controlsOverlay?.Q<VisualElement>(className: "controls-panel");
-        controlsCloseButton = root.Q<Button>("controls-close-button");
         settingsButton = root.Q<Button>("settings-button");
         settingsOverlay = RequireElement<VisualElement>("settings-overlay");
         settingsPanel = RequireElement<VisualElement>("settings-panel");
@@ -282,10 +273,6 @@ public class GameHUDController : MonoBehaviour
         resultsPanel?.RegisterCallback<KeyDownEvent>(OnResultsKeyDown);
         if (exitMatchButton != null)
             exitMatchButton.clicked += OnExitMatchClicked;
-        if (controlsButton != null)
-            controlsButton.clicked += ShowControlsOverlay;
-        if (controlsCloseButton != null)
-            controlsCloseButton.clicked += HideControlsOverlay;
         if (settingsButton != null)
             settingsButton.clicked += ShowSettingsOverlay;
         if (settingsCloseButton != null)
@@ -324,10 +311,6 @@ public class GameHUDController : MonoBehaviour
         resultsPanel?.UnregisterCallback<KeyDownEvent>(OnResultsKeyDown);
         if (exitMatchButton != null)
             exitMatchButton.clicked -= OnExitMatchClicked;
-        if (controlsButton != null)
-            controlsButton.clicked -= ShowControlsOverlay;
-        if (controlsCloseButton != null)
-            controlsCloseButton.clicked -= HideControlsOverlay;
         if (settingsButton != null)
             settingsButton.clicked -= ShowSettingsOverlay;
         if (settingsCloseButton != null)
@@ -1094,7 +1077,6 @@ public class GameHUDController : MonoBehaviour
         // that has not noticed the game stopped.
         HidePlanningCommit();
         SetResultButtonsEnabled(true, true);
-        CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
         HideDeployment();
         HideEscortAlert();
@@ -1469,32 +1451,9 @@ public class GameHUDController : MonoBehaviour
         action?.Invoke();
     }
 
-    private void ShowControlsOverlay()
-    {
-        if (
-            controlsOverlay == null
-            || (resultsOverlay != null && !resultsOverlay.ClassListContains("hidden"))
-        )
-            return;
-        controlsOverlay.RemoveFromClassList("hidden");
-        controlsOverlay.BringToFront();
-        ActivateOverlay(controlsOverlay, controlsCloseButton);
-    }
-
-    private void HideControlsOverlay()
-    {
-        CloseControlsOverlay(true);
-    }
-
-    private void CloseControlsOverlay(bool restoreFocus)
-    {
-        controlsOverlay?.AddToClassList("hidden");
-        ClearActiveOverlay(controlsOverlay, restoreFocus ? controlsButton : null);
-    }
-
     /// <summary>
     /// Opens the levels over a running round. The match is not paused and nothing is re-sent on
-    /// close: the sheet only borrows the dock the way the controls sheet does, and hands it back.
+    /// close: the sheet only borrows the dock and hands it back.
     /// </summary>
     private void ShowSettingsOverlay()
     {
@@ -1599,13 +1558,6 @@ public class GameHUDController : MonoBehaviour
             if (CanGrabFocus(resultsPanel))
                 return resultsPanel;
         }
-        else if (overlay == controlsOverlay)
-        {
-            if (CanGrabFocus(controlsCloseButton))
-                return controlsCloseButton;
-            if (CanGrabFocus(controlsPanel))
-                return controlsPanel;
-        }
         else if (overlay == settingsOverlay)
         {
             if (CanGrabFocus(settings?.FirstControl))
@@ -1697,11 +1649,7 @@ public class GameHUDController : MonoBehaviour
     {
         VisualElement focused = root?.focusController?.focusedElement as VisualElement;
         bool focusWasInASheet =
-            focused != null
-            && (
-                (settingsOverlay != null && settingsOverlay.Contains(focused))
-                || (controlsOverlay != null && controlsOverlay.Contains(focused))
-            );
+            focused != null && settingsOverlay != null && settingsOverlay.Contains(focused);
 
         if (!TryDismissOpenSheet(false))
             return;
@@ -1711,21 +1659,15 @@ public class GameHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Dismisses the sheet the player opened, innermost first. Reports whether anything was open so
-    /// Escape and cancel stay untouched during a round and keep reaching the match itself, and so a
-    /// dismissal with nothing open never touches the dock.
+    /// Dismisses the sheet the player opened. Reports whether anything was open so Escape and
+    /// cancel stay untouched during a round and keep reaching the match itself, and so a dismissal
+    /// with nothing open never touches the dock.
     /// </summary>
     private bool TryDismissOpenSheet(bool restoreFocus)
     {
         if (IsShowing(settingsOverlay))
         {
             CloseSettingsOverlay(restoreFocus);
-            return true;
-        }
-
-        if (IsShowing(controlsOverlay))
-        {
-            CloseControlsOverlay(restoreFocus);
             return true;
         }
 

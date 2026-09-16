@@ -292,7 +292,7 @@ public class Movement : NetworkBehaviour
         moving = false;
         if (animator != null)
         {
-            animator.PlayAnimation("Idle");
+            animator.PlayAnimation("DiveRecovery");
         }
 
         BeginDiveRecovery(recovery);

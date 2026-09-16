@@ -72,24 +72,62 @@ public static class CharacterBuilder
     private const float BaseHeight = 2.95f;
 
     [MenuItem("Battle Plan/Art/Build Characters", false, 12)]
-    public static void BuildCharacters()
+    public static void BuildCharacters() => BuildAndLog(Roster);
+
+    /// <summary>
+    /// Builds the one unit whose prefab is selected in the Project window, which is the only way
+    /// to iterate on a character honestly: building the roster rewrites all eight meshes and all
+    /// eight prefabs, so seven units land in the diff with nothing to show for it, and a rebuild
+    /// under a newer editor re-serialises them as well.
+    /// </summary>
+    [MenuItem("Battle Plan/Art/Build Selected Character", true, 13)]
+    private static bool ValidateBuildSelectedCharacter() => Find(Selection.activeObject?.name) != null;
+
+    [MenuItem("Battle Plan/Art/Build Selected Character", false, 13)]
+    private static void BuildSelectedCharacter() => BuildCharacter(Selection.activeObject.name);
+
+    /// <summary>
+    /// Builds one unit by prefab name. Returns false and says so if the name is not one of the
+    /// generated eight — the hand-authored units have no spec here to build from.
+    /// </summary>
+    public static bool BuildCharacter(string name)
+    {
+        CharacterSpec spec = Find(name);
+        if (spec == null)
+        {
+            Debug.LogError($"[Characters] No generated character called {name}.");
+            return false;
+        }
+
+        return BuildAndLog(new[] { spec }) == 1;
+    }
+
+    private static CharacterSpec Find(string name) =>
+        string.IsNullOrEmpty(name) ? null : Roster.FirstOrDefault(spec => spec.Name == name);
+
+    private static int BuildAndLog(IReadOnlyList<CharacterSpec> specs)
     {
         EnsureFolder(MeshFolder);
 
         int written = 0;
         int triangles = 0;
-        foreach (CharacterSpec spec in Roster)
+        foreach (CharacterSpec spec in specs)
         {
             Rig rig = new(spec);
 
             MeshBuilder body = new();
             BuildBody(body, rig);
+
+            // Kit defaults to the weapon hand, which is where all of it is carried but for the
+            // packs, cloaks and goggles that say otherwise inside their own gear pass.
+            body.Bone = (int)CharacterBone.HandR;
             spec.Gear(body, rig);
-            Mesh bodyMesh = WriteMesh(body.Build(spec.Name + "_Body"), MeshFolder + spec.Name + "_Body.asset");
+
+            Mesh bodyMesh = WriteMesh(Bind(body, rig, spec.Name + "_Body"), MeshFolder + spec.Name + "_Body.asset");
 
             MeshBuilder team = new();
             BuildTeamProp(team, rig);
-            Mesh teamMesh = WriteMesh(team.Build(spec.Name + "_Team"), MeshFolder + spec.Name + "_Team.asset");
+            Mesh teamMesh = WriteMesh(Bind(team, rig, spec.Name + "_Team"), MeshFolder + spec.Name + "_Team.asset");
 
             if (!Apply(spec, rig, bodyMesh, teamMesh, body.SubmeshPaints))
                 continue;
@@ -100,7 +138,12 @@ public static class CharacterBuilder
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log($"[Characters] Built {written} of {Roster.Length} units, {triangles} triangles total.");
+        Debug.Log(
+            specs.Count == 1
+                ? $"[Characters] Built {specs[0].Name}, {triangles} triangles."
+                : $"[Characters] Built {written} of {specs.Count} units, {triangles} triangles total."
+        );
+        return written;
     }
 
     /// <summary>
@@ -121,7 +164,7 @@ public static class CharacterBuilder
     /// tile never shows a photograph of a stand-in the prefab no longer is. Framed as an upper-body
     /// close-up so the face and what the unit is holding fill the tile.
     /// </summary>
-    [MenuItem("Battle Plan/Art/Build Character Portraits", false, 13)]
+    [MenuItem("Battle Plan/Art/Build Character Portraits", false, 14)]
     public static void BuildPortraits()
     {
         HeadshotFraming framing = HeadshotFraming.Default;
@@ -142,6 +185,50 @@ public static class CharacterBuilder
 
         AssetDatabase.Refresh();
         Debug.Log($"[Characters] Re-shot {written} of {total} portraits.");
+    }
+
+    /// <summary>
+    /// Re-shoots the portrait of the selected unit prefab alone. Works for the hand-authored five
+    /// as well as the generated eight, since a portrait is taken off a prefab rather than a spec.
+    /// </summary>
+    [MenuItem("Battle Plan/Art/Shoot Selected Character Portrait", true, 15)]
+    private static bool ValidateShootSelectedPortrait() => PortraitStem(Selection.activeObject?.name) != null;
+
+    [MenuItem("Battle Plan/Art/Shoot Selected Character Portrait", false, 15)]
+    private static void ShootSelectedPortrait() => BuildPortrait(Selection.activeObject.name);
+
+    /// <summary>Re-shoots one unit's portrait by prefab name.</summary>
+    public static bool BuildPortrait(string name)
+    {
+        string stem = PortraitStem(name);
+        if (stem == null)
+        {
+            Debug.LogError($"[Characters] No unit prefab called {name}.");
+            return false;
+        }
+
+        bool shot = ShootPortrait(PrefabFolder + name + ".prefab", PortraitFolder + stem + ".png", HeadshotFraming.Default);
+        AssetDatabase.Refresh();
+        Debug.Log(shot ? $"[Characters] Re-shot {stem} portrait." : $"[Characters] Could not shoot {name}.");
+        return shot;
+    }
+
+    /// <summary>
+    /// The PNG stem a prefab's portrait is written to, or null if the name is not a unit at all.
+    /// </summary>
+    private static string PortraitStem(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return null;
+        if (Find(name) != null)
+            return name;
+
+        foreach ((string prefab, string portrait) in HandMadePortraits)
+        {
+            if (prefab == name)
+                return portrait;
+        }
+        return null;
     }
 
     private static bool ShootPortrait(string prefabPath, string portraitPath, HeadshotFraming framing)
@@ -235,10 +322,13 @@ public static class CharacterBuilder
             ("Char_OutriderSand", "#9A8A62", 0.00f, 0.12f, null, 0f),
             ("Char_VoltaicViolet", "#4C3F7A", 0.00f, 0.16f, null, 0f),
             ("Char_BlitzCrimson", "#8E2F36", 0.00f, 0.14f, null, 0f),
-            ("Char_TieRed", "#A2242A", 0.00f, 0.18f, null, 0f),
             // Reads as black next to Char_Black rather than as the same surface as it, so a shoe
             // still parts from a trouser leg where the two meet.
             ("Char_BlazerBlack", "#1A1C20", 0.00f, 0.17f, null, 0f),
+            // Deliberately a long way off TeamBlueGlow's #2F43F5: this is the one fixed blue on a
+            // character, and it must not be mistaken for the colour that says whose side it is on.
+            ("Char_TieRed", "#A2242A", 0.00f, 0.18f, null, 0f),
+            ("Char_TieBlue", "#27477F", 0.00f, 0.20f, null, 0f),
             // The one emissive surface on the roster, and the reason the gain is this low: bloom
             // thresholds at 1.8, so a coil is meant to sit just under it and bloom on the frames
             // ArcSurge drives rather than glowing through the whole match.
@@ -309,7 +399,7 @@ public static class CharacterBuilder
         Cap,
         Hood,
         Beanie,
-        Tie,
+        Fedora,
     }
 
     private static readonly CharacterSpec[] Roster =
@@ -495,11 +585,12 @@ public static class CharacterBuilder
             Gear = GearBlitz,
         },
         // Not a soldier, and has to look like it from the first frame: no armour anywhere, a coat
-        // skirt below the belt no other unit has, and a head of silver hair where the rest wear
-        // shells. He is also the only unit built out of a value break rather than a hue — a white
-        // shirt wedge and white cuffs inside a black suit, which is two steps wider than any
-        // camouflaged body on the board and is what makes a head-and-shoulders tile of him read.
-        // The team colour goes on the tie, the one thing he is wearing a party would have coloured.
+        // skirt below the belt no other unit has, and a brimmed hat where the rest wear shells.
+        // He is also the only unit built out of a value break rather than a hue — a white shirt and
+        // white cuffs inside a black suit, which is two steps wider than any camouflaged body on
+        // the board and is what makes a head-and-shoulders tile of him read. The tie is the one
+        // fixed accent colour on the roster: the hat carries the team, so the tie is free to stay
+        // navy on both sides.
         new()
         {
             Name = "President",
@@ -508,7 +599,7 @@ public static class CharacterBuilder
             Pose = Pose.Sidearm,
             Legs = Legs.Human,
             Sleeves = Sleeves.Long,
-            Crest = Crest.Tie,
+            Crest = Crest.Fedora,
             RootScale = UnitRootScale,
             Paints = Named(
                 "Char_BlazerBlack",
@@ -516,7 +607,7 @@ public static class CharacterBuilder
                 "Char_Gunmetal",
                 "Char_Skin",
                 "Char_Black",
-                "Char_TieRed",
+                "Char_TieBlue",
                 "Char_CloakGray",
                 "Char_White"
             ),
@@ -684,6 +775,109 @@ public static class CharacterBuilder
             Quaternion.LookRotation(WeaponAxis, WeaponUp) * Quaternion.Euler(90f, 0f, 0f);
     }
 
+    // ================================================================= the rig
+
+    /// <summary>
+    /// Where a joint sits on a body authored feet-at-zero, one unit tall. These are the same
+    /// numbers <see cref="Rig"/> already draws the geometry from — a bone is placed at the seam
+    /// two solids interpenetrate at, not at an invented pivot — so a re-proportioned character
+    /// re-rigs itself and no clip has to be retuned for it.
+    /// </summary>
+    private static Vector3 Joint(CharacterBone bone, Rig r) =>
+        bone switch
+        {
+            CharacterBone.Hips => r.Pelvis,
+
+            // The waist rather than the hips, so a lean bends the torso out of the legs instead of
+            // swinging the legs with it. The torso tube is widest here and overlaps both thighs, so
+            // the gap a hard lean opens at the hip is inside the mass either way.
+            CharacterBone.Torso => new Vector3(0f, Rig.WaistY, 0f),
+
+            CharacterBone.Head => r.Head,
+            CharacterBone.ShoulderL => r.ShoulderL,
+            CharacterBone.ForearmL => r.ElbowL,
+            CharacterBone.HandL => r.WristL,
+            CharacterBone.ShoulderR => r.ShoulderR,
+            CharacterBone.ForearmR => r.ElbowR,
+            CharacterBone.HandR => r.WristR,
+            CharacterBone.ThighL => r.HipL,
+            CharacterBone.FootL => r.AnkleL,
+            CharacterBone.ThighR => r.HipR,
+            CharacterBone.FootR => r.AnkleR,
+
+            // Both weapon pivots sit on the bore, because that is the axis a rotor turns about. Any
+            // point on the weapon axis would do and the grip is the one the rest of the weapon is
+            // already measured from.
+            _ => r.WeaponOrigin,
+        };
+
+    /// <summary>
+    /// How a joint rests, in the model root's space. Every joint of the body rests square — which
+    /// is what lets the geometry go on being authored in absolute coordinates — and the two weapon
+    /// pivots are the exception, turned so their local Y lies along the barrel. Spinning a rotor is
+    /// then a rotation about one axis rather than about a direction that changes per unit with the
+    /// weapon's tilt.
+    ///
+    /// <para>
+    /// The aim lands on <c>Weapon</c> and the rotor hangs off it, so the rotor's own local rotation
+    /// comes out square and a clip keying zero on it means rest. That split is a requirement rather
+    /// than tidiness — see <c>CharacterSkeleton.IsPosed</c>.
+    /// </para>
+    /// </summary>
+    private static Quaternion JointRest(CharacterBone bone, Rig r) =>
+        bone == CharacterBone.Weapon || bone == CharacterBone.Rotor ? r.WeaponSection : Quaternion.identity;
+
+    /// <summary>
+    /// A joint's rest pose relative to the joint it hangs off, which is what the bone transform
+    /// carries. Written against the parent's own rest rotation rather than assuming it is square,
+    /// so hanging something off the weapon pivot later does not silently come out mis-aimed.
+    /// </summary>
+    private static (Vector3 Position, Quaternion Rotation) JointLocal(CharacterBone bone, Rig r)
+    {
+        if (CharacterSkeleton.IsRoot(bone))
+            return (Joint(bone, r), JointRest(bone, r));
+
+        CharacterBone parent = CharacterSkeleton.Parent(bone);
+        Quaternion inverse = Quaternion.Inverse(JointRest(parent, r));
+        return (inverse * (Joint(bone, r) - Joint(parent, r)), inverse * JointRest(bone, r));
+    }
+
+    /// <summary>
+    /// Every bone's bind matrix: the inverse of how that bone rests in the model root's own space.
+    /// For the joints of the body that is nothing but the joint pushed back to the origin, since
+    /// they all rest square; the weapon pivot carries its aim as well. Either way the mesh goes on
+    /// being authored in absolute model coordinates and comes out of the skin exactly where it was
+    /// drawn.
+    /// </summary>
+    private static Matrix4x4[] BindPoses(Rig r)
+    {
+        Matrix4x4[] poses = new Matrix4x4[CharacterSkeleton.All.Length];
+        foreach (CharacterBone bone in CharacterSkeleton.All)
+            poses[(int)bone] = Matrix4x4.TRS(Joint(bone, r), JointRest(bone, r), Vector3.one).inverse;
+        return poses;
+    }
+
+    /// <summary>
+    /// Finishes a surface as a skinned mesh: every vertex locked at weight one to the single bone
+    /// its geometry asked for. Rigid, deliberately — nothing here deforms, limbs rotate inside the
+    /// mass they interpenetrate. The skin is only how thirteen moving parts stay one renderer and
+    /// one mesh asset, which is what <c>Unit.SetTeamIndicators</c>, <c>HitFlash</c> and
+    /// <c>StunPulse</c> all expect to find.
+    /// </summary>
+    private static Mesh Bind(MeshBuilder builder, Rig r, string name)
+    {
+        Mesh mesh = builder.Build(name);
+
+        IReadOnlyList<int> vertexBones = builder.VertexBones;
+        BoneWeight[] weights = new BoneWeight[vertexBones.Count];
+        for (int i = 0; i < weights.Length; i++)
+            weights[i] = new BoneWeight { boneIndex0 = vertexBones[i], weight0 = 1f };
+
+        mesh.bindposes = BindPoses(r);
+        mesh.boneWeights = weights;
+        return mesh;
+    }
+
     // ================================================================= the shared body
 
     private static void BuildBody(MeshBuilder m, Rig r)
@@ -702,6 +896,7 @@ public static class CharacterBuilder
     /// </summary>
     private static void BuildTorso(MeshBuilder m, Rig r)
     {
+        m.Bone = (int)CharacterBone.Torso;
         m.Paint = (int)Paint.Suit;
         m.AddTube(
             new[]
@@ -718,12 +913,21 @@ public static class CharacterBuilder
 
     private static void BuildLegs(MeshBuilder m, Rig r)
     {
-        BuildLeg(m, r, r.HipL, r.KneeL, r.AnkleL);
-        BuildLeg(m, r, r.HipR, r.KneeR, r.AnkleR);
+        BuildLeg(m, r, CharacterBone.ThighL, CharacterBone.FootL, r.HipL, r.KneeL, r.AnkleL);
+        BuildLeg(m, r, CharacterBone.ThighR, CharacterBone.FootR, r.HipR, r.KneeR, r.AnkleR);
     }
 
-    private static void BuildLeg(MeshBuilder m, Rig r, Vector3 hip, Vector3 knee, Vector3 ankle)
+    private static void BuildLeg(
+        MeshBuilder m,
+        Rig r,
+        CharacterBone thigh,
+        CharacterBone foot,
+        Vector3 hip,
+        Vector3 knee,
+        Vector3 ankle
+    )
     {
+        m.Bone = (int)thigh;
         m.Paint = (int)(r.Trousers ? Paint.Kit : Paint.Suit);
         if (r.Legs == Legs.Sprung)
         {
@@ -740,6 +944,7 @@ public static class CharacterBuilder
         // The boot is a squashed ball running forward of the ankle rather than a box centred on it,
         // which is the cheapest facing cue on the board: from 73 degrees a unit's feet are always
         // visible and always point where it is looking.
+        m.Bone = (int)foot;
         m.Paint = (int)Paint.Ink;
         m.AddEllipsoid(
             new Vector3(ankle.x, 0.080f, ankle.z + 0.022f),
@@ -752,12 +957,15 @@ public static class CharacterBuilder
 
     private static void BuildArms(MeshBuilder m, Rig r)
     {
-        BuildArm(m, r, r.ShoulderL, r.ElbowL, r.WristL);
-        BuildArm(m, r, r.ShoulderR, r.ElbowR, r.WristR);
+        BuildArm(m, r, left: true, r.ShoulderL, r.ElbowL, r.WristL);
+        BuildArm(m, r, left: false, r.ShoulderR, r.ElbowR, r.WristR);
     }
 
-    private static void BuildArm(MeshBuilder m, Rig r, Vector3 shoulder, Vector3 elbow, Vector3 wrist)
+    private static void BuildArm(MeshBuilder m, Rig r, bool left, Vector3 shoulder, Vector3 elbow, Vector3 wrist)
     {
+        CharacterBone[] chain = CharacterSkeleton.Arm(left);
+
+        m.Bone = (int)chain[0];
         m.Paint = (int)Paint.Suit;
         m.AddTube(new[] { shoulder, elbow }, new[] { r.UpperArmR, r.ForearmR * 1.08f });
 
@@ -765,9 +973,11 @@ public static class CharacterBuilder
         // way. A dark mitt at the end of a dark sleeve makes the arm stop at the elbow from any
         // distance; a pale one is a second light value on the silhouette and the only thing that
         // says where a unit is pointing its weapon.
+        m.Bone = (int)chain[1];
         m.Paint = (int)(r.Sleeves == Sleeves.Short ? Paint.Skin : Paint.Suit);
         m.AddTube(new[] { elbow, wrist }, new[] { r.ForearmR * 1.02f, r.ForearmR * 0.92f });
 
+        m.Bone = (int)chain[2];
         m.Paint = (int)Paint.Skin;
         m.AddEllipsoid(wrist, Vector3.one * r.HandR, Quaternion.identity, 10, 6);
     }
@@ -780,6 +990,10 @@ public static class CharacterBuilder
     /// </summary>
     private static void BuildHead(MeshBuilder m, Rig r)
     {
+        // The neck stays on the torso and only the skull turns. A neck bound to the head swings its
+        // base out of the collar the moment the head looks anywhere, which at board distance reads
+        // as the head coming off.
+        m.Bone = (int)CharacterBone.Torso;
         m.Paint = (int)Paint.Skin;
         m.AddTube(
             new[] { new Vector3(0f, Rig.ShoulderY - 0.020f, -0.004f), new Vector3(0f, 0.772f, -0.002f) },
@@ -787,6 +1001,8 @@ public static class CharacterBuilder
             roundStart: false,
             roundEnd: false
         );
+
+        m.Bone = (int)CharacterBone.Head;
         m.AddEllipsoid(
             new Vector3(0f, Rig.HeadY, 0.002f),
             new Vector3(Rig.HeadHalfX, Rig.HeadHalfY, Rig.HeadHalfZ),
@@ -804,6 +1020,7 @@ public static class CharacterBuilder
     /// </summary>
     private static void BuildFace(MeshBuilder m, Rig r)
     {
+        m.Bone = (int)CharacterBone.Head;
         foreach (float side in new[] { -1f, 1f })
         {
             Vector3 eye = new(side * 0.052f, Rig.EyeY, 0.092f);
@@ -826,14 +1043,16 @@ public static class CharacterBuilder
     }
 
     /// <summary>
-    /// The team surface, and on seven of the eight it is a hat. That is where the hand-made units
-    /// put theirs — Soldier's helmet, Commander's peaked cap, Ramrod's beret — and it is the right
-    /// answer for the same reason they found: with the base plate, the crown is one of only two
-    /// surfaces a camera at 73 degrees sees square-on. It is its own mesh and its own renderer
+    /// The team surface, and on every one of the eight it is a hat. That is where the hand-made
+    /// units put theirs — Soldier's helmet, Commander's peaked cap, Ramrod's beret — and it is the
+    /// right answer for the same reason they found: with the base plate, the crown is one of only
+    /// two surfaces a camera at 73 degrees sees square-on. It is its own mesh and its own renderer
     /// because <c>Unit.SetTeamIndicators</c> swaps slot 0 on the tagged node.
     /// </summary>
     private static void BuildTeamProp(MeshBuilder m, Rig r)
     {
+        m.Bone = (int)CharacterBone.Head;
+
         // A hat here is a smaller solid sitting on the crown, the way Soldier's helmet is a second
         // sphere parked on the head rather than a shell drawn over it. Anything that drops below
         // the brow covers the face, and the face is the whole reason these read as the same toys
@@ -898,29 +1117,34 @@ public static class CharacterBuilder
                 );
                 break;
 
-            // Knot and blade, and no collar: the collar is shirt and belongs to the body, so the
-            // one team surface on this unit is the single stripe running down the middle of it.
-            // Cut wider than a tie is for the same reason the hats are oversized — this is the
-            // whole of the unit's team read, and a correctly-scaled tie is two pixels of it. The
-            // knot is pitched back rather than left flush with the chest for the same reason the
-            // others wear their colour on the crown: at 73 degrees a surface facing the sky is
-            // worth several facing the horizon, and the crown here is taken up by hair.
+            // A hat, and the same answer the other seven got, for the reason the hand-made five
+            // found first: with the base plate the crown is one of only two surfaces a camera at
+            // 73 degrees sees square-on, and a brim is the largest flat thing anyone here can wear
+            // facing the sky. The tie this replaced was a stripe down a vertical chest, lit at a
+            // graze from above and mostly behind an elbow — a tenth of the team read a brim gives.
             default:
-                m.AddTaperedPrism(
-                    new Vector3(0f, Rig.ShoulderY - 0.026f, r.ChestHalfZ * 1.16f),
-                    Quaternion.Euler(-24f, 0f, 0f),
-                    new Vector2(0.015f, 0.014f),
-                    new Vector2(0.025f, 0.016f),
-                    0.026f,
-                    0.006f
+                // Cut to Soldier's helmet: 0.77 across and 0.38 tall once the unit root has scaled
+                // it, measured off that prefab rather than guessed. The crown's last ring stops at
+                // 0.990 because a rounded end adds its own radius above it — reading the tube's top
+                // point as its top is what made the first cut of this hat a third too tall.
+                m.AddEllipsoid(
+                    new Vector3(0f, 0.940f, -0.006f),
+                    new Vector3(Rig.HeadHalfX * 1.22f, 0.009f, Rig.HeadHalfZ * 1.18f),
+                    Quaternion.Euler(-4f, 0f, 0f),
+                    18,
+                    6
                 );
-                m.AddTaperedPrism(
-                    new Vector3(0f, Rig.ChestY - 0.020f, r.ChestHalfZ * 1.18f),
-                    Quaternion.identity,
-                    new Vector2(0.020f, 0.012f),
-                    new Vector2(0.013f, 0.012f),
-                    0.074f,
-                    0.007f
+
+                // The crown has to be wider than the skull is at the brim, not wider than the skull
+                // is at its own top, or the head bulges out through the side of the hat. The head
+                // sits 2mm forward of centre, so the crown does too.
+                m.AddTube(
+                    new[] { new Vector3(0f, 0.936f, -0.002f), new Vector3(0f, 0.990f, -0.006f) },
+                    new[] { 0.100f, 0.070f },
+                    roundStart: false,
+                    roundEnd: true,
+                    segments: 16,
+                    squash: new Vector3(1f, 1f, 1.04f)
                 );
                 break;
         }
@@ -935,6 +1159,7 @@ public static class CharacterBuilder
         // one: the shield is this character's whole read, and every seam cut into it is a pixel of
         // noise at the distance where the read has to happen.
         Vector3 face = r.WristL + new Vector3(-0.020f, 0.020f, 0.090f);
+        m.Bone = (int)CharacterBone.HandL;
         m.Paint = (int)Paint.Kit;
         m.AddEllipsoid(face, new Vector3(0.118f, 0.168f, 0.028f), Quaternion.Euler(-8f, -12f, 0f), 12, 8);
 
@@ -943,9 +1168,11 @@ public static class CharacterBuilder
 
     private static void GearBreach(MeshBuilder m, Rig r)
     {
+        m.Bone = (int)CharacterBone.Head;
         m.Paint = (int)Paint.Ink;
         m.AddEllipsoid(new Vector3(0f, Rig.MouthY + 0.004f, 0.108f), new Vector3(0.048f, 0.010f, 0.016f), Quaternion.identity, 10, 6);
 
+        m.Bone = (int)CharacterBone.HandR;
         m.Paint = (int)Paint.Metal;
         Barrel(m, r, -0.200f, 0.260f, 0.048f);
         m.AddLathe(
@@ -965,6 +1192,7 @@ public static class CharacterBuilder
     {
         // Cloak down the back, as one tapering tube rather than a panel: a flat slab behind a round
         // body is the one thing on this roster that would give itself away as a cut-out.
+        m.Bone = (int)CharacterBone.Torso;
         m.Paint = (int)Paint.Kit;
         m.AddTube(
             new[]
@@ -989,7 +1217,11 @@ public static class CharacterBuilder
             segments: 10
         );
 
-        // The bow: an arc through the bow hand, plus a drawn string back to the other.
+        // The bow: an arc through the bow hand, plus a drawn string back to the other. All of it
+        // rides the bow hand — a string bound to one hand and nocked in the other would be cut in
+        // half the first frame the two move apart, so Farsight's draw arm is held still in the
+        // clips instead and the whole assembly travels as one piece.
+        m.Bone = (int)CharacterBone.HandL;
         Quaternion bowRot = r.WeaponRot;
         Vector3[] limb =
         {
@@ -1102,6 +1334,12 @@ public static class CharacterBuilder
         m.Paint = (int)Paint.Ink;
         Plate(0.286f, 0.306f, 0.082f);
 
+        // Everything from here to the muzzle is the rotor, and it turns: shaft, barrels, their
+        // clamp band and the crown. The drum behind it is housing and stays with the hand, which is
+        // what makes the spin read at all — six rods turning inside a band that does not is legible
+        // at twenty pixels, and a whole weapon rotating about its own axis is not.
+        m.Bone = (int)CharacterBone.Rotor;
+
         // Spindle first: the gaps between barrels have to look into a shaft, not through the gun.
         m.AddTube(
             new[] { r.OnWeapon(0.290f), r.OnWeapon(0.540f) },
@@ -1142,6 +1380,8 @@ public static class CharacterBuilder
             capEnd: true
         );
 
+        m.Bone = (int)CharacterBone.HandR;
+
         // Seated up into the underside of the rotor, carrying the mass the old side drum did. Kept
         // dark so the drum stays the only light mass on the weapon, with the straps reading against
         // it instead of the can reading against the drum.
@@ -1177,6 +1417,7 @@ public static class CharacterBuilder
 
         // Two coil rings standing off the back above the shoulder line. A torus is the one
         // primitive nothing else on this board uses and it survives being three pixels across.
+        m.Bone = (int)CharacterBone.Torso;
         m.Paint = (int)Paint.Accent;
         foreach (float side in new[] { -1f, 1f })
         {
@@ -1194,10 +1435,12 @@ public static class CharacterBuilder
         // lit band under it, where there used to be a stack of three: the stack was three glowing
         // lines a pixel apart, which bloom smears into a single smudge anyway.
         Vector3 emitter = r.WristL + new Vector3(0f, 0.020f, 0.008f);
+        m.Bone = (int)CharacterBone.HandL;
         m.Paint = (int)Paint.Accent;
         m.AddTorus(emitter, Quaternion.identity, r.ForearmR * 1.10f, 0.012f, 12, 6);
 
         // Charge pistol: a blunt body with a lit core down the top, not a barrel.
+        m.Bone = (int)CharacterBone.HandR;
         m.Paint = (int)Paint.Metal;
         Block(m, r, -0.032f, 0.086f, 0.028f, 0.032f);
         m.Paint = (int)Paint.Ink;
@@ -1219,6 +1462,7 @@ public static class CharacterBuilder
     {
         // Goggles pushed up onto the crown, riding over the beanie rather than over the eyes: a
         // character whose face is covered loses the one detail that says which way it is looking.
+        m.Bone = (int)CharacterBone.Head;
         m.Paint = (int)Paint.Ink;
         m.AddTube(
             new[] { new Vector3(-0.098f, 0.902f, 0.016f), new Vector3(0f, 0.912f, 0.106f), new Vector3(0.098f, 0.902f, 0.016f) },
@@ -1238,6 +1482,7 @@ public static class CharacterBuilder
         }
 
         // Short shotgun: wide receiver, stubby barrel, one bright band where the pump sits.
+        m.Bone = (int)CharacterBone.HandR;
         m.Paint = (int)Paint.Metal;
         Block(m, r, -0.078f, 0.064f, 0.032f, 0.036f);
         Barrel(m, r, 0.064f, 0.198f, 0.022f);
@@ -1248,85 +1493,114 @@ public static class CharacterBuilder
         m.AddPrism(r.OnWeapon(-0.110f), r.WeaponSection, new Vector3(0.022f, 0.044f, 0.030f), 0.018f);
     }
 
+    /// <summary>
+    /// The torso's own cross-section between two heights, widened by <paramref name="clearance"/>,
+    /// as the rows <see cref="MeshBuilder.AddPanel"/> lays cloth along. Read off
+    /// <see cref="BuildTorso"/> rather than restated, so a panel cannot come loose from the chest
+    /// it is meant to be lying on. The span widens up the rows, which is what cuts the shirt as a
+    /// V instead of the bib a constant one gives.
+    /// </summary>
+    private static Vector4[] Chest(Rig r, float from, float to, float clearance, float spanLow, float spanHigh)
+    {
+        Vector4[] rows = new Vector4[7];
+        for (int i = 0; i < rows.Length; i++)
+        {
+            float t = i / (float)(rows.Length - 1);
+            float y = Mathf.Lerp(from, to, t);
+            float radius = TorsoRadius(r, y) + clearance;
+            rows[i] = new Vector4(y, radius * Rig.TorsoWidth, radius, Mathf.Lerp(spanLow, spanHigh, t));
+        }
+        return rows;
+    }
+
+    /// <summary>The radius <see cref="BuildTorso"/> gives its tube at one height.</summary>
+    private static float TorsoRadius(Rig r, float y)
+    {
+        if (y <= Rig.WaistY)
+            return Mathf.Lerp(r.WaistRadius * 1.04f, r.WaistRadius, Mathf.InverseLerp(Rig.HipY + 0.006f, Rig.WaistY, y));
+        if (y <= Rig.ChestY)
+            return Mathf.Lerp(r.WaistRadius, r.ChestRadius, Mathf.InverseLerp(Rig.WaistY, Rig.ChestY, y));
+        if (y <= Rig.ShoulderY)
+            return Mathf.Lerp(r.ChestRadius, r.ShoulderRadius, Mathf.InverseLerp(Rig.ChestY, Rig.ShoulderY, y));
+
+        // Above the shoulder the tube is capped by a dome of its own radius, and the collar lies on
+        // that dome: it is the one piece of this suit the portrait sees clear of both arms.
+        float over = Mathf.Clamp01((y - Rig.ShoulderY) / r.ShoulderRadius);
+        return r.ShoulderRadius * Mathf.Sqrt(1f - over * over);
+    }
+
     private static void GearPresident(MeshBuilder m, Rig r)
     {
-        // Hair rather than the smooth cap a single dome reads as: a crown that hugs the skull, a
-        // sweep standing off the brow, and a pad at each temple, so the silhouette breaks where a
-        // hat's brim would be a continuous line.
-        m.Paint = (int)Paint.Trim;
-        m.AddEllipsoid(
-            new Vector3(0f, Rig.CrownY - 0.014f, -0.012f),
-            new Vector3(Rig.HeadHalfX * 1.04f, 0.054f, Rig.HeadHalfZ * 1.02f),
-            Quaternion.Euler(-8f, 0f, 0f),
-            16,
-            10
-        );
-        m.AddEllipsoid(
-            new Vector3(0f, 0.930f, Rig.HeadHalfZ * 0.66f),
-            new Vector3(Rig.HeadHalfX * 0.80f, 0.030f, 0.038f),
-            Quaternion.Euler(-26f, 0f, 0f),
-            12,
-            8
-        );
-        foreach (float side in new[] { -1f, 1f })
-        {
-            m.AddEllipsoid(
-                new Vector3(side * Rig.HeadHalfX * 0.89f, 0.894f, -0.034f),
-                new Vector3(0.016f, 0.046f, Rig.HeadHalfZ * 0.74f),
-                Quaternion.identity,
-                10,
-                7
-            );
-        }
+        PresidentHead(m, r);
+        PresidentSuit(m, r);
+        Pistol(m, r);
+    }
 
+    /// <summary>
+    /// Bare head, which is the whole point of it: every other unit on the board wears its team
+    /// colour on the crown, and this one has nothing up there at all. The brows are cut heavier
+    /// than the roster's because they are then the only marks on the largest, palest surface on
+    /// the character.
+    /// </summary>
+    private static void PresidentHead(MeshBuilder m, Rig r)
+    {
+        m.Bone = (int)CharacterBone.Head;
         m.Paint = (int)Paint.Ink;
         foreach (float side in new[] { -1f, 1f })
         {
             m.AddEllipsoid(
-                new Vector3(side * 0.042f, Rig.EyeY + 0.038f, 0.086f),
-                new Vector3(0.022f, 0.006f, 0.010f),
-                Quaternion.identity,
+                new Vector3(side * 0.046f, Rig.EyeY + 0.040f, 0.088f),
+                new Vector3(0.026f, 0.0075f, 0.012f),
+                Quaternion.Euler(0f, 0f, side * 5f),
                 8,
                 5
             );
         }
+    }
 
-        // The shirt, and the reason this unit reads at all: one panel standing a centimetre off
-        // the chest, cut as the V a jacket makes when it is worn open — a hand's width across at
-        // the collar, a tie's width at the belt. It has to stand that far proud to be white: sat
-        // flush on the torso its surface is tangent to it, and a white tangent to a black under a
-        // light from overhead renders the same grey as the black does.
+    /// <summary>
+    /// The suit, and the whole character's read: a white shirt V under the chin, its edges cut by
+    /// two black lapels that close over it just above the belt.
+    ///
+    /// <para>
+    /// Every piece here is a bevelled plate rather than the squashed tube the rest of the roster
+    /// is built from, which is the one place this character departs from the house style and it is
+    /// deliberate. A tube wide enough to show white either side of the tie has to stand a
+    /// centimetre off the chest to clear it, and what that reads as at tile size is a rounded
+    /// white mass under the chin — a cravat, or a neck pillow. A tailored edge is a straight line;
+    /// nothing built out of interpenetrating eggs will produce one.
+    /// </para>
+    ///
+    /// <para>
+    /// The shirt runs the full chest as a band rather than tapering to a V at the belt the way a
+    /// buttoned jacket does, because of where the sidearm pose puts the arms: both upper arms lie
+    /// across the chest at shoulder height, so everything above two thirds of the way up the torso
+    /// is behind an elbow in the portrait and on the board alike. A correctly-cut V is widest
+    /// exactly where nothing can see it.
+    /// </para>
+    /// </summary>
+    private static void PresidentSuit(MeshBuilder m, Rig r)
+    {
+        m.Bone = (int)CharacterBone.Torso;
+        // Shirt and collar, both lying all but flush on the chest: a hair of clearance and a hair
+        // of thickness. Standing a panel off the body far enough to see its edge is what makes it
+        // read as a card taped to the chest rather than as cloth, and the roster's own faces and
+        // boots say the same thing — at this size a garment is a region of flat colour, and the
+        // only thing that has to stand proud of the shirt is the tie.
+        //
+        // The collar is a second panel, widest where it meets the shirt and narrowing to the neck,
+        // which is the spread of a collar upside down and the one shape that says shirt on its own.
         m.Paint = (int)Paint.Kit;
-        m.AddTube(
-            new[] { new Vector3(0f, 0.470f, 0.056f), new Vector3(0f, 0.575f, 0.052f), new Vector3(0f, 0.672f, 0.050f) },
-            new[] { 0.030f, 0.062f, 0.090f },
-            roundStart: false,
-            segments: 16,
-            squash: new Vector3(1f, 1f, 0.34f)
-        );
-        m.AddTube(
-            new[] { new Vector3(0f, 0.652f, 0.004f), new Vector3(0f, 0.704f, 0.002f) },
-            new[] { 0.066f, 0.054f },
-            roundStart: false,
-            roundEnd: false,
-            segments: 14,
-            squash: new Vector3(1.10f, 1f, 1f)
-        );
-        foreach (float side in new[] { -1f, 1f })
-        {
-            m.AddPrism(
-                new Vector3(side * 0.038f, 0.636f, 0.072f),
-                Quaternion.Euler(-12f, 0f, side * -24f),
-                new Vector3(0.015f, 0.028f, 0.011f),
-                0.005f
-            );
-        }
+        m.AddPanel(Chest(r, 0.470f, 0.646f, 0.0015f, 0.34f, 0.46f), 0.002f, 8);
+        m.AddPanel(Chest(r, 0.634f, 0.716f, 0.0015f, 0.56f, 0.30f), 0.002f, 8);
 
-        // Cuffs. A long sleeve ends in a skin ball the same size as the sleeve, so without these
-        // the arm is one black stick with a blob on it — and both hands are what the eye follows
-        // on a unit holding a sidearm out in front of itself.
-        foreach ((Vector3 elbow, Vector3 wrist) in new[] { (r.ElbowL, r.WristL), (r.ElbowR, r.WristR) })
+        foreach ((CharacterBone hand, Vector3 elbow, Vector3 wrist) in new[]
         {
+            (CharacterBone.HandL, r.ElbowL, r.WristL),
+            (CharacterBone.HandR, r.ElbowR, r.WristR),
+        })
+        {
+            m.Bone = (int)hand;
             Vector3 along = (wrist - elbow).normalized;
             m.AddTube(
                 new[] { wrist - along * 0.062f, wrist - along * 0.034f },
@@ -1337,7 +1611,31 @@ public static class CharacterBuilder
             );
         }
 
+        m.Bone = (int)CharacterBone.Hips;
+        // The tie is the one thing here that stands proud of the shirt, because on a real one it
+        // is the one thing that does.
+        m.Paint = (int)Paint.Accent;
+        m.AddTaperedPrism(
+            new Vector3(0f, 0.668f, 0.066f),
+            Quaternion.Euler(-12f, 0f, 0f),
+            new Vector2(0.011f, 0.013f),
+            new Vector2(0.016f, 0.013f),
+            0.024f,
+            0.005f
+        );
+        m.AddTaperedPrism(
+            new Vector3(0f, 0.556f, 0.064f),
+            Quaternion.Euler(3f, 0f, 0f),
+            new Vector2(0.014f, 0.011f),
+            new Vector2(0.010f, 0.011f),
+            0.090f,
+            0.005f
+        );
+
         m.Paint = (int)Paint.Suit;
+
+        // The coat skirt below the belt, which no other unit has and is most of why the silhouette
+        // is a civilian's from above.
         m.AddTube(
             new[] { new Vector3(0f, Rig.HipY + 0.024f, 0f), new Vector3(0f, Rig.HipY - 0.070f, 0f) },
             new[] { r.WaistRadius * 1.04f, r.WaistRadius * 1.24f },
@@ -1346,8 +1644,6 @@ public static class CharacterBuilder
             segments: 14,
             squash: new Vector3(Rig.TorsoWidth, 1f, 1f)
         );
-
-        Pistol(m, r);
     }
 
     // ================================================================= shared gear pieces
@@ -1355,6 +1651,7 @@ public static class CharacterBuilder
     /// <summary>A rounded pack sitting against the back, sized in half-extents.</summary>
     private static void Pack(MeshBuilder m, Rig r, Paint paint, float halfX, float halfY, float halfZ)
     {
+        m.Bone = (int)CharacterBone.Torso;
         m.Paint = (int)paint;
         m.AddEllipsoid(
             new Vector3(0f, Rig.ChestY - 0.010f, -r.ChestHalfZ - halfZ * 0.72f),
@@ -1372,6 +1669,7 @@ public static class CharacterBuilder
     /// </summary>
     private static void Pistol(MeshBuilder m, Rig r)
     {
+        m.Bone = (int)CharacterBone.HandR;
         m.Paint = (int)Paint.Metal;
         Block(m, r, -0.030f, 0.130f, 0.026f, 0.038f);
         m.Paint = (int)Paint.Ink;
@@ -1381,6 +1679,7 @@ public static class CharacterBuilder
     /// <summary>A service carbine, sized by its overall length.</summary>
     private static void Carbine(MeshBuilder m, Rig r, float length, float depth)
     {
+        m.Bone = (int)CharacterBone.HandR;
         m.Paint = (int)Paint.Metal;
         Block(m, r, -0.080f, length * 0.42f, 0.030f, depth);
         Barrel(m, r, length * 0.42f, length, 0.022f);
@@ -1434,14 +1733,23 @@ public static class CharacterBuilder
             model.transform.localScale = FitUnderRoot(spec.RootScale, spec.Height);
             model.transform.localPosition = new Vector3(0f, GroundLine(root), 0f);
 
+            Transform[] bones = Skeleton(model.transform, rig);
+
             Material[] materials = new Material[paints.Count];
             for (int i = 0; i < paints.Count; i++)
                 materials[i] = LoadPaint(spec.Paints[paints[i]]);
 
-            AddSurface(model.transform, SurfaceName, body, materials);
+            AddSurface(model.transform, SurfaceName, body, materials, bones);
 
-            GameObject teamProp = AddSurface(model.transform, TeamPropName, team, new[] { LoadPaint("Char_TeamBase") });
+            GameObject teamProp = AddSurface(model.transform, TeamPropName, team, new[] { LoadPaint("Char_TeamBase") }, bones);
             teamProp.tag = TeamIndicatorTag;
+
+            Animator animator = model.AddComponent<Animator>();
+            animator.runtimeAnimatorController = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
+                CharacterAnimationBuilder.ControllerPath(spec.Name)
+            );
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
 
             Transform anchors = new GameObject(AnchorsName).transform;
             anchors.SetParent(model.transform, false);
@@ -1462,17 +1770,57 @@ public static class CharacterBuilder
         }
     }
 
-    private static GameObject AddSurface(Transform parent, string name, Mesh mesh, Material[] materials)
+    /// <summary>
+    /// One node, one renderer, one mesh asset — as before the rig went in, except the renderer is
+    /// skinned. The node keeps its name because the runtime finds both surfaces by it:
+    /// <c>Unit.SetTeamIndicators</c> swaps slot 0 on the tagged one, and the tests read the model's
+    /// shape off <c>Body/Mesh</c>.
+    /// </summary>
+    private static GameObject AddSurface(Transform parent, string name, Mesh mesh, Material[] materials, Transform[] bones)
     {
         GameObject surface = new(name);
         surface.transform.SetParent(parent, false);
-        surface.AddComponent<MeshFilter>().sharedMesh = mesh;
 
-        MeshRenderer renderer = surface.AddComponent<MeshRenderer>();
+        SkinnedMeshRenderer renderer = surface.AddComponent<SkinnedMeshRenderer>();
+        renderer.sharedMesh = mesh;
+        renderer.bones = bones;
+        renderer.rootBone = bones[(int)CharacterBone.Hips];
         renderer.sharedMaterials = materials;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
         renderer.receiveShadows = true;
+        renderer.quality = SkinQuality.Bone1;
+        renderer.updateWhenOffscreen = false;
+
+        // Culling bounds are deliberately left to Unity. A SkinnedMeshRenderer measures its
+        // localBounds in the root bone's space rather than its own, so assigning the mesh's own
+        // model-space bounds here shifts them up by the height of the hips — enough to push a
+        // surface as small as a hat clean out of frame and cull it, which is a bald unit rather
+        // than an obvious bug. Unity's own derivation already pads for animation.
         return surface;
+    }
+
+    /// <summary>
+    /// The bone hierarchy, parented under the model root so a clip written against
+    /// <c>CharacterSkeleton.Path</c> binds from the Animator that sits on that same node. Every
+    /// bone rests unrotated, which is what makes the bind poses in <see cref="BindPoses"/> pure
+    /// translations and the authored mesh its own rest pose.
+    /// </summary>
+    private static Transform[] Skeleton(Transform model, Rig r)
+    {
+        Transform[] bones = new Transform[CharacterSkeleton.All.Length];
+
+        foreach (CharacterBone bone in CharacterSkeleton.All)
+        {
+            Transform joint = new GameObject(bone.ToString()).transform;
+            joint.SetParent(CharacterSkeleton.IsRoot(bone) ? model : bones[(int)CharacterSkeleton.Parent(bone)], false);
+
+            (Vector3 position, Quaternion rotation) = JointLocal(bone, r);
+            joint.localPosition = position;
+            joint.localRotation = rotation;
+            bones[(int)bone] = joint;
+        }
+
+        return bones;
     }
 
     private static void Anchor(Transform parent, string name, Vector3 position)
@@ -1597,6 +1945,13 @@ public static class CharacterBuilder
         existing.vertices = mesh.vertices;
         existing.normals = mesh.normals;
         existing.uv = mesh.uv;
+
+        // Bind poses before weights, and both before the submeshes are laid back in: a weight
+        // naming a bone the mesh has no bind pose for is dropped silently and the vertex collapses
+        // to the origin.
+        existing.bindposes = mesh.bindposes;
+        existing.boneWeights = mesh.boneWeights;
+
         existing.subMeshCount = mesh.subMeshCount;
         for (int i = 0; i < mesh.subMeshCount; i++)
             existing.SetTriangles(mesh.GetTriangles(i), i);
@@ -1649,10 +2004,21 @@ public static class CharacterBuilder
         private readonly List<Vector3> vertices = new();
         private readonly List<Vector3> normals = new();
         private readonly List<Vector2> uvs = new();
+        private readonly List<int> bones = new();
         private readonly Dictionary<int, List<int>> paints = new();
         private readonly List<int> order = new();
 
         public int Paint { get; set; }
+
+        /// <summary>
+        /// The bone every vertex emitted from here on is locked to, weight one. Set alongside
+        /// <see cref="Paint"/> and read the same way: geometry asks for a bone, never for a
+        /// transform, so a limb can be re-jointed without touching a coordinate.
+        /// </summary>
+        public int Bone { get; set; }
+
+        /// <summary>Which bone each vertex belongs to, parallel to the mesh's vertex list.</summary>
+        public IReadOnlyList<int> VertexBones => bones;
 
         /// <summary>Paint slots that actually got geometry, in the order their submeshes are written.</summary>
         public IReadOnlyList<int> SubmeshPaints => order;
@@ -1676,6 +2042,7 @@ public static class CharacterBuilder
             vertices.Add(position);
             normals.Add(Vector3.zero);
             uvs.Add(Vector2.zero);
+            bones.Add(Bone);
             return vertices.Count - 1;
         }
 
@@ -2017,6 +2384,72 @@ public static class CharacterBuilder
             for (int i = 0; i < ring.Length; i++)
                 sum += ring[i];
             return sum / ring.Length;
+        }
+
+        /// <summary>
+        /// A patch of cloth lying on a body: the arc of an elliptical section either side of front,
+        /// swept up a spine of rows and given a thickness.
+        ///
+        /// <para>
+        /// This exists because the President's suit needs two things at once that nothing else in
+        /// this builder can give together — an edge straight enough to read as tailoring, and a
+        /// face that holds the same distance off a curved chest all the way across it. A flat
+        /// prism has the edge and floats a centimetre clear at its corners; a squashed tube holds
+        /// the distance and has no edges at all, which is how a shirt ends up reading as a cravat.
+        /// A panel is the torso's own cross-section, so it cannot float, and it stops at an angle
+        /// rather than wrapping, so it has two straight sides.
+        /// </para>
+        /// </summary>
+        /// <param name="spine">Rows of (height, section half-width, section half-depth, radians either side of centre).</param>
+        /// <param name="thickness">How far the panel stands off the section it lies on.</param>
+        /// <param name="centreTurn">Radians around from front the panel is centred on.</param>
+        public void AddPanel(IReadOnlyList<Vector4> spine, float thickness, int segments, float centreTurn = 0f)
+        {
+            if (spine.Count < 2 || segments < 2)
+                return;
+
+            int across = segments + 1;
+            int rows = spine.Count;
+            int[][] inner = new int[rows][];
+            int[][] outer = new int[rows][];
+            Vector3[] normalsAcross = new Vector3[across];
+
+            for (int i = 0; i < rows; i++)
+            {
+                inner[i] = new int[across];
+                outer[i] = new int[across];
+                for (int s = 0; s < across; s++)
+                {
+                    float around = Mathf.PI * 0.5f + centreTurn + (s / (float)segments * 2f - 1f) * spine[i].w;
+                    float cos = Mathf.Cos(around);
+                    float sin = Mathf.Sin(around);
+                    Vector3 on = new(cos * spine[i].y, spine[i].x, sin * spine[i].z);
+                    Vector3 away = new Vector3(cos * spine[i].z, 0f, sin * spine[i].y).normalized;
+                    inner[i][s] = Vertex(on);
+                    outer[i][s] = Vertex(on + away * thickness);
+                    normalsAcross[s] = away;
+                }
+            }
+
+            for (int i = 0; i < rows - 1; i++)
+            {
+                for (int s = 0; s < across - 1; s++)
+                {
+                    Vector3 face = (normalsAcross[s] + normalsAcross[s + 1]) * 0.5f;
+                    Patch(outer[i][s], outer[i][s + 1], outer[i + 1][s + 1], outer[i + 1][s], face);
+                    Patch(inner[i][s], inner[i][s + 1], inner[i + 1][s + 1], inner[i + 1][s], -face);
+                }
+
+                Vector3 left = Vector3.Cross(Vector3.up, normalsAcross[0]);
+                Patch(inner[i][0], outer[i][0], outer[i + 1][0], inner[i + 1][0], left);
+                Patch(inner[i][across - 1], outer[i][across - 1], outer[i + 1][across - 1], inner[i + 1][across - 1], -left);
+            }
+
+            for (int s = 0; s < across - 1; s++)
+            {
+                Patch(inner[0][s], outer[0][s], outer[0][s + 1], inner[0][s + 1], Vector3.down);
+                Patch(inner[rows - 1][s], outer[rows - 1][s], outer[rows - 1][s + 1], inner[rows - 1][s + 1], Vector3.up);
+            }
         }
 
         /// <summary>A closed box section, extruded along the local +Y of <paramref name="rotation"/>.</summary>

@@ -36,8 +36,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private ScrollView rosterOptions;
     private VisualElement classFilters;
     private VisualElement selectedRoster;
-    private Label rosterInstruction;
-    private Label rosterCountLabel;
     private Button confirmButton;
     private Label selectionStatus;
     private Label modeSummary;
@@ -151,8 +149,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
         rosterOptions = RequireElement<ScrollView>("roster-options");
         classFilters = RequireElement<VisualElement>("class-filters");
         selectedRoster = RequireElement<VisualElement>("selected-roster");
-        rosterInstruction = RequireElement<Label>("roster-instruction");
-        rosterCountLabel = RequireElement<Label>("roster-count-label");
         confirmButton = RequireElement<Button>("confirm-selection-button");
         selectionStatus = RequireElement<Label>("selection-status");
         modeSummary = RequireElement<Label>("mode-summary");
@@ -165,8 +161,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
         // curtain the last attempt raised.
         if (deployCurtain != null)
             deployCurtain.style.opacity = 0f;
-        if (rosterCountLabel != null)
-            rosterCountLabel.text = $"Pick {UnitsPerPlayer} units";
     }
 
     private T RequireElement<T>(string elementName)
@@ -565,7 +559,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
     private void UpdateSelectionState()
     {
-        UpdateRosterInstruction();
         bool selectionComplete = selectedUnits.All(index => index >= 0);
         RosterValidationResult validation = selectionComplete
             ? RosterRules.Validate(selectedUnits, allUnits?.units)
@@ -600,18 +593,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
             confirmButton.SetEnabled(IsSpawned && IsClient && selectionValid && canEdit);
         }
         UpdateStatusText();
-    }
-
-    private void UpdateRosterInstruction()
-    {
-        if (rosterInstruction == null)
-            return;
-
-        rosterInstruction.text = escortMode
-            ? $"Pick {UnitsPerPlayer}. Repeats are allowed. Slot "
-                + $"{EscortSeries.PresidentRosterSlot + 1} is the president's — the unit you put "
-                + "there only fields in the legs your crew defends."
-            : $"Pick {UnitsPerPlayer}. Repeats are allowed. Select a filled slot to remove it.";
     }
 
     private void ConfirmSelection()
@@ -1046,10 +1027,9 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
             if (optionStatus != null)
             {
-                optionStatus.text = !eligible
-                    ? "Unavailable"
-                    : (pickedCount > 1 ? $"Selected \u00d7{pickedCount}" : (selected ? "Selected" : string.Empty));
-                optionStatus.EnableInClassList("hidden", eligible && !selected);
+                // Stack count only: one copy is already announced by the tile inverting.
+                optionStatus.text = !eligible ? "Unavailable" : $"\u00d7{pickedCount}";
+                optionStatus.EnableInClassList("hidden", eligible && pickedCount < 2);
             }
 
             string unitName =

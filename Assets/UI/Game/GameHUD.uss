@@ -654,7 +654,6 @@
 }
 
 .hud-exit-button,
-.hud-controls-button,
 .hud-settings-button {
     min-height: 46px;
     flex-shrink: 0;
@@ -665,14 +664,13 @@
 
 /* Each dock chip is spaced by the one on its left, the way the commit cluster spaces itself, so the
    rightmost chip stays flush with the dock's edge. */
-.hud-exit-button,
-.hud-controls-button {
+.hud-exit-button {
     margin-right: 8px;
 }
 
-/* Leftmost of the three and the only one that ends the match, so it is kept off the two a player
-   reaches for mid-round and given the ink a destructive action wears everywhere else. Quiet rather
-   than filled: it is a way out, not something the HUD should be recommending. */
+/* The only one of the pair that ends the match, so it is kept off the chip a player reaches for
+   mid-round and given the ink a destructive action wears everywhere else. Quiet rather than
+   filled: it is a way out, not something the HUD should be recommending. */
 .hud-exit-button {
     color: var(--toy-danger-copy);
     border-color: var(--toy-danger-copy);
@@ -1378,17 +1376,13 @@
     background-color: var(--toy-scrim);
 }
 
-.controls-overlay {
-    background-color: var(--toy-scrim);
-}
-
 .settings-overlay {
     background-color: var(--toy-scrim);
 }
 
-/* Shorter than the controls sheet, so the phase banner above and the dock below stay readable
-   behind it. The round does not stop for this panel and the player may be watching the timer while
-   they reach for a level. */
+/* Kept short so the phase banner above and the dock below stay readable behind it. The round does
+   not stop for this panel and the player may be watching the timer while they reach for a
+   level. */
 .toybox-ui.settings-overlay .settings-panel {
     max-height: 62%;
     align-items: stretch;
@@ -1957,7 +1951,6 @@
 }
 
 .phone .hud-exit-button,
-.phone .hud-controls-button,
 .phone .hud-settings-button {
     min-height: 44px;
     padding-left: 8px;
@@ -2178,7 +2171,6 @@
 }
 
 .short .hud-exit-button,
-.short .hud-controls-button,
 .short .hud-settings-button {
     min-height: 44px;
     padding-top: 4px;
@@ -2206,7 +2198,6 @@
 }
 
 .phone.short .hud-exit-button,
-.phone.short .hud-controls-button,
 .phone.short .hud-settings-button {
     min-height: 44px;
     padding-top: 7px;

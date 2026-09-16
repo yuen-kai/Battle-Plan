@@ -48,7 +48,7 @@
                     <ui:Button name="sandbox-team-blue" text="Blue" class="button sandbox-button sandbox-team sandbox-team--blue sandbox-team--selected" tooltip="Add units to the blue crew" />
                     <ui:Button name="sandbox-team-red" text="Red" class="button sandbox-button sandbox-team sandbox-team--red" tooltip="Add units to the red crew" />
                 </ui:VisualElement>
-                <ui:ScrollView name="sandbox-quick-scroll" mode="Vertical" class="sandbox-quick-add__scroll">
+                <ui:ScrollView name="sandbox-quick-scroll" mode="Vertical" class="sandbox-quick-add__scroll" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
                     <ui:VisualElement name="sandbox-quick-grid" class="sandbox-picker__grid" />
                 </ui:ScrollView>
             </ui:VisualElement>
@@ -60,7 +60,7 @@
                     <ui:Label name="sandbox-picker-title" text="Choose a character" class="sandbox-panel__title" picking-mode="Ignore" />
                     <ui:Button name="sandbox-picker-close" text="Cancel" class="button sandbox-button" />
                 </ui:VisualElement>
-                <ui:ScrollView name="sandbox-picker-scroll" mode="Vertical" class="sandbox-picker__scroll">
+                <ui:ScrollView name="sandbox-picker-scroll" mode="Vertical" class="sandbox-picker__scroll" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
                     <ui:VisualElement name="sandbox-picker-grid" class="sandbox-picker__grid" />
                 </ui:ScrollView>
             </ui:VisualElement>

@@ -3332,6 +3332,12 @@ public class GameLoop : NetworkBehaviour
                         targetClient
                     );
                 }
+
+                // The weave goes to the dodging seat alone, for the same reason the alert does:
+                // which units have been shot at is that player's information to answer, and one
+                // that visibly ducks on every screen hands the shooter the read for free.
+                if (netObj != null && netObj.IsSpawned && unit.TryGetComponent(out AnimationHandler rig))
+                    rig.PlayPrivateAnimationClientRpc(active ? "Dodge" : "Idle", targetClient);
             }
         }
     }
