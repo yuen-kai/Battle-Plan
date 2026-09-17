@@ -1,0 +1,58 @@
+[
+  {
+    "name": "Rest",
+    "state": "Rest",
+    "rig": "Person",
+    "first": 0,
+    "last": 2,
+    "loop": false
+  },
+  {
+    "name": "Idle",
+    "state": "Idle",
+    "rig": "Person",
+    "first": 0,
+    "last": 96,
+    "loop": true
+  },
+  {
+    "name": "Moving",
+    "state": "Moving",
+    "rig": "Person",
+    "first": 0,
+    "last": 28,
+    "loop": true
+  },
+  {
+    "name": "Aiming",
+    "state": "Aiming",
+    "rig": "Person",
+    "first": 0,
+    "last": 78,
+    "loop": true
+  },
+  {
+    "name": "Shoot",
+    "state": "Shoot",
+    "rig": "Person",
+    "first": 0,
+    "last": 14,
+    "loop": false
+  },
+  {
+    "name": "Dodge",
+    "state": "Dodge",
+    "rig": "Person",
+    "first": 0,
+    "last": 34,
+    "loop": true
+  },
+  {
+    "name": "DiveRecovery",
+    "state": "DiveRecovery",
+    "rig": "Person",
+    "first": 0,
+    "last": 23,
+    "loop": false
+  }
+]
