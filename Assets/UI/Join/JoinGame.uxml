@@ -30,7 +30,7 @@
                         </ui:Button>
                     </ui:VisualElement>
 
-                    <ui:ScrollView mode="Vertical" class="join-content" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto">
+                    <ui:ScrollView name="join-content" mode="Vertical" class="join-content" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto">
                         <ui:VisualElement name="create-panel" class="join-panel">
                             <ui:Label text="Mode" class="section-label join-section-label join-section-label--first" picking-mode="Ignore" />
                             <ui:VisualElement class="mode-row">

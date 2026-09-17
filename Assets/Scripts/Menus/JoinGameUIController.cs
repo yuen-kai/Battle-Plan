@@ -34,6 +34,7 @@ public class JoinGameUIController : MonoBehaviour
     private VisualElement createPanel;
     private VisualElement joinPanel;
     private VisualElement relayCodePanel;
+    private ScrollView joinContent;
     private VisualElement localMultiplayerRow;
     private Label connectionCodeHeading;
     private Button showCreateButton;
@@ -214,6 +215,7 @@ public class JoinGameUIController : MonoBehaviour
         createPanel = RequireElement<VisualElement>("create-panel");
         joinPanel = RequireElement<VisualElement>("join-panel");
         relayCodePanel = RequireElement<VisualElement>("relay-code-panel");
+        joinContent = RequireElement<ScrollView>("join-content");
         localMultiplayerRow = RequireElement<VisualElement>("local-multiplayer-row");
         connectionCodeHeading = RequireElement<Label>("connection-code-heading");
         showCreateButton = RequireElement<Button>("show-create-button");
@@ -1219,7 +1221,12 @@ public class JoinGameUIController : MonoBehaviour
         SetRelayStatus(status);
         cancelHostButton?.SetEnabled(true);
         cancelHostButton?.RemoveFromClassList("hidden");
-        root?.schedule.Execute(() => cancelHostButton?.Focus());
+        root?.schedule.Execute(() =>
+        {
+            cancelHostButton?.Focus();
+            if (relayCodePanel != null)
+                joinContent?.ScrollTo(relayCodePanel);
+        });
     }
 
     private void ResetRelayState()

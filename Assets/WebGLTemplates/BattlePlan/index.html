@@ -47,10 +47,24 @@
       });
       document.addEventListener("dblclick", function (event) { event.preventDefault(); }, { passive: false });
 
+      // A phone reports a device pixel ratio of 3, which asks Unity for a framebuffer nine times
+      // the area of the CSS canvas and multiplies every full-screen render target the pipeline
+      // keeps - colour, depth, their MSAA counterparts and the post-processing chain - by the same
+      // nine. On a mobile browser that memory is charged against the same budget the tab is killed
+      // for exceeding, and a killed tab is a blank white page with no error to read. Capping the
+      // ratio costs a little sharpness and buys back both the memory and the fill rate. Desktop is
+      // left on its own ratio, where neither is scarce.
+      var maxHandheldPixelRatio = 1.5;
+      var handheld = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+        || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+
       var buildUrl = "Build";
       var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
       var config = {
         arguments: [],
+        devicePixelRatio: handheld
+          ? Math.min(window.devicePixelRatio || 1, maxHandheldPixelRatio)
+          : (window.devicePixelRatio || 1),
         dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
         frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
 #if USE_THREADS

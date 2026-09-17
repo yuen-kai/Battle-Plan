@@ -46,6 +46,7 @@ public class UIToolkitAssetSmokeTests
             new[]
             {
                 "screen",
+                "join-content",
                 "create-panel",
                 "join-panel",
                 "show-create-button",
