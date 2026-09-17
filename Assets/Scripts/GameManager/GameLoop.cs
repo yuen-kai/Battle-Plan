@@ -608,7 +608,28 @@ public class GameLoop : NetworkBehaviour
     /// </summary>
     public static bool devUseProductionSpawns;
 
+    /// <summary>
+    /// DEV: the crew a dev match fields, by catalogue index, in place of the fixed dev rosters.
+    /// The trailer rig can only stage a unit that is already on the board, and which units those
+    /// are is a property of the shoot rather than of dev mode. Null leaves the dev rosters alone.
+    /// Set before the host starts; the crews are configured as the match stands up.
+    /// </summary>
+    public static int[] devHostRosterOverride;
+    public static int[] devOpponentRosterOverride;
+
 #endif
+
+    /// <summary>The crew a dev team actually fields, once any shoot override is applied.</summary>
+    public static int[] ResolveDevRoster(int teamIndex, int[] configured)
+    {
+#if UNITY_EDITOR
+        int[] chosen =
+            teamIndex == HostTeamIndex ? devHostRosterOverride : devOpponentRosterOverride;
+        if (chosen != null && chosen.Length == RosterRules.UnitsPerPlayer)
+            return chosen;
+#endif
+        return configured;
+    }
 
     private static bool UseDevSpawnLayout()
     {

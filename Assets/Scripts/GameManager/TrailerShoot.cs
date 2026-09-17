@@ -21,6 +21,9 @@ public static class TrailerShoot
     const string TagKey = "BattlePlan.TrailerShoot.Tag";
     const string OnlyKey = "BattlePlan.TrailerShoot.Only";
     const string MapKey = "BattlePlan.TrailerShoot.Map";
+    const string ModeKey = "BattlePlan.TrailerShoot.Mode";
+    const string HostCrewKey = "BattlePlan.TrailerShoot.HostCrew";
+    const string BotCrewKey = "BattlePlan.TrailerShoot.BotCrew";
     const string ScaleKey = "BattlePlan.TrailerShoot.Scale";
     const string ReportPath = "Captures/Trailer/shoot-report.txt";
 
@@ -64,6 +67,49 @@ public static class TrailerShoot
         set => UnityEditor.SessionState.SetInt(MapKey, (int)value);
     }
 
+    /// <summary>Mode the match runs under, which is what puts a mode's own furniture on the board.</summary>
+    public static GameMode Mode
+    {
+        get => (GameMode)UnityEditor.SessionState.GetInt(ModeKey, (int)GameMode.KingOfTheHill);
+        set => UnityEditor.SessionState.SetInt(ModeKey, (int)value);
+    }
+
+    /// <summary>
+    /// Crews to field, by catalogue index. A beat can only stage a unit that is already on the
+    /// board, and a match fields five a side, so a shoot that films more than five characters is
+    /// several shoots. Empty fields the ordinary dev crews.
+    /// </summary>
+    public static int[] HostCrew
+    {
+        get => Unpack(HostCrewKey);
+        set => Pack(HostCrewKey, value);
+    }
+
+    public static int[] BotCrew
+    {
+        get => Unpack(BotCrewKey);
+        set => Pack(BotCrewKey, value);
+    }
+
+    static int[] Unpack(string key)
+    {
+        string packed = UnityEditor.SessionState.GetString(key, "");
+        if (string.IsNullOrEmpty(packed))
+            return null;
+
+        string[] parts = packed.Split(',');
+        int[] crew = new int[parts.Length];
+        for (int i = 0; i < parts.Length; i++)
+            crew[i] = int.Parse(parts[i]);
+        return crew;
+    }
+
+    static void Pack(string key, int[] crew) =>
+        UnityEditor.SessionState.SetString(
+            key,
+            crew == null ? "" : string.Join(",", crew)
+        );
+
     /// <summary>Configures and launches a shoot in one call, for driving from outside the editor.</summary>
     public static void Shoot(string tag, params string[] beats)
     {
@@ -83,6 +129,22 @@ public static class TrailerShoot
     public static void ShootBig(string tag, MapId map, int scale, params string[] beats)
     {
         Scale = scale;
+        ShootOn(tag, map, beats);
+    }
+
+    /// <summary>Same, in a named mode with named crews on both sides.</summary>
+    public static void ShootMatch(
+        string tag,
+        MapId map,
+        GameMode mode,
+        int[] hostCrew,
+        int[] botCrew,
+        params string[] beats
+    )
+    {
+        Mode = mode;
+        HostCrew = hostCrew;
+        BotCrew = botCrew;
         ShootOn(tag, map, beats);
     }
 
@@ -179,6 +241,11 @@ public sealed class TrailerShootRunner : MonoBehaviour
         GameLoop.devUseProductionSpawns = true;
         GameLoop.devMode = true;
 
+        // Who is on the board is the shoot's decision, not dev mode's: a beat can only stage a
+        // character the match already fielded, and the roster is five a side.
+        GameLoop.devHostRosterOverride = TrailerShoot.HostCrew;
+        GameLoop.devOpponentRosterOverride = TrailerShoot.BotCrew;
+
         // Real time, not the dev fast-forward. GameLoop drives Time.timeScale from this the moment
         // execution starts, overriding the capture rig, so at its default of 6 the footage is the
         // game at six times speed and a whole round goes by in about three seconds.
@@ -186,13 +253,24 @@ public sealed class TrailerShootRunner : MonoBehaviour
         DevMppmAutoJoin.DisableAutoJoin();
         MatchOptions options = MatchOptions.Default;
 
-        // King of the Hill, not Elimination, because of where it puts the fighting. Both crews
-        // deploy along opposite edges, so in Elimination each unit simply engages whoever is
-        // opposite it and the round becomes four or five separate duels strung out from one end of
-        // the board to the other — impossible to frame, since half the action is at the top of the
-        // screen and half at the bottom. The hill gives both sides the same reason to converge on
-        // the middle, so the fight happens in one place and a single shot can hold all of it.
-        options.gameMode = GameMode.KingOfTheHill;
+        // King of the Hill by default, not Elimination, because of where it puts the fighting.
+        // Both crews deploy along opposite edges, so in Elimination each unit simply engages
+        // whoever is opposite it and the round becomes four or five separate duels strung out from
+        // one end of the board to the other — impossible to frame, since half the action is at the
+        // top of the screen and half at the bottom. The hill gives both sides the same reason to
+        // converge on the middle, so the fight happens in one place and a single shot can hold all
+        // of it.
+        //
+        // A mode beat overrides it, because a mode's furniture — an extraction zone, a president
+        // in the crew — only exists in the match that mode stands up.
+        options.gameMode = TrailerShoot.Mode;
+
+        // Leg one's escort is drawn at random, so filming it unpinned would shoot a different
+        // board half the time: the crews change ends and the zone the president walks at moves to
+        // the other edge. The host escorts, every take.
+        EscortSeries.End();
+        if (options.gameMode == GameMode.EscortThePresident)
+            EscortSeries.Begin(GameLoop.HostTeamIndex);
         options.opponentType = OpponentType.AI;
         // Fog is a per-beat decision inside the rig, so the match itself starts without it.
         options.fogOfWar = false;

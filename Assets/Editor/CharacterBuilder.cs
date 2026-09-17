@@ -1086,9 +1086,13 @@ public static class CharacterBuilder
                     16,
                     10
                 );
+                // The brim has to start behind the crown's front surface, not at it: seated on
+                // the skin instead it reads as a disc stuck to the forehead with daylight under
+                // the cap. Long enough back to bury half its length in the crown, and the tip
+                // still lands where it did.
                 m.AddEllipsoid(
-                    new Vector3(0f, 0.938f, Rig.HeadHalfZ * 1.16f),
-                    new Vector3(Rig.HeadHalfX * 0.88f, 0.012f, 0.052f),
+                    new Vector3(0f, 0.944f, 0.102f),
+                    new Vector3(Rig.HeadHalfX * 0.88f, 0.012f, 0.080f),
                     Quaternion.Euler(-8f, 0f, 0f),
                     12,
                     6
