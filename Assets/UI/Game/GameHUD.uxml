@@ -141,12 +141,16 @@
 
         <ui:VisualElement name="results-overlay" class="modal-shade results-overlay toybox-ui hidden">
             <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+            <!-- The impact. Painted by MatchVerdictScreen, behind the rail, because a burst is
+                 rings and spokes whose geometry all derives from one strike point. -->
+            <ui:VisualElement name="results-stage" class="results-stage" picking-mode="Ignore" />
             <ui:VisualElement name="results-panel" class="modal results-panel" focusable="true" tabindex="-1">
                 <ui:ScrollView name="results-scroll" mode="Vertical" class="results-scroll" focusable="true" tabindex="0" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
-                    <ui:Label text="Battle report" class="section-label" picking-mode="Ignore" />
-                    <ui:VisualElement class="results-mark" picking-mode="Ignore" />
+                    <ui:Label name="results-decider" text="Battle report" class="section-label" picking-mode="Ignore" />
+                    <ui:VisualElement name="results-mark" class="results-mark" picking-mode="Ignore" />
+                    <ui:Label name="results-headline" text="Match complete" class="results-headline" picking-mode="Ignore" />
                     <ui:Label name="results-status" text="Match complete" class="results-status" picking-mode="Ignore" />
-                    <ui:VisualElement class="divider" picking-mode="Ignore" />
+                    <ui:VisualElement name="results-divider" class="divider hidden" picking-mode="Ignore" />
                     <ui:Label name="report-empty" text="No rounds were recorded for this match." class="report-empty hidden" picking-mode="Ignore" />
                     <ui:VisualElement name="report-reveal" class="report-reveal hidden">
                         <ui:Label text="What both crews ordered" class="section-label" picking-mode="Ignore" />

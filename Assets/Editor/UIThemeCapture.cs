@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -34,6 +35,15 @@ public static class UIThemeCapture
         public string Name;
         public string ScenePath;
         public Action<VisualElement> Stage;
+
+        /// <summary>
+        /// A screen whose composition only exists part way through an animation. The enumerator is
+        /// stepped once per editor update and the read-back is held back until Hold real seconds
+        /// have passed, so the frame captured is the frame asked for rather than whichever one the
+        /// editor happened to tick on.
+        /// </summary>
+        public Func<VisualElement, IEnumerator> Drive;
+        public float Hold;
     }
 
     private static readonly List<Shot> Shots = new()
@@ -59,6 +69,23 @@ public static class UIThemeCapture
             ScenePath = "Assets/Scenes/Game.unity",
             Stage = StageResults,
         },
+        // The verdict at the moment the word lands, which is the only moment the strike exists.
+        new Shot
+        {
+            Name = "06b-results-strike",
+            ScenePath = "Assets/Scenes/Game.unity",
+            Stage = StageResults,
+            Drive = DriveVictoryStrike,
+            Hold = 0.55f,
+        },
+        new Shot
+        {
+            Name = "06c-results-defeat",
+            ScenePath = "Assets/Scenes/Game.unity",
+            Stage = StageDefeat,
+            Drive = DriveDefeatStrike,
+            Hold = 0.72f,
+        },
         new Shot
         {
             Name = "07-title-settings",
@@ -74,6 +101,10 @@ public static class UIThemeCapture
     private static int shotIndex;
     private static int framesWaited;
     private static UIDocument activeDocument;
+    private static IEnumerator driver;
+    private static bool driveStarted;
+    private static MatchVerdictScreen drivenVerdict;
+    private static double holdUntil;
     private static PanelSettings authoredPanel;
     private static PanelSettings capturePanel;
     private static RenderTexture uiTarget;
@@ -165,6 +196,26 @@ public static class UIThemeCapture
         {
             activeDocument.rootVisualElement?.MarkDirtyRepaint();
             return;
+        }
+
+        // The driver starts only once layout has settled, and never before: its clock is real
+        // seconds, so counting the settle frames against it would spend the whole animation
+        // waiting for the scene load to finish.
+        Shot driven = queue[shotIndex];
+        if (driven.Drive != null && !driveStarted)
+        {
+            driveStarted = true;
+            driver = driven.Drive(activeDocument.rootVisualElement);
+            holdUntil = EditorApplication.timeSinceStartup + driven.Hold;
+        }
+        if (driver != null)
+        {
+            driver.MoveNext();
+            if (EditorApplication.timeSinceStartup < holdUntil)
+            {
+                activeDocument.rootVisualElement?.MarkDirtyRepaint();
+                return;
+            }
         }
 
         try
@@ -284,6 +335,11 @@ public static class UIThemeCapture
             uiTarget.Release();
             UnityEngine.Object.DestroyImmediate(uiTarget);
         }
+        drivenVerdict?.Dispose();
+        drivenVerdict = null;
+        driver = null;
+        driveStarted = false;
+        holdUntil = 0d;
         activeDocument = null;
         authoredPanel = null;
         capturePanel = null;
@@ -717,8 +773,37 @@ public static class UIThemeCapture
         SetText(root, "phase-label", "Match complete");
         SetText(root, "timer-label", string.Empty);
         Show(root, "results-overlay");
-        SetText(root, "results-status", "You win!");
-        root.Q<Label>("results-status")?.AddToClassList("results-status--victory");
+        SetText(root, "results-decider", "King of the hill");
+        SetText(root, "results-headline", "Victory");
+        SetText(root, "results-status", "You held the hill for 3 consecutive rounds.");
+        root.Q<VisualElement>("results-overlay")?.AddToClassList("results-overlay--victory");
+    }
+
+    private static void StageDefeat(VisualElement root)
+    {
+        StageResults(root);
+        SetText(root, "results-decider", "Elimination");
+        SetText(root, "results-headline", "Defeat");
+        SetText(root, "results-status", "Your crew is down.");
+        VisualElement overlay = root.Q<VisualElement>("results-overlay");
+        overlay?.RemoveFromClassList("results-overlay--victory");
+        overlay?.AddToClassList("results-overlay--defeat");
+    }
+
+    private static IEnumerator DriveVictoryStrike(VisualElement root) =>
+        DriveVerdict(root, MatchVerdictTone.Victory);
+
+    private static IEnumerator DriveDefeatStrike(VisualElement root) =>
+        DriveVerdict(root, MatchVerdictTone.Defeat);
+
+    private static IEnumerator DriveVerdict(VisualElement root, MatchVerdictTone tone)
+    {
+        VisualElement overlay = root.Q<VisualElement>("results-overlay");
+        if (overlay == null)
+            return null;
+
+        drivenVerdict = new MatchVerdictScreen(overlay);
+        return drivenVerdict.IsUsable ? drivenVerdict.Play(tone) : null;
     }
 
     private static void StageTitleSettings(VisualElement root)

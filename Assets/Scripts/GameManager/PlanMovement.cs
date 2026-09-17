@@ -369,7 +369,9 @@ public partial class PlanMovement : MonoBehaviour
         if (!lockInAvailable)
             return false;
 
-        GameObject incompleteAbilityUnit = plans
+        // An ability armed but never aimed is dropped rather than blocking the lock-in: the unit
+        // simply does nothing this round.
+        List<GameObject> unaimedAbilityUnits = plans
             .Where(entry =>
             {
                 if (!entry.Value.Item1)
@@ -380,15 +382,19 @@ public partial class PlanMovement : MonoBehaviour
                     && (entry.Value.Item2 == null || entry.Value.Item2.Count < 2);
             })
             .Select(entry => entry.Key)
-            .FirstOrDefault();
-        if (incompleteAbilityUnit != null)
+            .ToList();
+        foreach (GameObject unit in unaimedAbilityUnits)
         {
-            SwitchToUnit(incompleteAbilityUnit);
-            GameHUDController.Instance?.SetTargetFeedback(
-                "Choose an ability target before locking in.",
-                true
-            );
-            return false;
+            plans[unit] = (false, new List<Vector3> { GridSystem.GetNearestGridCell(unit) });
+            ClearAbilityIndicator(unit);
+        }
+        if (unaimedAbilityUnits.Count > 0)
+        {
+            PathSelection.Instance?.CancelCurrentDrag();
+            GameHUDController.Instance?.ClearTargetFeedback();
+            ResetVisualPlan();
+            ApplySelectedUnitModeVisuals();
+            RefreshUnitCards();
         }
 
         SubmitCurrentPlan(planningSessionVersion);

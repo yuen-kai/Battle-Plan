@@ -1403,7 +1403,11 @@
    debrief is anchored to the left margin instead — the same command-rail idiom
    the title and character screens are built on — and reads as a block: eyebrow,
    rule, verdict, then the two things you can do about it. */
-.results-overlay {
+/* Scoped through .toybox-ui to outrank the shared .toybox-ui.modal-shade, which centres its
+   child and sets padding with the shorthand. A bare .results-overlay lost both, and the rail this
+   whole block describes was quietly rendering as a 900px column centred in the frame — the one
+   composition the comment above rules out. */
+.toybox-ui.results-overlay {
     align-items: flex-start;
     justify-content: center;
     padding-left: 104px;
@@ -1445,37 +1449,65 @@
     color: var(--toy-text-muted);
 }
 
+/* The strike. Painted by MatchVerdictScreen over the whole screen rather than inside the panel,
+   because the burst is the moment the panel is reacting to and a burst clipped to a 900px column
+   is a graphic instead of an impact. */
+.results-stage {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+/* Fires out left-to-right ahead of the word, so the rail is struck rather than drawn. */
 .results-mark {
-    width: 260px;
+    width: 300px;
     height: 3px;
     margin-top: var(--toy-space-md);
     margin-bottom: var(--toy-space-md);
     background-color: var(--toy-primary);
 }
 
-/* The verdict is the only thing anyone reads on this panel, so it gets the size
-   a scoreboard gives it and nothing else on the sheet competes. */
-/* Big enough to be the moment, not so big it is doing an impression of one.
-   The verdict here is a sentence — "You win!", "Draw — both crews eliminated."
-   — so it has to survive wrapping, which a single screen-filling word does not
-   have to worry about. */
-.results-status {
-    margin-bottom: var(--toy-space-md);
+/* The word. Bigger than anything else the game sets, and free to be: the sentence that used to
+   share this line has moved to .results-status below it, so the verdict is one word that never
+   wraps and never has to be sized for the case where it does.
+ 
+   The size is what carries the moment; the colour deliberately does not. */
+.results-headline {
     -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
-    font-size: 58px;
+    font-size: 108px;
     color: var(--toy-text-copy);
     letter-spacing: 3px;
     -unity-text-align: middle-left;
-    text-shadow: 0 4px 16px var(--toy-shadow-stage);
-    white-space: normal;
+    text-shadow: 0 6px 26px var(--toy-shadow-stage);
+    white-space: nowrap;
 }
 
-.results-status--victory {
-    color: var(--toy-text);
+/* A win is the brightest thing on the screen and a loss goes cool — still no hue for either, for
+   the reason written over --toy-defeat.
+ 
+   This is the one place in the HUD that goes to white. The body ladder tops out at an off-white
+   chosen so a player can stare at it for twenty minutes, which is not the brief for a word held
+   for one second at the end of the match. */
+.results-overlay--victory .results-headline {
+    color: rgb(247, 251, 253);
 }
 
-.results-status--defeat {
+.results-overlay--defeat .results-headline {
     color: var(--toy-defeat);
+}
+
+/* How the match was decided, which is the whole reason the word above means anything. Reads as
+   copy rather than as a second verdict: the display face, the obliquity and the halo all come off,
+   exactly as they do on the leg briefing's brief. */
+.results-status {
+    max-width: 560px;
+    margin-top: var(--toy-space-sm);
+    font-size: var(--toy-type-body-lg);
+    color: var(--toy-text-copy);
+    -unity-text-align: middle-left;
+    white-space: normal;
 }
 
 .results-actions {
@@ -2138,12 +2170,16 @@
     margin-bottom: var(--toy-space-md);
 }
 
-.phone .results-status {
-    font-size: 52px;
+.phone .results-headline {
+    font-size: 54px;
     letter-spacing: 2px;
 }
 
-.phone .results-overlay {
+.phone .results-mark {
+    width: 180px;
+}
+
+.phone .toybox-ui.results-overlay {
     padding-left: var(--toy-space-lg);
 }
 
@@ -2192,9 +2228,8 @@
     font-size: 24px;
 }
 
-.short .results-status {
-    font-size: 68px;
-    letter-spacing: 3px;
+.short .results-headline {
+    font-size: 78px;
 }
 
 .phone.short .hud-exit-button,

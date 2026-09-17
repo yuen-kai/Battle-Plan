@@ -1,2 +1,2 @@
-03-roster: wrote Captures/OverwatchPass/03-roster.png (ui coverage 91 %)
+06-results: wrote Captures/OverwatchPass/06-results.png (ui coverage 100 %)
 done

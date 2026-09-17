@@ -22,6 +22,14 @@ public class GameHUDController : MonoBehaviour
     [SerializeField]
     private Camera boardCamera;
 
+    // Fired the moment the verdict opens rather than on the word's own landing frame: a sting is
+    // cut with its own attack, so starting it under the rail's strike lands the swell on the word.
+    [SerializeField]
+    private AudioClip victorySting;
+
+    [SerializeField]
+    private AudioClip defeatSting;
+
     // Below this the reserved bars would leave no usable board, so the fit is abandoned rather
     // than collapsing the viewport to a slit.
     private const float MinBoardViewportHeight = 0.35f;
@@ -46,6 +54,11 @@ public class GameHUDController : MonoBehaviour
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
     private VisualElement resultsPanel;
+    private VisualElement resultsDivider;
+    private Label resultsDecider;
+    private Label resultsHeadline;
+    private MatchVerdictScreen matchVerdict;
+    private Coroutine matchVerdictCoroutine;
     private Label phaseLabel;
     private Label timerLabel;
     private Label hillStatusLabel;
@@ -168,6 +181,9 @@ public class GameHUDController : MonoBehaviour
         HideEscortRoleBriefing();
         escortBriefing?.Dispose();
         escortBriefing = null;
+        HideResults();
+        matchVerdict?.Dispose();
+        matchVerdict = null;
         flash?.RemoveFromClassList("hud-flash--active");
 
         foreach (UnitCardElement card in cards)
@@ -198,6 +214,10 @@ public class GameHUDController : MonoBehaviour
         deploymentOverlay = RequireElement<VisualElement>("deployment-overlay");
         resultsOverlay = RequireElement<VisualElement>("results-overlay");
         resultsPanel = RequireElement<VisualElement>("results-panel");
+        resultsDivider = RequireElement<VisualElement>("results-divider");
+        matchVerdict = new MatchVerdictScreen(resultsOverlay);
+        if (!matchVerdict.IsUsable)
+            Debug.LogError("[GameHUDController] The match verdict screen is missing parts.");
         phaseLabel = RequireElement<Label>("phase-label");
         timerLabel = RequireElement<Label>("timer-label");
         hillStatusReadout = RequireElement<VisualElement>("hill-status-readout");
@@ -216,6 +236,8 @@ public class GameHUDController : MonoBehaviour
         rejoinNoticeTitle = RequireElement<Label>("rejoin-notice-title");
         rejoinNoticeStatus = RequireElement<Label>("rejoin-notice-status");
         deploymentStatus = RequireElement<Label>("deployment-status");
+        resultsDecider = RequireElement<Label>("results-decider");
+        resultsHeadline = RequireElement<Label>("results-headline");
         resultsStatus = RequireElement<Label>("results-status");
         playAgainButton = RequireElement<Button>("play-again-button");
         mainMenuButton = RequireElement<Button>("main-menu-button");
@@ -1056,18 +1078,75 @@ public class GameHUDController : MonoBehaviour
         Action onMainMenu
     )
     {
-        ShowResults(result.GetStatusForTeam(localTeamIndex), onPlayAgain, onMainMenu);
-        SetVerdictTone(result, localTeamIndex);
+        ShowVerdict(
+            ResolveVerdictTone(result, localTeamIndex),
+            result.GetDeciderLabel(),
+            result.GetHeadlineForTeam(localTeamIndex),
+            result.GetReasonForTeam(localTeamIndex),
+            onPlayAgain,
+            onMainMenu
+        );
     }
 
+    /// <summary>The tutorial and the dev harness, neither of which won anything.</summary>
     public void ShowResults(string status, Action onPlayAgain, Action onMainMenu)
     {
+        ShowVerdict(
+            MatchVerdictTone.Neutral,
+            "Match complete",
+            "Complete",
+            status ?? "Match complete",
+            onPlayAgain,
+            onMainMenu
+        );
+    }
+
+    /// <summary>
+    /// A draw and the tutorial's own ending stay neutral for the same reason their copy does:
+    /// nobody won, so nothing here should be celebrating or mourning.
+    /// </summary>
+    private static MatchVerdictTone ResolveVerdictTone(MatchResult result, int localTeamIndex)
+    {
+        bool decided =
+            result.IsValid
+            && result.HasWinner
+            && result.Reason != MatchResultReason.TutorialComplete;
+        if (!decided)
+            return MatchVerdictTone.Neutral;
+
+        return result.WinningTeamIndex == localTeamIndex
+            ? MatchVerdictTone.Victory
+            : MatchVerdictTone.Defeat;
+    }
+
+    /// <summary>
+    /// Writes the rail, then hands it to <see cref="MatchVerdictScreen"/> to land. The copy is set
+    /// here rather than there so a match that ends with the screen unusable still reads correctly.
+    /// </summary>
+    private void ShowVerdict(
+        MatchVerdictTone tone,
+        string decider,
+        string headline,
+        string reason,
+        Action onPlayAgain,
+        Action onMainMenu
+    )
+    {
+        if (resultsDecider != null)
+            resultsDecider.text = decider;
+        if (resultsHeadline != null)
+            resultsHeadline.text = headline;
         if (resultsStatus != null)
-            resultsStatus.text = status ?? "Match complete";
-        // Neutral until a typed result says otherwise. The string overload is the tutorial and the
-        // dev harness, neither of which won anything.
-        resultsStatus?.RemoveFromClassList("results-status--victory");
-        resultsStatus?.RemoveFromClassList("results-status--defeat");
+            resultsStatus.text = reason;
+        resultsStatus?.EnableInClassList("hidden", string.IsNullOrWhiteSpace(reason));
+        resultsOverlay?.EnableInClassList(
+            "results-overlay--victory",
+            tone == MatchVerdictTone.Victory
+        );
+        resultsOverlay?.EnableInClassList(
+            "results-overlay--defeat",
+            tone == MatchVerdictTone.Defeat
+        );
 
         playAgainAction = onPlayAgain;
         mainMenuAction = onMainMenu;
@@ -1084,24 +1163,34 @@ public class GameHUDController : MonoBehaviour
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);
+        AudioManager.PlayEffect(
+            tone switch
+            {
+                MatchVerdictTone.Victory => victorySting,
+                MatchVerdictTone.Defeat => defeatSting,
+                _ => null,
+            }
+        );
+        PlayMatchVerdict(tone);
     }
 
-    /// <summary>
-    /// Colours the verdict. A draw and the tutorial's own ending stay neutral for the same reason
-    /// the copy does: nobody won, and a gold headline over "Draw" would say otherwise.
-    /// </summary>
-    private void SetVerdictTone(MatchResult result, int localTeamIndex)
+    private void PlayMatchVerdict(MatchVerdictTone tone)
     {
-        if (resultsStatus == null)
+        if (matchVerdictCoroutine != null)
+        {
+            StopCoroutine(matchVerdictCoroutine);
+            matchVerdictCoroutine = null;
+        }
+        if (matchVerdict == null || !matchVerdict.IsUsable || !isActiveAndEnabled)
             return;
 
-        bool decided =
-            result.IsValid
-            && result.HasWinner
-            && result.Reason != MatchResultReason.TutorialComplete;
-        bool won = decided && result.WinningTeamIndex == localTeamIndex;
-        resultsStatus.EnableInClassList("results-status--victory", won);
-        resultsStatus.EnableInClassList("results-status--defeat", decided && !won);
+        matchVerdictCoroutine = StartCoroutine(RunMatchVerdict(tone));
+    }
+
+    private IEnumerator RunMatchVerdict(MatchVerdictTone tone)
+    {
+        yield return matchVerdict.Play(tone);
+        matchVerdictCoroutine = null;
     }
 
     // === BATTLE REPORT REVEAL ===
@@ -1119,6 +1208,7 @@ public class GameHUDController : MonoBehaviour
         bool hasReport = activeReport != null;
         reportReveal?.EnableInClassList("hidden", !hasReport);
         reportEmpty?.EnableInClassList("hidden", hasReport);
+        resultsDivider?.RemoveFromClassList("hidden");
         RenderReportRound();
     }
 
@@ -1369,7 +1459,15 @@ public class GameHUDController : MonoBehaviour
 
     public void HideResults()
     {
+        if (matchVerdictCoroutine != null)
+        {
+            StopCoroutine(matchVerdictCoroutine);
+            matchVerdictCoroutine = null;
+        }
         resultsOverlay?.AddToClassList("hidden");
+        resultsOverlay?.RemoveFromClassList("results-overlay--victory");
+        resultsOverlay?.RemoveFromClassList("results-overlay--defeat");
+        matchVerdict?.Hide();
         ClearActiveOverlay(resultsOverlay, null);
         playAgainAction = null;
         mainMenuAction = null;

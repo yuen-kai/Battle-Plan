@@ -399,7 +399,6 @@ public static class CharacterBuilder
         Cap,
         Hood,
         Beanie,
-        Fedora,
     }
 
     private static readonly CharacterSpec[] Roster =
@@ -584,13 +583,12 @@ public static class CharacterBuilder
             ),
             Gear = GearBlitz,
         },
-        // Not a soldier, and has to look like it from the first frame: no armour anywhere, a coat
-        // skirt below the belt no other unit has, and a brimmed hat where the rest wear shells.
-        // He is also the only unit built out of a value break rather than a hue — a white shirt and
-        // white cuffs inside a black suit, which is two steps wider than any camouflaged body on
-        // the board and is what makes a head-and-shoulders tile of him read. The tie is the one
-        // fixed accent colour on the roster: the hat carries the team, so the tie is free to stay
-        // navy on both sides.
+        // Not a soldier, and has to look like it from the first frame: no armour anywhere and a
+        // coat skirt below the belt no other unit has. He is also the only unit built out of a
+        // value break rather than a hue — a white shirt and white cuffs inside a black suit, which
+        // is two steps wider than any camouflaged body on the board and is what makes a
+        // head-and-shoulders tile of him read. The tie is the one fixed accent colour on the
+        // roster: the hat carries the team, so the tie is free to stay navy on both sides.
         new()
         {
             Name = "President",
@@ -599,7 +597,7 @@ public static class CharacterBuilder
             Pose = Pose.Sidearm,
             Legs = Legs.Human,
             Sleeves = Sleeves.Long,
-            Crest = Crest.Fedora,
+            Crest = Crest.Beanie,
             RootScale = UnitRootScale,
             Paints = Named(
                 "Char_BlazerBlack",
@@ -1108,43 +1106,13 @@ public static class CharacterBuilder
                 break;
 
             case Crest.Beanie:
+            default:
                 m.AddEllipsoid(
                     new Vector3(0f, Rig.CrownY + 0.006f, -0.002f),
                     new Vector3(Rig.HeadHalfX * 1.02f, 0.050f, Rig.HeadHalfZ * 0.98f),
                     Quaternion.identity,
                     16,
                     10
-                );
-                break;
-
-            // A hat, and the same answer the other seven got, for the reason the hand-made five
-            // found first: with the base plate the crown is one of only two surfaces a camera at
-            // 73 degrees sees square-on, and a brim is the largest flat thing anyone here can wear
-            // facing the sky. The tie this replaced was a stripe down a vertical chest, lit at a
-            // graze from above and mostly behind an elbow — a tenth of the team read a brim gives.
-            default:
-                // Cut to Soldier's helmet: 0.77 across and 0.38 tall once the unit root has scaled
-                // it, measured off that prefab rather than guessed. The crown's last ring stops at
-                // 0.990 because a rounded end adds its own radius above it — reading the tube's top
-                // point as its top is what made the first cut of this hat a third too tall.
-                m.AddEllipsoid(
-                    new Vector3(0f, 0.940f, -0.006f),
-                    new Vector3(Rig.HeadHalfX * 1.22f, 0.009f, Rig.HeadHalfZ * 1.18f),
-                    Quaternion.Euler(-4f, 0f, 0f),
-                    18,
-                    6
-                );
-
-                // The crown has to be wider than the skull is at the brim, not wider than the skull
-                // is at its own top, or the head bulges out through the side of the hat. The head
-                // sits 2mm forward of centre, so the crown does too.
-                m.AddTube(
-                    new[] { new Vector3(0f, 0.936f, -0.002f), new Vector3(0f, 0.990f, -0.006f) },
-                    new[] { 0.100f, 0.070f },
-                    roundStart: false,
-                    roundEnd: true,
-                    segments: 16,
-                    squash: new Vector3(1f, 1f, 1.04f)
                 );
                 break;
         }

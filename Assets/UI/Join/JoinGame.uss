@@ -188,6 +188,60 @@
     padding: var(--toy-space-panel);
 }
 
+/* The shared sheet hides every scroller in the game; this screen opts back in so a tall panel
+   advertises the rest of itself. Kept at zero opacity until the plate is hovered, and faded
+   rather than collapsed so revealing it never reflows the options underneath. */
+.join-content .unity-scroller {
+    display: flex;
+    width: 12px;
+    min-width: 12px;
+    background-color: transparent;
+    border-width: 0;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+}
+
+.join-console:hover .unity-scroller {
+    opacity: 1;
+}
+
+.join-content .unity-scroller__low-button,
+.join-content .unity-scroller__high-button {
+    display: none;
+}
+
+.join-content .unity-scroller__slider {
+    width: 12px;
+    min-width: 12px;
+    margin: 0;
+}
+
+.join-content .unity-scroller__slider .unity-base-slider__tracker {
+    width: 8px;
+    left: 2px;
+    margin: 0;
+    background-color: var(--toy-surface-quiet);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge);
+}
+
+.join-content .unity-scroller__slider .unity-base-slider__dragger {
+    width: 8px;
+    min-width: 8px;
+    left: 2px;
+    margin: 0;
+    background-color: var(--toy-surface-pressed);
+    border-width: var(--toy-stroke-thin);
+    border-color: var(--toy-edge-strong);
+}
+
+.join-content .unity-scroller__slider .unity-base-slider__dragger:hover {
+    background-color: var(--toy-primary);
+    border-color: var(--toy-primary-pressed);
+}
+
 /* Grows so the action at the foot of the panel has free space to be pushed
    into. When the options outgrow the viewport there is none, the auto margin
    collapses, and the button flows with everything else.

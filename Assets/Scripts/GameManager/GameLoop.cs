@@ -114,6 +114,71 @@ public struct MatchResult : INetworkSerializable, System.IEquatable<MatchResult>
         };
     }
 
+    /// <summary>The one word the verdict screen sets at display size.</summary>
+    public string GetHeadlineForTeam(int localTeamIndex)
+    {
+        if (!IsValid || Reason == MatchResultReason.TutorialComplete)
+            return "Complete";
+        if (Outcome == MatchOutcome.Draw)
+            return "Draw";
+        return WinningTeamIndex == localTeamIndex ? "Victory" : "Defeat";
+    }
+
+    /// <summary>The rule that ended it, for the eyebrow over the verdict.</summary>
+    public string GetDeciderLabel()
+    {
+        return Reason switch
+        {
+            MatchResultReason.Elimination or MatchResultReason.SimultaneousElimination =>
+                "Elimination",
+            MatchResultReason.KingOfTheHill => "King of the hill",
+            MatchResultReason.DisconnectForfeit => "Forfeit",
+            MatchResultReason.EscortSeries or MatchResultReason.EscortStalemate =>
+                "Escort series",
+            MatchResultReason.TutorialComplete => "Training",
+            _ => "Match complete",
+        };
+    }
+
+    /// <summary>
+    /// The sentence under the verdict: the same news <see cref="GetStatusForTeam"/> carries, minus
+    /// the "You win!" the word above now says. A bare elimination is spelled out rather than left
+    /// blank — it is the most common ending and the one the old sentence said least about.
+    /// </summary>
+    public string GetReasonForTeam(int localTeamIndex)
+    {
+        if (!IsValid || Reason == MatchResultReason.TutorialComplete)
+            return GetStatusForTeam(localTeamIndex);
+
+        if (Outcome == MatchOutcome.Draw)
+        {
+            return Reason switch
+            {
+                MatchResultReason.SimultaneousElimination =>
+                    "Both crews went down in the same round.",
+                MatchResultReason.EscortStalemate =>
+                    "Both motorcades ended the decider level together.",
+                _ => "Neither crew could take it.",
+            };
+        }
+
+        bool won = WinningTeamIndex == localTeamIndex;
+        return Reason switch
+        {
+            MatchResultReason.KingOfTheHill => won
+                ? $"You held the hill for {GameLoop.HillControlRoundsToWin} consecutive rounds."
+                : "The hill was held against you for "
+                    + $"{GameLoop.HillControlRoundsToWin} consecutive rounds.",
+            MatchResultReason.DisconnectForfeit => won
+                ? "Your opponent disconnected."
+                : "Your seat dropped out of the match.",
+            MatchResultReason.EscortSeries =>
+                $"Escort series {EscortSeries.GetLegWins(localTeamIndex)}"
+                + $"–{EscortSeries.GetLegWins(GameLoop.GetEnemyTeamIndex(localTeamIndex))}.",
+            _ => won ? "The enemy crew is down." : "Your crew is down.",
+        };
+    }
+
     public void NetworkSerialize<T>(BufferSerializer<T> serializer)
         where T : IReaderWriter
     {
@@ -2402,7 +2467,22 @@ public class GameLoop : NetworkBehaviour
         EnsureWallDestructionMap().Walls.Remove(cell);
         if (TryGetWallInstance(cell, out GameObject wallInstance))
             wallInstance.SetActive(false);
+        RefreshWallCornerPlugsAround(cell);
         serverFogDirty = true;
+    }
+
+    /// <summary>
+    /// Gives back the corner trim on every wall that was squaring a corner off against this cell.
+    /// The opening a destroyed wall leaves has to be as diagonally shootable as any other single
+    /// corner.
+    /// </summary>
+    private void RefreshWallCornerPlugsAround(Vector2Int cell)
+    {
+        foreach (Vector2Int offset in WallCornerPlugs.DiagonalOffsets)
+        {
+            if (TryGetWallInstance(cell + offset, out GameObject neighbour))
+                neighbour.GetComponent<WallCornerPlugs>()?.Apply();
+        }
     }
 
     public bool TryGetWallInstance(Vector2Int cell, out GameObject wallInstance)
