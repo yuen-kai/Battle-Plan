@@ -967,15 +967,12 @@ public class GameHUDController : MonoBehaviour
         if (hillStatusLabel == null)
             return;
 
-        bool hostControlled =
-            state.Status == HillControlStatus.Controlled
-            && state.ControllingTeamIndex == GameLoop.HostTeamIndex;
-        bool opponentControlled =
-            state.Status == HillControlStatus.Controlled
-            && state.ControllingTeamIndex == GameLoop.OpponentTeamIndex;
+        bool controlled = state.Status == HillControlStatus.Controlled;
+        bool localControlled =
+            controlled && GameLoop.IsTeamFriendlyToLocalPlayer(state.ControllingTeamIndex);
 
-        hillStatusLabel.EnableInClassList("hill-status--blue", hostControlled);
-        hillStatusLabel.EnableInClassList("hill-status--red", opponentControlled);
+        hillStatusLabel.EnableInClassList("hill-status--blue", localControlled);
+        hillStatusLabel.EnableInClassList("hill-status--red", controlled && !localControlled);
         hillStatusLabel.EnableInClassList(
             "hill-status--contested",
             state.Status == HillControlStatus.Contested
@@ -985,7 +982,7 @@ public class GameHUDController : MonoBehaviour
         {
             HillControlStatus.Contested => "Contested · streak reset",
             HillControlStatus.Controlled =>
-                $"{(hostControlled ? "Blue" : "Red")} control · "
+                $"{(localControlled ? "Your" : "Enemy")} control · "
                 + $"{Mathf.Clamp(state.Streak, 0, GameLoop.HillControlRoundsToWin)}/"
                 + GameLoop.HillControlRoundsToWin,
             _ => "No control · 0/" + GameLoop.HillControlRoundsToWin,

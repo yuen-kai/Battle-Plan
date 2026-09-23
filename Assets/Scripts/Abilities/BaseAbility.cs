@@ -166,7 +166,7 @@ public abstract class Ability : NetworkBehaviour
 
         if (runningExecution != null)
             StopCoroutine(runningExecution);
-        if (interruptedExecution != null)
+        if (runningExecution != null || interruptedExecution != null)
             OnAbilityInterrupted();
     }
 }

@@ -54,7 +54,7 @@ public class PresidentialRecall : Ability
     }
 
     private readonly List<RecalledAlly> recalled = new();
-    private readonly HashSet<GameObject> airborne = new();
+    private readonly HashSet<GameObject> unlanded = new();
 
     public static float MaxRecallSeconds(int detailCount) =>
         BeckonSeconds + MaxLeapSeconds + Mathf.Max(0, detailCount - 1) * LeapStaggerSeconds;
@@ -81,11 +81,12 @@ public class PresidentialRecall : Ability
         List<Vector2Int> ringCells = ResolveRingCells(anchor, identity.TeamIndex, detail.Count);
 
         recalled.Clear();
-        airborne.Clear();
+        unlanded.Clear();
         for (int index = 0; index < detail.Count && index < ringCells.Count; index++)
         {
             GameObject ally = detail[index];
             CancelOrders(ally);
+            unlanded.Add(ally);
             recalled.Add(
                 new RecalledAlly(
                     ally,
@@ -109,7 +110,7 @@ public class PresidentialRecall : Ability
             elapsed += Time.deltaTime;
             foreach (RecalledAlly ally in recalled)
             {
-                if (!airborne.Contains(ally.Unit))
+                if (!unlanded.Contains(ally.Unit))
                     continue;
 
                 float progress = Mathf.Clamp01((elapsed - ally.StartDelay) / ally.LeapSeconds);
@@ -153,12 +154,11 @@ public class PresidentialRecall : Ability
             allyCollider.enabled = false;
 
         ally.Unit.GetComponent<AnimationHandler>()?.PlayAnimation("Moving");
-        airborne.Add(ally.Unit);
     }
 
     private void Land(RecalledAlly ally)
     {
-        if (!airborne.Remove(ally.Unit) || ally.Unit == null)
+        if (!unlanded.Remove(ally.Unit) || ally.Unit == null)
             return;
 
         ally.Unit.transform.SetPositionAndRotation(
@@ -174,14 +174,17 @@ public class PresidentialRecall : Ability
         if (allyMovement != null)
             allyMovement.moving = false;
 
-        allyMovement?.transitionToShooting(onlyIfWeaponsStillFree: true);
+        if (ally.Unit.activeInHierarchy)
+            allyMovement?.transitionToShooting(onlyIfWeaponsStillFree: true);
+        else
+            ally.Unit.GetComponent<Shooting>()?.StandDown();
     }
 
     private void LandRemainingAllies()
     {
-        foreach (RecalledAlly ally in recalled.Where(ally => airborne.Contains(ally.Unit)).ToList())
+        foreach (RecalledAlly ally in recalled.Where(ally => unlanded.Contains(ally.Unit)).ToList())
             Land(ally);
-        airborne.Clear();
+        unlanded.Clear();
     }
 
     private List<GameObject> FindDetail(int teamIndex)

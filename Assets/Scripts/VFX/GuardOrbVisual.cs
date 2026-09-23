@@ -38,8 +38,9 @@ public sealed class GuardOrbVisual : MonoBehaviour
             return;
 
         EnsureBuilt();
-        if (orb != null)
-            orb.gameObject.SetActive(true);
+        if (orb == null)
+            return;
+        orb.gameObject.SetActive(true);
         Draw();
     }
 

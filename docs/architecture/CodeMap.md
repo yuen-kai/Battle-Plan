@@ -168,8 +168,10 @@ only one, and the only caller.
 `PresidentialRecall` commits every ally's cell, cancellation and refund up front, then animates the
 arrival: a beckon beat, then one staggered arc per ally over `AbilityTrajectory.SampleLob`, colliders
 off in flight the way `ShatterLeap` does it. Landing is what applies each ally's guard. The whole
-rally is under a second and `OnAbilityInterrupted` lands anyone still airborne, so the round resolves
-on the same cells whether or not the animation finishes.
+rally is under a second and `OnAbilityInterrupted` lands every ally not yet down, so the round resolves
+on the same cells whether or not the animation finishes. Disabling a caster mid-ability (the president
+dying mid-rally) runs `OnAbilityInterrupted` too, whether or not the ability was in an interruptible
+window.
 
 Planning previews ask an ability for optional path points through `BuildPlannedPath`. Runtime effect code remains in the concrete ability.
 

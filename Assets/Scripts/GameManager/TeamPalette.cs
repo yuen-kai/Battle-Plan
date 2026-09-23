@@ -30,8 +30,8 @@ public static class PaletteColorExtensions
 /// <item><b>Viewer-relative</b> (<see cref="Friendly"/> / <see cref="Enemy"/>) — "mine" and
 /// "theirs". Both seats read their own crew as blue. Almost everything wants this.</item>
 /// <item><b>Absolute</b> (<see cref="ForTeamIndex"/>) — team 0 and team 1 regardless of who is
-/// watching. Only correct for something both players must agree on the identity of, which in
-/// practice is the King of the Hill pad.</item>
+/// watching. Only correct for something both players must agree on the identity of, such as the
+/// escort extraction zones.</item>
 /// </list>
 /// </summary>
 public static class TeamPalette
@@ -161,7 +161,7 @@ public static class TeamPalette
 
     /// <summary>
     /// Absolute: team 0 is blue and team 1 is red on both screens. Only for state both players
-    /// must name the same way, which is the hill and nothing else.
+    /// must name the same way.
     /// </summary>
     public static Color ForTeamIndex(int teamIndex) => teamIndex == 0 ? Friendly : Enemy;
 

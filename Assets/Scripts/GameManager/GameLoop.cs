@@ -4731,12 +4731,10 @@ public class GameLoop : NetworkBehaviour
 
     private void UpdateKingOfTheHillOverlay(HillControlState state)
     {
-        // The pad is the one thing both seats must name the same way, so it takes the absolute
-        // team colour rather than the viewer-relative one every other team-tinted visual uses.
         bool controlled =
             state.Status == HillControlStatus.Controlled && state.ControllingTeamIndex >= 0;
         Color color = controlled
-            ? TeamPalette.ForTeamIndex(state.ControllingTeamIndex)
+            ? GetTeamColorForViewer(state.ControllingTeamIndex)
             : HillUncontestedColour;
         color.a = 1f;
         hillOverlay?.SetColor(color);
