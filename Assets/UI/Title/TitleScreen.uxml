@@ -31,10 +31,6 @@
                         <ui:VisualElement class="toy-icon toy-icon--player" picking-mode="Ignore" />
                         <ui:Label text="Characters" class="toy-button__label title-action__label" picking-mode="Ignore" />
                     </ui:Button>
-                    <ui:Button name="controls-button" class="button title-action title-action--ghost">
-                        <ui:VisualElement class="toy-icon toy-icon--controls" picking-mode="Ignore" />
-                        <ui:Label text="Controls" class="toy-button__label title-action__label" picking-mode="Ignore" />
-                    </ui:Button>
                     <ui:Button name="settings-button" class="button title-action title-action--ghost">
                         <ui:VisualElement class="toy-icon toy-icon--settings" picking-mode="Ignore" />
                         <ui:Label text="Settings" class="toy-button__label title-action__label" picking-mode="Ignore" />
@@ -52,7 +48,7 @@
             <ui:VisualElement name="settings-modal-panel" class="modal settings-panel" focusable="true" tabindex="-1">
                 <ui:Label text="Settings" class="title-lg" picking-mode="Ignore" />
                 <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:ScrollView name="settings-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="settings-scroll">
+                <ui:ScrollView name="settings-scroll" mode="Vertical" class="settings-scroll" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
                     <ui:Label text="Volume" class="section-label settings-section-label settings-section-label--first" picking-mode="Ignore" />
                     <ui:VisualElement class="setting-row">
                         <ui:Label text="Master" class="setting-row__label" picking-mode="Ignore" />
@@ -76,54 +72,6 @@
                     </ui:VisualElement>
                 </ui:ScrollView>
                 <ui:Button name="settings-close-button" text="Close" class="button button--primary modal-close" />
-            </ui:VisualElement>
-        </ui:VisualElement>
-
-        <ui:VisualElement name="controls-modal" class="modal-shade hidden">
-            <ui:VisualElement name="controls-modal-panel" class="modal controls-panel" focusable="true" tabindex="-1">
-                <ui:Label text="How to play" class="title-lg" picking-mode="Ignore" />
-                <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:ScrollView mode="Vertical" class="controls-scroll">
-                    <ui:VisualElement class="control-section">
-                        <ui:Label text="Round flow" class="control-section__label" picking-mode="Ignore" />
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Planning" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Both players choose orders at the same time." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Click a unit, then a highlighted square to set its route. Press its ability card to spend the round on the ability instead." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Abilities replace movement and recharge after their listed cooldown." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Lock in" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Lock in early. You can unlock while waiting; otherwise orders submit with the timer." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Dodge" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Drag threatened units to safety." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
-                            <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Enemies disappear outside your vision." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="control-section">
-                        <ui:Label text="Win conditions" class="control-section__label" picking-mode="Ignore" />
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Knock out the other crew." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
-                            <ui:Label text="King of the Hill" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Hold the hill for three rounds in a row." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:ScrollView>
-                <ui:Button name="controls-close-button" text="Close" class="button button--primary modal-close" />
             </ui:VisualElement>
         </ui:VisualElement>
 

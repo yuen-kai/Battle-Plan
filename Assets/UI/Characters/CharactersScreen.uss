@@ -214,22 +214,6 @@
     min-height: 0;
 }
 
-/* Content reads from the top and stops. Pinning the ability block to the bottom of a full-height
-   column was tried and left a void through the middle of the panel, which reads as a broken
-   layout; trailing space at the foot of a stats column does not. */
-.dossier-scroll .unity-scroll-view__content-container {
-    padding-right: var(--toy-space-md);
-}
-
-.dossier-bottom {
-    margin-top: var(--toy-space-xs);
-}
-
-.dossier-scroll > .unity-scroll-view__vertical-scroller {
-    width: var(--toy-scroll-size);
-    background-color: var(--toy-inset);
-}
-
 /* Every orange tick in the panel hangs in the padding so the text beside it starts on the same edge
    as the copy underneath. Left in the flow, the rule and its shoulder indent each heading twelve
    pixels off the column it introduces, and the eyebrow off the name it belongs to. */
@@ -253,70 +237,6 @@
 
 .dossier-name {
     margin-bottom: 8px;
-}
-
-/* The unit description is a one-word joke on most of the roster ("Boing", "Boom"), so it stays a
-   quiet caption and the play-style line under it carries the actual reading weight.
-
-   Both labels also carry .label, and `.toybox-ui .label` outranks a lone class selector — sizing
-   them from one has no effect and leaves the pair looking identical. Hence the screen scope. */
-.toybox-ui.characters-screen .dossier-description {
-    font-size: var(--toy-type-caption);
-    color: var(--toy-text-muted);
-    white-space: normal;
-}
-
-.toybox-ui.characters-screen .dossier-playstyle {
-    margin-top: var(--toy-space-md);
-    font-size: var(--toy-type-body);
-    color: var(--toy-text-copy);
-    white-space: normal;
-}
-
-/* Combat profile */
-
-.stat-list {
-    margin-top: 2px;
-}
-
-.trait-row {
-    min-height: 30px;
-    flex-direction: row;
-    align-items: center;
-}
-
-.trait-row__key {
-    width: 96px;
-    min-width: 96px;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-caption);
-    color: var(--toy-text-muted);
-    letter-spacing: var(--toy-track-label);
-}
-
-.trait-scale {
-    flex-direction: row;
-    align-items: center;
-}
-
-/* Discrete segments rather than a continuous bar: this screen is deciding whether a character looks
-   fun, and a bar invites reading a precise value off it that the pips deliberately do not carry.
-
-   An unlit segment is a dark well with a hairline rather than nothing, so the empty half of a row
-   still has a shape and the five rows stay comparable at a glance. Lit ones are white: the accent
-   is spoken for by state, and a trait is not one. */
-.trait-pip {
-    width: 34px;
-    height: 12px;
-    margin-right: 3px;
-    background-color: var(--toy-inset);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
-}
-
-.trait-pip--on {
-    background-color: var(--toy-text);
-    border-color: var(--toy-text);
 }
 
 /* Ability */
@@ -350,39 +270,6 @@
 }
 
 .ability-block__detail {
-    white-space: normal;
-}
-
-/* Per-unit verdicts. The keys are set identically now: the palette's warm hue is the accent that
-   means "act on this", and it was carrying "Weaknesses" here, which is neither an action nor an
-   error the player has made. The two words already say which row is which. */
-.verdict-row {
-    flex-direction: row;
-    align-items: flex-start;
-    margin-bottom: var(--toy-space-md);
-}
-
-.verdict-row--last {
-    margin-bottom: 0;
-}
-
-.verdict-row__key {
-    width: 96px;
-    min-width: 96px;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-caption);
-    color: var(--toy-text-muted);
-    letter-spacing: var(--toy-track-label);
-}
-
-/* A zero basis is what makes the copy wrap. Left on auto the label asks for its full single-line
-   width, and a flex row hands it that instead of the space actually left beside the key. */
-.verdict-row__copy {
-    flex-grow: 1;
-    flex-basis: 0;
-    min-width: 0;
-    font-size: var(--toy-type-label);
-    color: var(--toy-text-copy);
     white-space: normal;
 }
 
@@ -465,18 +352,6 @@
 .phone .characters-screen .characters-dossier {
     margin-right: var(--toy-space-control-x);
     padding: 18px 16px;
-}
-
-/* Five keys and five pips of a fixed width are the widest thing in the dossier, and they are what
-   pushes the panel past a phone before any of the copy does. */
-.phone .trait-row__key,
-.phone .verdict-row__key {
-    width: 78px;
-    min-width: 78px;
-}
-
-.phone .trait-pip {
-    width: 22px;
 }
 
 .short .characters-screen .class-bar {

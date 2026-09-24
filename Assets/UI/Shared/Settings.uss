@@ -11,15 +11,6 @@
     min-height: 0;
 }
 
-.settings-scroll .unity-scroll-view__content-container {
-    padding-right: var(--toy-space-sm);
-}
-
-.settings-scroll .unity-scroller--vertical {
-    width: var(--toy-scroll-size);
-    background-color: var(--toy-inset);
-}
-
 .settings-section-label {
     margin-top: var(--toy-space-lg);
 }

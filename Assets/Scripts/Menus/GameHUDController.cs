@@ -22,6 +22,14 @@ public class GameHUDController : MonoBehaviour
     [SerializeField]
     private Camera boardCamera;
 
+    // Fired the moment the verdict opens rather than on the word's own landing frame: a sting is
+    // cut with its own attack, so starting it under the rail's strike lands the swell on the word.
+    [SerializeField]
+    private AudioClip victorySting;
+
+    [SerializeField]
+    private AudioClip defeatSting;
+
     // Below this the reserved bars would leave no usable board, so the fit is abandoned rather
     // than collapsing the viewport to a slit.
     private const float MinBoardViewportHeight = 0.35f;
@@ -29,6 +37,7 @@ public class GameHUDController : MonoBehaviour
     private readonly UnitCardElement[] cards = new UnitCardElement[RosterRules.UnitsPerPlayer];
     private readonly UnitCardElement[] enemyCards =
         new UnitCardElement[RosterRules.UnitsPerPlayer];
+    private bool cardsInteractable;
     private UIDocument document;
     private VisualElement root;
     private VisualElement screen;
@@ -36,14 +45,32 @@ public class GameHUDController : MonoBehaviour
     private VisualElement cardsContainer;
     private VisualElement enemyCardsContainer;
     private VisualElement hudDock;
+    private VisualElement hudDockRow;
+    private VisualElement hudTop;
     private VisualElement enemyStatusStrip;
     private VisualElement hillStatusReadout;
+    private VisualElement escortStatusReadout;
+    private VisualElement escortAlert;
     private VisualElement deploymentOverlay;
     private VisualElement resultsOverlay;
     private VisualElement resultsPanel;
+    private VisualElement resultsDivider;
+    private Label resultsDecider;
+    private Label resultsHeadline;
+    private MatchVerdictScreen matchVerdict;
+    private Coroutine matchVerdictCoroutine;
     private Label phaseLabel;
     private Label timerLabel;
     private Label hillStatusLabel;
+    private Label escortStatusKey;
+    private Label escortStatusLabel;
+    private Label escortAlertLabel;
+    private Label escortAlertDetail;
+    private Coroutine escortAlertCoroutine;
+    private VisualElement escortBriefingOverlay;
+    private EscortRoleBriefing escortBriefing;
+    private Coroutine escortBriefingCoroutine;
+    private Coroutine deploymentHandoffCoroutine;
     private Label deploymentStatus;
     private Label resultsStatus;
     private Label targetFeedbackLabel;
@@ -71,10 +98,6 @@ public class GameHUDController : MonoBehaviour
     private int reportRoundIndex;
     private int reportLocalTeamIndex;
     private Button exitMatchButton;
-    private Button controlsButton;
-    private VisualElement controlsOverlay;
-    private VisualElement controlsPanel;
-    private Button controlsCloseButton;
     private Button settingsButton;
     private VisualElement settingsOverlay;
     private VisualElement settingsPanel;
@@ -93,6 +116,12 @@ public class GameHUDController : MonoBehaviour
     private bool timerSuppressed;
 
     public string HillStatusText => hillStatusLabel?.text ?? string.Empty;
+    public string EscortAlertText => escortAlertLabel?.text ?? string.Empty;
+    public string EscortBriefingRoleText => escortBriefing?.RoleText ?? string.Empty;
+    public bool EscortBriefingVisible => escortBriefingCoroutine != null;
+    public string EscortAlertDetailText => escortAlertDetail?.text ?? string.Empty;
+    public string EscortStatusText =>
+        $"{escortStatusKey?.text ?? string.Empty} · {escortStatusLabel?.text ?? string.Empty}";
     public string RejoinNoticeText => rejoinNoticeStatus?.text ?? string.Empty;
 
     private void OnEnable()
@@ -121,8 +150,8 @@ public class GameHUDController : MonoBehaviour
         RegisterCallbacks();
         BuildCards();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document, ApplySafeAreaInsets);
         HideResults();
-        CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
         ClearTargetFeedback();
         HideRejoinNotice();
@@ -135,6 +164,7 @@ public class GameHUDController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterCallbacks();
+        MobileDisplay.ForgetScreen(document);
         // A level chosen mid-match survives leaving it, even if the sheet never got closed.
         GameSettings.Flush();
         ReleaseBoardViewport();
@@ -148,6 +178,12 @@ public class GameHUDController : MonoBehaviour
             StopCoroutine(rejoinNoticeCoroutine);
             rejoinNoticeCoroutine = null;
         }
+        HideEscortRoleBriefing();
+        escortBriefing?.Dispose();
+        escortBriefing = null;
+        HideResults();
+        matchVerdict?.Dispose();
+        matchVerdict = null;
         flash?.RemoveFromClassList("hud-flash--active");
 
         foreach (UnitCardElement card in cards)
@@ -172,18 +208,36 @@ public class GameHUDController : MonoBehaviour
         cardsContainer = RequireElement<VisualElement>("unit-cards");
         enemyCardsContainer = RequireElement<VisualElement>("enemy-unit-cards");
         hudDock = RequireElement<VisualElement>("hud-dock");
+        hudDockRow = RequireElement<VisualElement>("hud-dock-row");
+        hudTop = RequireElement<VisualElement>("hud-top");
         enemyStatusStrip = RequireElement<VisualElement>("enemy-status-strip");
         deploymentOverlay = RequireElement<VisualElement>("deployment-overlay");
         resultsOverlay = RequireElement<VisualElement>("results-overlay");
         resultsPanel = RequireElement<VisualElement>("results-panel");
+        resultsDivider = RequireElement<VisualElement>("results-divider");
+        matchVerdict = new MatchVerdictScreen(resultsOverlay);
+        if (!matchVerdict.IsUsable)
+            Debug.LogError("[GameHUDController] The match verdict screen is missing parts.");
         phaseLabel = RequireElement<Label>("phase-label");
         timerLabel = RequireElement<Label>("timer-label");
         hillStatusReadout = RequireElement<VisualElement>("hill-status-readout");
         hillStatusLabel = RequireElement<Label>("hill-status-label");
+        escortStatusReadout = RequireElement<VisualElement>("escort-status-readout");
+        escortStatusKey = RequireElement<Label>("escort-status-key");
+        escortStatusLabel = RequireElement<Label>("escort-status-label");
+        escortAlert = RequireElement<VisualElement>("escort-alert");
+        escortAlertLabel = RequireElement<Label>("escort-alert-label");
+        escortAlertDetail = RequireElement<Label>("escort-alert-detail");
+        escortBriefingOverlay = RequireElement<VisualElement>("escort-briefing");
+        escortBriefing = new EscortRoleBriefing(escortBriefingOverlay);
+        if (!escortBriefing.IsUsable)
+            Debug.LogError("[GameHUDController] The escort leg briefing is missing parts.");
         rejoinNotice = RequireElement<VisualElement>("rejoin-notice");
         rejoinNoticeTitle = RequireElement<Label>("rejoin-notice-title");
         rejoinNoticeStatus = RequireElement<Label>("rejoin-notice-status");
         deploymentStatus = RequireElement<Label>("deployment-status");
+        resultsDecider = RequireElement<Label>("results-decider");
+        resultsHeadline = RequireElement<Label>("results-headline");
         resultsStatus = RequireElement<Label>("results-status");
         playAgainButton = RequireElement<Button>("play-again-button");
         mainMenuButton = RequireElement<Button>("main-menu-button");
@@ -206,10 +260,6 @@ public class GameHUDController : MonoBehaviour
         planningCommitStatus = root.Q<Label>("planning-commit-status");
         lockInButton = root.Q<Button>("lock-in-button");
         exitMatchButton = root.Q<Button>("exit-match-button");
-        controlsButton = root.Q<Button>("controls-button");
-        controlsOverlay = root.Q<VisualElement>("controls-overlay");
-        controlsPanel = controlsOverlay?.Q<VisualElement>(className: "controls-panel");
-        controlsCloseButton = root.Q<Button>("controls-close-button");
         settingsButton = root.Q<Button>("settings-button");
         settingsOverlay = RequireElement<VisualElement>("settings-overlay");
         settingsPanel = RequireElement<VisualElement>("settings-panel");
@@ -245,10 +295,6 @@ public class GameHUDController : MonoBehaviour
         resultsPanel?.RegisterCallback<KeyDownEvent>(OnResultsKeyDown);
         if (exitMatchButton != null)
             exitMatchButton.clicked += OnExitMatchClicked;
-        if (controlsButton != null)
-            controlsButton.clicked += ShowControlsOverlay;
-        if (controlsCloseButton != null)
-            controlsCloseButton.clicked += HideControlsOverlay;
         if (settingsButton != null)
             settingsButton.clicked += ShowSettingsOverlay;
         if (settingsCloseButton != null)
@@ -287,10 +333,6 @@ public class GameHUDController : MonoBehaviour
         resultsPanel?.UnregisterCallback<KeyDownEvent>(OnResultsKeyDown);
         if (exitMatchButton != null)
             exitMatchButton.clicked -= OnExitMatchClicked;
-        if (controlsButton != null)
-            controlsButton.clicked -= ShowControlsOverlay;
-        if (controlsCloseButton != null)
-            controlsCloseButton.clicked -= HideControlsOverlay;
         if (settingsButton != null)
             settingsButton.clicked -= ShowSettingsOverlay;
         if (settingsCloseButton != null)
@@ -394,7 +436,12 @@ public class GameHUDController : MonoBehaviour
 
     public void SetCardsInteractable(bool interactable)
     {
+        cardsInteractable = interactable;
         foreach (UnitCardElement card in cards)
+            card?.SetInteractable(interactable);
+        // In the sandbox the enemy strip is the designer's second dock, so it opens and closes with
+        // the first. Outside it, those cards are readouts and stay unpressable.
+        foreach (UnitCardElement card in enemyCards)
             card?.SetInteractable(interactable);
 
         ClearTargetFeedback();
@@ -425,6 +472,15 @@ public class GameHUDController : MonoBehaviour
         SetPlanningCommitState("LOCKED", "Locked", false, "Orders are final");
     }
 
+    /// <summary>
+    /// The sandbox's dodge commit. Reads as live and pressable like READY, because that is what it
+    /// is — one press, no unlock, and the window closes.
+    /// </summary>
+    public void ShowDodgeCommitReady()
+    {
+        SetPlanningCommitState("DODGE", "Confirm dive", true, "Commit this dodge and run the round");
+    }
+
     public void HidePlanningCommit()
     {
         planningCommit?.AddToClassList("hidden");
@@ -445,7 +501,7 @@ public class GameHUDController : MonoBehaviour
 
             string nextStateClass = status switch
             {
-                "READY" => "planning-commit--ready",
+                "READY" or "DODGE" => "planning-commit--ready",
                 "SENDING" => "planning-commit--sending",
                 "WAITING" => "planning-commit--waiting",
                 "UNLOCKING" => "planning-commit--unlocking",
@@ -556,15 +612,17 @@ public class GameHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Trims both strips to the crew size actually fielded, so a sandbox match with fewer units
-    /// does not leave unconfigured cards standing in the dock.
+    /// Trims each strip to the crew it shows, so a match fielding fewer units does not leave
+    /// unconfigured cards standing in the dock. The two counts differ whenever the board is uneven,
+    /// which in practice means the sandbox.
     /// </summary>
-    public void SetFieldedCardCount(int fieldedCount)
+    public void SetFieldedCardCount(int fieldedCount, int enemyFieldedCount = -1)
     {
+        int enemyCount = enemyFieldedCount < 0 ? fieldedCount : enemyFieldedCount;
         for (int i = 0; i < cards.Length; i++)
             cards[i]?.Root?.EnableInClassList("hidden", i >= fieldedCount);
         for (int i = 0; i < enemyCards.Length; i++)
-            enemyCards[i]?.Root?.EnableInClassList("hidden", i >= fieldedCount);
+            enemyCards[i]?.Root?.EnableInClassList("hidden", i >= enemyCount);
     }
 
     public void SetCardDisabled(int cardIndex, bool disabled)
@@ -585,10 +643,59 @@ public class GameHUDController : MonoBehaviour
             card.SetPlanningState(selected, abilityMode);
     }
 
+    public void SetEnemyCardPlanningState(int cardIndex, bool selected, bool abilityMode)
+    {
+        if (TryGetEnemyCard(cardIndex, out UnitCardElement card))
+            card.SetPlanningState(selected, abilityMode);
+    }
+
     public void ClearCardPlanningStates()
     {
         foreach (UnitCardElement card in cards)
             card?.SetPlanningState(false, false);
+        foreach (UnitCardElement card in enemyCards)
+            card?.SetPlanningState(false, false);
+    }
+
+    // === SANDBOX DOCK (dev tool) ===
+    // The sandbox composes both crews from the dock, so it needs to reach the strips themselves and
+    // to press cards on the enemy one. Everything here is inert until it is asked for.
+
+    /// <summary>The HUD's own tree, so the sandbox panel can dock inside it and pick like the HUD.</summary>
+    public VisualElement Root => root;
+
+    public VisualElement CardsStrip => cardsContainer;
+
+    public VisualElement EnemyCardsStrip => enemyCardsContainer;
+
+    public void EnableSandboxEnemyCardPresses()
+    {
+        for (int cardIndex = 0; cardIndex < enemyCards.Length; cardIndex++)
+        {
+            int slot = cardIndex;
+            enemyCards[cardIndex]?.EnableSandboxCommand(
+                () => PlanMovement.Instance?.TryActivateEnemyUnitCard(slot)
+            );
+            // A card that was a readout when the round opened never received the phase's request to
+            // be pressable, so it is handed the standing one on the way in.
+            enemyCards[cardIndex]?.SetInteractable(cardsInteractable);
+        }
+    }
+
+    /// <summary>
+    /// Makes the portraits of one strip the way into crew composing, up to the crew it fields, and
+    /// takes the affordance off the slots beyond it.
+    /// </summary>
+    public void SetSandboxCrewControls(bool enemyStrip, int fieldedCount, Action<int> onOpenSlot)
+    {
+        UnitCardElement[] strip = enemyStrip ? enemyCards : cards;
+        for (int cardIndex = 0; cardIndex < strip.Length; cardIndex++)
+        {
+            int slot = cardIndex;
+            strip[cardIndex]?.SetSandboxSlotAction(
+                cardIndex < fieldedCount ? () => onOpenSlot(slot) : null
+            );
+        }
     }
 
     public void SetPhase(string message, MessagePerspective perspective)
@@ -661,6 +768,198 @@ public class GameHUDController : MonoBehaviour
                 GameLoop.Instance != null ? GameLoop.Instance.HillControl : HillControlState.Empty
             );
         }
+
+        bool showEscortStatus = options.IsEscort;
+        root?.EnableInClassList("escort", showEscortStatus);
+        if (!showEscortStatus)
+        {
+            escortStatusReadout?.AddToClassList("hidden");
+            HideEscortAlert();
+            HideEscortRoleBriefing();
+            return;
+        }
+
+        SetEscortState(
+            GameLoop.Instance != null ? GameLoop.Instance.EscortStatus : EscortState.Empty,
+            GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1
+        );
+    }
+
+    /// <summary>
+    /// Opens a leg with the role this seat holds. Leg 1 tosses the coin that drew it; later legs
+    /// already know, so they hold up the card alone. The deployment overlay is retired here rather
+    /// than waiting for the first phase message, which does not arrive until the briefing is over.
+    /// </summary>
+    public void ShowEscortRoleBriefing(
+        EscortRole role,
+        int legNumber,
+        bool coinFlip,
+        float seconds,
+        float coverSeconds
+    )
+    {
+        if (escortBriefing == null || !escortBriefing.IsUsable)
+            return;
+
+        if (escortBriefingCoroutine != null)
+            StopCoroutine(escortBriefingCoroutine);
+        if (deploymentHandoffCoroutine != null)
+            StopCoroutine(deploymentHandoffCoroutine);
+
+        deploymentHandoffCoroutine = StartCoroutine(RetireDeploymentBehindBriefing());
+        escortBriefingCoroutine = StartCoroutine(
+            RunEscortRoleBriefing(role, legNumber, coinFlip, seconds, coverSeconds)
+        );
+    }
+
+    private IEnumerator RunEscortRoleBriefing(
+        EscortRole role,
+        int legNumber,
+        bool coinFlip,
+        float seconds,
+        float coverSeconds
+    )
+    {
+        yield return escortBriefing.Play(role, legNumber, coinFlip, seconds, coverSeconds);
+        escortBriefingCoroutine = null;
+    }
+
+    /// <summary>
+    /// Takes the deployment card down only once the briefing's page is opaque over it. Retiring it
+    /// on the frame the briefing opens showed the board through the briefing's own fade-in, which
+    /// on the opening leg is the board still arriving.
+    /// </summary>
+    private IEnumerator RetireDeploymentBehindBriefing()
+    {
+        yield return new WaitForSecondsRealtime(EscortRoleBriefing.EntrySeconds);
+        HideDeployment();
+        deploymentHandoffCoroutine = null;
+    }
+
+    public void HideEscortRoleBriefing()
+    {
+        if (escortBriefingCoroutine != null)
+        {
+            StopCoroutine(escortBriefingCoroutine);
+            escortBriefingCoroutine = null;
+        }
+        if (deploymentHandoffCoroutine != null)
+        {
+            StopCoroutine(deploymentHandoffCoroutine);
+            deploymentHandoffCoroutine = null;
+        }
+        escortBriefing?.Hide();
+    }
+
+    /// <summary>Throws the leg clock's last call across the board.</summary>
+    public void ShowEscortClockCall(string message, float seconds = 2.6f)
+    {
+        ShowEscortAlert(message, null, false, seconds);
+        Flash(MessagePerspective.Neutral, 0.35f);
+    }
+
+    /// <summary>
+    /// The same news the results overlay would give, told at the end of a leg instead of the series.
+    /// The caller flashes, so this does not: the phase notch punctuates the same moment.
+    /// </summary>
+    public void ShowEscortLegVerdict(string headline, string score, float seconds)
+    {
+        ShowEscortAlert(headline, score, true, seconds);
+    }
+
+    /// <summary>Real seconds, so a dev fast-forward cannot blink it past the player it is for.</summary>
+    private void ShowEscortAlert(
+        string headline,
+        string detail,
+        bool verdict,
+        float seconds
+    )
+    {
+        if (escortAlert == null || escortAlertLabel == null)
+            return;
+
+        escortAlertLabel.text = headline ?? string.Empty;
+        bool hasDetail = !string.IsNullOrWhiteSpace(detail);
+        if (escortAlertDetail != null)
+        {
+            escortAlertDetail.text = hasDetail ? detail : string.Empty;
+            escortAlertDetail.EnableInClassList("hidden", !hasDetail);
+        }
+
+        escortAlert.EnableInClassList("escort-alert--verdict", verdict);
+        escortAlert.RemoveFromClassList("hidden");
+        escortAlert.AddToClassList("escort-alert--visible");
+        escortAlert.BringToFront();
+
+        if (escortAlertCoroutine != null)
+            StopCoroutine(escortAlertCoroutine);
+        escortAlertCoroutine = StartCoroutine(HideEscortAlertAfter(Mathf.Max(0.1f, seconds)));
+    }
+
+    public void HideEscortAlert()
+    {
+        if (escortAlertCoroutine != null)
+        {
+            StopCoroutine(escortAlertCoroutine);
+            escortAlertCoroutine = null;
+        }
+        escortAlert?.RemoveFromClassList("escort-alert--visible");
+        escortAlert?.AddToClassList("hidden");
+    }
+
+    private IEnumerator HideEscortAlertAfter(float seconds)
+    {
+        yield return new WaitForSecondsRealtime(seconds);
+        escortAlert?.RemoveFromClassList("escort-alert--visible");
+        // Held one transition longer than the fade, so the class that takes it out of layout cannot
+        // cut the fade short. The handle is cleared only after that, or a call landing inside this
+        // window would have nothing to cancel and would be hidden again on the way out.
+        yield return new WaitForSecondsRealtime(0.25f);
+        escortAlert?.AddToClassList("hidden");
+        escortAlertCoroutine = null;
+    }
+
+    public void SetEscortState(EscortState state, int localTeamIndex)
+    {
+        if (escortStatusReadout == null || escortStatusLabel == null || escortStatusKey == null)
+            return;
+
+        bool running = state.IsRunning && localTeamIndex >= 0;
+        escortStatusReadout.EnableInClassList("hidden", !running);
+        if (!running)
+            return;
+
+        bool localEscorts = EscortSeries.IsEscortingTeam(state.LegNumber, localTeamIndex);
+        bool enemyEscorts = EscortSeries.IsEscortingTeam(
+            state.LegNumber,
+            GameLoop.GetEnemyTeamIndex(localTeamIndex)
+        );
+        // The same three words the leg briefing put across the screen, so the readout a player
+        // checks mid-leg is the one they were shown at the top of it.
+        string role = EscortSeries.RoleFor(state.LegNumber, localTeamIndex) switch
+        {
+            EscortRole.Protect => "You protect",
+            EscortRole.Defend => "You defend",
+            _ => "Both protect",
+        };
+        escortStatusKey.text =
+            $"Leg {Mathf.Clamp(state.LegNumber, 1, EscortSeries.DeciderLeg)}"
+            + $"/{EscortSeries.DeciderLeg} · {role}";
+
+        int rounds = state.RoundsRemaining;
+        escortStatusLabel.text =
+            $"{state.LegWinsFor(localTeamIndex)}–"
+            + $"{state.LegWinsFor(GameLoop.GetEnemyTeamIndex(localTeamIndex))} · "
+            + (rounds == 1 ? "1 round left" : $"{rounds} rounds left");
+
+        bool decider = localEscorts && enemyEscorts;
+        bool hostEscorts = EscortSeries.IsEscortingTeam(
+            state.LegNumber,
+            GameLoop.HostTeamIndex
+        );
+        escortStatusLabel.EnableInClassList("hill-status--contested", decider);
+        escortStatusLabel.EnableInClassList("hill-status--blue", !decider && hostEscorts);
+        escortStatusLabel.EnableInClassList("hill-status--red", !decider && !hostEscorts);
     }
 
     public void SetHillControl(HillControlState state)
@@ -668,15 +967,12 @@ public class GameHUDController : MonoBehaviour
         if (hillStatusLabel == null)
             return;
 
-        bool hostControlled =
-            state.Status == HillControlStatus.Controlled
-            && state.ControllingTeamIndex == GameLoop.HostTeamIndex;
-        bool opponentControlled =
-            state.Status == HillControlStatus.Controlled
-            && state.ControllingTeamIndex == GameLoop.OpponentTeamIndex;
+        bool controlled = state.Status == HillControlStatus.Controlled;
+        bool localControlled =
+            controlled && GameLoop.IsTeamFriendlyToLocalPlayer(state.ControllingTeamIndex);
 
-        hillStatusLabel.EnableInClassList("hill-status--blue", hostControlled);
-        hillStatusLabel.EnableInClassList("hill-status--red", opponentControlled);
+        hillStatusLabel.EnableInClassList("hill-status--blue", localControlled);
+        hillStatusLabel.EnableInClassList("hill-status--red", controlled && !localControlled);
         hillStatusLabel.EnableInClassList(
             "hill-status--contested",
             state.Status == HillControlStatus.Contested
@@ -686,7 +982,7 @@ public class GameHUDController : MonoBehaviour
         {
             HillControlStatus.Contested => "Contested · streak reset",
             HillControlStatus.Controlled =>
-                $"{(hostControlled ? "Blue" : "Red")} control · "
+                $"{(localControlled ? "Your" : "Enemy")} control · "
                 + $"{Mathf.Clamp(state.Streak, 0, GameLoop.HillControlRoundsToWin)}/"
                 + GameLoop.HillControlRoundsToWin,
             _ => "No control · 0/" + GameLoop.HillControlRoundsToWin,
@@ -779,18 +1075,75 @@ public class GameHUDController : MonoBehaviour
         Action onMainMenu
     )
     {
-        ShowResults(result.GetStatusForTeam(localTeamIndex), onPlayAgain, onMainMenu);
-        SetVerdictTone(result, localTeamIndex);
+        ShowVerdict(
+            ResolveVerdictTone(result, localTeamIndex),
+            result.GetDeciderLabel(),
+            result.GetHeadlineForTeam(localTeamIndex),
+            result.GetReasonForTeam(localTeamIndex),
+            onPlayAgain,
+            onMainMenu
+        );
     }
 
+    /// <summary>The tutorial and the dev harness, neither of which won anything.</summary>
     public void ShowResults(string status, Action onPlayAgain, Action onMainMenu)
     {
+        ShowVerdict(
+            MatchVerdictTone.Neutral,
+            "Match complete",
+            "Complete",
+            status ?? "Match complete",
+            onPlayAgain,
+            onMainMenu
+        );
+    }
+
+    /// <summary>
+    /// A draw and the tutorial's own ending stay neutral for the same reason their copy does:
+    /// nobody won, so nothing here should be celebrating or mourning.
+    /// </summary>
+    private static MatchVerdictTone ResolveVerdictTone(MatchResult result, int localTeamIndex)
+    {
+        bool decided =
+            result.IsValid
+            && result.HasWinner
+            && result.Reason != MatchResultReason.TutorialComplete;
+        if (!decided)
+            return MatchVerdictTone.Neutral;
+
+        return result.WinningTeamIndex == localTeamIndex
+            ? MatchVerdictTone.Victory
+            : MatchVerdictTone.Defeat;
+    }
+
+    /// <summary>
+    /// Writes the rail, then hands it to <see cref="MatchVerdictScreen"/> to land. The copy is set
+    /// here rather than there so a match that ends with the screen unusable still reads correctly.
+    /// </summary>
+    private void ShowVerdict(
+        MatchVerdictTone tone,
+        string decider,
+        string headline,
+        string reason,
+        Action onPlayAgain,
+        Action onMainMenu
+    )
+    {
+        if (resultsDecider != null)
+            resultsDecider.text = decider;
+        if (resultsHeadline != null)
+            resultsHeadline.text = headline;
         if (resultsStatus != null)
-            resultsStatus.text = status ?? "Match complete";
-        // Neutral until a typed result says otherwise. The string overload is the tutorial and the
-        // dev harness, neither of which won anything.
-        resultsStatus?.RemoveFromClassList("results-status--victory");
-        resultsStatus?.RemoveFromClassList("results-status--defeat");
+            resultsStatus.text = reason;
+        resultsStatus?.EnableInClassList("hidden", string.IsNullOrWhiteSpace(reason));
+        resultsOverlay?.EnableInClassList(
+            "results-overlay--victory",
+            tone == MatchVerdictTone.Victory
+        );
+        resultsOverlay?.EnableInClassList(
+            "results-overlay--defeat",
+            tone == MatchVerdictTone.Defeat
+        );
 
         playAgainAction = onPlayAgain;
         mainMenuAction = onMainMenu;
@@ -800,30 +1153,41 @@ public class GameHUDController : MonoBehaviour
         // that has not noticed the game stopped.
         HidePlanningCommit();
         SetResultButtonsEnabled(true, true);
-        CloseControlsOverlay(false);
         CloseSettingsOverlay(false);
         HideDeployment();
+        HideEscortAlert();
+        HideEscortRoleBriefing();
         resultsOverlay?.RemoveFromClassList("hidden");
         resultsOverlay?.BringToFront();
         ActivateOverlay(resultsOverlay, playAgainButton);
+        AudioManager.PlayEffect(
+            tone switch
+            {
+                MatchVerdictTone.Victory => victorySting,
+                MatchVerdictTone.Defeat => defeatSting,
+                _ => null,
+            }
+        );
+        PlayMatchVerdict(tone);
     }
 
-    /// <summary>
-    /// Colours the verdict. A draw and the tutorial's own ending stay neutral for the same reason
-    /// the copy does: nobody won, and a gold headline over "Draw" would say otherwise.
-    /// </summary>
-    private void SetVerdictTone(MatchResult result, int localTeamIndex)
+    private void PlayMatchVerdict(MatchVerdictTone tone)
     {
-        if (resultsStatus == null)
+        if (matchVerdictCoroutine != null)
+        {
+            StopCoroutine(matchVerdictCoroutine);
+            matchVerdictCoroutine = null;
+        }
+        if (matchVerdict == null || !matchVerdict.IsUsable || !isActiveAndEnabled)
             return;
 
-        bool decided =
-            result.IsValid
-            && result.HasWinner
-            && result.Reason != MatchResultReason.TutorialComplete;
-        bool won = decided && result.WinningTeamIndex == localTeamIndex;
-        resultsStatus.EnableInClassList("results-status--victory", won);
-        resultsStatus.EnableInClassList("results-status--defeat", decided && !won);
+        matchVerdictCoroutine = StartCoroutine(RunMatchVerdict(tone));
+    }
+
+    private IEnumerator RunMatchVerdict(MatchVerdictTone tone)
+    {
+        yield return matchVerdict.Play(tone);
+        matchVerdictCoroutine = null;
     }
 
     // === BATTLE REPORT REVEAL ===
@@ -841,6 +1205,7 @@ public class GameHUDController : MonoBehaviour
         bool hasReport = activeReport != null;
         reportReveal?.EnableInClassList("hidden", !hasReport);
         reportEmpty?.EnableInClassList("hidden", hasReport);
+        resultsDivider?.RemoveFromClassList("hidden");
         RenderReportRound();
     }
 
@@ -1091,7 +1456,15 @@ public class GameHUDController : MonoBehaviour
 
     public void HideResults()
     {
+        if (matchVerdictCoroutine != null)
+        {
+            StopCoroutine(matchVerdictCoroutine);
+            matchVerdictCoroutine = null;
+        }
         resultsOverlay?.AddToClassList("hidden");
+        resultsOverlay?.RemoveFromClassList("results-overlay--victory");
+        resultsOverlay?.RemoveFromClassList("results-overlay--defeat");
+        matchVerdict?.Hide();
         ClearActiveOverlay(resultsOverlay, null);
         playAgainAction = null;
         mainMenuAction = null;
@@ -1173,32 +1546,9 @@ public class GameHUDController : MonoBehaviour
         action?.Invoke();
     }
 
-    private void ShowControlsOverlay()
-    {
-        if (
-            controlsOverlay == null
-            || (resultsOverlay != null && !resultsOverlay.ClassListContains("hidden"))
-        )
-            return;
-        controlsOverlay.RemoveFromClassList("hidden");
-        controlsOverlay.BringToFront();
-        ActivateOverlay(controlsOverlay, controlsCloseButton);
-    }
-
-    private void HideControlsOverlay()
-    {
-        CloseControlsOverlay(true);
-    }
-
-    private void CloseControlsOverlay(bool restoreFocus)
-    {
-        controlsOverlay?.AddToClassList("hidden");
-        ClearActiveOverlay(controlsOverlay, restoreFocus ? controlsButton : null);
-    }
-
     /// <summary>
     /// Opens the levels over a running round. The match is not paused and nothing is re-sent on
-    /// close: the sheet only borrows the dock the way the controls sheet does, and hands it back.
+    /// close: the sheet only borrows the dock and hands it back.
     /// </summary>
     private void ShowSettingsOverlay()
     {
@@ -1303,13 +1653,6 @@ public class GameHUDController : MonoBehaviour
             if (CanGrabFocus(resultsPanel))
                 return resultsPanel;
         }
-        else if (overlay == controlsOverlay)
-        {
-            if (CanGrabFocus(controlsCloseButton))
-                return controlsCloseButton;
-            if (CanGrabFocus(controlsPanel))
-                return controlsPanel;
-        }
         else if (overlay == settingsOverlay)
         {
             if (CanGrabFocus(settings?.FirstControl))
@@ -1401,11 +1744,7 @@ public class GameHUDController : MonoBehaviour
     {
         VisualElement focused = root?.focusController?.focusedElement as VisualElement;
         bool focusWasInASheet =
-            focused != null
-            && (
-                (settingsOverlay != null && settingsOverlay.Contains(focused))
-                || (controlsOverlay != null && controlsOverlay.Contains(focused))
-            );
+            focused != null && settingsOverlay != null && settingsOverlay.Contains(focused);
 
         if (!TryDismissOpenSheet(false))
             return;
@@ -1415,21 +1754,15 @@ public class GameHUDController : MonoBehaviour
     }
 
     /// <summary>
-    /// Dismisses the sheet the player opened, innermost first. Reports whether anything was open so
-    /// Escape and cancel stay untouched during a round and keep reaching the match itself, and so a
-    /// dismissal with nothing open never touches the dock.
+    /// Dismisses the sheet the player opened. Reports whether anything was open so Escape and
+    /// cancel stay untouched during a round and keep reaching the match itself, and so a dismissal
+    /// with nothing open never touches the dock.
     /// </summary>
     private bool TryDismissOpenSheet(bool restoreFocus)
     {
         if (IsShowing(settingsOverlay))
         {
             CloseSettingsOverlay(restoreFocus);
-            return true;
-        }
-
-        if (IsShowing(controlsOverlay))
-        {
-            CloseControlsOverlay(restoreFocus);
             return true;
         }
 
@@ -1488,6 +1821,38 @@ public class GameHUDController : MonoBehaviour
     }
 
     private void OnChromeGeometryChanged(GeometryChangedEvent evt) => FitBoardViewport();
+
+    /// <summary>
+    /// Keeps HUD content clear of a display cutout without insetting the bars themselves. The
+    /// opaque dock and enemy strip must keep reaching the screen edge: <see cref="FitBoardViewport"/>
+    /// hands the camera only the band between them, and nothing else paints the edge a shrunken bar
+    /// would uncover. Their contents carry the inset instead.
+    /// </summary>
+    private void ApplySafeAreaInsets(Vector4 insets)
+    {
+        if (hudDockRow != null)
+        {
+            hudDockRow.style.marginLeft = insets.x;
+            hudDockRow.style.marginRight = insets.z;
+            hudDockRow.style.marginBottom = insets.w;
+        }
+
+        if (enemyCardsContainer != null)
+        {
+            enemyCardsContainer.style.marginLeft = insets.x;
+            enemyCardsContainer.style.marginTop = insets.y;
+            enemyCardsContainer.style.marginRight = insets.z;
+        }
+
+        if (hudTop != null)
+        {
+            hudTop.style.marginLeft = insets.x;
+            hudTop.style.marginTop = insets.y;
+            hudTop.style.marginRight = insets.z;
+        }
+
+        FitBoardViewport();
+    }
 
     /// <summary>
     /// Gives the board the screen it is not sharing with the HUD by shrinking the camera viewport

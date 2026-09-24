@@ -22,7 +22,7 @@ public sealed class AbilityStatusRing : MonoBehaviour
 
     // Sized against the plate the dial is cut into. The team puck is 1.755 across and its dark rim
     // 2.015, so a band centred at 0.8 sits on the puck's outer face with plate colour still reading
-    // inside it and the rim still reading outside. It also stays clear of Shield Rush's 2.15 ring,
+    // inside it and the rim still reading outside. It also stays clear of the speed boost's 2.15 ring,
     // which is the only other thing that ever draws at this radius.
     private const float QuadSize = 2f;
     private const float Radius = 0.8f;
@@ -37,7 +37,7 @@ public sealed class AbilityStatusRing : MonoBehaviour
     //
     // A move or ability range paves the cells it covers with MoveOverlayCell, whose plane is opaque
     // and writes depth at y 0.2, with a translucent highlight over it at 0.227. Every unit's base
-    // plate tops out under that — 0.156, and only 0.1 on the Shotgunner — so a dial that sits on
+    // plate tops out under that — 0.156, and only 0.1 on the Ramrod — so a dial that sits on
     // the plate is depth-rejected outright the moment a range is shown, which is the one moment a
     // player is deciding what to spend the round on. Above both, the dial survives; the difference
     // from the plate is under a tenth of a unit and does not read as float at the board's camera.

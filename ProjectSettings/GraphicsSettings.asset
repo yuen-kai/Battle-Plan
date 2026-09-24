@@ -63,8 +63,20 @@ GraphicsSettings:
   - {fileID: 4800000, guid: 9a41e2c07f5b4d3ea6820b94cd17f5d8, type: 3}
   - {fileID: 4800000, guid: 61a72d57a2e564c1daf860af03f8adc8, type: 3}
   - {fileID: 4800000, guid: 86c58bd39467b485c9d7a331b583624e, type: 3}
+  - {fileID: 4800000, guid: 650dd9526735d5b46b79224bc6e94025, type: 3}
+  - {fileID: 4800000, guid: 74132a5ce3c7402ca3291ad88481b664, type: 3}
+  - {fileID: 4800000, guid: 2e91c47ab6f14d33a8c0537b1e7d4a96, type: 3}
   m_PreloadedShaders: []
   m_PreloadShadersBatchTimeLimit: -1
+  m_GraphicsStateCollection: {fileID: 0}
+  m_CollectionStartupAction: 0
+  m_TraceSavePath: TracedCollection
+  m_TraceSendToEditor: 1
+  m_AdditionalWarmupCollections: []
+  m_WarmupAsync: 1
+  m_EnableCacheMissTracing: 0
+  m_WarmupProgressivelyLimit: -1
+  m_CacheMissCollectionPath: CacheMissCollection
   m_SpritesDefaultMaterial: {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
   m_CustomRenderPipeline: {fileID: 0}
   m_TransparencySortMode: 0
@@ -76,6 +88,7 @@ GraphicsSettings:
   m_FogStripping: 0
   m_InstancingStripping: 0
   m_BrgStripping: 0
+  m_DefaultLightBaker: 0
   m_LightmapKeepPlain: 1
   m_LightmapKeepDirCombined: 1
   m_LightmapKeepDynamicPlain: 1
@@ -90,6 +103,9 @@ GraphicsSettings:
     UnityEngine.Rendering.Universal.UniversalRenderPipeline: {fileID: 11400000, guid: 9752af2439782f84c9702c22e672edef, type: 2}
   m_ShaderBuildSettings:
     keywordDeclarationOverrides: []
+    numInternalDefines: 0
+    defines: []
+    compilerSettings: []
   m_LightsUseLinearIntensity: 1
   m_LightsUseColorTemperature: 1
   m_LogWhenShaderIsCompiled: 0

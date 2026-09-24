@@ -34,6 +34,7 @@ public class JoinGameUIController : MonoBehaviour
     private VisualElement createPanel;
     private VisualElement joinPanel;
     private VisualElement relayCodePanel;
+    private ScrollView joinContent;
     private VisualElement localMultiplayerRow;
     private Label connectionCodeHeading;
     private Button showCreateButton;
@@ -41,6 +42,7 @@ public class JoinGameUIController : MonoBehaviour
     private Button titleButton;
     private Button eliminationButton;
     private Button kingButton;
+    private Button escortButton;
     private Button createMatchButton;
     private Button joinMatchButton;
     private Button cancelHostButton;
@@ -50,7 +52,9 @@ public class JoinGameUIController : MonoBehaviour
     private Toggle fogToggle;
     private Toggle localMultiplayerToggle;
     private VisualElement mapRow;
+    private VisualElement mapPreview;
     private Label mapCaption;
+    private Texture2D mapPreviewTexture;
     private readonly List<(Button button, MapId mapId)> mapOptions = new();
     private TextField joinCodeInput;
     private Label relayCodeLabel;
@@ -100,19 +104,18 @@ public class JoinGameUIController : MonoBehaviour
 
         CacheElements();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document);
         CacheTransportDefaults();
         RegisterCallbacks();
         ConfigureInitialState();
-        if (!TryStartTutorialMatch())
+        if (!TryStartTutorialMatch() && !TryStartSandboxMatch())
             ShowPanel(PanelState.Create, true);
     }
 
     /// <summary>
     /// The tutorial is launched from the title screen but still needs this scene's NetworkManager,
     /// so it passes through here and creates its loopback host without the player touching the
-    /// lobby. The setup chrome is hidden for the second that takes, leaving the screen's own
-    /// backdrop, so the match-setup screen never flashes up on the way to the board.
-    /// <see cref="NetworkHandler"/> then skips character selection.
+    /// lobby. <see cref="NetworkHandler"/> then skips character selection.
     /// </summary>
     private bool TryStartTutorialMatch()
     {
@@ -128,6 +131,39 @@ public class JoinGameUIController : MonoBehaviour
             return false;
         }
 
+        TutorialSession.HostStartRequested = true;
+        StartDirectHostMatch(TutorialSession.BuildMatchOptions(), () => TutorialSession.IsActive);
+        return true;
+    }
+
+    /// <summary>
+    /// The character sandbox is launched from the Editor and routes through here for exactly the
+    /// same reason the tutorial does: it needs this scene's NetworkManager, and it has already
+    /// picked both crews itself.
+    /// </summary>
+    private bool TryStartSandboxMatch()
+    {
+        if (!SandboxSession.IsActive)
+            return false;
+
+        if (SandboxSession.HostStartRequested)
+        {
+            SandboxSession.End();
+            return false;
+        }
+
+        SandboxSession.HostStartRequested = true;
+        StartDirectHostMatch(SandboxSession.BuildMatchOptions(), () => SandboxSession.IsActive);
+        return true;
+    }
+
+    /// <summary>
+    /// Creates a loopback host for a session that brings its own match options and crews. The setup
+    /// chrome is hidden for the second that takes, leaving the screen's own backdrop, so the
+    /// match-setup screen never flashes up on the way to the board.
+    /// </summary>
+    private void StartDirectHostMatch(MatchOptions options, System.Func<bool> stillWanted)
+    {
         VisualElement screen = root.Q<VisualElement>("screen");
         if (screen != null)
         {
@@ -135,23 +171,23 @@ public class JoinGameUIController : MonoBehaviour
                 child.AddToClassList("hidden");
         }
 
-        TutorialSession.HostStartRequested = true;
-        pendingOptions = TutorialSession.BuildMatchOptions();
+        pendingOptions = options;
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
 
         // Deferred a frame: this runs from OnEnable, which is not ordered against the scene's
         // NetworkManager waking up, and CreateMatch needs the singleton.
         root.schedule.Execute(() =>
         {
-            if (isActiveAndEnabled && TutorialSession.IsActive)
+            if (isActiveAndEnabled && stillWanted())
                 CreateMatch();
         });
-        return true;
     }
 
     private void OnDisable()
     {
         networkOperationVersion++;
+        MobileDisplay.ForgetScreen(document);
+        ReleaseMapPreviewTexture();
         CancelAsyncNetworkWork();
         NetworkManager networkManager = NetworkManager.Singleton;
         bool networkIsRunning =
@@ -179,6 +215,7 @@ public class JoinGameUIController : MonoBehaviour
         createPanel = RequireElement<VisualElement>("create-panel");
         joinPanel = RequireElement<VisualElement>("join-panel");
         relayCodePanel = RequireElement<VisualElement>("relay-code-panel");
+        joinContent = RequireElement<ScrollView>("join-content");
         localMultiplayerRow = RequireElement<VisualElement>("local-multiplayer-row");
         connectionCodeHeading = RequireElement<Label>("connection-code-heading");
         showCreateButton = RequireElement<Button>("show-create-button");
@@ -186,6 +223,7 @@ public class JoinGameUIController : MonoBehaviour
         titleButton = RequireElement<Button>("title-button");
         eliminationButton = RequireElement<Button>("elimination-button");
         kingButton = RequireElement<Button>("king-button");
+        escortButton = RequireElement<Button>("escort-button");
         createMatchButton = RequireElement<Button>("create-match-button");
         joinMatchButton = RequireElement<Button>("join-match-button");
         cancelHostButton = RequireElement<Button>("cancel-host-button");
@@ -195,6 +233,7 @@ public class JoinGameUIController : MonoBehaviour
         fogToggle = RequireElement<Toggle>("fog-toggle");
         localMultiplayerToggle = RequireElement<Toggle>("local-multiplayer-toggle");
         mapRow = RequireElement<VisualElement>("map-row");
+        mapPreview = RequireElement<VisualElement>("map-preview");
         mapCaption = RequireElement<Label>("map-caption");
         BuildMapOptions();
         joinCodeInput = RequireElement<TextField>("join-code-input");
@@ -232,6 +271,8 @@ public class JoinGameUIController : MonoBehaviour
             eliminationButton.clicked += SelectEliminationMode;
         if (kingButton != null)
             kingButton.clicked += SelectKingOfTheHillMode;
+        if (escortButton != null)
+            escortButton.clicked += SelectEscortMode;
         if (playerOpponentButton != null)
             playerOpponentButton.clicked += SelectPlayerOpponent;
         if (aiOpponentButton != null)
@@ -287,6 +328,8 @@ public class JoinGameUIController : MonoBehaviour
             eliminationButton.clicked -= SelectEliminationMode;
         if (kingButton != null)
             kingButton.clicked -= SelectKingOfTheHillMode;
+        if (escortButton != null)
+            escortButton.clicked -= SelectEscortMode;
         if (playerOpponentButton != null)
             playerOpponentButton.clicked -= SelectPlayerOpponent;
         if (aiOpponentButton != null)
@@ -369,6 +412,7 @@ public class JoinGameUIController : MonoBehaviour
 
         eliminationButton?.SetEnabled(true);
         kingButton?.SetEnabled(true);
+        escortButton?.SetEnabled(true);
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
         joinCodeInput?.SetValueWithoutNotify(string.Empty);
         localMultiplayerToggle?.SetValueWithoutNotify(false);
@@ -451,7 +495,39 @@ public class JoinGameUIController : MonoBehaviour
 
         if (mapCaption != null)
             mapCaption.text = pendingOptions.Map.Caption;
+        ShowMapPreview();
         SetCreateStatus(string.Empty, false);
+    }
+
+    /// <summary>
+    /// Same drawing routine the character-select panel uses, so the chip a player picks here and
+    /// the board they see next are the same picture. The texture is owned by this screen and
+    /// replaced on every choice, which is affordable because a choice is a click, not a frame.
+    ///
+    /// Redrawn on a mode change as well as a board change: the deployment and the objective pad
+    /// both follow the mode, so a picture drawn for the mode a player has since left is wrong
+    /// about where their crew starts.
+    /// </summary>
+    private void ShowMapPreview()
+    {
+        if (mapPreview == null)
+            return;
+
+        Texture2D next = MapPreviewImage.CreateTexture(
+            pendingOptions.Map,
+            pendingOptions.gameMode
+        );
+        mapPreview.style.backgroundImage = new StyleBackground(next);
+        ReleaseMapPreviewTexture();
+        mapPreviewTexture = next;
+    }
+
+    private void ReleaseMapPreviewTexture()
+    {
+        if (mapPreviewTexture == null)
+            return;
+        Destroy(mapPreviewTexture);
+        mapPreviewTexture = null;
     }
 
     private void SelectEliminationMode()
@@ -462,6 +538,11 @@ public class JoinGameUIController : MonoBehaviour
     private void SelectKingOfTheHillMode()
     {
         SetGameMode(GameMode.KingOfTheHill);
+    }
+
+    private void SelectEscortMode()
+    {
+        SetGameMode(GameMode.EscortThePresident);
     }
 
     private void SetGameMode(GameMode gameMode)
@@ -477,6 +558,11 @@ public class JoinGameUIController : MonoBehaviour
             "button--selected",
             pendingOptions.gameMode == GameMode.KingOfTheHill
         );
+        escortButton?.EnableInClassList(
+            "button--selected",
+            pendingOptions.gameMode == GameMode.EscortThePresident
+        );
+        ShowMapPreview();
         SetCreateStatus(string.Empty, false);
     }
 
@@ -1073,6 +1159,7 @@ public class JoinGameUIController : MonoBehaviour
         titleButton?.SetEnabled(enabled);
         eliminationButton?.SetEnabled(enabled);
         kingButton?.SetEnabled(enabled);
+        escortButton?.SetEnabled(enabled);
         createMatchButton?.SetEnabled(enabled);
         joinMatchButton?.SetEnabled(enabled);
         playerOpponentButton?.SetEnabled(enabled);
@@ -1134,7 +1221,12 @@ public class JoinGameUIController : MonoBehaviour
         SetRelayStatus(status);
         cancelHostButton?.SetEnabled(true);
         cancelHostButton?.RemoveFromClassList("hidden");
-        root?.schedule.Execute(() => cancelHostButton?.Focus());
+        root?.schedule.Execute(() =>
+        {
+            cancelHostButton?.Focus();
+            if (relayCodePanel != null)
+                joinContent?.ScrollTo(relayCodePanel);
+        });
     }
 
     private void ResetRelayState()

@@ -121,7 +121,10 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         if (!string.IsNullOrEmpty(lesson))
             observedLessons.Add(lesson);
 
-        if (GameLoop.currentPhase == "executing" && Time.timeScale < ExecutionFastForward)
+        if (
+            GameLoop.currentPhase == GameLoop.Phase.Executing
+            && Time.timeScale < ExecutionFastForward
+        )
             Time.timeScale = ExecutionFastForward;
     }
 
@@ -283,9 +286,13 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         return true;
     }
 
-    private IEnumerator WaitForPhase(string phase, float timeoutSeconds)
+    private IEnumerator WaitForPhase(GameLoop.Phase phase, float timeoutSeconds)
     {
-        yield return WaitFor(() => GameLoop.currentPhase == phase, timeoutSeconds, $"phase {phase}");
+        yield return WaitFor(
+            () => GameLoop.currentPhase == phase,
+            timeoutSeconds,
+            $"phase {phase}"
+        );
     }
 
     private IEnumerator RunSuite()
@@ -321,7 +328,7 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         yield return WaitFor(
             () =>
                 GameLoop.Instance != null
-                && GameLoop.currentPhase == "planning"
+                && GameLoop.currentPhase == GameLoop.Phase.Planning
                 && GameLoop.GetTeamUnits(GameLoop.HostTeamIndex).Length == 1
                 && GameLoop.GetTeamUnits(GameLoop.OpponentTeamIndex).Length == 1,
             120f,
@@ -385,7 +392,7 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         );
 
         Check(PlanMovement.Instance.TryLockIn(), "orders submitted");
-        yield return WaitForPhase("executing", 60f);
+        yield return WaitForPhase(GameLoop.Phase.Executing, 60f);
         Check(!timedOut, "round one executed");
         if (timedOut)
             yield break;
@@ -407,7 +414,7 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         Check(!LessonCardVisible(), "dismissing clears the lesson card");
 
         // === Lesson two: the ability, and watching the opponent step clear ===
-        yield return WaitForPhase("planning", 90f);
+        yield return WaitForPhase(GameLoop.Phase.Planning, 90f);
         Check(!timedOut, "round two reached planning");
         if (timedOut)
             yield break;
@@ -431,17 +438,19 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         Check(PlanMovement.Instance.TryLockIn(), "ability orders submitted");
 
         yield return WaitFor(
-            () => GameLoop.currentPhase == "dodging" || GameLoop.currentPhase == "executing",
+            () =>
+                GameLoop.currentPhase == GameLoop.Phase.Dodging
+                || GameLoop.currentPhase == GameLoop.Phase.Executing,
             60f,
             "the ability round resolving"
         );
         Check(
-            GameLoop.currentPhase == "dodging",
+            GameLoop.currentPhase == GameLoop.Phase.Dodging,
             "throwing at the opponent opened a dodge window for them",
-            GameLoop.currentPhase
+            GameLoop.currentPhase.ToString()
         );
 
-        yield return WaitForPhase("executing", 60f);
+        yield return WaitForPhase(GameLoop.Phase.Executing, 60f);
         Check(!timedOut, "round two executed");
         if (timedOut)
             yield break;
@@ -456,7 +465,7 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         Check(DismissLesson(), "the dodged-ability card can be dismissed");
 
         // === Lesson three: the scripted opponent throws back ===
-        yield return WaitForPhase("planning", 90f);
+        yield return WaitForPhase(GameLoop.Phase.Planning, 90f);
         Check(!timedOut, "round three reached planning");
         if (timedOut)
             yield break;
@@ -487,14 +496,16 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
         Check(PlanMovement.Instance.TryLockIn(), "holding orders submitted");
 
         yield return WaitFor(
-            () => GameLoop.currentPhase == "dodging" || GameLoop.currentPhase == "executing",
+            () =>
+                GameLoop.currentPhase == GameLoop.Phase.Dodging
+                || GameLoop.currentPhase == GameLoop.Phase.Executing,
             60f,
             "the opponent's throw"
         );
         Check(
-            GameLoop.currentPhase == "dodging",
+            GameLoop.currentPhase == GameLoop.Phase.Dodging,
             "the scripted opponent threw its own ability at the student",
-            GameLoop.currentPhase
+            GameLoop.currentPhase.ToString()
         );
         Check(
             loop.dodgeAlerted?.ContainsKey(GameLoop.HostTeamIndex) == true,
@@ -574,7 +585,7 @@ public sealed class DevTutorialE2ETestRunner : MonoBehaviour
             () =>
                 SceneManager.GetActiveScene().name == "Game"
                 && GameLoop.Instance != null
-                && GameLoop.currentPhase == "planning",
+                && GameLoop.currentPhase == GameLoop.Phase.Planning,
             90f,
             "the tutorial replaying"
         );

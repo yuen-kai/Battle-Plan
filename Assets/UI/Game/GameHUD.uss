@@ -377,9 +377,10 @@
     justify-content: center;
 }
 
-/* The hill readout floats over the right end of this same band, so King of the
-   Hill keeps the row packed left where it clears the readout at full card width. */
-.koth .enemy-unit-cards .unity-scroll-view__content-container {
+/* An objective readout floats over the right end of this same band, so any mode
+   that carries one keeps the row packed left. */
+.koth .enemy-unit-cards .unity-scroll-view__content-container,
+.escort .enemy-unit-cards .unity-scroll-view__content-container {
     justify-content: flex-start;
 }
 
@@ -447,6 +448,94 @@
 
 .coach-prompt--visible {
     opacity: 1;
+}
+
+/* The leg clock's last call, in the gap between the two bands. Over the board rather than in a
+   readout because it is the one message in the match that must not be missable. */
+.escort-alert {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 26%;
+    align-items: center;
+    opacity: 0;
+    transition-duration: 0.22s;
+    transition-property: opacity;
+}
+
+.escort-alert--visible {
+    opacity: 1;
+}
+
+/* The one place the shout had no page of its own. Display type thrown straight across a lit board
+   measures against whatever is behind it, and over this board that ranges from the pale wall caps
+   to the walls themselves — the accent ran 3.2:1 over the deck and 1.2:1 over a wall, propped up
+   by a bloom, which thickens a glyph's edge without moving the stroke any further from the fill.
+ 
+   So the type gets a page: the shared top and bottom scrims turned to face each other, peaking at
+   0.9 in the middle where the words are and falling off to nothing before either edge of the
+   screen. The accent then measures a predictable 3.8:1 and the detail line 4.9:1, on any board and
+   in any lighting, and the board the message is about is still visible around it. Deliberately not
+   a plate: the reason the shout has none is that a bounded rectangle turns the loudest beat in the
+   leg into a notification, and a falloff with no edge cannot do that. */
+.escort-alert__veil {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -130px;
+    bottom: -130px;
+}
+
+/* Both halves use the top scrim, the upper one turned over, because that mask holds ~0.95 across
+   most of its length and only feathers near one end. Two of them back to back therefore give a
+   plateau over the middle of the band with a falloff at each outer edge — where the previous pair
+   (top scrim against bottom scrim) met at a single peak, which put the score in the strong part of
+   the band and left the title above it riding the gradient down to a quarter strength. */
+.toybox-ui .escort-alert__veil-above {
+    top: 0;
+    bottom: auto;
+    height: 50%;
+    rotate: 180deg;
+}
+
+.toybox-ui .escort-alert__veil-below {
+    top: auto;
+    bottom: 0;
+    height: 50%;
+}
+
+/* Orange because this is the objective's own clock, which is what the accent is reserved for. The
+   halo stays: the veil fades in and out around the copy, and the frames either side of it are
+   still type on a bare stage. */
+.escort-alert__copy {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 72px;
+    -unity-font-style: normal;
+    color: var(--toy-primary-copy);
+    letter-spacing: var(--toy-track-display);
+    -unity-text-align: middle-center;
+    text-shadow: 0 4px 24px var(--toy-shadow-stage);
+    white-space: nowrap;
+}
+
+/* A verdict is a sentence rather than a count, so it drops to the display step and is allowed to
+   wrap. At the shout size "Escort unopposed — crew wiped" runs off both edges of the screen. */
+.escort-alert--verdict .escort-alert__copy {
+    max-width: 900px;
+    font-size: var(--toy-type-display);
+    white-space: normal;
+}
+
+
+.escort-alert__detail {
+    margin-top: 4px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: var(--toy-type-title-lg);
+    -unity-font-style: normal;
+    color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-title);
+    -unity-text-align: middle-center;
+    text-shadow: 0 3px 16px var(--toy-shadow-stage);
 }
 
 /* Tutorial lesson. The beats worth stopping to read get a card instead of a strip, sat well above
@@ -565,7 +654,6 @@
 }
 
 .hud-exit-button,
-.hud-controls-button,
 .hud-settings-button {
     min-height: 46px;
     flex-shrink: 0;
@@ -576,14 +664,13 @@
 
 /* Each dock chip is spaced by the one on its left, the way the commit cluster spaces itself, so the
    rightmost chip stays flush with the dock's edge. */
-.hud-exit-button,
-.hud-controls-button {
+.hud-exit-button {
     margin-right: 8px;
 }
 
-/* Leftmost of the three and the only one that ends the match, so it is kept off the two a player
-   reaches for mid-round and given the ink a destructive action wears everywhere else. Quiet rather
-   than filled: it is a way out, not something the HUD should be recommending. */
+/* The only one of the pair that ends the match, so it is kept off the chip a player reaches for
+   mid-round and given the ink a destructive action wears everywhere else. Quiet rather than
+   filled: it is a way out, not something the HUD should be recommending. */
 .hud-exit-button {
     color: var(--toy-danger-copy);
     border-color: var(--toy-danger-copy);
@@ -738,14 +825,25 @@
     opacity: 0.06;
 }
 
+/* 4:3, the shape of a portrait file, so the picture fills the frame instead of
+   being fitted into a box of a different shape and leaving bands of bare plate
+   over and under the character.
+
+   Height is what gives way to get there, not width. A plate that keeps the
+   card's full 78 can only hold a 4:3 picture at 104 wide, and the copy cannot
+   pay that: at 1700 the ability line already has ten pixels less than it wants
+   with the frame at its old 78. So the plate hugs the picture and centres in the
+   row, which costs the copy nothing and crops nothing off the character. The two
+   numbers are tied by hand — USS has no aspect-ratio property — so anything that
+   changes one changes the other. */
 .unit-card__portrait {
     position: relative;
-    width: 78px;
-    min-width: 78px;
+    align-self: center;
+    width: 76px;
+    min-width: 76px;
+    height: 57px;
     -unity-background-scale-mode: scale-to-fit;
     background-color: var(--toy-warm);
-    border-right-width: var(--toy-stroke-thin);
-    border-right-color: var(--toy-edge);
 }
 
 .unit-card__copy {
@@ -1034,12 +1132,6 @@
     opacity: 1;
 }
 
-.unit-card--enemy .unit-card__portrait {
-    width: 52px;
-    min-width: 52px;
-    background-color: var(--toy-warm);
-}
-
 .unit-card--enemy .unit-card__copy {
     position: relative;
     justify-content: center;
@@ -1137,11 +1229,150 @@
     color: var(--toy-text-muted);
 }
 
-.results-overlay {
+/* === ESCORT LEG BRIEFING === */
+
+/* The screen that opens a leg. The roles swap between legs and the readout that carries the role
+   for the rest of the leg is caption-sized, so a player who has to go looking for it has already
+   spent the round that mattered finding out.
+ 
+   Built as the same left command rail the debrief and the front end use — eyebrow, rule, the one
+   word, then the line that says what it costs — rather than as a centre slam, for the reason
+   written over .results-overlay. The coin sits to the right of the rail as an object on the table.
+   Its space is reserved from the first frame, so the toss never shifts the composition under
+   itself. */
+.escort-briefing {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 104px;
+    padding-right: var(--toy-space-xl);
+    /* The scrim, not the ground: the board stays legible through it, which is the point — the
+       leg's ground is what the role being announced is about, and a briefing that hides it is a
+       loading screen. The same value every other full-screen overlay in this HUD sits on.
+ 
+       Translucency means the type is measured against the board rather than against one known
+       value, so the numbers below are worst cases, taken against the dark tokens this screen
+       resolves under (see .game-screen above). Over the pale wall caps, the brightest thing the
+       board normally puts behind it: Protect 6.8:1, Defend 6.5:1, Both 6.3:1, and the eyebrow and
+       brief 5.6:1. Against a blown-out white pixel — a muzzle flash sat directly behind a letter —
+       the same five hold 5.7, 5.4, 5.2, 4.7 and 4.7:1, so every step of the screen still clears AA
+       for normal text in the worst frame it can be caught in. */
     background-color: var(--toy-scrim);
+    opacity: 0;
 }
 
-.controls-overlay {
+/* The curtain. Opaque while the board behind it is being torn down and rebuilt, then eased away
+   under the role card so the new leg is revealed rather than cut to. It is the whole reason a leg
+   no longer needs a scene load to hide its rebuild — see GameLoop.OpenNextLeg. */
+.escort-briefing__curtain {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: var(--toy-ground);
+}
+
+.escort-briefing__verdict {
+    width: 620px;
+    max-width: 58%;
+    align-items: flex-start;
+    opacity: 0;
+}
+
+/* The eyebrow takes the brief's ink rather than the muted step below it. Over a translucent page
+   the muted step measures 4.5:1 at best and 3.7:1 against a blown-out pixel, and this is a 12px
+   label. It gives up nothing: it is already a second voice by size, tracking and the accent rule
+   on its left edge, which is what the type scale asks de-emphasis to be carried by.
+ 
+   Scoped through .toybox-ui to match the specificity of the .section-label rule it is overriding;
+   a bare class selector loses to it and silently leaves the muted value in place. */
+.toybox-ui .escort-briefing__leg {
+    align-self: flex-start;
+    color: var(--toy-text-copy);
+}
+
+/* The debrief's own mark, at the debrief's own size. */
+.escort-briefing__rule {
+    width: 260px;
+    height: var(--toy-accent-rule);
+    margin-top: var(--toy-space-md);
+    margin-bottom: var(--toy-space-md);
+    background-color: var(--toy-primary);
+}
+
+/* One word, so unlike the debrief's sentence it can take the whole rail and never wrap. */
+.escort-briefing__role {
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
+    font-size: 92px;
+    color: var(--toy-text);
+    letter-spacing: var(--toy-track-display);
+    -unity-text-align: middle-left;
+    /* The halo earns its place back now the page is translucent: on this half of the palette the
+       stage shadow is a dark one, so it deepens the page immediately behind the glyph, which is
+       exactly the frame where a bright board pixel would otherwise be sat under a letter. */
+    text-shadow: 0 4px 20px var(--toy-shadow-stage);
+    white-space: nowrap;
+}
+
+/* Protecting is the objective, so it takes the accent the objective owns everywhere else.
+   Defending is the ink. The decider is neither, so it takes the board's own blue. */
+.escort-briefing__role--protect {
+    color: var(--toy-primary-copy);
+}
+
+.escort-briefing__role--defend {
+    color: var(--toy-text);
+}
+
+.escort-briefing__role--both {
+    color: var(--toy-select-copy);
+}
+
+.escort-briefing__brief {
+    max-width: 560px;
+    margin-top: var(--toy-space-md);
+    font-size: var(--toy-type-body-lg);
+    color: var(--toy-text-copy);
+    -unity-text-align: middle-left;
+    white-space: normal;
+    opacity: 0;
+}
+
+/* The coin is drawn by Painter2D over this square, which is why it carries a size and no paint of
+   its own. */
+.escort-briefing__stage {
+    width: 360px;
+    height: 360px;
+    flex-shrink: 0;
+    margin-left: var(--toy-space-xl);
+}
+
+/* The word on the coin's face. Squashed with the face it is stamped on, and sized in C# from the
+   radius so it survives every breakpoint below without restating itself.
+ 
+   Its colour is set in C# too, and deliberately not from a token: the two faces are fills drawn by
+   Painter2D, so their ink has to be pinned to the fill rather than to the theme. Both candidate
+   tokens flip with the HUD's dark end — --toy-text put light grey on the bone face at 1.4:1 and
+   --toy-text-on-deep put near-black on the slate one at 2.2:1. */
+.escort-briefing__coin-face {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 38px;
+    letter-spacing: var(--toy-track-title);
+    -unity-text-align: middle-center;
+}
+
+.results-overlay {
     background-color: var(--toy-scrim);
 }
 
@@ -1149,9 +1380,9 @@
     background-color: var(--toy-scrim);
 }
 
-/* Shorter than the controls sheet, so the phase banner above and the dock below stay readable
-   behind it. The round does not stop for this panel and the player may be watching the timer while
-   they reach for a level. */
+/* Kept short so the phase banner above and the dock below stay readable behind it. The round does
+   not stop for this panel and the player may be watching the timer while they reach for a
+   level. */
 .toybox-ui.settings-overlay .settings-panel {
     max-height: 62%;
     align-items: stretch;
@@ -1172,7 +1403,11 @@
    debrief is anchored to the left margin instead — the same command-rail idiom
    the title and character screens are built on — and reads as a block: eyebrow,
    rule, verdict, then the two things you can do about it. */
-.results-overlay {
+/* Scoped through .toybox-ui to outrank the shared .toybox-ui.modal-shade, which centres its
+   child and sets padding with the shorthand. A bare .results-overlay lost both, and the rail this
+   whole block describes was quietly rendering as a 900px column centred in the frame — the one
+   composition the comment above rules out. */
+.toybox-ui.results-overlay {
     align-items: flex-start;
     justify-content: center;
     padding-left: 104px;
@@ -1214,37 +1449,65 @@
     color: var(--toy-text-muted);
 }
 
+/* The strike. Painted by MatchVerdictScreen over the whole screen rather than inside the panel,
+   because the burst is the moment the panel is reacting to and a burst clipped to a 900px column
+   is a graphic instead of an impact. */
+.results-stage {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+/* Fires out left-to-right ahead of the word, so the rail is struck rather than drawn. */
 .results-mark {
-    width: 260px;
+    width: 300px;
     height: 3px;
     margin-top: var(--toy-space-md);
     margin-bottom: var(--toy-space-md);
     background-color: var(--toy-primary);
 }
 
-/* The verdict is the only thing anyone reads on this panel, so it gets the size
-   a scoreboard gives it and nothing else on the sheet competes. */
-/* Big enough to be the moment, not so big it is doing an impression of one.
-   The verdict here is a sentence — "You win!", "Draw — both crews eliminated."
-   — so it has to survive wrapping, which a single screen-filling word does not
-   have to worry about. */
-.results-status {
-    margin-bottom: var(--toy-space-md);
+/* The word. Bigger than anything else the game sets, and free to be: the sentence that used to
+   share this line has moved to .results-status below it, so the verdict is one word that never
+   wraps and never has to be sized for the case where it does.
+ 
+   The size is what carries the moment; the colour deliberately does not. */
+.results-headline {
     -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCapsObl-Regular UI SDF.asset");
-    font-size: 58px;
+    font-size: 108px;
     color: var(--toy-text-copy);
     letter-spacing: 3px;
     -unity-text-align: middle-left;
-    text-shadow: 0 4px 16px var(--toy-shadow-stage);
-    white-space: normal;
+    text-shadow: 0 6px 26px var(--toy-shadow-stage);
+    white-space: nowrap;
 }
 
-.results-status--victory {
-    color: var(--toy-text);
+/* A win is the brightest thing on the screen and a loss goes cool — still no hue for either, for
+   the reason written over --toy-defeat.
+ 
+   This is the one place in the HUD that goes to white. The body ladder tops out at an off-white
+   chosen so a player can stare at it for twenty minutes, which is not the brief for a word held
+   for one second at the end of the match. */
+.results-overlay--victory .results-headline {
+    color: rgb(247, 251, 253);
 }
 
-.results-status--defeat {
+.results-overlay--defeat .results-headline {
     color: var(--toy-defeat);
+}
+
+/* How the match was decided, which is the whole reason the word above means anything. Reads as
+   copy rather than as a second verdict: the display face, the obliquity and the halo all come off,
+   exactly as they do on the leg briefing's brief. */
+.results-status {
+    max-width: 560px;
+    margin-top: var(--toy-space-sm);
+    font-size: var(--toy-type-body-lg);
+    color: var(--toy-text-copy);
+    -unity-text-align: middle-left;
+    white-space: normal;
 }
 
 .results-actions {
@@ -1542,9 +1805,15 @@
     min-width: 0;
 }
 
-.compact .unit-card__portrait {
+/* A compact ability card bottoms out at 240 wide, where the ability line has 51
+   pixels to spare and no more, so the frame steps down rather than the copy. Same
+   ratio, same picture size as the old 48-wide frame rendered anyway — it is the
+   plate around it that stops being oversized. Friendly only: the enemy card has
+   room to spare at this breakpoint and keeps the full frame. */
+.compact .unit-card--friendly .unit-card__portrait {
     width: 48px;
     min-width: 48px;
+    height: 36px;
 }
 
 .compact .unit-card__copy {
@@ -1623,6 +1892,34 @@
     min-width: 0;
 }
 
+.narrow .escort-alert__copy {
+    font-size: 56px;
+}
+
+.narrow .escort-alert--verdict .escort-alert__copy {
+    max-width: 660px;
+    font-size: var(--toy-type-title-lg);
+}
+
+/* The rail and the coin stop competing for the same row well before the phone breakpoint: at
+   1280 the two together are wider than the board they are sat over. */
+.narrow .escort-briefing {
+    padding-left: 56px;
+}
+
+.narrow .escort-briefing__role {
+    font-size: 66px;
+}
+
+.narrow .escort-briefing__verdict {
+    width: 480px;
+}
+
+.narrow .escort-briefing__stage {
+    width: 280px;
+    height: 280px;
+}
+
 .narrow .hill-status-readout {
     width: 244px;
 }
@@ -1686,7 +1983,6 @@
 }
 
 .phone .hud-exit-button,
-.phone .hud-controls-button,
 .phone .hud-settings-button {
     min-height: 44px;
     padding-left: 8px;
@@ -1783,6 +2079,15 @@
     font-size: 22px;
 }
 
+.phone .escort-alert__copy {
+    font-size: 34px;
+}
+
+.phone .escort-alert--verdict .escort-alert__copy {
+    max-width: 88%;
+    font-size: var(--toy-type-title);
+}
+
 .phone .hill-status-readout {
     top: 0;
     left: auto;
@@ -1831,12 +2136,50 @@
     font-size: 28px;
 }
 
-.phone .results-status {
-    font-size: 52px;
+/* No room for a rail beside an object, so the coin goes above the words and both centre. */
+.phone .escort-briefing {
+    flex-direction: column-reverse;
+    align-items: center;
+    justify-content: center;
+    padding-left: var(--toy-space-lg);
+}
+
+.phone .escort-briefing__verdict {
+    width: 100%;
+    max-width: 100%;
+    align-items: center;
+}
+
+.phone .escort-briefing__leg {
+    align-self: center;
+}
+
+.phone .escort-briefing__role {
+    font-size: 48px;
+    -unity-text-align: middle-center;
+}
+
+.phone .escort-briefing__brief {
+    -unity-text-align: middle-center;
+}
+
+.phone .escort-briefing__stage {
+    width: 200px;
+    height: 200px;
+    margin-left: 0;
+    margin-bottom: var(--toy-space-md);
+}
+
+.phone .results-headline {
+    font-size: 54px;
     letter-spacing: 2px;
 }
 
-.phone .results-overlay {
+.phone .results-mark {
+    width: 180px;
+}
+
+.phone .toybox-ui.results-overlay {
     padding-left: var(--toy-space-lg);
 }
 
@@ -1864,7 +2207,6 @@
 }
 
 .short .hud-exit-button,
-.short .hud-controls-button,
 .short .hud-settings-button {
     min-height: 44px;
     padding-top: 4px;
@@ -1886,17 +2228,44 @@
     font-size: 24px;
 }
 
-.short .results-status {
-    font-size: 68px;
-    letter-spacing: 3px;
+.short .results-headline {
+    font-size: 78px;
 }
 
 .phone.short .hud-exit-button,
-.phone.short .hud-controls-button,
 .phone.short .hud-settings-button {
     min-height: 44px;
     padding-top: 7px;
     padding-bottom: 7px;
+}
+
+/* A landscape phone is short before it is narrow. Stacking the dock, as the phone breakpoint does
+   for a portrait one, costs the board more height than it wins the cards in width: measured on a
+   936x432 panel it took the dock to 188px and left the board 0.325 of the screen, under the
+   floor FitBoardViewport accepts, so the board kept a stale viewport. The row comes back here and
+   the cards scroll sideways instead. */
+.phone.short .hud-dock__row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.phone.short .hud-header-actions {
+    width: auto;
+    margin-left: 8px;
+    margin-top: 0;
+}
+
+.short .escort-alert {
+    top: 20%;
+}
+
+.short .escort-briefing__role {
+    font-size: 62px;
+}
+
+.short .escort-briefing__stage {
+    width: 240px;
+    height: 240px;
 }
 
 .phone.short .hill-status-readout {

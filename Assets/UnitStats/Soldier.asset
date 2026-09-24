@@ -15,15 +15,12 @@ MonoBehaviour:
   unitModel: {fileID: 5730507131329954583, guid: f1e7614fcfc4b2540b2575cb03d3fc7b, type: 3}
   unitName: Soldier
   unitClass: 0
-  unitDescription: Jack of all trades.
-  playStyle: Holds ground in the middle of the board and trades at mid range.
+  playStyle: Well-rounded damage dealer
   weaponName: Mid-range rifle
-  strengths: Versatile, and strong against mid-range threats.
-  weaknesses: Outclassed at extreme range and in close quarters.
   unitSprite: {fileID: 21300000, guid: 4311808404f2b456e9afebd81d87d4b8, type: 3}
   unavailableForRoster: 0
   abilityName: Grenade
-  abilityDescription: Toss a timed area blast to pressure space or start a fight.
+  abilityDescription: Tosses an area blast to pressure space or start a fight.
   abilitySprite: {fileID: 21300000, guid: 4311808404f2b456e9afebd81d87d4b8, type: 3}
   moveDist: 3
   moveSpeed: 1
@@ -33,14 +30,21 @@ MonoBehaviour:
   redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
   timeBetweenShots: 0.3
   magazineSize: 5
-  reloadTime: 2
+  reloadTime: 1.35
   bulletSpread: 3
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
+  canShootWhileMoving: 0
   bulletSpeed: 3
   targetRange: 4
   bulletRange: 8
   damage: 10
   backstabMultiplier: 1
   backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 0
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 270

@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 // Pure coverage for the one-unit-per-cell rule. Both halves of it are expressed as static grid
@@ -8,11 +10,26 @@ using UnityEngine;
 // half trims routes until each finishes somewhere unclaimed, and the execution half picks the cell
 // a unit is set down on when it has to give one up. The parts that genuinely need live units — the
 // client refusing to draw onto a held cell, and the slide that runs the moment a unit arrives on an
-// occupied cell — are runtime acceptance and are intentionally not exercised here.
+// occupied cell — are runtime acceptance and are intentionally not exercised here. Which cell a plan
+// reserves is the one exception: an ability that carries its caster is asked where it puts it down,
+// so those cases build a bare unit carrying the ability component and nothing else.
 [TestFixture]
 [Category("UnitOverlap")]
 public class UnitOverlapEditModeTests
 {
+    private readonly List<GameObject> spawnedObjects = new();
+
+    [TearDown]
+    public void TearDown()
+    {
+        foreach (GameObject spawned in spawnedObjects)
+        {
+            if (spawned != null)
+                UnityEngine.Object.DestroyImmediate(spawned);
+        }
+        spawnedObjects.Clear();
+    }
+
     // === Planning: routes are trimmed until every one of them ends somewhere different ===
 
     [Test]
@@ -206,6 +223,141 @@ public class UnitOverlapEditModeTests
             "An empty plan says nothing about where its unit ends up."
         );
         Assert.That(PlanMovement.GetPlannedEndIndex(true, 0), Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void PlannedEndCell_ARouteReservesItsLastStepAndNoOrdersReserveWhereItStands()
+    {
+        GameObject walker = CreateUnitAt(new Vector2Int(2, 2));
+
+        Assert.That(
+            PlanMovement.GetPlannedEndCell(
+                walker,
+                false,
+                Plan(new Vector2Int(2, 2), new Vector2Int(3, 2))
+            ),
+            Is.EqualTo(new Vector2Int(3, 2))
+        );
+        Assert.That(
+            PlanMovement.GetPlannedEndCell(walker, false, null),
+            Is.EqualTo(new Vector2Int(2, 2)),
+            "A unit with no orders reserves the cell it is standing on."
+        );
+    }
+
+    [Test]
+    public void PlannedEndCell_AnAbilityThatKeepsItsCasterPutReservesItsOwnCell()
+    {
+        GameObject thrower = CreateUnitAt(new Vector2Int(2, 2));
+        thrower.AddComponent<Grenade>();
+
+        Assert.That(
+            PlanMovement.GetPlannedEndCell(
+                thrower,
+                true,
+                Plan(new Vector2Int(2, 2), new Vector2Int(6, 4))
+            ),
+            Is.EqualTo(new Vector2Int(2, 2)),
+            "The grenade lands four cells away; the unit that threw it does not."
+        );
+    }
+
+    [Test]
+    public void PlannedEndCell_AJumpGivesUpItsLaunchCellAndReservesWhereItComesDown()
+    {
+        GameObject rider = CreateUnitAt(new Vector2Int(2, 2));
+        rider.AddComponent<Pogo>();
+
+        Assert.That(
+            PlanMovement.GetPlannedEndCell(
+                rider,
+                true,
+                Plan(new Vector2Int(2, 2), new Vector2Int(5, 4))
+            ),
+            Is.EqualTo(new Vector2Int(5, 4)),
+            "The rider spends the round standing on the square it was aimed at."
+        );
+    }
+
+    [Test]
+    public void PlannedEndCell_ARushReservesTheCellItsFixedDistanceCarriesItTo()
+    {
+        UnitData ramrod = LoadUnitData("Ramrod");
+        Assert.That(ramrod.abilityFixedDistance, Is.GreaterThan(1));
+        Vector2Int startCell = new(3, 3);
+        Vector2Int aim = startCell + Vector2Int.right;
+
+        WithWalls(
+            Array.Empty<Vector2Int>(),
+            () =>
+                Assert.That(
+                    PlanMovement.GetPlannedEndCell(
+                        CreateRamrodAt(startCell, ramrod),
+                        true,
+                        Plan(startCell, aim)
+                    ),
+                    Is.EqualTo(startCell + new Vector2Int(ramrod.abilityFixedDistance, 0)),
+                    "The charge is aimed one cell away and travels its whole fixed distance."
+                )
+        );
+
+        WithWalls(
+            new[] { startCell + new Vector2Int(2, 0) },
+            () =>
+                Assert.That(
+                    PlanMovement.GetPlannedEndCell(
+                        CreateRamrodAt(startCell, ramrod),
+                        true,
+                        Plan(startCell, aim)
+                    ),
+                    Is.EqualTo(aim),
+                    "A wall cuts the charge short, and the reservation stops where it does."
+                )
+        );
+    }
+
+    private static List<Vector3> Plan(params Vector2Int[] cells)
+    {
+        return cells.Select(GameLoop.gridCoordToWorld).ToList();
+    }
+
+    private GameObject CreateUnitAt(Vector2Int cell)
+    {
+        GameObject unit = new($"PlanEndUnit_{cell.x}_{cell.y}");
+        spawnedObjects.Add(unit);
+        unit.transform.position = GameLoop.gridCoordToWorld(cell);
+        return unit;
+    }
+
+    private GameObject CreateRamrodAt(Vector2Int cell, UnitData data)
+    {
+        GameObject charger = CreateUnitAt(cell);
+        charger.AddComponent<DashRush>();
+        charger.AddComponent<Movement>().unitData = data;
+        return charger;
+    }
+
+    private static UnitData LoadUnitData(string unitName)
+    {
+        string path = $"Assets/UnitStats/{unitName}.asset";
+        UnitData data = AssetDatabase.LoadAssetAtPath<UnitData>(path);
+        Assert.That(data, Is.Not.Null, $"Could not load {path}.");
+        return data;
+    }
+
+    /// <summary>Runs a case against a chosen wall layout, restoring the board afterwards.</summary>
+    private static void WithWalls(IEnumerable<Vector2Int> walls, Action body)
+    {
+        MapDefinition original = MapCatalog.Active;
+        MapCatalog.SetActive(MapDefinition.Scratch(walls));
+        try
+        {
+            body();
+        }
+        finally
+        {
+            MapCatalog.SetActive(original);
+        }
     }
 
     // === Execution: which cell a displaced unit is set down on ===

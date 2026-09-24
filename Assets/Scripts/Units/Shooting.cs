@@ -3,12 +3,6 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-/// <summary>
-/// Manages combat mechanics for units including enemy detection, targeting systems, ammunition management, and projectile firing.
-/// Features target acquisition with line-of-sight validation, visual targeting laser with animated lock-on sequence,
-/// automatic reloading cycles, and configurable bullet properties such as spread, damage, and backstab mechanics.
-/// Supports pause/resume functionality for tactical control and maintains bullet lifecycle management.
-/// </summary>
 public class Shooting : NetworkBehaviour
 {
     public UnitData unitData;
@@ -17,27 +11,24 @@ public class Shooting : NetworkBehaviour
 
     private TargetLaserVisual targetLaser;
 
-    // One replicated value written once per lock, rather than five written every frame. The beam's
-    // geometry follows both units' live transforms and its ramp is a pure function of elapsed
-    // server time, so each peer can animate the whole thing from the instant the lock began.
-    // A NetworkVariable rather than an RPC because object-scoped RPCs are dropped while a unit is
-    // NetworkHidden for fog, whereas a variable resyncs on NetworkShow.
     private readonly NetworkVariable<TargetLockState> targetLock = new();
 
     private List<GameObject> bullets = new();
     private int currentAmmo;
+    private int continuousShotsFired;
+    private float lastShotTime = float.NegativeInfinity;
+
+    private const float ShotEdgeWeight = 1f;
+    private const float ShotCenterWeight = 1f;
 
     [HideInInspector]
-    public bool allowShooting = true; // Controls whether the unit can start a new shooting cycle
+    public bool allowShooting = true;
 
     [HideInInspector]
     public bool stillShooting = true;
 
     private Coroutine shootingCoroutine;
 
-    // CONTROLLER
-    // All setup is in OnNetworkSpawn (not Start) so a fog NetworkShow re-runs it and the current
-    // lock state is applied to a freshly (re)created beam.
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
@@ -56,8 +47,7 @@ public class Shooting : NetworkBehaviour
         GameLoop.OrderAllowShooting += SetAllowShooting;
         GameLoop.OrderStillShooting += SetStillShooting;
         GameLoop.OrderContinueShooting += ContinueShooting;
-        // enemyTeam is resolved lazily (ResolveEnemyTeam): at spawn time GameLoop has not yet
-        // assigned this unit's team tag (tags are set right after NetworkHelper.Spawn returns).
+
     }
 
     public override void OnNetworkDespawn()
@@ -100,10 +90,6 @@ public class Shooting : NetworkBehaviour
         targetLaser.SetLock(newValue);
     }
 
-    /// <summary>
-    /// Publishes a lock once, when it is acquired. Re-locking the same target is a no-op so the
-    /// value stays clean of per-frame writes; a new target replaces it and restarts the ramp.
-    /// </summary>
     private void BeginTargetLock(GameObject target, float duration)
     {
         if (!IsServer)
@@ -137,10 +123,6 @@ public class Shooting : NetworkBehaviour
             targetLock.Value = default;
     }
 
-    /// <summary>
-    /// A target-lock laser must be dodgeable/readable: reveal this shooter to the victim's
-    /// client for the lock duration (plus a short grace) so the beam replicates and renders.
-    /// </summary>
     private void ForceRevealForTargetLock(GameObject target)
     {
         if (!IsServer || target == null || unitData.targetLockDuration <= 0f)
@@ -167,17 +149,19 @@ public class Shooting : NetworkBehaviour
         stillShooting = true;
     }
 
+    public bool holdFire;
+
     public void StartShooting()
     {
+        if (holdFire || GetComponent<Unit>()?.IsStunned == true)
+        {
+            StandDown();
+            return;
+        }
         PauseShooting();
         shootingCoroutine = StartCoroutine(InitiateShooting());
     }
 
-    /// <summary>
-    /// End this unit's turn without firing, releasing the round's wait on it. A dodger that is
-    /// still picking itself up when the round stops authorising new shooting cycles has missed the
-    /// fight; opening one here would empty a magazine into units already ordered to cease fire.
-    /// </summary>
     public void StandDown()
     {
         PauseShooting();
@@ -187,8 +171,14 @@ public class Shooting : NetworkBehaviour
 
     public void ContinueShooting()
     {
-        allowShooting = true; //reallow shooting
-        if (stillShooting == false) //restart shooting if not already shooting
+        if (holdFire || GetComponent<Unit>()?.IsStunned == true)
+        {
+            StandDown();
+            return;
+        }
+
+        allowShooting = true;
+        if (!stillShooting)
         {
             stillShooting = true;
             shootingCoroutine = StartCoroutine(InitiateShooting());
@@ -197,14 +187,24 @@ public class Shooting : NetworkBehaviour
 
     private IEnumerator RotateToFaceTarget(GameObject target)
     {
-        yield return StartCoroutine(
-            transform
-                .GetComponent<Movement>()
-                .RotateToFaceTarget(target.transform.position, unitData.rotationSpeed)
-        );
+        yield return GetComponent<Movement>()
+            .RotateToFaceTarget(GetHorizontalTargetPosition(target), unitData.rotationSpeed);
     }
 
-    // SHOOTING
+    private Vector3 GetHorizontalTargetPosition(GameObject target)
+    {
+        Vector3 targetPosition = target.transform.position;
+        targetPosition.y = transform.position.y;
+        return targetPosition;
+    }
+
+    private void FaceTargetHorizontally(GameObject target)
+    {
+        Vector3 direction = GetHorizontalTargetPosition(target) - transform.position;
+        if (direction.sqrMagnitude > Mathf.Epsilon)
+            transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+    }
+
     public IEnumerator InitiateShooting()
     {
         if (GetComponent<AnimationHandler>() != null)
@@ -215,21 +215,25 @@ public class Shooting : NetworkBehaviour
         currentAmmo = unitData.magazineSize;
 
         float remainingTargetLockTime = unitData.targetLockDuration;
-
         while (allowShooting)
         {
             GameObject target = FindNearestEnemy();
             if (target)
             {
-                yield return StartCoroutine(RotateToFaceTarget(target));
+                yield return RotateToFaceTarget(target);
                 ForceRevealForTargetLock(target);
             }
 
             remainingTargetLockTime = unitData.targetLockDuration;
 
+            SpreadZoneWeights shotZones = new(
+                ShotEdgeWeight,
+                ShotCenterWeight,
+                ShotEdgeWeight
+            );
+
             while (currentAmmo > 0)
             {
-                //Refind target
                 if (target == null || !lineOfSight(target))
                 {
                     ClearTargetLock();
@@ -237,7 +241,7 @@ public class Shooting : NetworkBehaviour
                     if (target)
                     {
                         remainingTargetLockTime = unitData.targetLockDuration;
-                        yield return StartCoroutine(RotateToFaceTarget(target));
+                        yield return RotateToFaceTarget(target);
                         ForceRevealForTargetLock(target);
                     }
                     if (!allowShooting)
@@ -247,12 +251,9 @@ public class Shooting : NetworkBehaviour
                     continue;
                 }
 
-                //Target lock
                 if (remainingTargetLockTime > 0f)
                 {
-                    transform.rotation = Quaternion.LookRotation(
-                        (target.transform.position - transform.position).normalized
-                    ); // Track target
+                    FaceTargetHorizontally(target);
 
                     BeginTargetLock(target, unitData.targetLockDuration);
 
@@ -263,17 +264,33 @@ public class Shooting : NetworkBehaviour
                 }
                 ClearTargetLock();
 
-                transform.rotation = Quaternion.LookRotation(
-                    (target.transform.position - transform.position).normalized
-                ); // Track target
-                FireBullet();
+                FaceTargetHorizontally(target);
 
-                yield return new WaitForSeconds(unitData.timeBetweenShots);
+                float shotTime = Time.time;
+                if (shotTime - lastShotTime >= unitData.fireRateRampResetDelay)
+                    continuousShotsFired = 0;
+
+                float shotDelay = ComputeRampedShotDelay(
+                    continuousShotsFired,
+                    unitData.fireRateRampShots,
+                    unitData.fireRateRampStartDelay,
+                    unitData.timeBetweenShots
+                );
+
+                FireBullet(
+                    transform.forward,
+                    unitData.bulletSpread,
+                    shotZones,
+                    consumeAmmo: true
+                );
+                continuousShotsFired++;
+                lastShotTime = shotTime;
+                yield return new WaitForSeconds(shotDelay);
             }
 
             if (allowShooting)
             {
-                yield return StartCoroutine(Reload());
+                yield return Reload();
             }
         }
 
@@ -282,114 +299,161 @@ public class Shooting : NetworkBehaviour
             GetComponent<AnimationHandler>().PlayAnimation("Idle");
         }
 
-        // Wait for all bullets to be destroyed
         while (GetActiveBulletCount() > 0)
         {
             yield return null;
         }
 
-        yield return new WaitForSeconds(0.1f); // Small delay to ensure player deaths are processed
+        yield return new WaitForSeconds(0.1f);
         stillShooting = false;
     }
 
-    public void FireBullet(
-        float spread = -1,
-        float bulletSpeed = -1,
-        float damage = -1,
-        float backstabMultiplier = -1,
-        float range = -1,
-        float backstabAngle = -1,
-        GameObject bulletPrefab = null
+    public static float ComputeRampedShotDelay(
+        int continuousShotsFired,
+        int rampShots,
+        float rampStartDelay,
+        float floorDelay
     )
     {
-        spread = spread == -1 ? unitData.bulletSpread : spread;
-        bulletSpeed = bulletSpeed == -1 ? unitData.bulletSpeed : bulletSpeed;
-        damage = damage == -1 ? unitData.damage : damage;
-        backstabMultiplier =
-            backstabMultiplier == -1 ? unitData.backstabMultiplier : backstabMultiplier;
-        range = range == -1 ? unitData.bulletRange : range;
-        backstabAngle = backstabAngle == -1 ? unitData.backstabAngle : backstabAngle;
-        bulletPrefab = bulletPrefab ?? ResolveBulletPrefab();
+        if (rampShots <= 0)
+            return floorDelay;
 
-        // Fire bullet with spread
-        Vector3 baseDirection = transform.forward;
-        float spreadAngle = Random.Range(-spread, spread);
-        Vector3 shootDirection = Quaternion.AngleAxis(spreadAngle, transform.up) * baseDirection;
+        float progress = Mathf.Clamp01((float)continuousShotsFired / rampShots);
+        return Mathf.Lerp(rampStartDelay, floorDelay, progress);
+    }
+
+    private static Vector3 ApplyZoneSpread(
+        Vector3 forward,
+        Vector3 up,
+        int zone,
+        float maxSpreadAngle
+    )
+    {
+        float spreadAngle = zone switch
+        {
+            0 => Random.Range(-maxSpreadAngle, -maxSpreadAngle * 0.33f),
+            1 => Random.Range(-maxSpreadAngle * 0.33f, maxSpreadAngle * 0.33f),
+            2 => Random.Range(maxSpreadAngle * 0.33f, maxSpreadAngle),
+            _ => 0f
+        };
+        return Quaternion.AngleAxis(spreadAngle, up) * forward;
+    }
+
+    public void FireBullet(
+        Vector3 baseDirection,
+        float spreadAngle,
+        SpreadZoneWeights spreadZones,
+        float range = -1,
+        bool? pierces = null,
+        bool ignoreAdjacentWalls = false,
+        bool consumeAmmo = false
+    )
+    {
+        if (baseDirection.sqrMagnitude <= Mathf.Epsilon)
+            return;
+
+        Vector3 direction =
+            spreadZones != null && spreadAngle > 0f
+                ? ApplyZoneSpread(
+                    baseDirection,
+                    transform.up,
+                    spreadZones.NextZone(),
+                    spreadAngle
+                )
+                : baseDirection;
+        direction.Normalize();
+
+        bool explodesOnImpact = unitData.bulletExplodesOnImpact;
+        float aoeRadius = unitData.bulletAoeRadius;
+        range = range == -1 ? unitData.bulletRange : range;
+        bool bulletPierces = pierces ?? unitData.bulletPierces;
 
         Vector3 origin = transform.position;
         bullets.Add(
             CreateBullet(
-                bulletPrefab,
                 origin,
-                shootDirection,
-                bulletSpeed,
-                damage,
-                backstabMultiplier,
+                direction,
                 range,
-                backstabAngle,
-                authoritative: true
+                explodesOnImpact,
+                aoeRadius,
+                bulletPierces,
+                authoritative: true,
+                ignoreAdjacentWalls: ignoreAdjacentWalls
             )
         );
 
-        // Clients need the tracer, not the arithmetic: damage is resolved on the authoritative copy
-        // above, and spread is already folded into the direction so every peer draws the same shot.
-        FireBulletClientRpc(origin, shootDirection, bulletSpeed);
-
-        currentAmmo--;
-
-        if (GetComponent<AnimationHandler>() != null)
-        {
-            GetComponent<AnimationHandler>().TriggerAnimation("Shoot");
-        }
-    }
-
-    /// <summary>
-    /// Draws the tracer on every other peer. Object-scoped, so a shot from a unit this client
-    /// cannot see stays invisible to it, which is what fog already implies but network-spawned
-    /// bullets never honoured.
-    /// </summary>
-    [ClientRpc]
-    private void FireBulletClientRpc(Vector3 origin, Vector3 direction, float bulletSpeed)
-    {
-        if (IsServer)
-            return; // the authoritative copy is already in flight
-
-        CreateBullet(
-            ResolveBulletPrefab(),
+        FireBulletClientRpc(
             origin,
             direction,
-            bulletSpeed,
-            unitData.damage,
-            unitData.backstabMultiplier,
-            unitData.bulletRange,
-            unitData.backstabAngle,
-            authoritative: false
+            range,
+            explodesOnImpact,
+            aoeRadius,
+            bulletPierces,
+            ignoreAdjacentWalls
+        );
+
+        if (consumeAmmo)
+            currentAmmo--;
+
+        GetComponent<AnimationHandler>()?.TriggerAnimation("Shoot");
+    }
+
+    [ClientRpc]
+    private void FireBulletClientRpc(
+        Vector3 origin,
+        Vector3 direction,
+        float range,
+        bool explodesOnImpact,
+        float aoeRadius,
+        bool pierces,
+        bool ignoreAdjacentWalls
+    )
+    {
+        if (IsServer)
+            return;
+
+        CreateBullet(
+            origin,
+            direction,
+            range,
+            explodesOnImpact,
+            aoeRadius,
+            pierces,
+            authoritative: false,
+            ignoreAdjacentWalls: ignoreAdjacentWalls
         );
     }
 
     private GameObject CreateBullet(
-        GameObject bulletPrefab,
         Vector3 origin,
         Vector3 direction,
-        float bulletSpeed,
-        float damage,
-        float backstabMultiplier,
         float range,
-        float backstabAngle,
-        bool authoritative
+        bool explodesOnImpact,
+        float aoeRadius,
+        bool pierces,
+        bool authoritative,
+        bool ignoreAdjacentWalls
     )
     {
-        GameObject bullet = Instantiate(bulletPrefab, origin, Quaternion.LookRotation(direction));
+        GameObject bullet = Instantiate(
+            ResolveBulletPrefab(),
+            origin,
+            Quaternion.LookRotation(direction)
+        );
         bullet
             .GetComponent<Bullet>()
             .Initialize(
-                direction * bulletSpeed * GameLoop.cellSize,
-                damage,
-                backstabMultiplier,
+                direction * unitData.bulletSpeed * GameLoop.cellSize,
+                unitData.damage,
+                unitData.backstabMultiplier,
                 range * GameLoop.cellSize,
-                backstabAngle,
+                unitData.backstabAngle,
                 ResolveEnemyTeam(),
-                authoritative
+                authoritative,
+                explodesOnImpact,
+                aoeRadius * GameLoop.cellSize,
+                pierces,
+                ignoreAdjacentWalls
             );
         return bullet;
     }
@@ -464,8 +528,6 @@ public class Shooting : NetworkBehaviour
 
     private string ResolveEnemyTeam()
     {
-        // The team tag is assigned by GameLoop right after spawn, which is later than
-        // OnNetworkSpawn — so resolve on first use instead of at spawn.
         if (string.IsNullOrEmpty(enemyTeam))
         {
             int ownTeamIndex = GetComponent<Unit>()?.TeamIndex ?? -1;
@@ -484,7 +546,6 @@ public class Shooting : NetworkBehaviour
             if (string.IsNullOrEmpty(ResolveEnemyTeam()))
                 return null;
 
-            // Server: use tags or any authoritative lookup
             GameObject[] enemies = GameObject.FindGameObjectsWithTag(enemyTeam);
             foreach (GameObject enemy in enemies)
             {
@@ -498,7 +559,6 @@ public class Shooting : NetworkBehaviour
             return nearestEnemy;
         }
 
-        // Client: use ownership-based discovery to avoid tag usage
         if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
         {
             return null;
@@ -553,7 +613,6 @@ public class Shooting : NetworkBehaviour
             return false;
         }
 
-        // Check for clear line of sight within range
         Vector3 directionToEnemy = (enemy.transform.position - transform.position).normalized;
         bool hitSomething = TryProjectileCast(
             transform.position,
@@ -576,12 +635,56 @@ public class Shooting : NetworkBehaviour
     }
 }
 
-/// <summary>
-/// A lock-on as replicated: who is being locked, when the lock started on the server clock, and how
-/// long it runs. The beam's endpoints come from the two units' live transforms and its ramp is a
-/// pure function of elapsed time, so none of that needs replicating and this is written once per
-/// lock rather than every frame.
-/// </summary>
+public sealed class SpreadZoneWeights
+{
+    private const float BalanceStrength = 1f;
+
+    private readonly float[] targetShare = new float[3];
+    private readonly float[] credit = new float[3];
+    private readonly float[] roll = new float[3];
+
+    public SpreadZoneWeights(float left, float center, float right)
+    {
+        float sum = left + center + right;
+        if (sum <= 0f)
+            left = center = right = sum = 1f;
+
+        targetShare[0] = left / sum;
+        targetShare[1] = center / sum;
+        targetShare[2] = right / sum;
+    }
+
+    public int NextZone()
+    {
+        float total = 0f;
+        for (int i = 0; i < 3; i++)
+        {
+            credit[i] += targetShare[i];
+            roll[i] = targetShare[i] * Mathf.Exp(BalanceStrength * credit[i]);
+            total += roll[i];
+        }
+
+        int zone = 2;
+        if (total > 0f)
+        {
+            float pick = Random.value * total;
+            float cumulative = 0f;
+            for (int i = 0; i < 3; i++)
+            {
+                cumulative += roll[i];
+                if (pick < cumulative)
+                {
+                    zone = i;
+                    break;
+                }
+            }
+        }
+
+        credit[zone] -= 1f;
+        return zone;
+    }
+}
+
 public struct TargetLockState : INetworkSerializable, System.IEquatable<TargetLockState>
 {
     public bool Active;
@@ -597,7 +700,6 @@ public struct TargetLockState : INetworkSerializable, System.IEquatable<TargetLo
         Duration = Mathf.Max(0.0001f, duration);
     }
 
-    /// <summary>Ramp position, 0 at acquisition through 1 when the shot is released.</summary>
     public float ProgressAt(double serverTime)
     {
         return Mathf.Clamp01((float)((serverTime - StartServerTime) / Duration));
@@ -631,11 +733,6 @@ public struct TargetLockState : INetworkSerializable, System.IEquatable<TargetLo
     }
 }
 
-/// <summary>
-/// Local-only lock-on beam. Every peer animates it from the replicated <see cref="TargetLockState"/>
-/// and the live transforms of the two units, which is why the lock itself costs a single replicated
-/// write instead of a per-frame stream of endpoints, widths and colours.
-/// </summary>
 [RequireComponent(typeof(LineRenderer))]
 public sealed class TargetLaserVisual : MonoBehaviour
 {
@@ -654,8 +751,6 @@ public sealed class TargetLaserVisual : MonoBehaviour
         beam.positionCount = 2;
         beam.enabled = false;
 
-        // Energy-beam look: white HDR core, glow tinted by the white->red lock-on ramp riding the
-        // LineRenderer vertex colors.
         Shader beamShader = Shader.Find("BattlePlan/EnergyBeam");
         if (beamShader != null)
         {
@@ -684,8 +779,6 @@ public sealed class TargetLaserVisual : MonoBehaviour
         NetworkManager manager = NetworkManager.Singleton;
         if (manager == null || (target == null && !TryResolveTarget(manager)))
         {
-            // A target this peer cannot see yet leaves the beam dark rather than drawing to a
-            // position fog has not disclosed.
             beam.enabled = false;
             return;
         }

@@ -11,6 +11,7 @@ using UnityEngine.UIElements;
 public class CharacterSelectionUIController : NetworkBehaviour
 {
     private const int UnitsPerPlayer = RosterRules.UnitsPerPlayer;
+    private const float RosterWheelStep = 60f;
     private static readonly int[] BotRoster = GameLoop.DefaultBotRoster;
 
     [SerializeField]
@@ -28,13 +29,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private readonly int[] selectedUnits = CreateEmptyRoster();
     private readonly List<UnitOptionView> optionViews = new();
     private readonly List<SelectedSlotView> slotViews = new();
+    private readonly List<ClassFilterView> filterViews = new();
 
     private UIDocument document;
     private VisualElement root;
     private ScrollView rosterOptions;
+    private VisualElement classFilters;
     private VisualElement selectedRoster;
-    private Label rosterInstruction;
-    private Label rosterCountLabel;
     private Button confirmButton;
     private Label selectionStatus;
     private Label modeSummary;
@@ -44,12 +45,25 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private Label mapCaption;
     private Texture2D previewTexture;
     private MapDefinition shownMap;
+    private GameMode shownGameMode;
+    private bool escortMode;
     private bool localSelectionSubmitted;
     private bool sceneLoadRequested;
     private bool uiCallbacksRegistered;
     private bool networkCallbacksRegistered;
     private bool disconnectRecoveryStarted;
+    private VisualElement deployCurtain;
+    private Coroutine deployCurtainCoroutine;
+
+    /// <summary>
+    /// How long the curtain takes to cover this screen, and how long the server holds off the load
+    /// after asking for it. The hold is the longer of the two so a client a little way down the
+    /// wire still finishes fading before the scene is pulled out from under it.
+    /// </summary>
+    private const float DeployCurtainSeconds = 0.18f;
+    private const float DeployCurtainHoldSeconds = 0.34f;
     private string localStatusOverride;
+    private UnitClass? activeClassFilter;
 
     private static int[] CreateEmptyRoster()
     {
@@ -71,8 +85,11 @@ public class CharacterSelectionUIController : NetworkBehaviour
         CacheElements();
         RegisterUiCallbacks();
         BuildRosterOptions();
+        BuildClassFilters();
+        ApplyClassFilter(null);
         BuildSelectedSlots();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document);
         UpdateSummary(IsSpawned ? replicatedOptions.Value : MatchOptions.Current);
         UpdateSelectionState();
         root.schedule.Execute(FocusFirstEnabledRosterOption);
@@ -81,6 +98,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private void OnDisable()
     {
         UnregisterUiCallbacks();
+        MobileDisplay.ForgetScreen(document);
         DisposeGeneratedViews();
         ReleasePreviewTexture();
         shownMap = null;
@@ -129,9 +147,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private void CacheElements()
     {
         rosterOptions = RequireElement<ScrollView>("roster-options");
+        classFilters = RequireElement<VisualElement>("class-filters");
         selectedRoster = RequireElement<VisualElement>("selected-roster");
-        rosterInstruction = RequireElement<Label>("roster-instruction");
-        rosterCountLabel = RequireElement<Label>("roster-count-label");
         confirmButton = RequireElement<Button>("confirm-selection-button");
         selectionStatus = RequireElement<Label>("selection-status");
         modeSummary = RequireElement<Label>("mode-summary");
@@ -139,13 +156,11 @@ public class CharacterSelectionUIController : NetworkBehaviour
         fogSummary = RequireElement<Label>("fog-summary");
         mapPreview = RequireElement<VisualElement>("map-preview");
         mapCaption = RequireElement<Label>("map-caption");
-        if (rosterInstruction != null)
-        {
-            rosterInstruction.text =
-                $"Pick {UnitsPerPlayer}. Repeats are allowed. Select a filled slot to remove it.";
-        }
-        if (rosterCountLabel != null)
-            rosterCountLabel.text = $"Pick {UnitsPerPlayer} units";
+        deployCurtain = RequireElement<VisualElement>("deploy-curtain");
+        // A screen that came back — a rejected crew, a dropped seat — must not still be behind the
+        // curtain the last attempt raised.
+        if (deployCurtain != null)
+            deployCurtain.style.opacity = 0f;
     }
 
     private T RequireElement<T>(string elementName)
@@ -168,6 +183,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         if (confirmButton != null)
             confirmButton.clicked += ConfirmSelection;
+        if (rosterOptions != null)
+        {
+            rosterOptions.RegisterCallback<WheelEvent>(
+                OnRosterOptionsWheel,
+                TrickleDown.TrickleDown
+            );
+        }
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         uiCallbacksRegistered = true;
     }
@@ -179,6 +201,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         if (confirmButton != null)
             confirmButton.clicked -= ConfirmSelection;
+        if (rosterOptions != null)
+        {
+            rosterOptions.UnregisterCallback<WheelEvent>(
+                OnRosterOptionsWheel,
+                TrickleDown.TrickleDown
+            );
+        }
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         uiCallbacksRegistered = false;
     }
@@ -225,6 +254,8 @@ public class CharacterSelectionUIController : NetworkBehaviour
         for (int i = 0; i < allUnits.units.Count; i++)
         {
             int unitIndex = i;
+            if (!RosterRules.IsUnitEligible(allUnits.units, unitIndex))
+                continue;
             UnitData data = allUnits.units[i];
             UnitOptionView view = CreateUnitOptionView(data, i);
             view.ClickAction = () => SelectUnit(unitIndex);
@@ -260,8 +291,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         VisualElement portrait = button.Q<VisualElement>("unit-option-portrait");
         Label unitName = button.Q<Label>("unit-option-name");
-        Label description = button.Q<Label>("unit-option-description");
-        Label ability = button.Q<Label>("unit-option-ability");
         Label optionStatus = button.Q<Label>("unit-option-status");
         if (optionStatus == null)
         {
@@ -270,20 +299,14 @@ public class CharacterSelectionUIController : NetworkBehaviour
             button.Add(optionStatus);
         }
 
+        viewRoot.AddToClassList("unit-cell");
         button.name = $"unit-option-{index}";
         button.tooltip = data != null ? $"Add {data.unitName} to the crew" : "Add unit";
         if (unitName != null)
             unitName.text = data != null ? data.unitName : "Unknown unit";
-        if (description != null)
-            description.text = data != null ? data.unitDescription : "Unit data unavailable.";
-        if (ability != null)
-            ability.text =
-                data != null && !string.IsNullOrWhiteSpace(data.abilityName)
-                    ? data.abilityName
-                    : "Move only";
         SetBackgroundImage(portrait, data != null ? data.unitSprite : null);
 
-        return new UnitOptionView(viewRoot, button, data, optionStatus);
+        return new UnitOptionView(viewRoot, button, data, optionStatus, index);
     }
 
     private static Button BuildFallbackUnitOption()
@@ -301,24 +324,82 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         Label unitName = new("Unit") { name = "unit-option-name" };
         unitName.AddToClassList("unit-option__name");
-        Label description = new() { name = "unit-option-description" };
-        description.AddToClassList("unit-option__description");
-
-        VisualElement abilityRow = new();
-        abilityRow.AddToClassList("unit-option__ability-row");
-        VisualElement abilityMark = new();
-        abilityMark.AddToClassList("unit-option__ability-mark");
-        Label ability = new("Ability") { name = "unit-option-ability" };
-        ability.AddToClassList("unit-option__ability");
-        abilityRow.Add(abilityMark);
-        abilityRow.Add(ability);
 
         copy.Add(unitName);
-        copy.Add(description);
-        copy.Add(abilityRow);
         button.Add(portrait);
         button.Add(copy);
         return button;
+    }
+
+    private void OnRosterOptionsWheel(WheelEvent evt)
+    {
+        float span = rosterOptions.verticalScroller.highValue;
+        if (span <= 0f || Mathf.Approximately(evt.delta.y, 0f))
+            return;
+
+        Vector2 offset = rosterOptions.scrollOffset;
+        float scrolled = Mathf.Clamp(offset.y + evt.delta.y * RosterWheelStep, 0f, span);
+        if (Mathf.Approximately(scrolled, offset.y))
+            return;
+
+        rosterOptions.scrollOffset = new Vector2(offset.x, scrolled);
+        evt.StopPropagation();
+    }
+
+    private void BuildClassFilters()
+    {
+        foreach (ClassFilterView view in filterViews)
+            view.Dispose();
+        filterViews.Clear();
+        classFilters?.Clear();
+
+        if (classFilters == null || optionViews.Count == 0)
+            return;
+
+        AddClassFilter(null, "All");
+        foreach (UnitClass unitClass in (UnitClass[])Enum.GetValues(typeof(UnitClass)))
+        {
+            if (optionViews.Exists(view => Matches(view, unitClass)))
+                AddClassFilter(unitClass, unitClass.ToString());
+        }
+    }
+
+    private void AddClassFilter(UnitClass? unitClass, string label)
+    {
+        Button button = new()
+        {
+            text = label,
+            name = unitClass == null ? "class-filter-all" : $"class-filter-{unitClass.Value}",
+            tooltip = unitClass == null ? "Show every unit" : $"Show only {label} units",
+        };
+        button.AddToClassList("button");
+        button.AddToClassList("class-chip");
+
+        ClassFilterView view = new(button, unitClass);
+        view.ClickAction = () => ApplyClassFilter(unitClass);
+        button.clicked += view.ClickAction;
+
+        filterViews.Add(view);
+        classFilters.Add(button);
+    }
+
+    private void ApplyClassFilter(UnitClass? unitClass)
+    {
+        activeClassFilter = unitClass;
+
+        foreach (ClassFilterView view in filterViews)
+            view.SetActive(view.UnitClass == activeClassFilter);
+
+        foreach (UnitOptionView view in optionViews)
+            view.SetVisible(activeClassFilter == null || Matches(view, activeClassFilter.Value));
+
+        if (rosterOptions != null)
+            rosterOptions.scrollOffset = new Vector2(rosterOptions.scrollOffset.x, 0f);
+    }
+
+    private static bool Matches(UnitOptionView view, UnitClass unitClass)
+    {
+        return view.Data != null && view.Data.unitClass == unitClass;
     }
 
     private void BuildSelectedSlots()
@@ -410,8 +491,11 @@ public class CharacterSelectionUIController : NetworkBehaviour
             view.Dispose();
         foreach (SelectedSlotView view in slotViews)
             view.Dispose();
+        foreach (ClassFilterView view in filterViews)
+            view.Dispose();
         optionViews.Clear();
         slotViews.Clear();
+        filterViews.Clear();
     }
 
     private void SelectUnit(int unitIndex)
@@ -470,7 +554,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
     private void FocusFirstEnabledRosterOption()
     {
-        optionViews.FirstOrDefault(view => view.CanReceiveFocus)?.Button?.Focus();
+        optionViews.FirstOrDefault(view => view.CanReceiveFocus && view.Visible)?.Button?.Focus();
     }
 
     private void UpdateSelectionState()
@@ -482,15 +566,11 @@ public class CharacterSelectionUIController : NetworkBehaviour
         bool selectionValid = selectionComplete && validation.IsValid;
         bool canEdit = !localSelectionSubmitted && !sceneLoadRequested;
 
-        for (int unitIndex = 0; unitIndex < optionViews.Count; unitIndex++)
+        foreach (UnitOptionView view in optionViews)
         {
-            int pickedCount = selectedUnits.Count(index => index == unitIndex);
-            bool eligible = RosterRules.IsUnitEligible(allUnits?.units, unitIndex);
-            optionViews[unitIndex].Configure(
-                pickedCount,
-                eligible,
-                canEdit && !selectionComplete && eligible
-            );
+            int pickedCount = selectedUnits.Count(index => index == view.UnitIndex);
+            bool eligible = RosterRules.IsUnitEligible(allUnits?.units, view.UnitIndex);
+            view.Configure(pickedCount, eligible, canEdit && !selectionComplete && eligible);
         }
 
         for (int i = 0; i < slotViews.Count && i < selectedUnits.Length; i++)
@@ -499,7 +579,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
             bool filled =
                 allUnits?.units != null && unitIndex >= 0 && unitIndex < allUnits.units.Count;
             UnitData data = filled ? allUnits.units[unitIndex] : null;
-            slotViews[i].Configure(data, filled, canEdit);
+            slotViews[i]
+                .Configure(
+                    data,
+                    filled,
+                    canEdit,
+                    escortMode && i == EscortSeries.PresidentRosterSlot
+                );
         }
 
         if (confirmButton != null)
@@ -643,9 +729,66 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
         sceneLoadRequested = true;
         GameLoop.ResetMatchState();
+        // A finished escort series stays on the statics so the scene load between its legs can
+        // carry the score across. This is the other kind of scene load — a new match — so the
+        // series is closed here and the next one opens on leg 1 with a fresh coin.
+        EscortSeries.End();
         GameLoop.ConfigureTeam(GameLoop.HostTeamIndex, hostId, hostRoster);
         GameLoop.ConfigureTeam(GameLoop.OpponentTeamIndex, opponentId, opponentRoster);
+
+        // Both screens are taken down before the scene is, rather than the load cutting straight
+        // from a bright crew screen to the match's near-black deploy card.
+        ShowDeployCurtainClientRpc();
+        StartCoroutine(LoadGameBehindCurtain());
+    }
+
+    /// <summary>
+    /// Waits for the curtain to have covered every seat, then hands over. Aborts if the match fell
+    /// apart while it was waiting — a seat dropping during the hold puts this screen into its own
+    /// recovery, and loading the board on top of that would strand it there.
+    /// </summary>
+    private IEnumerator LoadGameBehindCurtain()
+    {
+        yield return new WaitForSecondsRealtime(DeployCurtainHoldSeconds);
+
+        if (disconnectRecoveryStarted || NetworkManager == null || !IsServer || !IsSpawned)
+            yield break;
+
         NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+    }
+
+    [ClientRpc]
+    private void ShowDeployCurtainClientRpc(ClientRpcParams clientRpcParams = default)
+    {
+        if (deployCurtain == null)
+            return;
+
+        if (deployCurtainCoroutine != null)
+            StopCoroutine(deployCurtainCoroutine);
+        deployCurtain.BringToFront();
+        deployCurtainCoroutine = StartCoroutine(RaiseDeployCurtain());
+    }
+
+    /// <summary>
+    /// Real seconds, and read rather than accumulated: the server is holding the load open against
+    /// a wall clock, so this has to finish on the same one.
+    /// </summary>
+    private IEnumerator RaiseDeployCurtain()
+    {
+        float startedAt = Time.realtimeSinceStartup;
+        for (
+            float elapsed = 0f;
+            elapsed < DeployCurtainSeconds;
+            elapsed = Time.realtimeSinceStartup - startedAt
+        )
+        {
+            float progress = Mathf.Clamp01(elapsed / DeployCurtainSeconds);
+            deployCurtain.style.opacity = 1f - (1f - progress) * (1f - progress) * (1f - progress);
+            yield return null;
+        }
+
+        deployCurtain.style.opacity = 1f;
+        deployCurtainCoroutine = null;
     }
 
     private bool RevalidateStoredSelection(ulong clientId, int[] roster)
@@ -735,33 +878,38 @@ public class CharacterSelectionUIController : NetworkBehaviour
     private void UpdateSummary(MatchOptions options)
     {
         options = options.Sanitized();
+        escortMode = options.IsEscort;
         if (modeSummary != null)
             modeSummary.text = options.GameModeDisplayName;
         if (opponentSummary != null)
             opponentSummary.text = options.IsBotMatch ? "AI" : "Player";
         if (fogSummary != null)
             fogSummary.text = options.fogOfWar ? "Fog on" : "Fog off";
-        UpdateMapPanel(options.Map);
+        UpdateMapPanel(options.Map, options.gameMode);
     }
 
     /// <summary>
-    /// Draws the board the lobby actually chose. The UXML carries a baked thumbnail so the screen
-    /// is never blank while this runs, but leaving it in place would show Concourse's cover on
-    /// every map.
+    /// Draws the board the lobby actually chose, set up the way the chosen mode will set it up.
+    /// The UXML carries a baked thumbnail so the screen is never blank while this runs, but
+    /// leaving it in place would show Concourse's cover on every map.
+    ///
+    /// The mode is part of the cache key because it changes the picture: Escort deploys one crew
+    /// forward of its back rank, and only King of the Hill paints the pad.
     /// </summary>
-    private void UpdateMapPanel(MapDefinition map)
+    private void UpdateMapPanel(MapDefinition map, GameMode gameMode)
     {
         if (mapCaption != null)
             mapCaption.text = $"{map.DisplayName} · {GridSystem.ColumnCount} × {GridSystem.RowCount}";
 
-        if (mapPreview == null || map == shownMap)
+        if (mapPreview == null || (map == shownMap && gameMode == shownGameMode))
             return;
 
-        Texture2D next = MapPreviewImage.CreateTexture(map);
+        Texture2D next = MapPreviewImage.CreateTexture(map, gameMode);
         mapPreview.style.backgroundImage = new StyleBackground(next);
         ReleasePreviewTexture();
         previewTexture = next;
         shownMap = map;
+        shownGameMode = gameMode;
     }
 
     private void ReleasePreviewTexture()
@@ -838,23 +986,33 @@ public class CharacterSelectionUIController : NetworkBehaviour
     {
         public VisualElement Root { get; }
         public Button Button { get; }
+        public UnitData Data { get; }
+        public int UnitIndex { get; }
         public bool CanReceiveFocus { get; private set; }
+        public bool Visible { get; private set; } = true;
         public Action ClickAction { get; set; }
 
-        private readonly UnitData data;
         private readonly Label optionStatus;
 
         public UnitOptionView(
             VisualElement root,
             Button button,
             UnitData data,
-            Label optionStatus
+            Label optionStatus,
+            int unitIndex
         )
         {
             Root = root;
             Button = button;
-            this.data = data;
+            Data = data;
             this.optionStatus = optionStatus;
+            UnitIndex = unitIndex;
+        }
+
+        public void SetVisible(bool visible)
+        {
+            Visible = visible;
+            Root.EnableInClassList("hidden", !visible);
         }
 
         public void Configure(int pickedCount, bool eligible, bool canChoose)
@@ -869,14 +1027,13 @@ public class CharacterSelectionUIController : NetworkBehaviour
 
             if (optionStatus != null)
             {
-                optionStatus.text = !eligible
-                    ? "Unavailable"
-                    : (pickedCount > 1 ? $"Selected \u00d7{pickedCount}" : (selected ? "Selected" : string.Empty));
-                optionStatus.EnableInClassList("hidden", eligible && !selected);
+                // Stack count only: one copy is already announced by the tile inverting.
+                optionStatus.text = !eligible ? "Unavailable" : $"\u00d7{pickedCount}";
+                optionStatus.EnableInClassList("hidden", eligible && pickedCount < 2);
             }
 
             string unitName =
-                data != null && !string.IsNullOrWhiteSpace(data.unitName) ? data.unitName : "unit";
+                Data != null && !string.IsNullOrWhiteSpace(Data.unitName) ? Data.unitName : "unit";
             Button.tooltip = !eligible
                 ? $"{unitName} is unavailable for deployment"
                 : (
@@ -919,24 +1076,53 @@ public class CharacterSelectionUIController : NetworkBehaviour
             this.detail = detail;
         }
 
-        public void Configure(UnitData data, bool filled, bool canEdit)
+        public void Configure(UnitData data, bool filled, bool canEdit, bool isPresidentSlot)
         {
             Button.EnableInClassList("selected-slot--filled", filled);
+            Button.EnableInClassList("selected-slot--president", isPresidentSlot);
             Button.SetEnabled(filled && canEdit);
-            Button.tooltip =
-                filled && data != null
-                    ? $"Remove {data.unitName} from the crew"
-                    : "Open crew slot";
+            Button.tooltip = isPresidentSlot
+                ? "The president takes this slot in the legs your crew escorts"
+                : (
+                    filled && data != null
+                        ? $"Remove {data.unitName} from the crew"
+                        : "Open crew slot"
+                );
             if (unitName != null)
                 unitName.text = filled && data != null ? data.unitName : "Open slot";
             if (detail != null)
             {
-                detail.text =
-                    filled && data != null && !string.IsNullOrWhiteSpace(data.abilityName)
+                detail.text = isPresidentSlot ? "President stands in here"
+                    : filled && data != null && !string.IsNullOrWhiteSpace(data.abilityName)
                         ? data.abilityName
-                        : "Choose a unit";
+                    : "Choose a unit";
             }
             SetBackgroundImage(portrait, filled && data != null ? data.unitSprite : null);
+        }
+
+        public void Dispose()
+        {
+            if (Button != null && ClickAction != null)
+                Button.clicked -= ClickAction;
+            ClickAction = null;
+        }
+    }
+
+    private sealed class ClassFilterView : IDisposable
+    {
+        public Button Button { get; }
+        public UnitClass? UnitClass { get; }
+        public Action ClickAction { get; set; }
+
+        public ClassFilterView(Button button, UnitClass? unitClass)
+        {
+            Button = button;
+            UnitClass = unitClass;
+        }
+
+        public void SetActive(bool active)
+        {
+            Button.EnableInClassList("button--selected", active);
         }
 
         public void Dispose()

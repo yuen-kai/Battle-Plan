@@ -30,6 +30,13 @@ public sealed class UnitCardElement : IDisposable
     private bool isAbilityMode;
     private bool disposed;
 
+    // Set on an enemy card the sandbox has handed to the designer. The card keeps its enemy
+    // styling and health readout — it is still the other crew — but answers a press and shows a
+    // planning state, because in the sandbox that strip is a second dock rather than a readout.
+    private bool sandboxCommandable;
+    private Action sandboxSlotAction;
+    private bool sandboxPortraitBound;
+
     public VisualElement Root => container;
     public bool IsEnemyConfigured => enemyCard && enemyConfigured;
     public bool IsEnemyAlive => IsEnemyConfigured && enemyAlive;
@@ -186,7 +193,7 @@ public sealed class UnitCardElement : IDisposable
 
     public void SetInteractable(bool interactable)
     {
-        if (enemyCard)
+        if (enemyCard && !sandboxCommandable)
         {
             interactionRequested = false;
             selectButton?.SetEnabled(false);
@@ -224,7 +231,7 @@ public sealed class UnitCardElement : IDisposable
 
     public void SetPlanningState(bool selected, bool abilityMode)
     {
-        if (enemyCard)
+        if (enemyCard && !sandboxCommandable)
         {
             cardRoot.RemoveFromClassList("unit-card--selected");
             cardRoot.RemoveFromClassList("unit-card--ability");
@@ -238,7 +245,7 @@ public sealed class UnitCardElement : IDisposable
 
     public void Focus()
     {
-        if (!enemyCard)
+        if (!enemyCard || sandboxCommandable)
             selectButton?.Focus();
     }
 
@@ -297,7 +304,7 @@ public sealed class UnitCardElement : IDisposable
 
         if (stateLabel != null)
             stateLabel.text = !enemyConfigured ? "LINKING" : (enemyAlive ? "ACTIVE" : "ELIMINATED");
-        if (selectButton != null)
+        if (selectButton != null && !sandboxCommandable)
         {
             selectButton.tooltip =
                 enemyConfigured && !enemyAlive
@@ -326,7 +333,10 @@ public sealed class UnitCardElement : IDisposable
         bool coolingDown = hasAbility && abilityCooldownRoundsRemaining > 0;
         if (flipIndicator != null)
         {
-            flipIndicator.EnableInClassList("hidden", enemyCard || !hasAbility);
+            flipIndicator.EnableInClassList(
+                "hidden",
+                (enemyCard && !sandboxCommandable) || !hasAbility
+            );
             flipIndicator.EnableInClassList(
                 "unit-card__flip-indicator--cooldown",
                 coolingDown
@@ -349,7 +359,7 @@ public sealed class UnitCardElement : IDisposable
 
     private void ApplyPlanningVisualState()
     {
-        if (enemyCard)
+        if (enemyCard && !sandboxCommandable)
             return;
 
         cardRoot.EnableInClassList("unit-card--selected", isSelected);
@@ -359,7 +369,7 @@ public sealed class UnitCardElement : IDisposable
 
     private void UpdateSelectTooltip()
     {
-        if (enemyCard || selectButton == null)
+        if ((enemyCard && !sandboxCommandable) || selectButton == null)
             return;
 
         if (!hasAbility)
@@ -384,6 +394,58 @@ public sealed class UnitCardElement : IDisposable
             : $"Order {configuredAbilityName} instead of moving.";
     }
 
+    /// <summary>
+    /// Hands an enemy card to the sandbox designer: it starts answering presses and showing which
+    /// order it holds, exactly as a card on their own dock does.
+    /// </summary>
+    public void EnableSandboxCommand(Action onActivate)
+    {
+        if (!enemyCard || sandboxCommandable)
+            return;
+
+        sandboxCommandable = true;
+        activateAction = onActivate;
+        if (selectButton != null)
+        {
+            selectButton.focusable = true;
+            selectButton.pickingMode = PickingMode.Position;
+            selectButton.clicked += OnSelectClicked;
+        }
+        RefreshAbilityState();
+    }
+
+    /// <summary>
+    /// Makes the card's portrait the way into the sandbox's crew composing: press the character to
+    /// change it or take it off the board. Pass null to take the affordance away.
+    /// <para>
+    /// The portrait is the natural handle — it is the character, and it is what a designer points at
+    /// when they mean "this one" — but it lives inside the card's own press, which orders the
+    /// ability. So the press is claimed here and stopped before it reaches the button: composing the
+    /// crew and ordering its round never share a click.
+    /// </para>
+    /// </summary>
+    public void SetSandboxSlotAction(Action onOpen)
+    {
+        sandboxSlotAction = onOpen;
+        if (portrait == null)
+            return;
+
+        bool editable = onOpen != null;
+        portrait.EnableInClassList("unit-card__portrait--editable", editable);
+        portrait.pickingMode = editable ? PickingMode.Position : PickingMode.Ignore;
+        portrait.tooltip = editable ? "Change or remove this unit" : string.Empty;
+        if (sandboxPortraitBound || !editable)
+            return;
+
+        sandboxPortraitBound = true;
+        portrait.RegisterCallback<PointerDownEvent>(evt => evt.StopPropagation());
+        portrait.RegisterCallback<PointerUpEvent>(evt =>
+        {
+            evt.StopPropagation();
+            sandboxSlotAction?.Invoke();
+        });
+    }
+
     public void Dispose()
     {
         if (disposed)
@@ -393,6 +455,7 @@ public sealed class UnitCardElement : IDisposable
         if (selectButton != null)
             selectButton.clicked -= OnSelectClicked;
         activateAction = null;
+        sandboxSlotAction = null;
     }
 
     private static void SetBackgroundImage(VisualElement element, Sprite sprite)

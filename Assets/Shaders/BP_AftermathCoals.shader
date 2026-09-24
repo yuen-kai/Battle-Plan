@@ -37,6 +37,11 @@ Shader "BattlePlan/AftermathCoals"
         _GlintHeat ("Glint Heat Gate", Range(0.5, 1)) = 0.72
         _Warp ("Domain Warp", Range(0, 0.6)) = 0.32
         _Seed ("Seed", Float) = 0
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -80,7 +85,14 @@ Shader "BattlePlan/AftermathCoals"
                 half _GlintHeat;
                 half _Warp;
                 float _Seed;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -92,6 +104,7 @@ Shader "BattlePlan/AftermathCoals"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             float CoalHash1(float n)
@@ -128,6 +141,7 @@ Shader "BattlePlan/AftermathCoals"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -152,7 +166,8 @@ Shader "BattlePlan/AftermathCoals"
                     _Threshold + radial * radial * _ThresholdSlope + (1.0 - burn) * _Cooling;
                 float excess = heat - threshold;
 
-                float coverage = saturate(excess / max(_Feather, 1e-3)) * saturate(burn * 3.0);
+                float coverage = saturate(excess / max(_Feather, 1e-3)) * saturate(burn * 3.0)
+                    * BlastShadow(IN.positionWS);
                 clip(coverage - 0.02);
 
                 float warmth = saturate(excess / max(_HeatSpan, 1e-3)) * burn;

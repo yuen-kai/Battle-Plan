@@ -538,6 +538,7 @@ public static class Aftermath
         }
 
         readonly List<Material> ownedMaterials = new();
+        BlastShadow shadow;
 
         Transform cameraTransform;
         Profile profile;
@@ -564,6 +565,7 @@ public static class Aftermath
         {
             radius = impactRadius;
             profile = ProfileFor(kind);
+            shadow = BlastShadow.Collect(transform.position, impactRadius);
 
             Camera boardCamera = GameLoop.Instance != null ? GameLoop.Instance.TeamCamera : null;
             if (boardCamera == null)
@@ -1289,6 +1291,9 @@ public static class Aftermath
             filter.sharedMesh = mesh;
 
             material = new Material(shader);
+            // The burn, the coals and the plume all sit on ground the blast had to reach, and all
+            // of them are drawn over the top of a raised slab unless told where it stands.
+            shadow.Apply(material);
             ownedMaterials.Add(material);
 
             MeshRenderer renderer = quad.AddComponent<MeshRenderer>();

@@ -22,6 +22,11 @@ Shader "BattlePlan/DebrisBed"
         _Edge ("Edge", Range(1, 40)) = 12
         _Cool ("Cool", Float) = 0
         _Bite ("Ash Bite", Range(0, 0.5)) = 0.26
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -64,7 +69,14 @@ Shader "BattlePlan/DebrisBed"
                 float _Edge;
                 float _Cool;
                 float _Bite;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -76,12 +88,14 @@ Shader "BattlePlan/DebrisBed"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 return OUT;
             }
@@ -104,6 +118,7 @@ Shader "BattlePlan/DebrisBed"
                 // changing across its whole area for half a second after the flame has gone.
                 float arrive = saturate((_Lay - mark.b * 0.5) * 6.0);
                 float cover = saturate(_Cover * arrive * body * (1.0 - 0.72 * cooled));
+                cover *= BlastShadow(IN.positionWS);
                 clip(cover - 0.004);
 
                 float3 bed = lerp(_BedTone.xyz, _BedSeam.xyz, saturate(mark.r * 1.1));

@@ -20,7 +20,7 @@ Act boundaries are read from the cut's timeline, so retiming an edit rescores it
 
 Run after Tools/trailer/build.py.
 Usage:  python3 Tools/trailer/audio.py [cut]
-        cut — trailer | gameplay | characters   (default: trailer)
+        cut — trailer | gameplay | characters | update   (default: trailer)
 """
 
 import json
@@ -112,6 +112,21 @@ SCORES = {
         acts=[
             stage(THEME, "lowpass=f=900", "volume=0.6", "afade=t=in:st=0:d=1.2"),
             stage(THEME, "volume=1.0", "afade=t=in:st=0:d=0.8", fade_out(1.2)),
+            stage(CLOSING, "volume=1.05", "afade=t=in:st=0:d=0.5", fade_out(2.6)),
+        ],
+    ),
+    # The update film, scored like the reveal it borrows its second half from: veiled under the
+    # mode statement, open for the crew, menu theme over the title card. Act one is longer here
+    # than in any other cut, so the opening is only veiled rather than muffled — a third of the
+    # film would otherwise play under a lowpass.
+    "update": dict(
+        video="BattlePlan_Update.mp4",
+        out="BattlePlan_Update_Scored.mp4",
+        theme=CREW_THEME,
+        closer=CLOSER,
+        acts=[
+            stage(THEME, "lowpass=f=1800", "volume=0.68", "afade=t=in:st=0:d=1.2"),
+            stage(THEME, "volume=1.0", "afade=t=in:st=0:d=0.7", fade_out(1.2)),
             stage(CLOSING, "volume=1.05", "afade=t=in:st=0:d=0.5", fade_out(2.6)),
         ],
     ),

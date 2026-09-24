@@ -29,21 +29,34 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PRODUCT="BattlePlan1"
-BUILD_DIR="$PROJECT_DIR/Builds/Version1"
-VERSION="1.0"
-
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 step() { printf '\n==> %s\n' "$1"; }
+
+source "$SCRIPT_DIR/lib-version.sh"
 
 [ -f "$SCRIPT_DIR/.env.itch" ] && source "$SCRIPT_DIR/.env.itch"
 
 ITCH_PROJECT="${ITCH_PROJECT:-}"
-if [ "${1:-}" = "--project" ]; then
-	ITCH_PROJECT="$2"
-	shift 2
-fi
+VERSION=""
+targets=()
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--project) [ $# -ge 2 ] || die "--project needs a value"; ITCH_PROJECT="$2"; shift 2 ;;
+	--version) [ $# -ge 2 ] || die "--version needs a value"; VERSION="$2"; shift 2 ;;
+	-*) die "unknown option: $1" ;;
+	mac | windows | linux | web) targets+=("$1"); shift ;;
+	*) die "unknown target: $1 (expected mac|windows|linux|web)" ;;
+	esac
+done
+
 [ -n "$ITCH_PROJECT" ] || die "set ITCH_PROJECT (env var, .env.itch, or --project user/game) - find the slug on your itch.io project's dashboard"
+[ -n "$VERSION" ] || VERSION="$(latest_version "$PROJECT_DIR/Builds")" ||
+	die "no Builds/Version<N> folder to upload - run build-release.sh first"
+[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "invalid version: $VERSION (expected N or N.N)"
+
+PRODUCT="BattlePlan$VERSION"
+BUILD_DIR="$PROJECT_DIR/Builds/Version$VERSION"
+[ -d "$BUILD_DIR" ] || die "$BUILD_DIR does not exist"
 
 command -v butler >/dev/null 2>&1 || die "butler not found on PATH"
 [ -f "$HOME/Library/Application Support/itch/butler_creds" ] || die "not logged in - run 'butler login' first"
@@ -55,8 +68,9 @@ push() {
 	butler push "$path" "$ITCH_PROJECT:$channel" --userversion "$VERSION"
 }
 
-targets=("$@")
 [ ${#targets[@]} -eq 0 ] && targets=(mac windows linux web)
+
+step "Uploading version $VERSION from $BUILD_DIR to $ITCH_PROJECT"
 
 for t in "${targets[@]}"; do
 	case "$t" in
@@ -64,7 +78,6 @@ for t in "${targets[@]}"; do
 	windows) push "windows" "$BUILD_DIR/${PRODUCT}Windows.zip" ;;
 	linux) push "linux" "$BUILD_DIR/${PRODUCT}Linux.zip" ;;
 	web) push "html5" "$BUILD_DIR/${PRODUCT}Web.zip" ;;
-	*) die "unknown target: $t (expected mac|windows|linux|web)" ;;
 	esac
 done
 

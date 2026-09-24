@@ -29,7 +29,13 @@ public static class DamagePopup
     /// <param name="worldPosition">Anywhere on the victim; only its ground column is used.</param>
     /// <param name="amount">Damage dealt; rendered rounded.</param>
     /// <param name="tone">How loudly it should read.</param>
-    public static void Spawn(Vector3 worldPosition, float amount, DamageTone tone = DamageTone.Normal)
+    /// <param name="crit">Whether a damage multiplier earned this hit; recolours it.</param>
+    public static void Spawn(
+        Vector3 worldPosition,
+        float amount,
+        DamageTone tone = DamageTone.Normal,
+        bool crit = false
+    )
     {
         if (amount <= 0f)
             return;
@@ -38,7 +44,7 @@ public static class DamagePopup
 
         GameObject root = new("DamageNumber");
         root.transform.position = anchoredAt;
-        root.AddComponent<DamagePopupLabel>().Build(anchoredAt, amount, tone);
+        root.AddComponent<DamagePopupLabel>().Build(anchoredAt, amount, tone, crit);
     }
 }
 
@@ -235,13 +241,37 @@ public sealed class DamagePopupLabel : MonoBehaviour
     {
         CapCells = 0.32f,
         RiseCells = 0.76f,
-        // The only tone that shakes. It is the last number a unit will ever show the player, and
-        // the shake is what separates it from a large ordinary hit without spending hue on it.
+        // The loudest tone the gold ramp reaches. It is the last number a unit will ever show the
+        // player, and the shake is what separates it from a large ordinary hit without spending
+        // hue on it.
         ShakeDegrees = 5.5f,
         Drive = 1.56f,
         FillTop = Rgb(255, 255, 16),
         FillBottom = Rgb(255, 245, 0),
     };
+
+    // A crit is not a louder hit, it is a different kind of one: damage the attacker multiplied
+    // rather than damage the weapon deals. So it leaves the gold ramp entirely instead of
+    // extending it — the ramp above still reads magnitude, and red reads cause. Nothing else about
+    // the number moves, so a crit for eleven is still small and a crit for ninety is still large.
+    //
+    // Red is the one hue that cannot be as bright as the gold it replaces, and the deck's own 181
+    // is why every fill above sits over it. The drive pays most of that back: pushed past the
+    // ramp's own top, it takes the red channel well through the tonemapper's shoulder and lifts
+    // the other two with it. What is left of the gap is the stroke's to close, which is the job
+    // this file already gives it.
+    private const float CritDrive = 1.9f;
+
+    // Every crit shakes. The gold ramp only shakes on the hit that kills, and a crit has to read
+    // as a crit on a graze too, so this is the one cue that does not depend on the number's size.
+    private const float CritShakeDegrees = 5.5f;
+
+    // Authored well down in green, because the drive multiplies it: a lit end at 138 arrives past
+    // one after the drive and lands next to the red it is supposed to sit under, which is a yellow
+    // core in a red numeral. These leave the lit end near 0.69 and the shadowed one near 0.33, so
+    // the ramp reads as one hue lit from above rather than as red fading out of orange.
+    private static readonly Color CritFillTop = Rgb(255, 92, 66);
+    private static readonly Color CritFillBottom = Rgb(255, 44, 30);
 
     private static TMP_FontAsset resolvedFont;
     private static Camera[] cameraScratch = new Camera[4];
@@ -264,9 +294,9 @@ public sealed class DamagePopupLabel : MonoBehaviour
     private bool hasOutline;
     private bool hasShadow;
 
-    public void Build(Vector3 spawnPosition, float amount, DamageTone requested)
+    public void Build(Vector3 spawnPosition, float amount, DamageTone requested, bool crit)
     {
-        tone = LookFor(requested);
+        tone = LookFor(requested, crit);
         origin = spawnPosition;
 
         // Axes are taken once, from the camera as it stands at the hit. Recomputing them every
@@ -648,13 +678,31 @@ public sealed class DamagePopupLabel : MonoBehaviour
             faceMaterial.SetColor(UnderlayColorId, ShadowInk.WithAlpha(ShadowAlpha * fade));
     }
 
-    private static Tone LookFor(DamageTone requested)
+    private static Tone LookFor(DamageTone requested, bool crit)
     {
-        return requested switch
+        Tone look = requested switch
         {
             DamageTone.Heavy => HeavyLook,
             DamageTone.Critical => CriticalLook,
             _ => NormalLook,
+        };
+        return crit ? CritOf(look) : look;
+    }
+
+    /// <summary>
+    /// The same hit at the same loudness, in the crit's own hue. Built per call rather than cached
+    /// per tone so the crit look stays one set of constants instead of three hand-paired triples.
+    /// </summary>
+    private static Tone CritOf(Tone look)
+    {
+        return new Tone
+        {
+            CapCells = look.CapCells,
+            RiseCells = look.RiseCells,
+            ShakeDegrees = Mathf.Max(look.ShakeDegrees, CritShakeDegrees),
+            Drive = CritDrive,
+            FillTop = CritFillTop,
+            FillBottom = CritFillBottom,
         };
     }
 

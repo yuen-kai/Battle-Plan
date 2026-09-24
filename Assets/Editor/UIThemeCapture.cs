@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -34,6 +35,15 @@ public static class UIThemeCapture
         public string Name;
         public string ScenePath;
         public Action<VisualElement> Stage;
+
+        /// <summary>
+        /// A screen whose composition only exists part way through an animation. The enumerator is
+        /// stepped once per editor update and the read-back is held back until Hold real seconds
+        /// have passed, so the frame captured is the frame asked for rather than whichever one the
+        /// editor happened to tick on.
+        /// </summary>
+        public Func<VisualElement, IEnumerator> Drive;
+        public float Hold;
     }
 
     private static readonly List<Shot> Shots = new()
@@ -59,6 +69,23 @@ public static class UIThemeCapture
             ScenePath = "Assets/Scenes/Game.unity",
             Stage = StageResults,
         },
+        // The verdict at the moment the word lands, which is the only moment the strike exists.
+        new Shot
+        {
+            Name = "06b-results-strike",
+            ScenePath = "Assets/Scenes/Game.unity",
+            Stage = StageResults,
+            Drive = DriveVictoryStrike,
+            Hold = 0.55f,
+        },
+        new Shot
+        {
+            Name = "06c-results-defeat",
+            ScenePath = "Assets/Scenes/Game.unity",
+            Stage = StageDefeat,
+            Drive = DriveDefeatStrike,
+            Hold = 0.72f,
+        },
         new Shot
         {
             Name = "07-title-settings",
@@ -70,9 +97,14 @@ public static class UIThemeCapture
     // The panel only paints when the editor ticks its runtime panels, which it will not do while a
     // menu command is still on the stack. The run is therefore spread across EditorApplication
     // updates: set a scene up, let it breathe for SettleFrames, read it back, move to the next.
+    private static List<Shot> queue;
     private static int shotIndex;
     private static int framesWaited;
     private static UIDocument activeDocument;
+    private static IEnumerator driver;
+    private static bool driveStarted;
+    private static MatchVerdictScreen drivenVerdict;
+    private static double holdUntil;
     private static PanelSettings authoredPanel;
     private static PanelSettings capturePanel;
     private static RenderTexture uiTarget;
@@ -81,8 +113,15 @@ public static class UIThemeCapture
     [MenuItem("Battle Plan/Capture UI Theme Screenshots")]
     public static void CaptureAll()
     {
+        Capture(null);
+    }
+
+    /// <summary>One shot by name, so iterating on a single screen costs one scene load.</summary>
+    public static void Capture(string shotName)
+    {
         Directory.CreateDirectory(OutputDirectory);
         report = new System.Text.StringBuilder();
+        queue = shotName == null ? Shots : Shots.FindAll(shot => shot.Name == shotName);
         shotIndex = -1;
         framesWaited = 0;
         PushRenderScale();
@@ -126,7 +165,7 @@ public static class UIThemeCapture
         if (activeDocument == null)
         {
             shotIndex++;
-            if (shotIndex >= Shots.Count)
+            if (shotIndex >= queue.Count)
             {
                 EditorApplication.update -= Step;
                 PopRenderScale();
@@ -141,11 +180,11 @@ public static class UIThemeCapture
 
             try
             {
-                Begin(Shots[shotIndex]);
+                Begin(queue[shotIndex]);
             }
             catch (Exception e)
             {
-                report.AppendLine($"{Shots[shotIndex].Name}: SETUP FAILED {e.Message}");
+                report.AppendLine($"{queue[shotIndex].Name}: SETUP FAILED {e.Message}");
                 Release();
             }
             framesWaited = 0;
@@ -159,13 +198,33 @@ public static class UIThemeCapture
             return;
         }
 
+        // The driver starts only once layout has settled, and never before: its clock is real
+        // seconds, so counting the settle frames against it would spend the whole animation
+        // waiting for the scene load to finish.
+        Shot driven = queue[shotIndex];
+        if (driven.Drive != null && !driveStarted)
+        {
+            driveStarted = true;
+            driver = driven.Drive(activeDocument.rootVisualElement);
+            holdUntil = EditorApplication.timeSinceStartup + driven.Hold;
+        }
+        if (driver != null)
+        {
+            driver.MoveNext();
+            if (EditorApplication.timeSinceStartup < holdUntil)
+            {
+                activeDocument.rootVisualElement?.MarkDirtyRepaint();
+                return;
+            }
+        }
+
         try
         {
-            Finish(Shots[shotIndex]);
+            Finish(queue[shotIndex]);
         }
         catch (Exception e)
         {
-            report.AppendLine($"{Shots[shotIndex].Name}: CAPTURE FAILED {e.Message}");
+            report.AppendLine($"{queue[shotIndex].Name}: CAPTURE FAILED {e.Message}");
         }
         Release();
     }
@@ -276,6 +335,11 @@ public static class UIThemeCapture
             uiTarget.Release();
             UnityEngine.Object.DestroyImmediate(uiTarget);
         }
+        drivenVerdict?.Dispose();
+        drivenVerdict = null;
+        driver = null;
+        driveStarted = false;
+        holdUntil = 0d;
         activeDocument = null;
         authoredPanel = null;
         capturePanel = null;
@@ -388,7 +452,7 @@ public static class UIThemeCapture
     private static readonly string[] UnitNames =
     {
         "Soldier",
-        "Shotgunner",
+        "Ramrod",
         "Sniper",
         "Pogo Rider",
         "Commander",
@@ -429,17 +493,46 @@ public static class UIThemeCapture
         }
     }
 
+    /// <summary>
+    /// Built from the shipped catalog rather than from a hand-written list, because the grid's
+    /// composition — how many tiles, how many rows, whether the last row is ragged — is the thing
+    /// this screen is judged on, and five invented names never showed it.
+    /// </summary>
     private static void StageRoster(VisualElement root)
     {
-        List<Texture2D> portraits = LoadPortraits();
-        string[] descriptions =
+        UnitDatabase database = AssetDatabase.LoadAssetAtPath<UnitDatabase>(
+            "Assets/UnitStats/AllUnits.asset"
+        );
+        List<UnitData> units = new();
+        if (database?.units != null)
         {
-            "Jack of all trades.",
-            "Bruiser that wants to be close.",
-            "Punishes a straight line.",
-            "Boing.",
-            "Bends a fight around cover.",
-        };
+            for (int i = 0; i < database.units.Count; i++)
+            {
+                if (RosterRules.IsUnitEligible(database.units, i))
+                    units.Add(database.units[i]);
+            }
+        }
+
+        VisualElement filters = root.Q<VisualElement>("class-filters");
+        if (filters != null)
+        {
+            List<string> labels = new() { "All" };
+            foreach (UnitClass unitClass in (UnitClass[])Enum.GetValues(typeof(UnitClass)))
+                labels.Add(unitClass.ToString());
+            for (int i = 0; i < labels.Count; i++)
+            {
+                Button chip = new() { text = labels[i] };
+                chip.AddToClassList("button");
+                chip.AddToClassList("class-chip");
+                if (i == 0)
+                    chip.AddToClassList("button--selected");
+                filters.Add(chip);
+            }
+        }
+
+        // Two of the catalog picked, one of them twice: the state the screen spends most of its
+        // life in, and the one that has to show a stack badge and a part-filled crew strip.
+        int[] picks = { 4, 4, 1 };
 
         var options = root.Q<ScrollView>("roster-options");
         VisualTreeAsset optionTemplate = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
@@ -447,26 +540,31 @@ public static class UIThemeCapture
         );
         if (options != null && optionTemplate != null)
         {
-            for (int i = 0; i < UnitNames.Length; i++)
+            for (int i = 0; i < units.Count; i++)
             {
                 TemplateContainer instance = optionTemplate.Instantiate();
+                instance.AddToClassList("unit-cell");
                 Button button = instance.Q<Button>("unit-option-button");
-                instance.style.flexShrink = 0f;
-                SetText(instance, "unit-option-name", UnitNames[i]);
-                SetText(instance, "unit-option-description", descriptions[i]);
-                SetText(instance, "unit-option-ability", AbilityNames[i]);
-                if (portraits.Count > 0)
-                    instance.Q<VisualElement>("unit-option-portrait").style.backgroundImage =
-                        new StyleBackground(portraits[i % portraits.Count]);
-                if (i is 0 or 3)
+                SetText(instance, "unit-option-name", units[i].unitName);
+                SetSprite(instance.Q<VisualElement>("unit-option-portrait"), units[i].unitSprite);
+
+                int picked = 0;
+                foreach (int pick in picks)
                 {
-                    button?.AddToClassList("unit-option--selected");
-                    Label status = instance.Q<Label>("unit-option-status");
-                    status.text = i == 0 ? "×2" : "×1";
-                    status.RemoveFromClassList("hidden");
+                    if (pick == i)
+                        picked++;
                 }
-                if (i == 4)
-                    button?.AddToClassList("unit-option--unavailable");
+                if (picked > 0)
+                {
+                    instance.AddToClassList("unit-option--selected");
+                    button?.AddToClassList("unit-option--selected");
+                    if (picked > 1)
+                    {
+                        Label status = instance.Q<Label>("unit-option-status");
+                        status.text = $"\u00d7{picked}";
+                        status.RemoveFromClassList("hidden");
+                    }
+                }
                 options.Add(instance);
             }
         }
@@ -477,27 +575,30 @@ public static class UIThemeCapture
         );
         if (selected != null && slotTemplate != null)
         {
-            string[] filled = { "Soldier", "Soldier", "Pogo Rider", null, null };
-            for (int i = 0; i < filled.Length; i++)
+            for (int i = 0; i < 5; i++)
             {
                 TemplateContainer instance = slotTemplate.Instantiate();
                 Button button = instance.Q<Button>("selected-slot-button");
                 SetText(instance, "selected-slot-index", (i + 1).ToString());
-                if (filled[i] != null)
+                if (i < picks.Length && picks[i] < units.Count)
                 {
+                    UnitData data = units[picks[i]];
                     button?.AddToClassList("selected-slot--filled");
-                    SetText(instance, "selected-slot-name", filled[i]);
-                    SetText(instance, "selected-slot-detail", "Tap to remove");
-                    if (portraits.Count > 0)
-                        instance.Q<VisualElement>("selected-slot-portrait").style.backgroundImage =
-                            new StyleBackground(portraits[i % portraits.Count]);
+                    SetText(instance, "selected-slot-name", data.unitName);
+                    SetText(instance, "selected-slot-detail", data.abilityName);
+                    SetSprite(instance.Q<VisualElement>("selected-slot-portrait"), data.unitSprite);
                 }
                 selected.Add(instance);
             }
         }
 
-        SetText(root, "roster-count-label", "Pick 2 more");
-        SetText(root, "selection-status", "Two slots left.");
+        SetText(root, "selection-status", $"{picks.Length} / 5 selected");
+    }
+
+    private static void SetSprite(VisualElement element, Sprite sprite)
+    {
+        if (element != null && sprite != null)
+            element.style.backgroundImage = new StyleBackground(sprite);
     }
 
     private static void StageCharacters(VisualElement root)
@@ -526,38 +627,6 @@ public static class UIThemeCapture
                 if (i == 1)
                     dot.AddToClassList("carousel-dot--current");
                 dots.Add(dot);
-            }
-        }
-
-        VisualElement stats = root.Q<VisualElement>("stat-list");
-        if (stats != null)
-        {
-            (string key, int filledPips)[] traits =
-            {
-                ("Health", 3),
-                ("Damage", 3),
-                ("Range", 4),
-                ("Speed", 3),
-            };
-            foreach ((string key, int filledPips) in traits)
-            {
-                VisualElement row = new();
-                row.AddToClassList("trait-row");
-                Label label = new(key);
-                label.AddToClassList("trait-row__key");
-                row.Add(label);
-                VisualElement scale = new();
-                scale.AddToClassList("trait-scale");
-                for (int i = 0; i < 5; i++)
-                {
-                    VisualElement pip = new();
-                    pip.AddToClassList("trait-pip");
-                    if (i < filledPips)
-                        pip.AddToClassList("trait-pip--on");
-                    scale.Add(pip);
-                }
-                row.Add(scale);
-                stats.Add(row);
             }
         }
     }
@@ -704,8 +773,37 @@ public static class UIThemeCapture
         SetText(root, "phase-label", "Match complete");
         SetText(root, "timer-label", string.Empty);
         Show(root, "results-overlay");
-        SetText(root, "results-status", "You win!");
-        root.Q<Label>("results-status")?.AddToClassList("results-status--victory");
+        SetText(root, "results-decider", "King of the hill");
+        SetText(root, "results-headline", "Victory");
+        SetText(root, "results-status", "You held the hill for 3 consecutive rounds.");
+        root.Q<VisualElement>("results-overlay")?.AddToClassList("results-overlay--victory");
+    }
+
+    private static void StageDefeat(VisualElement root)
+    {
+        StageResults(root);
+        SetText(root, "results-decider", "Elimination");
+        SetText(root, "results-headline", "Defeat");
+        SetText(root, "results-status", "Your crew is down.");
+        VisualElement overlay = root.Q<VisualElement>("results-overlay");
+        overlay?.RemoveFromClassList("results-overlay--victory");
+        overlay?.AddToClassList("results-overlay--defeat");
+    }
+
+    private static IEnumerator DriveVictoryStrike(VisualElement root) =>
+        DriveVerdict(root, MatchVerdictTone.Victory);
+
+    private static IEnumerator DriveDefeatStrike(VisualElement root) =>
+        DriveVerdict(root, MatchVerdictTone.Defeat);
+
+    private static IEnumerator DriveVerdict(VisualElement root, MatchVerdictTone tone)
+    {
+        VisualElement overlay = root.Q<VisualElement>("results-overlay");
+        if (overlay == null)
+            return null;
+
+        drivenVerdict = new MatchVerdictScreen(overlay);
+        return drivenVerdict.IsUsable ? drivenVerdict.Play(tone) : null;
     }
 
     private static void StageTitleSettings(VisualElement root)

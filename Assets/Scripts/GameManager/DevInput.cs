@@ -61,6 +61,28 @@ public static class DevInput
         );
     }
 
+    /// <summary>
+    /// Start an Escort the President dev match at leg 1. Leg 1's escort is drawn at random, so
+    /// pass <paramref name="firstEscortTeamIndex"/> to pin it and get a repeatable deployment.
+    /// </summary>
+    public static void StartEscortMatch(
+        float speed = -1f,
+        bool botOpponent = false,
+        bool fogOfWar = true,
+        int firstEscortTeamIndex = -1
+    )
+    {
+        EscortSeries.End();
+        if (firstEscortTeamIndex >= 0)
+            EscortSeries.Begin(firstEscortTeamIndex);
+        StartConfiguredMatch(
+            GameMode.EscortThePresident,
+            botOpponent ? OpponentType.AI : OpponentType.Player,
+            speed,
+            fogOfWar
+        );
+    }
+
     private static void StartConfiguredMatch(
         GameMode gameMode,
         OpponentType opponentType,

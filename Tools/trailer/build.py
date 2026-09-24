@@ -22,7 +22,7 @@ Cards are drawn with Pillow rather than ffmpeg's drawtext: the local ffmpeg is b
 freetype, and rendering them ourselves buys real letter-spacing in the project's own faces.
 
 Usage:  python3 Tools/trailer/build.py [cut] [take]
-        cut  — trailer | gameplay | characters   (default: trailer)
+        cut  — trailer | gameplay | characters | update   (default: trailer)
         take — default shoot tag for shots that do not name their own (default: v2)
 """
 
@@ -259,10 +259,76 @@ CHARACTERS = [
 ]
 
 
+# --- Update trailer: one new mode, seven new characters ---------------------------------------
+#
+# An update film has two jobs and they want opposite treatments. The mode is a rule, so it is
+# stated once and then shown three times at the pace of the thing itself — a crossing, a save, an
+# arrival. The crew is a list, so it is cut the way the original reveal was: portrait, then the
+# board shot that proves the portrait, each pair tighter than the last.
+#
+# The crew pairs come from two shoots because a match fields five a side and there are seven new
+# characters; the mode comes from a third, since an extraction zone and a president only exist in
+# an Escort match. Each shot names the take it was pulled from.
+
+ESCORT_TAKE = "e1"
+CREW_TAKE = "u1"
+CREW_TAKE_B = "u2"
+
+
+def crew(beat, boast, label, take, portrait_in, portrait_dur, action_in, action_dur):
+    """One character: the close-up that says who he is, then the board shot that proves it."""
+    return [
+        dict(act=2, beat=f"p-{beat}", take=take, inp=portrait_in, dur=portrait_dur,
+             captions=[cap(0.15, portrait_dur - 0.15, [boast], label=label, **CONFIDENT)]),
+        dict(act=2, beat=f"a-{beat}", take=take, inp=action_in, dur=action_dur),
+    ]
+
+
+UPDATE = [
+    dict(act=1, dur=3.4, xf=0.0, card=[
+        ("NEW MODE", OSWALD, 38, ORANGE, -118, 16),
+        ("ESCORT YOUR PRESIDENT", OSWALD_BOLD, 80, BONE, -54, 8),
+        ("OR STOP THEIRS", OSWALD_BOLD, 80, BONE, 44, 8),
+    ]),
+    # The rule as one picture: his crew around him, their crew across the lane, and the outlined
+    # ground he has to reach at the top of the frame. Whole-board, so none of that is cropped out.
+    # The defence opens fire at 1.6s and the crew is still crossing at 4.5, so the shot holds the
+    # whole exchange without ever cutting on a casualty — nobody in it dies.
+    dict(act=1, beat="e-advance", take=ESCORT_TAKE, inp=0.40, dur=4.30, grade=BOARD_GRADE,
+         xf=CARD_CUT),
+    # A rocket down the president's lane and a bodyguard who dodges into it. The dive lands at
+    # 1.4s and the rocket reaches him at 1.9; held past both, because the shot is only about the
+    # block if the man who blocked it is still standing there when it ends.
+    dict(act=1, beat="e-block", take=ESCORT_TAKE, inp=0.20, dur=4.30),
+    dict(act=1, beat="e-extract", take=ESCORT_TAKE, inp=0.40, dur=3.20),
+
+    dict(act=2, dur=2.6, card=[
+        ("AND SEVEN NEW CHARACTERS", OSWALD_BOLD, 72, BONE, -36, 8),
+    ]),
+    *crew("sentinel", "NOTHING GETS DOWN THIS LANE.", "SENTINEL", CREW_TAKE,
+          0.50, 2.4, 0.80, 3.0),
+    *crew("salvo", "HE SHOOTS THROUGH THE WALL.", "SALVO", CREW_TAKE,
+          0.50, 2.3, 1.10, 3.6),
+    *crew("breach", "HE DOESN'T GO AROUND COVER.", "BREACH", CREW_TAKE,
+          0.50, 2.2, 0.80, 2.8),
+    *crew("voltaic", "STAND TOGETHER, FALL TOGETHER.", "VOLTAIC", CREW_TAKE,
+          0.50, 2.2, 0.90, 2.6),
+    *crew("farsight", "HIS ARROWS DON'T STOP AT THE FIRST MAN.", "FARSIGHT", CREW_TAKE,
+          0.50, 2.1, 0.40, 2.6),
+    *crew("blitz", "HE LANDS ON YOU.", "BLITZ", CREW_TAKE_B,
+          0.50, 2.0, 1.30, 3.0),
+    *crew("outrider", "HE NEVER STOPS FIRING.", "OUTRIDER", CREW_TAKE_B,
+          0.50, 2.0, 1.40, 3.8),
+
+    end_card(3),
+]
+
+
 CUTS = {
     "trailer": dict(edit=TRAILER, take="v2", out="BattlePlan_Trailer.mp4"),
     "gameplay": dict(edit=GAMEPLAY, take=GAMEPLAY_TAKE, out="BattlePlan_Gameplay.mp4"),
     "characters": dict(edit=CHARACTERS, take="v2", out="BattlePlan_Characters.mp4"),
+    "update": dict(edit=UPDATE, take=CREW_TAKE, out="BattlePlan_Update.mp4"),
 }
 
 

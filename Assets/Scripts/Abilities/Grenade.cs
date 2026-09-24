@@ -85,18 +85,26 @@ public partial class Grenade : Ability
         }
         grenade.transform.position = targetPosition;
 
-        // Explode and damage enemies
-        CameraEffects.Instance.CameraShakeClientRpc();
-        ExplosionFxClientRpc(targetPosition, AreaRadius);
-        ExplodeGrenade(targetPosition, AreaRadius);
-        GameObject explosionEffect = NetworkHelper.Spawn(
-            grenadeExplosionPrefab,
+        Blast.Explode(
             targetPosition,
-            Quaternion.identity
-        );
-        NetworkHelper.Instance.Despawn(
-            explosionEffect,
-            explosionEffect.GetComponent<ParticleSystem>().main.duration
+            AreaRadius * GameLoop.cellSize,
+            GameLoop.GetEnemyTeam(gameObject.tag),
+            ShieldRush.GetEnemyShieldMask(gameObject),
+            damage,
+            () =>
+            {
+                CameraEffects.Instance.CameraShakeClientRpc();
+                ExplosionFxClientRpc(targetPosition, AreaRadius);
+                GameObject explosionEffect = NetworkHelper.Spawn(
+                    grenadeExplosionPrefab,
+                    targetPosition,
+                    Quaternion.identity
+                );
+                NetworkHelper.Instance.Despawn(
+                    explosionEffect,
+                    explosionEffect.GetComponent<ParticleSystem>().main.duration
+                );
+            }
         );
         NetworkHelper.Instance.Despawn(grenade);
     }
@@ -119,44 +127,5 @@ public partial class Grenade : Ability
         // the damage radius, and pieces travelling that far stop reading as ground coming out of a
         // hole and start reading as a second, wider event.
         DebrisBurst.Spawn(explosionPosition, alarm, blast * 0.55f, 24);
-    }
-
-    private void ExplodeGrenade(Vector3 explosionPosition, float AreaRadius)
-    {
-        string enemyTeam = GameLoop.GetEnemyTeam(gameObject.tag);
-
-        // Units move by Transform during execution. Sync before the overlap query so a completed
-        // dodge is evaluated at its current position even when no physics tick ran this frame.
-        Physics.SyncTransforms();
-
-        // Find all enemies within explosion range
-        Collider[] enemiesInRange = Physics.OverlapSphere(
-            explosionPosition,
-            AreaRadius * GameLoop.cellSize,
-            LayerMask.GetMask(enemyTeam)
-        );
-
-        foreach (Collider enemy in enemiesInRange)
-        {
-            // Check line of sight from explosion to enemy
-            Vector3 directionToEnemy = (enemy.transform.position - explosionPosition).normalized;
-            float distanceToEnemy = Vector3.Distance(explosionPosition, enemy.transform.position);
-            if (
-                Physics.Raycast(
-                    explosionPosition,
-                    directionToEnemy,
-                    out RaycastHit hit,
-                    distanceToEnemy,
-                    LayerMask.GetMask("Walls", enemyTeam)
-                )
-            )
-            {
-                // If raycast hits an obstacle before reaching the enemy, skip damage
-                if (hit.collider != enemy)
-                    continue;
-            }
-
-            enemy.transform.GetComponent<Health>()?.TakeDamage(damage);
-        }
     }
 }

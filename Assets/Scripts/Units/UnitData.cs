@@ -27,22 +27,12 @@ public class UnitData : ScriptableObject
     [Tooltip("Role bucket used to group the roster in menus")]
     public UnitClass unitClass = UnitClass.Assault;
 
-    [TextArea(3, 5)]
-    [Tooltip("Description of the unit")]
-    public string unitDescription = "New Unit Description";
-
     [TextArea(2, 3)]
     [Tooltip("How this unit is played, in one sentence")]
     public string playStyle = "";
 
     [Tooltip("Weapon in plain words, e.g. \"Mid-range rifle\"")]
     public string weaponName = "";
-
-    [Tooltip("What this unit is good at, in one line")]
-    public string strengths = "";
-
-    [Tooltip("What this unit struggles against, in one line")]
-    public string weaknesses = "";
 
     [Tooltip("Sprite representing the unit")]
     public Sprite unitSprite;
@@ -97,6 +87,22 @@ public class UnitData : ScriptableObject
     [Tooltip("Bullet spread angle in degrees (one side of center)")]
     public float bulletSpread = 3f;
 
+    [Tooltip(
+        "Shots in an uninterrupted firing run before the cadence reaches timeBetweenShots. 0 disables the ramp."
+    )]
+    public int fireRateRampShots = 0;
+
+    [Tooltip(
+        "Delay after the first shot of a firing run when fireRateRampShots > 0; unused otherwise."
+    )]
+    public float fireRateRampStartDelay = 0f;
+
+    [Tooltip("Time without a shot before the fire-rate ramp starts over.")]
+    public float fireRateRampResetDelay = 1.5f;
+
+    [Tooltip("Unit may fire immediately while moving instead of waiting for movement to finish")]
+    public bool canShootWhileMoving = false;
+
     [Header("=== COMBAT PARAMETERS ===")]
     [Tooltip("Bullet travel speed in cells per second")]
     public float bulletSpeed = 3f;
@@ -115,6 +121,15 @@ public class UnitData : ScriptableObject
 
     [Tooltip("Minimum angle in degrees from forward direction to consider a backstab")]
     public float backstabAngle = 90f;
+
+    [Tooltip("Bullet explodes in a radius on impact (enemy or wall) instead of single-target only")]
+    public bool bulletExplodesOnImpact = false;
+
+    [Tooltip("Splash radius in cells when bulletExplodesOnImpact is set")]
+    public float bulletAoeRadius = 0f;
+
+    [Tooltip("Bullet keeps flying through enemies instead of stopping on the first one hit")]
+    public bool bulletPierces = false;
 
     [Header("=== TARGETING PARAMETERS ===")]
     [Tooltip("DISABLED: Time to find and acquire a target")]

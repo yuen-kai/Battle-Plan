@@ -22,6 +22,11 @@ Shader "BattlePlan/DebrisCoals"
         _OutEdge ("Going Out Edge", Range(1, 12)) = 3.2
         _Flicker ("Flicker", Range(0, 0.5)) = 0
         _Phase ("Flicker Phase", Float) = 0
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -63,7 +68,14 @@ Shader "BattlePlan/DebrisCoals"
                 float _OutEdge;
                 float _Flicker;
                 float _Phase;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -75,12 +87,14 @@ Shader "BattlePlan/DebrisCoals"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 return OUT;
             }
@@ -103,6 +117,7 @@ Shader "BattlePlan/DebrisCoals"
                         + 0.38 * sin(_Phase * 0.41 + mark.b * 13.0 - mark.r * 9.0));
 
                 float heat = saturate((mark.a - _Cut) * _Edge) * mark.r * alive * _Glow;
+                heat *= BlastShadow(IN.positionWS);
                 return half4(_CoalTone.xyz * max(heat * breath, 0.0), 1);
             }
             ENDHLSL

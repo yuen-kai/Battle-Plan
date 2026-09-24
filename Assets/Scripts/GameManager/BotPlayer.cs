@@ -96,9 +96,63 @@ public sealed class BotKnowledge
 }
 
 /// <summary>
+/// DEV: opt-in "hold position" override so specific bot-controlled units — or, registered before
+/// their GameObjects even exist, an entire bot team — never plan a move or an ability and never
+/// queue a dodge dive, regardless of what TryChooseAbility/BuildMovementPath would otherwise choose.
+/// Built for the sandbox (see <c>SandboxSession.cs</c>), where the designer plans the opposing crew
+/// by hand and the bot must never choose anything for it.
+///
+/// Freezing only touches planning/dodge DECISIONS. Health, damage application, on-hit reactions,
+/// and death all still run through the normal Health/Unit pipeline untouched — a frozen unit still
+/// takes damage and can die exactly like any other unit; it simply never chooses to move, attack, or
+/// evade on its own.
+///
+/// The team-level flag exists alongside the per-unit set because a per-GameObject freeze can only be
+/// registered once a unit's GameObject exists (after it spawns), which is a frame after BotPlayer
+/// plans the very first round of a freshly started match — too late to guarantee round 1 is inert.
+/// Setting the team flag before the match even starts (before StartHost()) has no such race.
+/// </summary>
+public static class BotFrozenUnits
+{
+    private static readonly HashSet<GameObject> frozenUnits = new();
+    private static readonly HashSet<int> frozenTeams = new();
+
+    public static void SetFrozen(GameObject unit, bool isFrozen)
+    {
+        if (unit == null)
+            return;
+        if (isFrozen)
+            frozenUnits.Add(unit);
+        else
+            frozenUnits.Remove(unit);
+    }
+
+    public static void SetTeamFrozen(int teamIndex, bool isFrozen)
+    {
+        if (isFrozen)
+            frozenTeams.Add(teamIndex);
+        else
+            frozenTeams.Remove(teamIndex);
+    }
+
+    public static bool IsFrozen(GameObject unit, int teamIndex)
+    {
+        return (unit != null && frozenUnits.Contains(unit)) || frozenTeams.Contains(teamIndex);
+    }
+
+    /// <summary>Clears every override. Call between unrelated dev sessions to avoid stale state.</summary>
+    public static void ClearAll()
+    {
+        frozenUnits.Clear();
+        frozenTeams.Clear();
+    }
+}
+
+/// <summary>
 /// Server-only deterministic opponent. Planning consumes only the bot's fog observation and
-/// its own last-known memory. Dodge planning consumes public ability telegraphs, never the
-/// opponent's submitted movement plans.
+/// its own last-known memory, except in Escort the President, where <see cref="IgnoresFog"/>
+/// grants full board knowledge so the motorcade is hunted rather than searched for. Dodge
+/// planning consumes public ability telegraphs, never the opponent's submitted movement plans.
 /// </summary>
 public sealed class BotPlayer
 {
@@ -111,6 +165,7 @@ public sealed class BotPlayer
 
     public int TeamIndex { get; }
     public BotKnowledge Knowledge => knowledge;
+    public bool IgnoresFog => gameLoop.Options.IsEscort;
     public int PlanningContributionCount { get; private set; }
     public int DodgeContributionCount { get; private set; }
     public int AbilityContributionCount { get; private set; }
@@ -140,8 +195,13 @@ public sealed class BotPlayer
         GameObject abilityUnit = null;
         Vector2Int abilityTarget = default;
         bool abilityNeedsTarget = false;
+        // Frozen units never volunteer for the round's single ability slot, so a sandbox target
+        // dummy can never spend it out from under a unit that is actually free to act.
+        GameObject[] abilityCandidateUnits = botUnits
+            .Where(unit => !BotFrozenUnits.IsFrozen(unit, TeamIndex))
+            .ToArray();
         TryChooseAbility(
-            botUnits,
+            abilityCandidateUnits,
             roundNumber,
             out abilityUnit,
             out abilityTarget,
@@ -154,12 +214,32 @@ public sealed class BotPlayer
         HashSet<Vector2Int> occupiedCells = new(botUnits.Select(GetCell).Concat(visibleEnemyCells));
         List<Vector2Int> targets = GetStrategicTargets(
             gameLoop.Options.gameMode,
-            knowledge.GetTargetCells()
+            knowledge.GetTargetCells(),
+            TeamIndex
         );
+
+        ResolveEscortRoles(
+            out GameObject ownPresident,
+            out List<Vector2Int> presidentTargets,
+            out List<Vector2Int> escortCrewTargets
+        );
+
+        // The president plans first so his crew can screen the cell he commits to.
+        if (ownPresident != null)
+            botUnits = botUnits.OrderByDescending(unit => unit == ownPresident).ToArray();
 
         foreach (GameObject unit in botUnits)
         {
             Vector3 startWorld = GridSystem.GetNearestGridCell(unit);
+            if (BotFrozenUnits.IsFrozen(unit, TeamIndex))
+            {
+                // Frozen means it never moves and never spends the ability slot; whether it shoots
+                // back is a separate question this does not answer, so nothing here touches
+                // Shooting. A frozen crew still returns fire, which is what a sandbox opponent
+                // standing on a square is expected to do.
+                plans[unit] = (false, new List<Vector3> { startWorld });
+                continue;
+            }
             if (unit == abilityUnit)
             {
                 plans[unit] = abilityNeedsTarget
@@ -175,13 +255,15 @@ public sealed class BotPlayer
             occupiedCells.Remove(start);
             List<Vector2Int> cellPath = BuildMovementPath(
                 start,
-                targets,
+                unit == ownPresident ? presidentTargets : escortCrewTargets ?? targets,
                 visibleEnemyCells,
                 occupiedCells,
                 unit.GetComponent<Movement>().unitData.moveDist,
                 observedCells,
                 lastObservedEpoch
             );
+            if (unit == ownPresident && cellPath.Count > 0)
+                escortCrewTargets = BuildEscortScreenTargets(cellPath[^1], TeamIndex);
             // Movement speeds vary by unit, so reserving only matching timesteps is unsafe.
             // Reserve every cell in an earlier unit's route to prevent crossings and edge swaps.
             ReservePathCells(occupiedCells, cellPath);
@@ -192,15 +274,140 @@ public sealed class BotPlayer
         return plans;
     }
 
-    public static List<Vector2Int> GetStrategicTargets(
-        GameMode gameMode,
-        IEnumerable<Vector2Int> knownEnemyCells
+    public const int EscortScreenLeadCells = 2;
+    public const int EscortInterceptLeadCells = 1;
+    public const int EscortRoleSpreadCells = 2;
+
+    private void ResolveEscortRoles(
+        out GameObject ownPresident,
+        out List<Vector2Int> presidentTargets,
+        out List<Vector2Int> escortCrewTargets
     )
     {
-        IEnumerable<Vector2Int> targets =
-            gameMode == GameMode.KingOfTheHill
-                ? GameLoop.KingOfTheHillCells
-                : (knownEnemyCells ?? Enumerable.Empty<Vector2Int>());
+        ownPresident = null;
+        presidentTargets = null;
+        escortCrewTargets = null;
+        if (!gameLoop.Options.IsEscort)
+            return;
+
+        if (EscortSeries.IsEscortingTeam(TeamIndex))
+        {
+            GameObject president = gameLoop.GetPresident(TeamIndex);
+            if (president == null || !IsLiving(president))
+                return;
+
+            ownPresident = president;
+            presidentTargets = EscortSeries.ExtractionCellsFor(TeamIndex).ToList();
+            escortCrewTargets = BuildEscortScreenTargets(GetCell(president), TeamIndex);
+            return;
+        }
+
+        int escortingTeamIndex = GameLoop.GetEnemyTeamIndex(TeamIndex);
+        escortCrewTargets = TryGetKnownEnemyPresidentCell(escortingTeamIndex, out Vector2Int seenAt)
+            ? BuildEscortInterceptTargets(seenAt, escortingTeamIndex)
+            : EscortSeries.ExtractionCellsFor(escortingTeamIndex).ToList();
+    }
+
+    private bool TryGetKnownEnemyPresidentCell(int escortingTeamIndex, out Vector2Int cell)
+    {
+        cell = default;
+        GameObject president = gameLoop.GetPresident(escortingTeamIndex);
+        return president != null
+            && knowledge.LastKnownCells.TryGetValue(GetStableUnitId(president), out cell);
+    }
+
+    public static List<Vector2Int> BuildEscortScreenTargets(
+        Vector2Int presidentCell,
+        int escortingTeamIndex
+    )
+    {
+        return OpenFootprint(
+            StepTowardExtraction(presidentCell, escortingTeamIndex, EscortScreenLeadCells),
+            EscortRoleSpreadCells
+        );
+    }
+
+    public static List<Vector2Int> BuildEscortInterceptTargets(
+        Vector2Int presidentCell,
+        int escortingTeamIndex
+    )
+    {
+        int presidentSteps = EscortSeries.StepsToExtraction(presidentCell, escortingTeamIndex);
+        List<Vector2Int> between = OpenFootprint(
+                StepTowardExtraction(presidentCell, escortingTeamIndex, EscortInterceptLeadCells),
+                EscortRoleSpreadCells
+            )
+            .Where(cell =>
+                EscortSeries.StepsToExtraction(cell, escortingTeamIndex) <= presidentSteps
+            )
+            .ToList();
+        return between.Count > 0 ? between : new List<Vector2Int> { presidentCell };
+    }
+
+    private static Vector2Int StepTowardExtraction(
+        Vector2Int from,
+        int escortingTeamIndex,
+        int steps
+    )
+    {
+        Vector2Int goal = NearestExtractionCell(from, escortingTeamIndex);
+        int distance = GridSystem.GetGridDistance(from, goal);
+        if (distance == 0 || steps <= 0)
+            return from;
+
+        float progress = Mathf.Min(1f, steps / (float)distance);
+        return new Vector2Int(
+            Mathf.RoundToInt(Mathf.Lerp(from.x, goal.x, progress)),
+            Mathf.RoundToInt(Mathf.Lerp(from.y, goal.y, progress))
+        );
+    }
+
+    private static Vector2Int NearestExtractionCell(Vector2Int from, int escortingTeamIndex)
+    {
+        Vector2Int nearest = from;
+        int fewest = int.MaxValue;
+        foreach (
+            Vector2Int cell in EscortSeries
+                .ExtractionCellsFor(escortingTeamIndex)
+                .OrderBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+        )
+        {
+            int steps = GridSystem.GetGridDistance(from, cell);
+            if (steps >= fewest)
+                continue;
+            fewest = steps;
+            nearest = cell;
+        }
+        return nearest;
+    }
+
+    private static List<Vector2Int> OpenFootprint(Vector2Int centre, int radius)
+    {
+        HashSet<Vector2Int> walls = GameLoop.wallLayout;
+        return GridSystem
+            .GetSquareFootprint(centre, radius)
+            .Where(cell => GridSystem.IsCellInBounds(cell) && !walls.Contains(cell))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Where the crew is trying to be, as opposed to who it is trying to shoot. An objective mode
+    /// names cells; Elimination names whichever enemies have been seen.
+    /// </summary>
+    public static List<Vector2Int> GetStrategicTargets(
+        GameMode gameMode,
+        IEnumerable<Vector2Int> knownEnemyCells,
+        int botTeamIndex = -1
+    )
+    {
+        IEnumerable<Vector2Int> targets;
+        if (gameMode == GameMode.KingOfTheHill)
+            targets = GameLoop.KingOfTheHillCells;
+        else if (gameMode == GameMode.EscortThePresident && botTeamIndex >= 0)
+            targets = GetEscortObjectiveCells(botTeamIndex);
+        else
+            targets = knownEnemyCells ?? Enumerable.Empty<Vector2Int>();
         return targets.Distinct().OrderBy(cell => cell.x).ThenBy(cell => cell.y).ToList();
     }
 
@@ -213,6 +420,13 @@ public sealed class BotPlayer
         return gameMode == GameMode.KingOfTheHill
             && GameLoop.KingOfTheHillCells.Contains(start)
             && !GameLoop.KingOfTheHillCells.Contains(destination);
+    }
+
+    private static IEnumerable<Vector2Int> GetEscortObjectiveCells(int botTeamIndex)
+    {
+        return EscortSeries.IsEscortingTeam(botTeamIndex)
+            ? EscortSeries.ExtractionCellsFor(botTeamIndex)
+            : EscortSeries.ExtractionCellsFor(GameLoop.GetEnemyTeamIndex(botTeamIndex));
     }
 
     public PathsDict CreateDodgeContribution(
@@ -248,7 +462,14 @@ public sealed class BotPlayer
         occupied.UnionWith(visibleEnemyCells);
         List<Vector2Int> knownEnemies = knowledge.GetTargetCells();
 
-        foreach (GameObject unit in alertedUnits.Where(IsLiving).OrderBy(GetStableUnitId))
+        // Frozen units decline every dodge window too — a target dummy that dove clear of a hit
+        // would defeat the point of standing still for the test unit's ability to land on it.
+        foreach (
+            GameObject unit in alertedUnits
+                .Where(IsLiving)
+                .Where(unit => !BotFrozenUnits.IsFrozen(unit, TeamIndex))
+                .OrderBy(GetStableUnitId)
+        )
         {
             Vector2Int start = GetCell(unit);
             occupied.Remove(start);
@@ -273,10 +494,15 @@ public sealed class BotPlayer
     private void RefreshObservation()
     {
         observationEpoch++;
-        HashSet<Vector2Int> visibleCells = gameLoop.GetObservableCellsForTeam(TeamIndex);
+        bool ignoreFog = IgnoresFog;
+        HashSet<Vector2Int> visibleCells = gameLoop.GetObservableCellsForTeam(
+            TeamIndex,
+            ignoreFog
+        );
         List<BotEnemySighting> sightings = gameLoop.GetVisibleEnemySightingsForTeam(
             TeamIndex,
-            visibleCells
+            visibleCells,
+            ignoreFog
         );
         if (visibleCells != null)
         {
@@ -410,10 +636,13 @@ public sealed class BotPlayer
                 continue;
             }
 
+            AbilityLineOfFire lineOfFire = candidate.unit.GetComponent<Ability>().LineOfFire;
+
             if (!candidate.data.selectAbilitySquare)
             {
                 bool enemyClose = visibleEnemyCells.Any(cell =>
                     GridDistance(start, cell) <= Mathf.CeilToInt(candidate.data.targetRange)
+                    && HasUsableLineOfFire(start, cell, lineOfFire)
                 );
                 if (!enemyClose)
                     continue;
@@ -423,12 +652,11 @@ public sealed class BotPlayer
                 return;
             }
 
-            foreach (
-                Vector2Int visibleTarget in visibleEnemyCells
-                    .OrderBy(cell => GridDistance(start, cell))
-                    .ThenBy(cell => cell.x)
-                    .ThenBy(cell => cell.y)
-            )
+            foreach (Vector2Int visibleTarget in OrderAimCandidates(
+                start,
+                visibleEnemyCells,
+                lineOfFire
+            ))
             {
                 if (GridDistance(start, visibleTarget) > candidate.data.abilitySquareRange)
                     continue;
@@ -450,6 +678,54 @@ public sealed class BotPlayer
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// Visible enemy cells in the order an aimed ability should try them.
+    /// <para>
+    /// A cell can be visible to the team and still sit behind a wall from the caster, because the
+    /// team's sight is the union of every unit's, and aiming something that stops at a wall past
+    /// one wastes the round's only ability. So a required line drops those cells outright.
+    /// </para>
+    /// <para>
+    /// A preferred line only breaks ties between cells the same distance away. It is not allowed
+    /// to reach past a nearer target for a clear shot at a further one, because what is being
+    /// compared are two different aims rather than two targets: this planner measures range with
+    /// <c>abilitySquareRange</c>, which is how far a player may aim, and an ability's effect can
+    /// travel a good deal less than that — Breach may aim across the whole board and its rocket
+    /// flies eight cells. Nearest-first is what keeps an aim inside that.
+    /// </para>
+    /// </summary>
+    public static IEnumerable<Vector2Int> OrderAimCandidates(
+        Vector2Int casterCell,
+        IEnumerable<Vector2Int> enemyCells,
+        AbilityLineOfFire lineOfFire
+    )
+    {
+        return enemyCells
+            .Where(cell => HasUsableLineOfFire(casterCell, cell, lineOfFire))
+            .OrderBy(cell => GridDistance(casterCell, cell))
+            .ThenByDescending(cell =>
+                lineOfFire == AbilityLineOfFire.Preferred
+                && GridSystem.HasGridLineOfSight(casterCell, cell)
+            )
+            .ThenBy(cell => cell.x)
+            .ThenBy(cell => cell.y);
+    }
+
+    /// <summary>
+    /// Whether an ability can do anything at all to <paramref name="target"/> from
+    /// <paramref name="casterCell"/>. A preferred line still fires through a wall — it only scores
+    /// worse, which is <see cref="OrderAimCandidates"/>'s job, not this one's.
+    /// </summary>
+    public static bool HasUsableLineOfFire(
+        Vector2Int casterCell,
+        Vector2Int target,
+        AbilityLineOfFire lineOfFire
+    )
+    {
+        return lineOfFire != AbilityLineOfFire.Required
+            || GridSystem.HasGridLineOfSight(casterCell, target);
     }
 
     /// <summary>
@@ -913,6 +1189,6 @@ public sealed class BotPlayer
         NetworkObject networkObject = unit != null ? unit.GetComponent<NetworkObject>() : null;
         return networkObject != null && networkObject.IsSpawned
             ? networkObject.NetworkObjectId
-            : unchecked((ulong)(uint)(unit != null ? unit.GetInstanceID() : 0));
+            : (unit != null ? unit.GetEntityId().GetRawData() : 0UL);
     }
 }

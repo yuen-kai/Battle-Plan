@@ -8,9 +8,9 @@
 
         <ui:VisualElement name="enemy-status-strip" class="enemy-status-strip">
             <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
-            <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" />
+            <ui:ScrollView name="enemy-unit-cards" mode="Horizontal" class="enemy-unit-cards" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
 
-            <ui:VisualElement class="hud-top toybox-ui" picking-mode="Ignore">
+            <ui:VisualElement name="hud-top" class="hud-top toybox-ui" picking-mode="Ignore">
                 <ui:VisualElement name="rejoin-notice" class="rejoin-notice toy-readout hidden" picking-mode="Ignore">
                     <ui:Label name="rejoin-notice-title" text="Opponent dropped" class="rejoin-notice__key toy-readout__label" picking-mode="Ignore" />
                     <ui:Label name="rejoin-notice-status" text="Rejoin window closed" class="rejoin-notice__value toy-chip" picking-mode="Ignore" />
@@ -18,6 +18,10 @@
                 <ui:VisualElement name="hill-status-readout" class="hill-status-readout toy-readout hidden" picking-mode="Ignore">
                     <ui:Label text="Hill control" class="hill-status-readout__key toy-readout__label" picking-mode="Ignore" />
                     <ui:Label name="hill-status-label" text="No control · 0/3" class="hill-status-readout__value toy-chip" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement name="escort-status-readout" class="hill-status-readout toy-readout hidden" picking-mode="Ignore">
+                    <ui:Label name="escort-status-key" text="Leg 1 · You escort" class="hill-status-readout__key toy-readout__label" picking-mode="Ignore" />
+                    <ui:Label name="escort-status-label" text="0–0 · 8 rounds left" class="hill-status-readout__value toy-chip" picking-mode="Ignore" />
                 </ui:VisualElement>
             </ui:VisualElement>
 
@@ -35,6 +39,18 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <ui:VisualElement name="escort-alert" class="escort-alert hidden" picking-mode="Ignore">
+            <!-- Two of the shared edge scrims, back to back, so the band is strongest where the
+                 type sits and falls off to the live board above and below it. Still not a plate:
+                 it has no edge to read as one. -->
+            <ui:VisualElement class="escort-alert__veil toybox-ui" picking-mode="Ignore">
+                <ui:VisualElement class="toy-scrim-top escort-alert__veil-above" picking-mode="Ignore" />
+                <ui:VisualElement class="toy-scrim-top escort-alert__veil-below" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:Label name="escort-alert-label" class="escort-alert__copy" picking-mode="Ignore" />
+            <ui:Label name="escort-alert-detail" class="escort-alert__detail hidden" picking-mode="Ignore" />
+        </ui:VisualElement>
+
         <ui:VisualElement name="hud-dock" class="hud-dock">
             <ui:VisualElement class="hud-hatch" picking-mode="Ignore" />
             <ui:VisualElement name="lesson-popup" class="lesson-popup toybox-ui hidden" picking-mode="Ignore">
@@ -48,15 +64,14 @@
             </ui:VisualElement>
             <ui:Label name="target-feedback-label" class="target-feedback hidden" picking-mode="Ignore" />
 
-            <ui:VisualElement class="hud-dock__row">
-                <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" />
+            <ui:VisualElement name="hud-dock-row" class="hud-dock__row">
+                <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
                 <ui:VisualElement class="hud-header-actions">
                     <ui:VisualElement name="planning-commit" class="planning-commit hidden">
                         <ui:Label name="planning-commit-status" text="READY" class="planning-commit__status" picking-mode="Ignore" />
                         <ui:Button name="lock-in-button" text="Lock in" class="button button--primary planning-commit__button" tooltip="Lock current orders" />
                     </ui:VisualElement>
                     <ui:Button name="exit-match-button" text="Exit" class="button hud-exit-button hidden" tooltip="Leave and return to the title screen" />
-                    <ui:Button name="controls-button" text="Controls" class="button hud-controls-button" />
                     <ui:Button name="settings-button" text="Settings" class="button hud-settings-button" tooltip="Audio and display settings" />
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -72,51 +87,23 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:VisualElement name="controls-overlay" class="modal-shade controls-overlay toybox-ui hidden">
-            <ui:VisualElement class="modal controls-panel" focusable="true" tabindex="-1">
-                <ui:Label text="Match controls" class="title-lg" picking-mode="Ignore" />
-                <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:ScrollView name="controls-scroll" mode="Vertical" class="controls-scroll" focusable="true" tabindex="0">
-                    <ui:VisualElement class="control-section">
-                        <ui:Label text="Round flow" class="control-section__label" picking-mode="Ignore" />
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Planning" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Both players plan at the same time. Enemy orders stay hidden until execution." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Choose an order" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Click a unit on the board, then click a highlighted square to set its route. Press that unit's ability card in the dock to spend its round on the ability instead." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Ability cooldown" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="An ability replaces that unit's movement for the round. The dial on the unit's base plate and the disc on its card both count the rounds until it is back." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Lock in" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Lock in when ready. You can unlock while waiting; unlocked orders submit when the planning timer ends." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Dodge" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="If threatened during Dodge, drag each flashing unit to safety." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
-                            <ui:Label text="Fog" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Fog hides enemy positions and orders. Enemy health and ability cooldowns remain public on contact cards." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                    <ui:VisualElement class="control-section">
-                        <ui:Label text="Win conditions" class="control-section__label" picking-mode="Ignore" />
-                        <ui:VisualElement class="control-row">
-                            <ui:Label text="Elimination" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Wipe out the enemy crew." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                        <ui:VisualElement class="control-row control-row--last">
-                            <ui:Label text="King of the Hill" class="control-key" picking-mode="Ignore" />
-                            <ui:Label text="Hold the hill for three consecutive rounds. A contested round resets the streak." class="label control-copy" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
-                </ui:ScrollView>
-                <ui:Button name="controls-close-button" text="Return to match" class="button button--primary modal-close" />
+        <!-- The leg briefing. Full screen because the roles change hands between legs and the
+             readout that carries the role afterwards is the size of a caption; a player who has
+             to go looking for it has already spent the round that mattered. Leg 1's coin is
+             drawn by Painter2D in EscortRoleBriefing, so the only child here is the word on its
+             face, which cannot be drawn there. -->
+        <ui:VisualElement name="escort-briefing" class="escort-briefing toybox-ui hidden">
+            <ui:VisualElement name="escort-briefing-curtain" class="escort-briefing__curtain" picking-mode="Ignore" />
+            <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+            <ui:VisualElement class="toy-vignette" picking-mode="Ignore" />
+            <ui:VisualElement name="escort-briefing-verdict" class="escort-briefing__verdict" picking-mode="Ignore">
+                <ui:Label name="escort-briefing-leg" text="Leg 1 of 3" class="escort-briefing__leg section-label" picking-mode="Ignore" />
+                <ui:VisualElement name="escort-briefing-rule" class="escort-briefing__rule" picking-mode="Ignore" />
+                <ui:Label name="escort-briefing-role" text="Protect" class="escort-briefing__role" picking-mode="Ignore" />
+                <ui:Label name="escort-briefing-brief" class="escort-briefing__brief" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:VisualElement name="escort-briefing-stage" class="escort-briefing__stage" picking-mode="Ignore">
+                <ui:Label name="escort-briefing-coin-face" class="escort-briefing__coin-face" picking-mode="Ignore" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -124,7 +111,7 @@
             <ui:VisualElement name="settings-panel" class="modal settings-panel" focusable="true" tabindex="-1">
                 <ui:Label text="Settings" class="title-lg" picking-mode="Ignore" />
                 <ui:VisualElement class="divider" picking-mode="Ignore" />
-                <ui:ScrollView name="settings-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="settings-scroll">
+                <ui:ScrollView name="settings-scroll" mode="Vertical" class="settings-scroll" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
                     <ui:Label text="Volume" class="section-label settings-section-label settings-section-label--first" picking-mode="Ignore" />
                     <ui:VisualElement class="setting-row">
                         <ui:Label text="Master" class="setting-row__label" picking-mode="Ignore" />
@@ -154,12 +141,16 @@
 
         <ui:VisualElement name="results-overlay" class="modal-shade results-overlay toybox-ui hidden">
             <ui:VisualElement class="toy-hatch" picking-mode="Ignore" />
+            <!-- The impact. Painted by MatchVerdictScreen, behind the rail, because a burst is
+                 rings and spokes whose geometry all derives from one strike point. -->
+            <ui:VisualElement name="results-stage" class="results-stage" picking-mode="Ignore" />
             <ui:VisualElement name="results-panel" class="modal results-panel" focusable="true" tabindex="-1">
-                <ui:ScrollView name="results-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="results-scroll" focusable="true" tabindex="0">
-                    <ui:Label text="Battle report" class="section-label" picking-mode="Ignore" />
-                    <ui:VisualElement class="results-mark" picking-mode="Ignore" />
+                <ui:ScrollView name="results-scroll" mode="Vertical" class="results-scroll" focusable="true" tabindex="0" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden">
+                    <ui:Label name="results-decider" text="Battle report" class="section-label" picking-mode="Ignore" />
+                    <ui:VisualElement name="results-mark" class="results-mark" picking-mode="Ignore" />
+                    <ui:Label name="results-headline" text="Match complete" class="results-headline" picking-mode="Ignore" />
                     <ui:Label name="results-status" text="Match complete" class="results-status" picking-mode="Ignore" />
-                    <ui:VisualElement class="divider" picking-mode="Ignore" />
+                    <ui:VisualElement name="results-divider" class="divider hidden" picking-mode="Ignore" />
                     <ui:Label name="report-empty" text="No rounds were recorded for this match." class="report-empty hidden" picking-mode="Ignore" />
                     <ui:VisualElement name="report-reveal" class="report-reveal hidden">
                         <ui:Label text="What both crews ordered" class="section-label" picking-mode="Ignore" />

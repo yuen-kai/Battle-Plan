@@ -129,7 +129,7 @@ public static class AbilityFilmStudio
         new()
         {
             Name = "shieldrush",
-            AbilityType = "Shield",
+            AbilityType = "ShieldRush",
             CasterCell = new Vector2Int(6, 5),
             TargetCell = new Vector2Int(7, 5),
             EnemyCells = new[] { new Vector2Int(10, 5), new Vector2Int(10, 6) },
@@ -151,6 +151,23 @@ public static class AbilityFilmStudio
             CrossTo = new Vector2Int(9, 3),
             CrossStartSeconds = 1.3f,
             CrossSeconds = 1.0f,
+        },
+        new()
+        {
+            Name = "arcsurge",
+            AbilityType = "ArcSurge",
+            CasterCell = new Vector2Int(7, 5),
+            TargetCell = new Vector2Int(7, 5),
+            EnemyCells = new[]
+            {
+                new Vector2Int(9, 5),
+                new Vector2Int(7, 7),
+                new Vector2Int(5, 4),
+                new Vector2Int(9, 7),
+            },
+            LookAtCell = new Vector2(7f, 5f),
+            CameraDistance = 19f,
+            CaptureSeconds = 3.4f,
         },
     };
 
@@ -264,6 +281,24 @@ public static class AbilityFilmStudio
                     (cast.Length > 0 && cast[0] != null ? cast[0].transform.position : origin)
                     + Vector3.up * 2.2f;
                 DamagePopup.Spawn(above, 80f, DamageTone.Heavy);
+            },
+        },
+        new()
+        {
+            // The same hit a crit multiplier away, so the red can be judged against the gold shot
+            // above rather than on its own, which is the only way to tell whether it has the
+            // luminance to sit over this deck.
+            Name = "crit-numbers",
+            Origin = new Vector2Int(8, 5),
+            Bystanders = new[] { new Vector2Int(8, 5) },
+            CaptureSeconds = 1.7f,
+            CameraDistance = 9f,
+            Fire = (origin, _, cast) =>
+            {
+                Vector3 above =
+                    (cast.Length > 0 && cast[0] != null ? cast[0].transform.position : origin)
+                    + Vector3.up * 2.2f;
+                DamagePopup.Spawn(above, 80f, DamageTone.Heavy, crit: true);
             },
         },
     };
@@ -550,7 +585,7 @@ public static class AbilityFilmStudio
             // Mirrors GameLoop.RunAbility, which is what a real activation looks like on every peer.
             HitFlash.FlashTarget(caster, 0.4f, 1.5f);
             ImpactShockwave.Spawn(caster.transform.position, teamColor, 1.8f, 0.45f);
-            abilityRoutine = ability.StartCoroutine(ability.ExecuteAbility(targetWorld, radius));
+            abilityRoutine = ability.StartCoroutine(ability.RunAbility(targetWorld, radius));
             if (shot.SmokeFootprint)
                 smokeRoutine = ability.StartCoroutine(DeploySmokeScreen(shot.TargetCell));
         }

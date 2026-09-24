@@ -45,6 +45,11 @@ Shader "BattlePlan/ShockwavePuff"
         _TintReach ("Key Tint Reach", Range(0, 2)) = 1.05
         _Seed ("Seed", Float) = 0
         _EdgePixels ("Edge Pixels", Range(0.5, 4)) = 1.2
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -99,7 +104,14 @@ Shader "BattlePlan/ShockwavePuff"
                 half _TintReach;
                 float _Seed;
                 half _EdgePixels;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -111,6 +123,7 @@ Shader "BattlePlan/ShockwavePuff"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             static const float2 kReliefDir[5] =
@@ -147,6 +160,7 @@ Shader "BattlePlan/ShockwavePuff"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
@@ -186,6 +200,9 @@ Shader "BattlePlan/ShockwavePuff"
                 mask *= saturate(
                     (intactField - _Erode) / max(fwidth(intactField) * _EdgePixels, 1e-5)
                 );
+                // Thrown ground, so it answers to the slab twice over: none of it lands behind one
+                // and none of it draws through one.
+                mask *= BlastShadow(IN.positionWS);
                 clip(mask - 0.004);
 
                 // Only the lumps bend the surface. The mound's own curvature is applied below as a

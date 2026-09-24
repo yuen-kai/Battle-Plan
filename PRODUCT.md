@@ -24,7 +24,7 @@ The non-gameplay flow is Title Screen → Create or Join Match → Assemble Crew
 
 ## Capabilities and Constraints
 
-- Built in Unity 6000.3.1f1 with UI Toolkit and Netcode for GameObjects 2.7.
+- Built in Unity 6000.6.0f1 with UI Toolkit and Netcode for GameObjects 2.13.
 - `RosterRules.UnitsPerPlayer` is five; roster options and selected slots are generated at runtime.
 - Menu presentation models must be scene-local decoration with no `NetworkObject`, gameplay scripts, colliders, or authority.
 - Existing UXML element names, scene routes, controller contracts, and responsive root classes must remain stable.

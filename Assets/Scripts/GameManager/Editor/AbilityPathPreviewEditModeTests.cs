@@ -204,24 +204,24 @@ public class AbilityPathPreviewEditModeTests
     }
 
     [Test]
-    public void ShotgunnerRush_PreviewsTheWholeRunWhenTheLaneIsClear()
+    public void RamrodRush_PreviewsTheWholeRunWhenTheLaneIsClear()
     {
-        UnitData shotgunner = LoadUnit("Shotgunner");
-        Assert.That(shotgunner.abilityFixedDistance, Is.GreaterThan(0));
+        UnitData ramrod = LoadUnit("Ramrod");
+        Assert.That(ramrod.abilityFixedDistance, Is.GreaterThan(0));
 
         WithWalls(
             System.Array.Empty<Vector2Int>(),
             () =>
             {
-                GameObject caster = SpawnAt(shotgunner, new Vector2Int(3, 3));
+                GameObject caster = SpawnAt(ramrod, new Vector2Int(3, 3));
                 try
                 {
-                    Shield shield = caster.GetComponent<Shield>();
-                    Assert.That(shield, Is.Not.Null, "The Shotgunner prefab must retain its Shield.");
+                    DashRush dashRush = caster.GetComponent<DashRush>();
+                    Assert.That(dashRush, Is.Not.Null, "The Ramrod prefab must carry DashRush.");
 
                     // The player picks a neighbouring cell to name a direction, not a destination.
                     Assert.That(
-                        shield.BuildPlannedPath(Square(new Vector2Int(4, 3)), shotgunner, points),
+                        dashRush.BuildPlannedPath(Square(new Vector2Int(4, 3)), ramrod, points),
                         Is.EqualTo(AbilityPathKind.Ground)
                     );
                     Assert.That(points.Count, Is.EqualTo(2));
@@ -232,7 +232,7 @@ public class AbilityPathPreviewEditModeTests
                     Assert.That(
                         Vector3.Distance(
                             points[1],
-                            Square(new Vector2Int(3 + shotgunner.abilityFixedDistance, 3))
+                            Square(new Vector2Int(3 + ramrod.abilityFixedDistance, 3))
                         ),
                         Is.LessThan(Tolerance)
                     );
@@ -246,20 +246,20 @@ public class AbilityPathPreviewEditModeTests
     }
 
     [Test]
-    public void ShotgunnerRush_PreviewStopsAtTheWallThatWillStopTheRush()
+    public void RamrodRush_PreviewStopsAtTheWallThatWillStopTheRush()
     {
-        UnitData shotgunner = LoadUnit("Shotgunner");
+        UnitData ramrod = LoadUnit("Ramrod");
 
         WithWalls(
             new[] { new Vector2Int(5, 3) },
             () =>
             {
-                GameObject caster = SpawnAt(shotgunner, new Vector2Int(3, 3));
+                GameObject caster = SpawnAt(ramrod, new Vector2Int(3, 3));
                 try
                 {
-                    Shield shield = caster.GetComponent<Shield>();
+                    DashRush dashRush = caster.GetComponent<DashRush>();
                     Assert.That(
-                        shield.BuildPlannedPath(Square(new Vector2Int(4, 3)), shotgunner, points),
+                        dashRush.BuildPlannedPath(Square(new Vector2Int(4, 3)), ramrod, points),
                         Is.EqualTo(AbilityPathKind.Ground)
                     );
 
@@ -270,7 +270,7 @@ public class AbilityPathPreviewEditModeTests
                     );
                     Assert.That(
                         Vector3.Distance(points[0], points[1]),
-                        Is.LessThan(shotgunner.abilityFixedDistance * GameLoop.cellSize)
+                        Is.LessThan(ramrod.abilityFixedDistance * GameLoop.cellSize)
                     );
                 }
                 finally
@@ -282,16 +282,16 @@ public class AbilityPathPreviewEditModeTests
     }
 
     [Test]
-    public void ShotgunnerRush_DrawsNothingUntilADirectionIsPicked()
+    public void RamrodRush_DrawsNothingUntilADirectionIsPicked()
     {
-        UnitData shotgunner = LoadUnit("Shotgunner");
-        GameObject caster = SpawnAt(shotgunner, new Vector2Int(3, 3));
+        UnitData ramrod = LoadUnit("Ramrod");
+        GameObject caster = SpawnAt(ramrod, new Vector2Int(3, 3));
         try
         {
-            Shield shield = caster.GetComponent<Shield>();
+            DashRush dashRush = caster.GetComponent<DashRush>();
 
             Assert.That(
-                shield.BuildPlannedPath(Square(new Vector2Int(9, 3)), shotgunner, points),
+                dashRush.BuildPlannedPath(Square(new Vector2Int(9, 3)), ramrod, points),
                 Is.EqualTo(AbilityPathKind.None)
             );
             Assert.That(points, Is.Empty);
@@ -356,6 +356,53 @@ public class AbilityPathPreviewEditModeTests
                 $"{unitName}'s ability reaches its target without travelling, so it draws no path."
             );
             Assert.That(points, Is.Empty);
+        }
+        finally
+        {
+            Object.DestroyImmediate(caster);
+        }
+    }
+
+    /// <summary>
+    /// A lock is telegraphed as a line rather than a path, and both the dodge telegraph and the
+    /// planning preview run from the caster to
+    /// <see cref="GameLoop.ResolveLineAbilityEndpoint"/>. The square it is aimed at sits on the
+    /// floor while the caster stands above it, so an aim taken at the square itself tilts the line
+    /// down and the overshoot past it ends up metres underground.
+    /// </summary>
+    [TestCase("Sniper")]
+    [TestCase("Salvo")]
+    public void LineAbilityEndpoint_RunsLevelWithTheCaster(string unitName)
+    {
+        UnitData data = LoadUnit(unitName);
+        Assert.That(data.responseDistLine, Is.True, $"{unitName} threatens along a line.");
+
+        GameObject caster = SpawnAt(data, new Vector2Int(5, 5));
+        try
+        {
+            Vector3 casterPosition = caster.transform.position;
+            Assert.That(
+                casterPosition.y,
+                Is.GreaterThan(Tolerance),
+                "The caster stands above the deck, which is what the aim has to account for."
+            );
+
+            Vector3 endpoint = GameLoop.ResolveLineAbilityEndpoint(
+                caster,
+                Square(new Vector2Int(9, 5))
+            );
+
+            Assert.That(
+                endpoint.y,
+                Is.EqualTo(casterPosition.y).Within(Tolerance),
+                "A beam that leaves the muzzle level has to stay level."
+            );
+            Assert.That(
+                endpoint.z,
+                Is.EqualTo(casterPosition.z).Within(Tolerance),
+                "The aim was straight down the row."
+            );
+            Assert.That(endpoint.x, Is.GreaterThan(casterPosition.x));
         }
         finally
         {

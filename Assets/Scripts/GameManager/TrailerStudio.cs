@@ -102,8 +102,16 @@ public static class TrailerStudio
         public float WalkAt = -1f;
 
         /// <summary>
+        /// Takes that route as a dodge rather than a walk: the dive animation, dive speed, and the
+        /// recovery that leaves the unit down and unable to shoot where it landed. The same call
+        /// the dodge window makes, so a unit that throws itself in front of something is doing the
+        /// thing a player does with it and not a walk dressed up as one.
+        /// </summary>
+        public bool Dive;
+
+        /// <summary>
         /// Keeps this unit's weapon cold for the whole beat. Walking a unit in arms it, so a
-        /// victim staged that way will fight back and can win — which is how the Shotgunner died
+        /// victim staged that way will fight back and can win — which is how the Ramrod died
         /// in his own hero shot. Victims that only need to be hit hold fire.
         /// </summary>
         public bool HoldsFire;
@@ -237,7 +245,8 @@ public static class TrailerStudio
         float fromDistance,
         float toDistance,
         float fromYaw,
-        float toYaw
+        float toYaw,
+        float aim = 2.45f
     ) =>
         new()
         {
@@ -260,7 +269,7 @@ public static class TrailerStudio
             // controller in the project at all, so they stand in their bind pose; framed wide that
             // is a T-pose in a close-up, and framed here it is out of shot. It is also simply the
             // better portrait — these faces are the funniest thing the game owns.
-            Aim = 2.45f,
+            Aim = aim,
             FromDistance = fromDistance,
             ToDistance = toDistance,
             FromPitch = 40f,
@@ -354,7 +363,7 @@ public static class TrailerStudio
         new()
         {
             Team = Friendly,
-            Unit = "Shotgunner",
+            Unit = "Ramrod",
             Start = new Vector2Int(10, 0),
             Drawn = true,
             // The short order in the plan. A turn where every unit is sent the same distance is a
@@ -428,7 +437,7 @@ public static class TrailerStudio
         new()
         {
             Team = Enemy,
-            Unit = "Shotgunner",
+            Unit = "Ramrod",
             Start = new Vector2Int(4, 9),
             Route = new[]
             {
@@ -607,7 +616,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(1, 2),
                     Route = new[]
                     {
@@ -664,7 +673,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(1, 2),
                     Walk = new[]
                     {
@@ -699,7 +708,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Enemy,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(12, 4),
                     Walk = new[] { new Vector2Int(11, 4), new Vector2Int(10, 4) },
                     WalkAt = 0.15f,
@@ -720,7 +729,7 @@ public static class TrailerStudio
         // filled with deck rather than the void past the board edge.
         Portrait("p-sniper", "Sniper", 7, 4, 2.7f, 2.3f, -12f, 5f),
         Portrait("p-pogo", "PogoRider", 6, 5, 2.65f, 2.25f, 10f, -6f),
-        Portrait("p-shotgunner", "Shotgunner", 8, 4, 2.6f, 2.2f, -9f, 7f),
+        Portrait("p-shotgunner", "Ramrod", 8, 4, 2.6f, 2.2f, -9f, 7f),
         Portrait("p-soldier", "Soldier", 7, 5, 2.65f, 2.25f, 8f, -5f),
         Portrait("p-commander", "Commander", 6, 4, 2.6f, 2.2f, -7f, 8f),
 
@@ -809,7 +818,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(3, 5),
                     Walk = new[] { new Vector2Int(4, 5) },
                     WalkAt = 0.05f,
@@ -863,7 +872,7 @@ public static class TrailerStudio
             {
                 At(Friendly, "Soldier", 4, 4),
                 At(Enemy, "Soldier", 9, 5, 0.5f),
-                At(Enemy, "Shotgunner", 10, 4, 0.5f),
+                At(Enemy, "Ramrod", 10, 4, 0.5f),
                 At(Enemy, "PogoRider", 8, 4, 0.5f),
             },
             Caster = 0,
@@ -889,7 +898,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(4, 6),
                     Walk = new[]
                     {
@@ -990,7 +999,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(3, 0),
                     Face = new Vector2(3f, 9f),
                     // Directional: the cell picked names a heading, and the rush resolves to the
@@ -1041,7 +1050,7 @@ public static class TrailerStudio
                 At(Enemy, "PogoRider", 1, 9),
                 At(Enemy, "Soldier", 4, 8),
                 At(Enemy, "Sniper", 7, 9),
-                At(Enemy, "Shotgunner", 10, 8),
+                At(Enemy, "Ramrod", 10, 8),
                 At(Enemy, "Commander", 13, 9),
             },
             FromLook = new Vector2(7f, 4.5f),
@@ -1063,7 +1072,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(3, 0),
                     Route = new[]
                     {
@@ -1123,7 +1132,7 @@ public static class TrailerStudio
                 At(Enemy, "PogoRider", 1, 9),
                 At(Enemy, "Soldier", 4, 8),
                 At(Enemy, "Sniper", 7, 9),
-                At(Enemy, "Shotgunner", 10, 8),
+                At(Enemy, "Ramrod", 10, 8),
                 At(Enemy, "Commander", 13, 9),
             },
             FromLook = new Vector2(7f, 4.5f),
@@ -1237,7 +1246,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Enemy,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(10, 4),
                     Walk = new[] { new Vector2Int(9, 4) },
                     WalkAt = 0.05f,
@@ -1279,7 +1288,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(9, 2),
                     Walk = new[] { new Vector2Int(10, 2) },
                     WalkAt = 0.05f,
@@ -1392,7 +1401,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(12, 2),
                     Walk = new[]
                     {
@@ -1516,7 +1525,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Friendly,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(5, 2),
                     Walk = new[] { new Vector2Int(6, 2) },
                     WalkAt = 0.05f,
@@ -1550,7 +1559,7 @@ public static class TrailerStudio
                 new Actor
                 {
                     Team = Enemy,
-                    Unit = "Shotgunner",
+                    Unit = "Ramrod",
                     Cell = new Vector2Int(10, 2),
                     Walk = new[] { new Vector2Int(9, 2) },
                     WalkAt = 0.05f,
@@ -1624,7 +1633,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Friendly,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(6, 2),
                         Walk = new[] { new Vector2Int(6, 3) },
                         WalkAt = 0.05f,
@@ -1658,7 +1667,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Enemy,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(8, 2),
                         Walk = new[] { new Vector2Int(8, 3) },
                         WalkAt = 0.05f,
@@ -1694,7 +1703,7 @@ public static class TrailerStudio
                 // up. Thrown by the crew we are watching, standing right next to it, every cell is
                 // seen and the bank films as a haze you can barely find. Thrown at them it is the
                 // wall it is supposed to be — and it opens, cell by cell, exactly as the
-                // Shotgunner pushes into it, because a sightline that ends in smoke is not blocked
+                // Ramrod pushes into it, because a sightline that ends in smoke is not blocked
                 // by it. That is the mechanic doing the work no staging could fake.
                 Name = "m-bastion",
                 Seconds = 4.4f,
@@ -1711,7 +1720,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Friendly,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(8, 9),
                         Walk = new[]
                         {
@@ -1734,7 +1743,7 @@ public static class TrailerStudio
                     // unit parked next to the bank sees the cell it is standing beside and thins
                     // it; two of them on the doorstep thinned the whole screen to a haze. From
                     // over here the crew has no look into it at all, so it stands as the wall it
-                    // is and opens one cell at a time under the Shotgunner as he walks in.
+                    // is and opens one cell at a time under the Ramrod as he walks in.
                     new Actor
                     {
                         Team = Friendly,
@@ -1809,7 +1818,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Friendly,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(1, 4),
                         Walk = new[] { new Vector2Int(1, 5) },
                         WalkAt = 0.05f,
@@ -1817,7 +1826,7 @@ public static class TrailerStudio
                     new Actor
                     {
                         Team = Enemy,
-                        Unit = "Shotgunner",
+                        Unit = "Ramrod",
                         Cell = new Vector2Int(1, 7),
                         Walk = new[] { new Vector2Int(1, 6) },
                         WalkAt = 0.05f,
@@ -1848,6 +1857,659 @@ public static class TrailerStudio
             -0.8f,
             1.0f
         ),
+        // ---- The update: a new mode, and seven new characters --------------------------------
+        //
+        // Escort the President is filmed in an escort match rather than staged into a King of the
+        // Hill one, because the mode's furniture only exists where the mode does: the president
+        // himself is fielded in place of the escorting crew's middle roster slot, and the two
+        // extraction zones are outlined on the deck by the round loop. Both are in every frame
+        // below without this rig drawing anything.
+        //
+        // The host escorts, pinned in TrailerShoot, so the zone being walked at is always the one
+        // on row nine and every take frames the same way.
+        new()
+        {
+            // The mode in one picture: a president in the middle of his own crew, a defence dug in
+            // across the lane ahead of him, and the outlined ground he has to reach at the top of
+            // the frame.
+            //
+            // Not filmed at the whole-board pose the other wide shots use. From up there he is one
+            // blue figure among five and the only thing this shot has to say is which one of them
+            // the round is about — so the camera comes down and in until the suit reads, which is
+            // as close as it can come while still holding row nine in frame.
+            Name = "e-advance",
+            Seconds = 5.0f,
+            Cast = new[]
+            {
+                // A row behind his own screen, which is both what keeps him alive here and what
+                // escorting actually looks like. Level with the crew he was the nearest target in
+                // the lane and the flankers shot him dead inside four seconds.
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "The President",
+                    Cell = new Vector2Int(7, 3),
+                    Walk = new[] { new Vector2Int(7, 4) },
+                    WalkAt = 0.05f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Sentinel",
+                    Cell = new Vector2Int(6, 4),
+                    Walk = new[] { new Vector2Int(6, 5) },
+                    WalkAt = 0.05f,
+                },
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Salvo",
+                    Cell = new Vector2Int(8, 4),
+                    Walk = new[] { new Vector2Int(8, 5) },
+                    WalkAt = 0.05f,
+                },
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Blitz",
+                    Cell = new Vector2Int(5, 4),
+                    Walk = new[] { new Vector2Int(5, 5) },
+                    WalkAt = 0.05f,
+                },
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Outrider",
+                    Cell = new Vector2Int(9, 4),
+                    Walk = new[] { new Vector2Int(9, 5) },
+                    WalkAt = 0.05f,
+                },
+                // The defence is dug in across the lane. Each walks a cell first, because arriving
+                // is what arms a unit, and the two on the flank open up on the flankers opposite
+                // them a beat apart so the line does not all fire on the same frame.
+                //
+                // The one facing the president's own lane never fires. Given the shot, he takes it:
+                // the first take of this framing had the president dead three and a half seconds
+                // in, which is the wrong thing for the shot that introduces the mode to say, and
+                // the shot after this one is the one where somebody stops a rocket for him.
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Breach",
+                    Cell = new Vector2Int(6, 8),
+                    Walk = new[] { new Vector2Int(6, 7) },
+                    WalkAt = 0.05f,
+                    Face = new Vector2(6f, 0f),
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Farsight",
+                    Cell = new Vector2Int(9, 8),
+                    Walk = new[] { new Vector2Int(9, 7) },
+                    WalkAt = 0.05f,
+                    Face = new Vector2(9f, 0f),
+                    HoldsFire = true,
+                    ShootAt = 1.6f,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Voltaic",
+                    Cell = new Vector2Int(11, 8),
+                    Walk = new[] { new Vector2Int(11, 7) },
+                    WalkAt = 0.05f,
+                    Face = new Vector2(11f, 0f),
+                    HoldsFire = true,
+                    ShootAt = 2.0f,
+                },
+            },
+            FromLook = new Vector2(7f, 5.2f),
+            ToLook = new Vector2(7f, 5.9f),
+            FromDistance = 21f,
+            ToDistance = 19f,
+            FromPitch = 58f,
+            ToPitch = 54f,
+            FromYaw = 7f,
+            ToYaw = -5f,
+            Aim = 1.2f,
+            Move = Ease.InOut,
+        },
+        // The shot the mode is sold on. A rocket is aimed flat down the president's lane, and a
+        // bodyguard dodges into it: the dive is the game's own dodge move, and the rocket stops on
+        // him because Bunker Buster detonates on the first enemy body in its path. Three cells
+        // back is the margin that matters — the blast reaches one and a half, so the president
+        // lives only because somebody else was standing in the right place.
+        new()
+        {
+            Name = "e-block",
+            Seconds = 5.0f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Breach",
+                    Cell = new Vector2Int(6, 9),
+                    Face = new Vector2(6f, 0f),
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "The President",
+                    Cell = new Vector2Int(6, 2),
+                    Walk = new[] { new Vector2Int(6, 3) },
+                    WalkAt = 0.05f,
+                    HoldsFire = true,
+                },
+                // Comes in from the flank and lands on the lane, so the block is a move across the
+                // frame rather than a unit that was already in the way. Two cells at dive speed
+                // puts him there well before the rocket, which crosses three at two and a half a
+                // second.
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Sentinel",
+                    Cell = new Vector2Int(8, 6),
+                    Walk = new[] { new Vector2Int(7, 6), new Vector2Int(6, 6) },
+                    WalkAt = 0.85f,
+                    Dive = true,
+                    HoldsFire = true,
+                },
+            },
+            Caster = 0,
+            AbilityTarget = new Vector2Int(6, 1),
+            AbilityAt = 0.7f,
+            // Down the lane from behind the president, so the rocket comes at the camera and the
+            // dive crosses in front of it. Far enough back to hold six cells of lane: the shot is
+            // the distance between the blast and the man it did not reach, and a frame that keeps
+            // only one of the two is not that shot.
+            FromLook = new Vector2(6f, 4.8f),
+            ToLook = new Vector2(6f, 5.6f),
+            FromDistance = 17f,
+            ToDistance = 15f,
+            FromPitch = 47f,
+            ToPitch = 43f,
+            FromYaw = -7f,
+            ToYaw = 5f,
+            Aim = 1.3f,
+            Move = Ease.Out,
+        },
+        // What all of that was for: the last step onto the outlined ground.
+        new()
+        {
+            Name = "e-extract",
+            Seconds = 4.0f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "The President",
+                    Cell = new Vector2Int(7, 8),
+                    Walk = new[] { new Vector2Int(7, 9) },
+                    WalkAt = 0.6f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Sentinel",
+                    Cell = new Vector2Int(6, 8),
+                    Face = new Vector2(6f, 0f),
+                },
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Blitz",
+                    Cell = new Vector2Int(8, 8),
+                    Face = new Vector2(8f, 0f),
+                },
+            },
+            FromLook = new Vector2(7f, 8.2f),
+            ToLook = new Vector2(7f, 8.8f),
+            FromDistance = 15f,
+            ToDistance = 13f,
+            FromPitch = 58f,
+            ToPitch = 53f,
+            FromYaw = 12f,
+            ToYaw = -4f,
+            Aim = 1.3f,
+            Move = Ease.Out,
+        },
+
+        // ---- The new crew, alone, then working ------------------------------------------------
+        //
+        // Framed like the original reveal and pulled back from it: the first crew was shot at head
+        // and shoulders because three of those five have no animation controller and a full-body
+        // close-up of a bind pose is a T-pose. Every character below is animated, so the camera can
+        // stand off far enough to show the kit each of them is named for — a shield, a machine gun,
+        // a rocket tube, a bow — which at the old distance sat outside the frame.
+        Portrait("p-sentinel", "Sentinel", 7, 4, 3.4f, 3.0f, -12f, 5f, 2.15f),
+        Portrait("p-salvo", "Salvo", 6, 5, 3.35f, 2.95f, 10f, -6f, 2.15f),
+        Portrait("p-breach", "Breach", 8, 4, 3.3f, 2.9f, -9f, 7f, 2.15f),
+        Portrait("p-voltaic", "Voltaic", 7, 5, 3.35f, 2.95f, 8f, -5f, 2.15f),
+        Portrait("p-farsight", "Farsight", 6, 4, 3.3f, 2.9f, -7f, 8f, 2.15f),
+        Portrait("p-blitz", "Blitz", 8, 5, 3.3f, 2.9f, 9f, -7f, 2.15f),
+        Portrait("p-outrider", "Outrider", 7, 4, 3.25f, 2.85f, -10f, 6f, 2.15f),
+
+        // Shield Wall: the shield goes up facing the lane and the fire coming down it stops there.
+        // Filmed across the lane rather than along it, because the thing to see is the bank
+        // standing between two units, not the muzzle of the one shooting at it.
+        new()
+        {
+            Name = "a-sentinel",
+            Seconds = 5.0f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Sentinel",
+                    Cell = new Vector2Int(6, 4),
+                    Face = new Vector2(6f, 9f),
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Soldier",
+                    Cell = new Vector2Int(6, 8),
+                    Walk = new[] { new Vector2Int(6, 7) },
+                    WalkAt = 0.05f,
+                    Face = new Vector2(6f, 0f),
+                    HoldsFire = true,
+                    ShootAt = 1.5f,
+                },
+            },
+            Caster = 0,
+            AbilityTarget = new Vector2Int(6, 5),
+            AbilityAt = 0.6f,
+            FromLook = new Vector2(6f, 5.4f),
+            ToLook = new Vector2(6f, 5.8f),
+            FromDistance = 11f,
+            ToDistance = 9.5f,
+            FromPitch = 40f,
+            ToPitch = 36f,
+            FromYaw = 62f,
+            ToYaw = 40f,
+            Aim = 1.5f,
+            Move = Ease.InOut,
+        },
+        // Suppressing Fire, through the wall he is standing against. The cone opens on the far
+        // side of a block that would stop anything else he owns, which is the whole reason to
+        // take him.
+        //
+        // The barrage is a twenty degree fan, so where the victims stand is not a staging
+        // preference: at two cells that fan is three quarters of a cell wide either side of the
+        // line and at three cells it is one, and the first take stood both of them a full cell
+        // off it and outside. They are in the lane now, not beside it.
+        new()
+        {
+            Name = "a-salvo",
+            Seconds = 5.6f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Salvo",
+                    Cell = new Vector2Int(5, 4),
+                    Face = new Vector2(5f, 0f),
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Soldier",
+                    Cell = new Vector2Int(5, 2),
+                    Face = new Vector2(5f, 9f),
+                    StartHealth = 0.2f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Commander",
+                    Cell = new Vector2Int(5, 1),
+                    Face = new Vector2(5f, 9f),
+                    StartHealth = 0.2f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Ramrod",
+                    Cell = new Vector2Int(6, 1),
+                    Face = new Vector2(6f, 9f),
+                    StartHealth = 0.15f,
+                    HoldsFire = true,
+                },
+            },
+            Caster = 0,
+            AbilityTarget = new Vector2Int(5, 3),
+            AbilityAt = 0.7f,
+            // Across the lane rather than down it, so the wall, the gunner behind it and the three
+            // men on the far side of it are all in one frame. Shot from behind him the cone goes
+            // away from the camera and the wall it passes through is out of shot.
+            FromLook = new Vector2(5f, 2.4f),
+            ToLook = new Vector2(5f, 2.0f),
+            FromDistance = 14f,
+            ToDistance = 12.5f,
+            FromPitch = 42f,
+            ToPitch = 37f,
+            FromYaw = -104f,
+            ToYaw = -82f,
+            Aim = 1.5f,
+            Move = Ease.InOut,
+        },
+        // Bunker Buster into a group standing against a wall. Three of them fall and the wall goes
+        // with them, because the blast takes down every block inside its radius.
+        //
+        // Not fired at the wall itself, which was the first take and which killed nobody: a blast
+        // is only dealt to a body it has a clear line to, and the wall the rocket detonates on is
+        // that line's own shelter. It is still down at the end of this shot — the blast that kills
+        // the group demolishes it from their side — so the shot says both things about him, and in
+        // the right order.
+        new()
+        {
+            Name = "a-breach",
+            Seconds = 5.4f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Breach",
+                    Cell = new Vector2Int(6, 3),
+                    Face = new Vector2(6f, 9f),
+                    HoldsFire = true,
+                },
+                // The rocket detonates on the first enemy body in its path, so this is the one it
+                // stops on and the other two are inside the blast off him.
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Soldier",
+                    Cell = new Vector2Int(6, 6),
+                    Face = new Vector2(6f, 0f),
+                    StartHealth = 0.6f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Commander",
+                    Cell = new Vector2Int(7, 6),
+                    Face = new Vector2(7f, 0f),
+                    StartHealth = 0.6f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Sniper",
+                    Cell = new Vector2Int(5, 5),
+                    Face = new Vector2(5f, 0f),
+                    StartHealth = 0.6f,
+                    HoldsFire = true,
+                },
+            },
+            Caster = 0,
+            AbilityTarget = new Vector2Int(6, 9),
+            AbilityAt = 0.8f,
+            FromLook = new Vector2(6f, 5.2f),
+            ToLook = new Vector2(6f, 6.0f),
+            FromDistance = 14f,
+            ToDistance = 12f,
+            FromPitch = 46f,
+            ToPitch = 41f,
+            FromYaw = 22f,
+            ToYaw = -10f,
+            Aim = 1.5f,
+            Move = Ease.InOut,
+        },
+        // Arc Surge, walked into the middle of three of them. The punish for standing together,
+        // so the shot is framed on the group rather than on him.
+        new()
+        {
+            Name = "a-voltaic",
+            Seconds = 5.0f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Voltaic",
+                    Cell = new Vector2Int(7, 4),
+                    Walk = new[] { new Vector2Int(7, 5) },
+                    WalkAt = 0.05f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Soldier",
+                    Cell = new Vector2Int(6, 6),
+                    Face = new Vector2(6f, 0f),
+                    StartHealth = 0.3f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Commander",
+                    Cell = new Vector2Int(8, 6),
+                    Face = new Vector2(8f, 0f),
+                    StartHealth = 0.3f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Ramrod",
+                    Cell = new Vector2Int(9, 5),
+                    Face = new Vector2(0f, 5f),
+                    StartHealth = 0.3f,
+                    HoldsFire = true,
+                },
+            },
+            Caster = 0,
+            AbilityTarget = new Vector2Int(7, 5),
+            AbilityAt = 1.3f,
+            FromLook = new Vector2(7.4f, 5.4f),
+            ToLook = new Vector2(7.6f, 5.6f),
+            FromDistance = 12f,
+            ToDistance = 10f,
+            FromPitch = 48f,
+            ToPitch = 42f,
+            FromYaw = -20f,
+            ToYaw = 10f,
+            Aim = 1.5f,
+            Move = Ease.Out,
+        },
+        // Triple Volley down a column three of them are standing in. The arrows pierce, so the
+        // back of the line is no safer than the front — one shot, three bodies, and that is the
+        // whole read.
+        //
+        // In a line rather than spread across the fan, which is how the first take was staged and
+        // why only one of them died: the three arrows sit twelve degrees apart, which is under a
+        // cell of spread at the range anything is standing at, and Concourse's wall pips catch the
+        // outer two before they have opened up. So the centre arrow is the shot, and what it needs
+        // is somebody behind somebody.
+        new()
+        {
+            Name = "a-farsight",
+            Seconds = 5.0f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Farsight",
+                    Cell = new Vector2Int(6, 2),
+                    Face = new Vector2(6f, 9f),
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Soldier",
+                    Cell = new Vector2Int(6, 4),
+                    Face = new Vector2(6f, 0f),
+                    StartHealth = 0.2f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Commander",
+                    Cell = new Vector2Int(6, 5),
+                    Face = new Vector2(6f, 0f),
+                    StartHealth = 0.2f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Ramrod",
+                    Cell = new Vector2Int(6, 6),
+                    Face = new Vector2(6f, 0f),
+                    StartHealth = 0.2f,
+                    HoldsFire = true,
+                },
+            },
+            Caster = 0,
+            AbilityTarget = new Vector2Int(6, 3),
+            AbilityAt = 0.8f,
+            // Across the line, not along it. Down the column the three of them hide behind each
+            // other and the shot is one man falling; from the side it is three.
+            FromLook = new Vector2(6f, 4.4f),
+            ToLook = new Vector2(6f, 4.8f),
+            FromDistance = 14f,
+            ToDistance = 12.5f,
+            FromPitch = 42f,
+            ToPitch = 37f,
+            FromYaw = 76f,
+            ToYaw = 58f,
+            Aim = 1.5f,
+            Move = Ease.InOut,
+        },
+        // Shatter Leap: five cells of board crossed in one arc, and the landing is the attack.
+        new()
+        {
+            Name = "a-blitz",
+            Seconds = 5.4f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Blitz",
+                    Cell = new Vector2Int(4, 3),
+                    Face = new Vector2(8f, 6f),
+                    HoldsFire = true,
+                },
+                // The landing cell itself is left clear — a leap is a move, and the game will not
+                // send a unit onto an occupied square. The three of them ring it instead.
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Soldier",
+                    Cell = new Vector2Int(7, 5),
+                    Face = new Vector2(7f, 0f),
+                    StartHealth = 0.3f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Commander",
+                    Cell = new Vector2Int(7, 6),
+                    Face = new Vector2(7f, 0f),
+                    StartHealth = 0.3f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Sniper",
+                    Cell = new Vector2Int(8, 5),
+                    Face = new Vector2(0f, 5f),
+                    StartHealth = 0.3f,
+                    HoldsFire = true,
+                },
+            },
+            Caster = 0,
+            AbilityTarget = new Vector2Int(8, 6),
+            AbilityAt = 0.7f,
+            FromLook = new Vector2(5.6f, 4.4f),
+            ToLook = new Vector2(8f, 6f),
+            FromDistance = 14f,
+            ToDistance = 11f,
+            FromPitch = 46f,
+            ToPitch = 40f,
+            FromYaw = 22f,
+            ToYaw = -10f,
+            Aim = 1.5f,
+            Move = Ease.InOut,
+        },
+        // No ability at all. The rifle fires while he is moving, so the shot is one four-cell
+        // order taken at a run with two of them dying during it — which is the whole character.
+        new()
+        {
+            Name = "a-outrider",
+            Seconds = 5.4f,
+            Cast = new[]
+            {
+                new Actor
+                {
+                    Team = Friendly,
+                    Unit = "Outrider",
+                    Cell = new Vector2Int(3, 4),
+                    Walk = new[]
+                    {
+                        new Vector2Int(4, 4),
+                        new Vector2Int(5, 4),
+                        new Vector2Int(6, 4),
+                        new Vector2Int(7, 4),
+                    },
+                    WalkAt = 0.5f,
+                    ShootAt = 0.3f,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Soldier",
+                    Cell = new Vector2Int(7, 6),
+                    Face = new Vector2(7f, 0f),
+                    StartHealth = 0.25f,
+                    HoldsFire = true,
+                },
+                new Actor
+                {
+                    Team = Enemy,
+                    Unit = "Commander",
+                    Cell = new Vector2Int(8, 3),
+                    Face = new Vector2(0f, 3f),
+                    StartHealth = 0.25f,
+                    HoldsFire = true,
+                },
+            },
+            FromLook = new Vector2(4.5f, 4.4f),
+            ToLook = new Vector2(7.4f, 4.6f),
+            FromDistance = 12f,
+            ToDistance = 11f,
+            FromPitch = 44f,
+            ToPitch = 40f,
+            FromYaw = 26f,
+            ToYaw = -14f,
+            Aim = 1.5f,
+            Move = Ease.Linear,
+        },
     };
 
     public static string[] BeatNames()
@@ -2177,7 +2839,7 @@ public static class TrailerStudio
                     0.45f
                 );
                 spawned.Add(
-                    ability.StartCoroutine(ability.ExecuteAbility(abilityWorld, abilityRadius))
+                    ability.StartCoroutine(ability.RunAbility(abilityWorld, abilityRadius))
                 );
                 if (beat.SmokeFootprint)
                     spawned.Add(ability.StartCoroutine(DeploySmokeScreen(beat.AbilityTarget)));
@@ -2204,7 +2866,9 @@ public static class TrailerStudio
                         List<Vector3> cells = new(actor.Walk.Length);
                         foreach (Vector2Int cell in actor.Walk)
                             cells.Add(GameLoop.gridCoordToWorld(cell));
-                        spawned.Add(movement.StartCoroutine(movement.MoveToCells(cells)));
+                        spawned.Add(
+                            movement.StartCoroutine(movement.MoveToCells(cells, actor.Dive))
+                        );
                     }
                 }
 
@@ -2655,7 +3319,7 @@ public static class TrailerStudio
     static BotPlayer hostBrain;
     static int plannedRound = -1;
     static int dodgedRound = -1;
-    static string lastPhase = "";
+    static GameLoop.Phase? lastPhase;
 
     /// <summary>
     /// How long the planning phase is held open before the plans are submitted.
@@ -2712,7 +3376,7 @@ public static class TrailerStudio
         hostBrain = null;
         plannedRound = -1;
         dodgedRound = -1;
-        lastPhase = "";
+        lastPhase = null;
         heldPlans = null;
         planHoldUntil = 0f;
         planDrawFrom = 0f;
@@ -2853,7 +3517,7 @@ public static class TrailerStudio
         if (loop == null)
             return;
 
-        string phase = GameLoop.currentPhase;
+        GameLoop.Phase phase = GameLoop.currentPhase;
         int round = loop.RoundNumber;
 
         if (phase != lastPhase)
@@ -2862,7 +3526,7 @@ public static class TrailerStudio
             lastPhase = phase;
         }
 
-        if (phase == "planning" && round != plannedRound)
+        if (phase == GameLoop.Phase.Planning && round != plannedRound)
         {
             if (heldPlans == null)
             {
@@ -2886,7 +3550,7 @@ public static class TrailerStudio
                 plannedRound = round;
             }
         }
-        else if (phase == "dodging" && round != dodgedRound)
+        else if (phase == GameLoop.Phase.Dodging && round != dodgedRound)
         {
             AnswerDodge();
             dodgedRound = round;

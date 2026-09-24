@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fc18e5daab56be24fabfea8b7f6ee673, type: 3}
+  m_Name: Blitz
+  m_EditorClassIdentifier: Assembly-CSharp::UnitData
+  unitModel: {fileID: 4136433947033533029, guid: 551fe39e6deec4f13b8910d91374fc1a, type: 3}
+  unitName: Blitz
+  unitClass: 3
+  playStyle: An agressive shotgunner
+  weaponName: Shotgun
+  unitSprite: {fileID: 21300000, guid: fb489e35aae7a4e77a46bc2639bc4b12, type: 3}
+  unavailableForRoster: 0
+  abilityName: Shatter Leap
+  abilityDescription: Leaps to a square up to five cells away, dealing area damage.
+  abilitySprite: {fileID: 21300000, guid: fb489e35aae7a4e77a46bc2639bc4b12, type: 3}
+  moveDist: 3
+  moveSpeed: 1.1
+  diveSpeed: 4
+  rotationSpeed: 360
+  blueBulletPrefab: {fileID: 3702423415996770277, guid: 3fffebdd015dd480b93a5e67f2e646b6, type: 3}
+  redBulletPrefab: {fileID: 5620557307623549959, guid: a51a57840134b4a64a3d9d519b3325f3, type: 3}
+  timeBetweenShots: 0.01
+  magazineSize: 6
+  reloadTime: 2.8
+  bulletSpread: 18
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
+  canShootWhileMoving: 0
+  bulletSpeed: 2
+  targetRange: 2.2
+  bulletRange: 2.8
+  damage: 10
+  backstabMultiplier: 1
+  backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 0
+  findTargetTime: 0
+  targetLockDuration: 0
+  aimRotationSpeed: 450
+  visionRange: 4
+  maxHealth: 90
+  abilityCardSprite: {fileID: 21300000, guid: ffc251cf527234bcea0828d7535f2a90, type: 3}
+  selectAbilitySquare: 1
+  abilitySquareRange: 5
+  selectAbilityDirection: 0
+  abilityFixedDistance: 0
+  abilityRadius: 1.6
+  selectTime: 4
+  responseRange: 2.6
+  responseDistLine: 0
+  timeDivePerUnit: 3
+  diveRange: 2
+  abilityCooldownRounds: 2

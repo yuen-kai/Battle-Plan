@@ -456,7 +456,11 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
     private IEnumerator ResolveRound()
     {
         DevInput.SubmitPlans();
-        yield return WaitFor(() => GameLoop.currentPhase != "planning", 20f, "planning submission");
+        yield return WaitFor(
+            () => GameLoop.currentPhase != GameLoop.Phase.Planning,
+            20f,
+            "planning submission"
+        );
         if (timedOut)
             yield break;
 
@@ -464,18 +468,18 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         bool submittedDodge = false;
         bool checkedExecutionTelegraphs = false;
         while (
-            GameLoop.currentPhase != "planning"
-            && GameLoop.currentPhase != "idle"
+            GameLoop.currentPhase != GameLoop.Phase.Planning
+            && GameLoop.currentPhase != GameLoop.Phase.Idle
             && Time.realtimeSinceStartup < deadline
         )
         {
-            if (GameLoop.currentPhase == "dodging" && !submittedDodge)
+            if (GameLoop.currentPhase == GameLoop.Phase.Dodging && !submittedDodge)
             {
                 Snap("02-dodge");
                 DevInput.SubmitDodge();
                 submittedDodge = true;
             }
-            if (GameLoop.currentPhase == "executing" && !checkedExecutionTelegraphs)
+            if (GameLoop.currentPhase == GameLoop.Phase.Executing && !checkedExecutionTelegraphs)
             {
                 bool hasActiveTelegraph = Object
                     .FindObjectsByType<Transform>(
@@ -484,6 +488,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                     )
                     .Any(transform =>
                         transform.name == "AbilityTelegraphLine"
+                        || transform.name == "AbilityTelegraphCone"
                         || transform.name == "AbilityTelegraphMarker"
                         || transform.name.StartsWith("SmokeTelegraphCell_")
                         || transform.name.StartsWith("AbilityTelegraphCell_")
@@ -525,7 +530,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                 && NetworkManager.Singleton.IsServer
                 && NetworkManager.Singleton.ConnectedClients.Count == 1
                 && GameLoop.Instance != null
-                && GameLoop.currentPhase == "planning"
+                && GameLoop.currentPhase == GameLoop.Phase.Planning
                 && GameLoop.GetTeamUnits(0).Length == RosterRules.UnitsPerPlayer
                 && GameLoop.GetTeamUnits(1).Length == RosterRules.UnitsPerPlayer,
             90f,

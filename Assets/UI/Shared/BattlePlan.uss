@@ -386,90 +386,11 @@
     margin-top: 24px;
 }
 
-.controls-panel {
-    width: 760px;
-    height: 680px;
-    max-width: 92%;
-    max-height: 88%;
-}
-
-.controls-scroll {
-    flex-grow: 1;
-    min-height: 0;
-}
-
-.controls-scroll .unity-scroll-view__content-container {
-    padding-right: 12px;
-}
-
-.controls-scroll .unity-scroller--vertical {
-    width: var(--toy-scroll-size);
-    background-color: var(--toy-inset);
-}
-
-.controls-scroll .unity-base-slider__tracker {
-    background-color: var(--toy-inset);
-    border-color: var(--toy-divider);
-}
-
-.controls-scroll .unity-base-slider__dragger {
-    background-color: var(--toy-text-muted);
-    border-width: 0;
-}
-
-.unity-scroller__low-button,
-.unity-scroller__high-button {
+/* Every ScrollView in the game hides its scrollers and is driven by wheel, drag
+   and focus instead, so a scroller that reaches the tree from code rather than
+   UXML has nothing to render. */
+.unity-scroller {
     display: none;
-}
-
-.control-section {
-    margin-bottom: 10px;
-}
-
-.control-section__label {
-    margin-top: 4px;
-    margin-bottom: 6px;
-    padding-left: 9px;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: 11px;
-    color: var(--toy-primary-copy);
-    letter-spacing: var(--toy-track-label);
-    border-left-width: var(--toy-accent-rule);
-    border-left-color: var(--toy-primary);
-}
-
-.control-row {
-    min-height: 48px;
-    flex-direction: row;
-    align-items: flex-start;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    border-bottom-width: 1px;
-    border-bottom-color: var(--toy-divider);
-}
-
-.control-key {
-    width: 176px;
-    min-width: 176px;
-    padding-right: 18px;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    color: var(--toy-text);
-    letter-spacing: var(--toy-track-label);
-}
-
-.control-copy {
-    flex-grow: 1;
-    min-width: 0;
-    color: var(--toy-text-copy);
-    white-space: normal;
-}
-
-.control-row--last {
-    border-bottom-width: 0;
-}
-
-.controls-panel .modal-close {
-    margin-top: 16px;
 }
 
 .status-line {
@@ -513,34 +434,7 @@
     padding: 22px;
 }
 
-.phone .controls-panel {
-    padding: 18px;
-}
-
-.phone .control-row {
-    min-height: 0;
-    flex-direction: column;
-    padding-top: 8px;
-    padding-bottom: 8px;
-}
-
-.phone .control-key {
-    width: auto;
-    min-width: 0;
-    margin-bottom: 4px;
-    padding-right: 0;
-}
-
-.phone .controls-panel .modal-close {
-    width: 100%;
-}
-
 .short .screen-frame {
     padding-top: 18px;
     padding-bottom: 18px;
-}
-
-.short .controls-panel {
-    height: 92%;
-    max-height: 92%;
 }

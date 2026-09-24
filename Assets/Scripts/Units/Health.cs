@@ -12,17 +12,47 @@ public class Health : NetworkBehaviour
     private NetworkVariable<float> currentHealth = new();
     private NetworkVariable<bool> isAlive = new(true);
 
+    private float damageTakenMultiplier = 1f;
+    private readonly NetworkVariable<bool> damageReductionActive = new(false);
+
+    private GuardOrbVisual guardOrb;
+
+    /// <summary>
+    /// How long a crit announcement stays good for on a peer that received it.
+    /// <para>
+    /// A crit is an event belonging to one hit, so it travels as an RPC rather than as state, and
+    /// it is sent before the health write so it is queued into the tick ahead of the
+    /// <c>NetworkVariable</c> delta whose callback draws the number. The window is what makes that
+    /// ordering survivable either way: an announcement that somehow arrives after its own hit
+    /// expires instead of recolouring whatever lands next. It is also why fog costs nothing here —
+    /// a hidden unit drops the RPC and shows an ordinary number, on a peer that cannot see it.
+    /// </para>
+    /// </summary>
+    private const float CritAnnouncementSeconds = 0.5f;
+
+    private float critAnnouncedUntil = float.NegativeInfinity;
+
     private Transform unitCanvas;
     private Transform healthBar;
     private Transform healthFill;
     private UnityEngine.UI.Image healthFillImage;
+    private float unitCanvasHeight;
 
     private const float TypicalMaxHealth = 100f;
+
+    /// <summary>
+    /// The air the bar keeps above its own unit on screen, given as world units of lift per unit of
+    /// distance from the lens. A slope rather than a length, so it holds the same share of the frame
+    /// at any range and any field of view. Sized to clear a whole unit silhouette — a 3.1-unit body
+    /// seen from 73 degrees above — with a little left over.
+    /// </summary>
+    private const float MinCanvasScreenGap = 0.07f;
 
     /// <summary>Read-only HP accessor for dev tooling/tests (server-authoritative value on host).</summary>
     public float CurrentHealth => currentHealth.Value;
     public float MaxHealth => unitData != null ? Mathf.Max(0f, unitData.maxHealth) : 0f;
     public bool IsAlive => isAlive.Value;
+    public bool HasDamageReduction => damageReductionActive.Value;
 
     public override void OnNetworkSpawn()
     {
@@ -31,15 +61,24 @@ public class Health : NetworkBehaviour
         healthFill = healthBar != null ? healthBar.Find("HealthFill") : null;
         healthFillImage =
             healthFill != null ? healthFill.GetComponent<UnityEngine.UI.Image>() : null;
+        unitCanvasHeight =
+            unitCanvas is RectTransform canvasRect
+                ? canvasRect.anchoredPosition.y * transform.localScale.y
+                : 0f;
 
         currentHealth.OnValueChanged += OnHealthChanged;
         isAlive.OnValueChanged += OnAliveChanged;
+        damageReductionActive.OnValueChanged += OnDamageReductionChanged;
 
         if (IsServer)
         {
             isAlive.Value = true;
             currentHealth.Value = unitData.maxHealth;
+            damageTakenMultiplier = 1f;
+            damageReductionActive.Value = false;
         }
+
+        RefreshGuardPresentation(damageReductionActive.Value);
 
         UpdateMaxHealthScale();
         UpdateHealthFill(currentHealth.Value);
@@ -53,28 +92,95 @@ public class Health : NetworkBehaviour
     {
         currentHealth.OnValueChanged -= OnHealthChanged;
         isAlive.OnValueChanged -= OnAliveChanged;
+        damageReductionActive.OnValueChanged -= OnDamageReductionChanged;
         base.OnNetworkDespawn();
     }
 
     void Update()
     {
-        if (!IsClient)
+        if (!IsClient || unitCanvas == null)
             return;
 
-        if (GameLoop.Instance?.TeamCamera != null && unitCanvas != null)
-            unitCanvas.forward = GameLoop.Instance.TeamCamera.transform.forward;
+        Camera view = GameLoop.ViewCamera;
+        if (view == null)
+            return;
+
+        unitCanvas.forward = view.transform.forward;
+        unitCanvas.position = CanvasPosition(view.transform);
     }
 
-    public void TakeDamage(float damage)
+    /// <summary>
+    /// Where the bar has to sit to be readable from the board camera.
+    /// <para>
+    /// The camera looks down at 73 degrees from just short of the host's own back row, so the near
+    /// rank — which is the local player's crew, and row zero is where it deploys — is seen from
+    /// almost directly overhead and from the far side of its own vertical axis. Height in world Y
+    /// then projects *down* the screen instead of up it: authored between 1.3 and 2 units above the
+    /// unit, the bar came out underneath the unit wearing it, tangled in its own silhouette, for
+    /// exactly the crew the player watches most. The far rank is seen at a slant and had no such
+    /// problem, which is why only friendly bars read badly.
+    /// </para>
+    /// <para>
+    /// The authored height is kept as the per-unit intent it is, and topped up along the camera's
+    /// own up axis until the bar clears its unit by <see cref="MinCanvasScreenGap"/> on screen.
+    /// Lifting along that axis leaves depth untouched, so a single correction lands exactly on the
+    /// gap asked for, and it carries the bar away from the lens rather than towards it — nothing
+    /// new can come between the two.
+    /// </para>
+    /// </summary>
+    private Vector3 CanvasPosition(Transform lens)
+    {
+        Vector3 unitPosition = transform.position;
+        Vector3 canvasPosition = unitPosition + Vector3.up * unitCanvasHeight;
+
+        Vector3 toUnit = unitPosition - lens.position;
+        Vector3 toCanvas = canvasPosition - lens.position;
+        float unitDepth = Vector3.Dot(toUnit, lens.forward);
+        float canvasDepth = Vector3.Dot(toCanvas, lens.forward);
+        if (unitDepth <= 0f || canvasDepth <= 0f)
+            return canvasPosition;
+
+        float screenGap =
+            Vector3.Dot(toCanvas, lens.up) / canvasDepth - Vector3.Dot(toUnit, lens.up) / unitDepth;
+
+        return screenGap >= MinCanvasScreenGap
+            ? canvasPosition
+            : canvasPosition + lens.up * ((MinCanvasScreenGap - screenGap) * canvasDepth);
+    }
+
+    public void ApplyDamageReductionForRound(float multiplier)
     {
         if (!IsServer || !isAlive.Value)
             return;
 
-        // The tutorial sandbox teaches; it does not kill. Hits still land and still read on the
-        // health bar, but neither crew can be eliminated, so a fumbled dodge cannot end the lesson
-        // script early or hand a first-time player a defeat.
-        float floor = TutorialSession.IsActive ? 1f : 0f;
-        currentHealth.Value = Mathf.Max(floor, currentHealth.Value - damage);
+        damageTakenMultiplier = Mathf.Min(damageTakenMultiplier, Mathf.Clamp01(multiplier));
+        damageReductionActive.Value = damageTakenMultiplier < 1f;
+    }
+
+    public void ClearDamageReduction()
+    {
+        damageTakenMultiplier = 1f;
+        if (IsServer)
+            damageReductionActive.Value = false;
+    }
+
+    public void TakeDamage(float damage, bool crit = false)
+    {
+        if (!IsServer || !isAlive.Value)
+            return;
+
+        if (crit)
+            AnnounceCrit();
+
+        // The tutorial teaches; it does not kill. Hits still land and still read on the health bar,
+        // but neither crew can be eliminated, so a fumbled dodge cannot end the lesson script early
+        // or hand a first-time player a defeat. The sandbox offers the same protection per crew, so
+        // a scenario can be run to the end without a casualty finishing the match first.
+        bool cannotBeKilled =
+            TutorialSession.IsActive
+            || SandboxSession.IsImmortal(GetComponent<Unit>()?.TeamIndex ?? -1);
+        float floor = cannotBeKilled ? 1f : 0f;
+        currentHealth.Value = Mathf.Max(floor, currentHealth.Value - damage * damageTakenMultiplier);
         if (currentHealth.Value > 0f)
         {
             GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
@@ -83,12 +189,52 @@ public class Health : NetworkBehaviour
 
         isAlive.Value = false;
         GetComponent<Movement>()?.ClearTemporaryMoveSpeedBoost();
+        ClearDamageReduction();
         GameLoop.Instance?.DisableUnitCard(gameObject);
         GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
 
         // Leave the NetworkObject active through this frame's network update so the final
         // NetworkVariable values can be sent before round-end arbitration.
         StartCoroutine(DeactivateOnServerNextFrame());
+    }
+
+    /// <summary>
+    /// Tells every peer that the hit about to land was a crit.
+    /// <para>
+    /// The server marks itself rather than waiting on its own loopback, because a
+    /// <c>NetworkVariable</c> write fires <c>OnValueChanged</c> synchronously on the peer that
+    /// writes it: a host draws its number inside <see cref="TakeDamage"/>, before an RPC sent from
+    /// the same line could come back to it, and a mark that late would colour the following hit
+    /// instead of this one. Remote peers have the ordering the other way round and in their favour
+    /// — the RPC is queued here, ahead of a health delta the tick has not sent yet.
+    /// </para>
+    /// </summary>
+    private void AnnounceCrit()
+    {
+        critAnnouncedUntil = Time.time + CritAnnouncementSeconds;
+
+        // Edit-mode harnesses damage a Health that was never spawned, and NGO logs an error for
+        // an RPC sent off a session that is not running. The mark above is the half of this that
+        // those callers need; the send is the half only a live session has anyone to send to.
+        if (IsSpawned)
+            AnnounceCritClientRpc();
+    }
+
+    [ClientRpc]
+    private void AnnounceCritClientRpc()
+    {
+        if (IsServer)
+            return;
+
+        critAnnouncedUntil = Time.time + CritAnnouncementSeconds;
+    }
+
+    /// <summary>Consumes a pending crit announcement, so it can only colour one number.</summary>
+    private bool TakeCritAnnouncement()
+    {
+        bool announced = Time.time <= critAnnouncedUntil;
+        critAnnouncedUntil = float.NegativeInfinity;
+        return announced;
     }
 
 #if UNITY_EDITOR
@@ -134,6 +280,7 @@ public class Health : NetworkBehaviour
             movement.ClearTemporaryMoveSpeedBoost();
             movement.moving = false;
         }
+        ClearDamageReduction();
 
         Shooting shooting = GetComponent<Shooting>();
         shooting?.PauseShooting();
@@ -181,18 +328,24 @@ public class Health : NetworkBehaviour
         if (newValue > 0f)
             HitReaction.Play(gameObject, HitOrigin(), severity);
 
-        DamagePopup.Spawn(transform.position, damage, ToneFor(severity, newValue <= 0f));
+        DamagePopup.Spawn(
+            transform.position,
+            damage,
+            ToneFor(severity, newValue <= 0f),
+            TakeCritAnnouncement()
+        );
     }
 
     /// <summary>
     /// Where a hit came from, for knockback direction only — never for anything authoritative.
     /// <para>
     /// Damage reaches this peer as a <c>NetworkVariable</c> callback carrying a number and nothing
-    /// else, and the two honest ways to learn the attacker — widening <see cref="TakeDamage"/> or
-    /// replicating the source — are both new authoritative state bought for a visual. The unit's
-    /// own facing is the nearest thing already replicated: <see cref="Shooting"/> turns a unit to
-    /// look at whatever it is engaging, so in a firefight the return fire is coming from in front
-    /// of it, and where it is not the direction is merely arbitrary rather than wrong.
+    /// else. A crit escapes that by riding <see cref="AnnounceCrit"/>, which is one bit on the few
+    /// hits that earn it; a position is a vector on every hit, and replicating one to point a
+    /// knockback costs more than the direction is worth. The unit's own facing is the nearest
+    /// thing already replicated: <see cref="Shooting"/> turns a unit to look at whatever it is
+    /// engaging, so in a firefight the return fire is coming from in front of it, and where it is
+    /// not the direction is merely arbitrary rather than wrong.
     /// </para>
     /// </summary>
     private Vector3 HitOrigin() => transform.position + transform.forward * GameLoop.cellSize;
@@ -207,6 +360,19 @@ public class Health : NetworkBehaviour
         if (lethal || severity >= 0.7f)
             return DamageTone.Critical;
         return severity >= 0.4f ? DamageTone.Heavy : DamageTone.Normal;
+    }
+
+    private void OnDamageReductionChanged(bool previousValue, bool newValue)
+    {
+        RefreshGuardPresentation(newValue);
+    }
+
+    private void RefreshGuardPresentation(bool active)
+    {
+        if (active && guardOrb == null)
+            guardOrb = GuardOrbVisual.Attach(gameObject);
+        if (guardOrb != null)
+            guardOrb.SetGuarded(active);
     }
 
     private void OnAliveChanged(bool previousValue, bool newValue)

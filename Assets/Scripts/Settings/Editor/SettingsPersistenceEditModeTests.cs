@@ -303,9 +303,14 @@ public class SettingsPersistenceEditModeTests
         );
         Assert.That(
             source,
-            Does.Not.Contain("void Start()").And.Not.Contain("void Update()"),
-            "The empty template hooks were the whole of this component; a per-frame callback here "
-                + "would mean the levels are being polled instead of pushed."
+            Does.Not.Contain("void Start()"),
+            "The empty template hooks were the whole of this component."
+        );
+        Assert.That(
+            UpdateBody(source),
+            Is.EqualTo("AdvanceCrossfade(Time.unscaledDeltaTime);"),
+            "The one per-frame callback exists to move the backing track's crossfade along; "
+                + "anything else here would mean the levels are being polled instead of pushed."
         );
         Assert.That(source, Does.Contain("GameSettings.Changed += ApplyToTrackedSources"));
         Assert.That(
@@ -647,12 +652,11 @@ public class SettingsPersistenceEditModeTests
         Assert.That(
             sheet,
             Does.Contain("ClearActiveOverlay(settingsOverlay,"),
-            "The sheet releases the dock through the same path the controls sheet uses."
+            "The sheet releases the dock through the shared overlay teardown."
         );
         Assert.That(
             controller,
-            Does.Contain("if (IsShowing(settingsOverlay))")
-                .And.Contain("if (IsShowing(controlsOverlay))"),
+            Does.Contain("if (IsShowing(settingsOverlay))"),
             "Escape dismisses the sheet the player opened and is left alone otherwise, so it keeps "
                 + "reaching the match during a round."
         );
@@ -700,7 +704,7 @@ public class SettingsPersistenceEditModeTests
 
         string serverSide = Between(
             gameLoop,
-            "currentPhase = \"dodging\";",
+            "currentPhase = Phase.Dodging;",
             "void StartDodgePlanningClientRpc("
         );
         Assert.That(
@@ -804,15 +808,8 @@ public class SettingsPersistenceEditModeTests
         VisualElement tree = asset.Instantiate();
         Button entry = tree.Q<Button>("settings-button");
         VisualElement overlay = tree.Q<VisualElement>("settings-overlay");
-        VisualElement controls = tree.Q<VisualElement>("controls-button");
 
         Assert.That(entry, Is.Not.Null, "The sheet needs an entry point in the dock.");
-        Assert.That(
-            entry.parent,
-            Is.EqualTo(controls?.parent),
-            "The settings button sits beside the controls button, where the player already looks "
-                + "for match chrome."
-        );
         Assert.That(
             overlay.ClassListContains("toybox-ui"),
             Is.True,
@@ -833,8 +830,8 @@ public class SettingsPersistenceEditModeTests
         Assert.That(
             panelRule,
             Does.Contain("max-height: 62%"),
-            "The sheet stays shorter than the controls sheet so the phase banner and the dock are "
-                + "still readable behind it while the round runs."
+            "The sheet stays short enough that the phase banner and the dock are still readable "
+                + "behind it while the round runs."
         );
     }
 
@@ -937,6 +934,26 @@ public class SettingsPersistenceEditModeTests
         PlayerPrefs.DeleteKey(GameSettings.SfxVolumeKey);
         PlayerPrefs.DeleteKey(GameSettings.QualityLevelKey);
         PlayerPrefs.Save();
+    }
+
+    /// <summary>
+    /// Reads back the body of the manager's only per-frame callback, so the test still fails if
+    /// anything beyond the crossfade starts running there every frame.
+    /// </summary>
+    private static string UpdateBody(string source)
+    {
+        int start = source.IndexOf("private void Update()", StringComparison.Ordinal);
+        Assert.That(
+            start,
+            Is.GreaterThanOrEqualTo(0),
+            "AudioManager no longer drives the crossfade from Update."
+        );
+
+        int open = source.IndexOf('{', start);
+        int close = source.IndexOf("\n    }", open, StringComparison.Ordinal);
+        Assert.That(close, Is.GreaterThan(open), "Could not read the body of AudioManager.Update.");
+
+        return source.Substring(open + 1, close - open - 1).Trim();
     }
 
     /// <summary>

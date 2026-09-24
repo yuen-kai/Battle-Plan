@@ -8,7 +8,6 @@ public class TitleScreenUIController : MonoBehaviour
     private UIDocument document;
     private VisualElement root;
     private VisualElement settingsModal;
-    private VisualElement controlsModal;
     private VisualElement creditsModal;
     private VisualElement activeModal;
     private SettingsPanelBinder settings;
@@ -16,11 +15,9 @@ public class TitleScreenUIController : MonoBehaviour
     private Button tutorialButton;
     private Button charactersButton;
     private Button settingsButton;
-    private Button controlsButton;
     private Button creditsButton;
     private Button quitButton;
     private Button settingsCloseButton;
-    private Button controlsCloseButton;
     private Button creditsCloseButton;
     private Button modalReturnButton;
     private Button[] clickSoundButtons;
@@ -43,6 +40,7 @@ public class TitleScreenUIController : MonoBehaviour
 
         CacheElements();
         ConsoleUiNavigation.ConfigureButtons(root);
+        MobileDisplay.ConfigureScreen(document);
         RegisterCallbacks();
         settings.ShowStoredSettings();
         CloseModal(false);
@@ -52,6 +50,7 @@ public class TitleScreenUIController : MonoBehaviour
     private void OnDisable()
     {
         UnregisterCallbacks();
+        MobileDisplay.ForgetScreen(document);
         GameSettings.Flush();
         activeModal = null;
         modalReturnButton = null;
@@ -60,18 +59,15 @@ public class TitleScreenUIController : MonoBehaviour
     private void CacheElements()
     {
         settingsModal = RequireElement<VisualElement>("settings-modal");
-        controlsModal = RequireElement<VisualElement>("controls-modal");
         creditsModal = RequireElement<VisualElement>("credits-modal");
         settings = new SettingsPanelBinder(settingsModal, nameof(TitleScreenUIController));
         playButton = RequireElement<Button>("play-button");
         tutorialButton = RequireElement<Button>("tutorial-button");
         charactersButton = RequireElement<Button>("characters-button");
         settingsButton = RequireElement<Button>("settings-button");
-        controlsButton = RequireElement<Button>("controls-button");
         creditsButton = RequireElement<Button>("credits-button");
         quitButton = RequireElement<Button>("quit-button");
         settingsCloseButton = RequireElement<Button>("settings-close-button");
-        controlsCloseButton = RequireElement<Button>("controls-close-button");
         creditsCloseButton = RequireElement<Button>("credits-close-button");
         clickSoundButtons = new[]
         {
@@ -79,11 +75,9 @@ public class TitleScreenUIController : MonoBehaviour
             tutorialButton,
             charactersButton,
             settingsButton,
-            controlsButton,
             creditsButton,
             quitButton,
             settingsCloseButton,
-            controlsCloseButton,
             creditsCloseButton,
         };
     }
@@ -122,16 +116,12 @@ public class TitleScreenUIController : MonoBehaviour
             charactersButton.clicked += OpenCharacters;
         if (settingsButton != null)
             settingsButton.clicked += OpenSettings;
-        if (controlsButton != null)
-            controlsButton.clicked += OpenControls;
         if (creditsButton != null)
             creditsButton.clicked += OpenCredits;
         if (quitButton != null)
             quitButton.clicked += QuitGame;
         if (settingsCloseButton != null)
             settingsCloseButton.clicked += CloseModalFromButton;
-        if (controlsCloseButton != null)
-            controlsCloseButton.clicked += CloseModalFromButton;
         if (creditsCloseButton != null)
             creditsCloseButton.clicked += CloseModalFromButton;
 
@@ -161,16 +151,12 @@ public class TitleScreenUIController : MonoBehaviour
             charactersButton.clicked -= OpenCharacters;
         if (settingsButton != null)
             settingsButton.clicked -= OpenSettings;
-        if (controlsButton != null)
-            controlsButton.clicked -= OpenControls;
         if (creditsButton != null)
             creditsButton.clicked -= OpenCredits;
         if (quitButton != null)
             quitButton.clicked -= QuitGame;
         if (settingsCloseButton != null)
             settingsCloseButton.clicked -= CloseModalFromButton;
-        if (controlsCloseButton != null)
-            controlsCloseButton.clicked -= CloseModalFromButton;
         if (creditsCloseButton != null)
             creditsCloseButton.clicked -= CloseModalFromButton;
 
@@ -211,11 +197,6 @@ public class TitleScreenUIController : MonoBehaviour
         ShowModal(settingsModal, settings.FirstControl, settingsButton);
     }
 
-    private void OpenControls()
-    {
-        ShowModal(controlsModal, controlsCloseButton, controlsButton);
-    }
-
     private void OpenCredits()
     {
         ShowModal(creditsModal, creditsCloseButton, creditsButton);
@@ -246,7 +227,6 @@ public class TitleScreenUIController : MonoBehaviour
             GameSettings.Flush();
 
         settingsModal?.AddToClassList("hidden");
-        controlsModal?.AddToClassList("hidden");
         creditsModal?.AddToClassList("hidden");
 
         Button returnButton = modalReturnButton;

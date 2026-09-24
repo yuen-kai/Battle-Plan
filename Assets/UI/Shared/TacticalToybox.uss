@@ -298,10 +298,6 @@
     background-image: url("project://database/Assets/UI/Shared/Icons/play.svg");
 }
 
-.toybox-ui .toy-icon--controls {
-    background-image: url("project://database/Assets/UI/Shared/Icons/controls.svg");
-}
-
 .toybox-ui .toy-icon--settings {
     background-image: url("project://database/Assets/UI/Shared/Icons/settings.svg");
 }
@@ -328,6 +324,10 @@
 
 .toybox-ui .toy-icon--hill {
     background-image: url("project://database/Assets/UI/Shared/Icons/hill.svg");
+}
+
+.toybox-ui .toy-icon--escort {
+    background-image: url("project://database/Assets/UI/Shared/Icons/escort.svg");
 }
 
 .toybox-ui .toy-icon--flag {
@@ -804,72 +804,6 @@
     justify-content: center;
 }
 
-.toybox-ui .controls-panel {
-    width: 760px;
-    height: 680px;
-    max-width: 92%;
-    max-height: 90%;
-}
-
-.toybox-ui .controls-scroll {
-    flex-grow: 1;
-    min-height: 0;
-}
-
-.toybox-ui .controls-scroll .unity-scroll-view__content-container {
-    padding-right: var(--toy-space-md);
-}
-
-.toybox-ui .control-section {
-    margin-bottom: 10px;
-}
-
-.toybox-ui .control-section__label {
-    margin-top: var(--toy-space-xs);
-    margin-bottom: var(--toy-space-sm);
-    padding-left: 9px;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: var(--toy-type-caption);
-    color: var(--toy-primary-copy);
-    letter-spacing: var(--toy-track-label);
-    border-left-width: var(--toy-accent-rule);
-    border-left-color: var(--toy-primary);
-}
-
-.toybox-ui .control-row {
-    min-height: 46px;
-    flex-direction: row;
-    align-items: flex-start;
-    padding-top: var(--toy-space-control-top);
-    padding-bottom: var(--toy-space-control-top);
-    border-bottom-width: var(--toy-stroke-thin);
-    border-bottom-color: var(--toy-divider);
-}
-
-.toybox-ui .control-key {
-    width: 176px;
-    min-width: 176px;
-    padding-right: var(--toy-space-panel-compact);
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    color: var(--toy-text);
-    letter-spacing: var(--toy-track-label);
-}
-
-.toybox-ui .control-copy {
-    flex-grow: 1;
-    min-width: 0;
-    color: var(--toy-text-copy);
-    white-space: normal;
-}
-
-.toybox-ui .control-row--last {
-    border-bottom-width: 0;
-}
-
-.toybox-ui .controls-panel .modal-close {
-    margin-top: var(--toy-space-control-x);
-}
-
 /* ------------------------------------------------------------------ status */
 
 .toybox-ui .status-line {
@@ -891,36 +825,6 @@
 .toybox-ui .status-line.label--danger,
 .toybox-ui .status-line--danger {
     color: var(--toy-danger-copy);
-}
-
-/* --------------------------------------------------------------- scrollers */
-
-.toybox-ui .unity-scroller--vertical,
-.toybox-ui .unity-scroller--horizontal {
-    background-color: var(--toy-inset);
-}
-
-/* Unity's scroller ships a stepper button at each end. They are editor
-   furniture — nothing else in this interface has a raised nub with an arrow on
-   it — and at the foot of a plate they read as an unfinished control. The track
-   and its thumb carry the whole job. */
-.toybox-ui .unity-scroller__low-button,
-.toybox-ui .unity-scroller__high-button {
-    display: none;
-}
-
-.toybox-ui .unity-scroller .unity-base-slider__tracker {
-    background-color: var(--toy-inset);
-    border-color: var(--toy-divider);
-}
-
-/* A scrollbar is furniture, not content. At the strong edge value the thumb was
-   the brightest thing on a panel of hairlines and read as the one control
-   nobody had finished styling. */
-.toybox-ui .unity-scroller .unity-base-slider__dragger {
-    background-color: var(--toy-text-muted);
-    border-width: 0;
-    border-radius: var(--toy-radius-sm);
 }
 
 /* The route glyph on the title board: a start pip, a run of orange, a stop. */
@@ -960,34 +864,7 @@
     padding: var(--toy-space-modal-phone);
 }
 
-.phone .toybox-ui .controls-panel {
-    padding: var(--toy-space-panel-compact);
-}
-
-.phone .toybox-ui .control-row {
-    min-height: 0;
-    flex-direction: column;
-    padding-top: var(--toy-space-sm);
-    padding-bottom: var(--toy-space-sm);
-}
-
-.phone .toybox-ui .control-key {
-    width: auto;
-    min-width: 0;
-    margin-bottom: var(--toy-space-xs);
-    padding-right: 0;
-}
-
-.phone .toybox-ui .controls-panel .modal-close {
-    width: 100%;
-}
-
 .phone .toybox-ui .button {
     min-height: var(--toy-target-phone);
     font-size: var(--toy-type-body-lg);
-}
-
-.short .toybox-ui .controls-panel {
-    height: 92%;
-    max-height: 92%;
 }

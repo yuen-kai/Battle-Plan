@@ -189,6 +189,16 @@ public static class ImpactCamera
         active.HoldTime(hold, Mathf.Clamp01(timeScale));
     }
 
+    /// <summary>
+    /// Restores the unshaken pose before another local camera system pans or zooms it. Live shakes
+    /// remain queued and continue from the new pose in LateUpdate, so navigation never bakes a
+    /// transient impact offset into the camera's resting position.
+    /// </summary>
+    public static void PrepareForExternalCameraMotion(Camera camera)
+    {
+        driver?.PrepareForExternalMotion(camera);
+    }
+
     /// <summary>Deterministic per location, so a revision can be compared frame for frame.</summary>
     static float PhaseFor(Vector3 worldPosition)
     {
@@ -366,6 +376,14 @@ public static class ImpactCamera
 
             Time.timeScale = heldTimeScale;
             appliedTimeScale = heldTimeScale;
+        }
+
+        public void PrepareForExternalMotion(Camera camera)
+        {
+            if (camera == null || anchor != camera.transform)
+                return;
+
+            RestoreAnchor();
         }
 
         void Update()

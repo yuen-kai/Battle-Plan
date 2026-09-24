@@ -202,6 +202,14 @@ public static class ArenaBuilder
         // carries gives four separated steps from deck to shaded face — which is what makes
         // a 2.0 m blocker read as solid and full height from a 73-degree camera.
         new("Map_Cover",        "--bp-cover",        "#46525A", 0.00f, 0.18f),
+        // The cap on top of that body, and the brightest step of the four. It was left out of
+        // this table on the reasoning that the cap predated the port and was not part of it,
+        // which let it keep a brushed-steel albedo and a trace of metal from an abandoned
+        // texture pass. Nothing else in the arena carries a map, so the cap was the one surface
+        // reading as material rather than as paint — and worse, the cube it sits on is 2.75 m
+        // wide and 0.12 m tall, so its rim faces stretched a 128 px tile about 23:1 and the
+        // whole kit picked up fine horizontal banding under the 73-degree camera.
+        new("Map_WallCap",      "--bp-cover-cap",    "#ADC7D1", 0.00f, 0.18f),
         // The pillar variant's ID strip.
         new("Map_CoverPlate",   "--bp-ground-paint", "#E8E2D4", 0.00f, 0.18f),
 
@@ -416,17 +424,19 @@ public static class ArenaBuilder
     // ================================================================= cover kit
 
     /// <summary>
-    /// Four silhouettes, one envelope. Height never varies: every wall cell blocks line of sight
-    /// by rule, so a prop that reads as shootable-over is a lie.
+    /// Two silhouettes over four slots, one envelope. Height never varies: every wall cell blocks
+    /// line of sight by rule, so a prop that reads as shootable-over is a lie. The slots stay four
+    /// so the prefab and <see cref="CoverVariant"/>'s folded table are untouched and a line-free
+    /// dial can be given to a slot later without rebuilding either.
     /// </summary>
     private static Dictionary<string, Mesh> BuildCoverKitMeshes()
     {
         EnsureFolder(MeshFolder);
         var kit = new Dictionary<string, Mesh>
         {
-            ["Cover_Block"] = BuildCoverBlock(),
-            ["Cover_Container"] = BuildCoverContainer(),
-            ["Cover_Stack"] = BuildCoverStack(),
+            ["Cover_Block"] = BuildCoverBody("Cover_Block"),
+            ["Cover_Container"] = BuildCoverBody("Cover_Container"),
+            ["Cover_Stack"] = BuildCoverBody("Cover_Stack"),
             ["Cover_Pillar"] = BuildCoverPillar(),
         };
 
@@ -445,61 +455,26 @@ public static class ArenaBuilder
         return saved;
     }
 
-    private static Mesh BuildCoverBlock()
+    /// <summary>
+    /// One unbroken box, which is what the three body slots all get now.
+    ///
+    /// The container used to be corrugated — seven ribs standing 0.08 proud of a narrowed panel —
+    /// and the stack carried a 0.10 recess at mid-height, both there to tell the silhouettes apart
+    /// from above. Both failed at the distance the game is actually played from: on a dark slate
+    /// body a groove that shallow is not depot detail, it is a black slot, and a row of them reads
+    /// as a striped texture rather than as a container.
+    ///
+    /// Nothing replaces them, because nothing can. The envelope is fixed — 2.7 across, 1.94 to the
+    /// cap, every wall the same height by rule — so every dial that would separate two bodies
+    /// draws an edge across a face, and an edge across a face is the artefact being removed. That
+    /// leaves corner softness, which is the pillar's, and the board keeps two forms instead of
+    /// four: this crisp box and the pillar's deep bevel.
+    /// </summary>
+    private static Mesh BuildCoverBody(string name)
     {
         var m = new MeshBuilder();
         m.AddChamferedBox(Vector3.zero, Cell, Cell, 0f, CoverBodyTop, CoverChamfer);
-        return m.Build("Cover_Block");
-    }
-
-    /// <summary>
-    /// Corrugation done by narrowing the panel and standing the ribs back out to the cell edge,
-    /// rather than by cutting grooves into a full-width face. Cutting would need the face rebuilt
-    /// as a frame around every groove; this way the widest point of the prop is still exactly
-    /// 2.7, which is the number all four variants have to agree on.
-    /// </summary>
-    private static Mesh BuildCoverContainer()
-    {
-        const int RibCount = 7;
-        const float RibDepth = 0.08f;
-        const float RibWidth = 0.22f;
-
-        var m = new MeshBuilder();
-        m.AddChamferedBox(Vector3.zero, Cell, Cell - RibDepth * 2f, 0f, CoverBodyTop, CoverChamfer);
-
-        // Ribs on the two faces perpendicular to Z. The prop is rotated at placement so a
-        // corrugated face always turns toward the board centre.
-        float pitch = (Cell - RibWidth) / (RibCount - 1);
-        for (int i = 0; i < RibCount; i++)
-        {
-            float x = (i - (RibCount - 1) * 0.5f) * pitch;
-            foreach (int sign in new[] { -1, 1 })
-            {
-                float outer = sign * Cell * 0.5f;
-                float inner = sign * (Cell * 0.5f - RibDepth);
-                m.AddOpenBox(
-                    new Vector3(x - RibWidth * 0.5f, 0f, Mathf.Min(inner, outer)),
-                    new Vector3(x + RibWidth * 0.5f, CoverBodyTop - CoverChamfer, Mathf.Max(inner, outer)),
-                    skipMinY: true);
-            }
-        }
-        return m.Build("Cover_Container");
-    }
-
-    private static Mesh BuildCoverStack()
-    {
-        const float LowerTop = 1.00f;
-        const float GapTop = 1.10f;   // 0.10 recess centred on y 1.05
-        const float GapInset = 0.10f;
-
-        var m = new MeshBuilder();
-        m.AddChamferedBox(Vector3.zero, Cell, Cell, 0f, LowerTop, CoverChamfer);
-        m.AddOpenBox(
-            new Vector3(-(Cell * 0.5f - GapInset), LowerTop, -(Cell * 0.5f - GapInset)),
-            new Vector3(Cell * 0.5f - GapInset, GapTop, Cell * 0.5f - GapInset),
-            skipMinY: true, skipMaxY: true);
-        m.AddChamferedBox(Vector3.zero, Cell, Cell, GapTop, CoverBodyTop, CoverChamfer);
-        return m.Build("Cover_Stack");
+        return m.Build(name);
     }
 
     /// <summary>
@@ -931,6 +906,20 @@ public static class ArenaBuilder
 
     // ================================================================= material palette
 
+    /// <summary>
+    /// The cover meshes on their own. Build Arena also emits them, but it resets the arena root,
+    /// the deck and the backdrop on the way, which is far too much to move to change the shape of
+    /// a block. The mesh assets are overwritten in place, so every GUID the wall prefab holds
+    /// survives and the prefab does not need rebuilding.
+    /// </summary>
+    [MenuItem("Battle Plan/Art/Build Cover Kit", false, 11)]
+    public static void BuildCoverKit()
+    {
+        foreach (var pair in BuildCoverKitMeshes())
+            Debug.Log($"[Arena] {pair.Key}: {pair.Value.triangles.Length / 3} tris.");
+        AssetDatabase.SaveAssets();
+    }
+
     [MenuItem("Battle Plan/Art/Apply Material Palette", false, 12)]
     public static void ApplyMaterialPalette()
     {
@@ -953,6 +942,7 @@ public static class ArenaBuilder
                 mat.SetColor("_Color", srgb);
             mat.SetFloat("_Metallic", spec.Metallic);
             mat.SetFloat("_Smoothness", spec.Smoothness);
+            ClearAlbedoMap(mat);
 
             if (spec.EmissionHex != null)
             {
@@ -974,6 +964,25 @@ public static class ArenaBuilder
 
         AssetDatabase.SaveAssets();
         Debug.Log($"[Arena] Material palette applied to {written} materials.");
+    }
+
+    /// <summary>
+    /// A palette row is a flat token colour, so an albedo map on one is always a leftover. The
+    /// tiling goes back to 1 as well: a stale non-uniform scale would stretch whatever the next
+    /// texture pass assigns, which is exactly how the wall cap came to be striped.
+    /// </summary>
+    private static void ClearAlbedoMap(Material mat)
+    {
+        foreach (string property in new[] { "_BaseMap", "_MainTex" })
+        {
+            if (!mat.HasProperty(property))
+                continue;
+            if (mat.GetTexture(property) != null)
+                Debug.Log($"[Arena] Cleared {property} on {mat.name}; palette rows are flat colour.");
+            mat.SetTexture(property, null);
+            mat.SetTextureScale(property, Vector2.one);
+            mat.SetTextureOffset(property, Vector2.zero);
+        }
     }
 
     [MenuItem("Battle Plan/Art/Apply Post Stack", false, 13)]

@@ -1,0 +1,83 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: rgb(22, 29, 33);
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: rgb(180, 193, 197);
+}
+
+#unity-container {
+  position: fixed;
+  inset: 0;
+}
+
+/* Withdraws the canvas from browser scroll, pinch-zoom and double-tap-zoom so the game's own
+   two-finger pan and pinch reach Unity intact. */
+#unity-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  background: rgb(22, 29, 33);
+}
+
+#unity-loading-bar {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+#unity-loading-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+#unity-progress-bar-empty {
+  width: 220px;
+  height: 4px;
+  background: rgb(30, 39, 44);
+  border: 1px solid rgba(173, 199, 209, 0.6);
+}
+
+#unity-progress-bar-full {
+  width: 0%;
+  height: 100%;
+  background: rgb(241, 143, 1);
+}
+
+#unity-warning {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  text-align: center;
+}
+
+#unity-warning div {
+  padding: 10px;
+  font-size: 13px;
+}
+
+.unity-warning--notice {
+  background: rgb(30, 39, 44);
+}
+
+.unity-warning--error {
+  background: rgb(188, 45, 41);
+  color: rgb(241, 246, 248);
+}

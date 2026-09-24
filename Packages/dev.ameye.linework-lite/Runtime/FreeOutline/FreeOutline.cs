@@ -292,6 +292,7 @@ namespace LineworkLite.FreeOutline
                 }
             }
 #endif
+#if !UNITY_6000_6_OR_NEWER
             private RTHandle cameraDepthRTHandle;
             
             #pragma warning disable 618, 672
@@ -418,6 +419,7 @@ namespace LineworkLite.FreeOutline
             {
                 cameraDepthRTHandle = depth;
             }
+#endif
 
             public override void OnCameraCleanup(CommandBuffer cmd)
             {
@@ -425,8 +427,9 @@ namespace LineworkLite.FreeOutline
                 {
                     throw new ArgumentNullException(nameof(cmd));
                 }
-                
+#if !UNITY_6000_6_OR_NEWER
                 cameraDepthRTHandle = null;
+#endif
             }
 
             public void Dispose()
@@ -484,7 +487,8 @@ namespace LineworkLite.FreeOutline
             var render = freeOutlinePass.Setup(ref settings, ref maskMaterial, ref outlineMaterial, ref clearMaterial);
             if (render) renderer.EnqueuePass(freeOutlinePass);
         }
-        
+
+#if !UNITY_6000_6_OR_NEWER
         #pragma warning disable 618, 672
         public override void SetupRenderPasses(ScriptableRenderer renderer, in RenderingData renderingData)
         {
@@ -494,6 +498,7 @@ namespace LineworkLite.FreeOutline
             freeOutlinePass.SetTarget(renderer.cameraDepthTargetHandle);
         }
         #pragma warning restore 618, 672
+#endif
         
         /// <summary>
         /// Clean up resources allocated to the Scriptable Renderer Feature such as materials.

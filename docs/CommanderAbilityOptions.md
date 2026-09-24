@@ -180,7 +180,7 @@ Scores are directional (1 poor, 5 strong), not proof that an option is fun:
 
 ## Selected implementation
 
-The radial **Smoke Screen** is selected over the directional wall to reduce placement friction. It occupies a fixed 3×3 block—nine grid cells—centered on the plan-time target. Its duration is fixed: it applies for the round in which it is used and clears before the following planning phase. It blocks both shot and fog-of-war sightlines that cross its cell interiors; units at either endpoint retain close-range sight.
+The radial **Smoke Screen** is selected over the directional wall to reduce placement friction. It occupies a fixed 3×3 block—nine grid cells—centered on the plan-time target. Its duration is fixed: it applies for the round in which it is used and clears before the following planning phase. It blocks both shot and fog-of-war sightlines that cross its cell interiors; units at either endpoint retain close-range sight. The block is on acquiring a target, not on projectile flight — bullets and grenades pass through the cloud unimpeded.
 
 The wall remains documented only as a rejected prototype direction. The selectable ability should use existing square-targeting, not directional targeting.
 

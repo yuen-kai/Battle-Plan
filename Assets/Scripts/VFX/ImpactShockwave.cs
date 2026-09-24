@@ -285,6 +285,7 @@ public class ImpactShockwave : MonoBehaviour
     float coreLife;
 
     float clodOpacity;
+    BlastShadow shadow;
     float lightLifetime;
     float lightPeak;
 
@@ -313,6 +314,10 @@ public class ImpactShockwave : MonoBehaviour
     void Build(Color color, float radius, float life, bool withLightPop, float groundDust)
     {
         maxRadius = radius;
+        // Collected before any layer is built so every quad is handed the same wedge, and the
+        // thrown clods can have their travel cut short by the slab that stops them.
+        shadow = BlastShadow.Collect(transform.position, radius);
+        shadow.Strike();
         dustSeed = Random.Range(0f, 20f);
         shapeSeed = Random.Range(2f, 40f);
         collarSeed = Random.Range(48f, 88f);
@@ -664,6 +669,15 @@ public class ImpactShockwave : MonoBehaviour
             clod.Distance *= Mathf.Lerp(0.84f, 1.16f, downwind);
             clod.QuadSize = clodRadius * 2f * ClodQuadPad;
 
+            // Thrown ground does not pass through a raised slab; it banks up against the near face
+            // of it. The drift is cut by the same share so the pile does not walk through later.
+            float reach = shadow.Reach(clod.Direction, clod.Distance);
+            if (reach < clod.Distance)
+            {
+                clod.DriftSpeed *= clod.Distance > 0.001f ? reach / clod.Distance : 0f;
+                clod.Distance = reach;
+            }
+
             // Every clod is lit from the crater it was thrown out of, so a dozen of them read as a
             // dozen lumps of one material under one lamp rather than a dozen unrelated sprites.
             clod.TowardBlast = clod.Distance > 0.01f
@@ -984,6 +998,10 @@ public class ImpactShockwave : MonoBehaviour
         filter.sharedMesh = mesh;
 
         material = new Material(shader);
+        // Every layer of the effect is centred on the blast, so one wedge serves all of them
+        // whatever each quad is scaled or turned to. Layers whose shader has no use for it ignore
+        // the values harmlessly.
+        shadow.Apply(material);
         ownedMaterials.Add(material);
 
         MeshRenderer renderer = quad.AddComponent<MeshRenderer>();

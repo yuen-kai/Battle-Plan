@@ -348,6 +348,7 @@ public static class DebrisBurst
         float age;
         bool biased;
         float biasDegrees;
+        BlastShadow shadow;
 
         public void Build(float radius, int count, Vector3 direction)
         {
@@ -363,6 +364,33 @@ public static class DebrisBurst
             cardBlock = new MaterialPropertyBlock();
             cardMesh = BuildCardMesh();
             BuildMaterials();
+
+            // A slab standing in the blast takes everything behind it out of the picture, and
+            // everything thrown that way stops on its near face. Collected before any piece is
+            // placed so the whole burst agrees on where the shield is.
+            //
+            // Every layer is fed, not just the ones above the shield in the queue. The slab's
+            // material is a third opaque, so the burning ground and the dust cards underneath it
+            // came through the glass at near full strength and the barrier read as absent.
+            shadow = BlastShadow.Collect(transform.position, radius);
+            shadow.Apply(scorchMaterial);
+            shadow.Apply(bedMaterial);
+            shadow.Apply(coalMaterial);
+            shadow.Apply(chunkMaterial);
+            shadow.Apply(surgeMaterial);
+            shadow.Apply(streakMaterial);
+            shadow.Apply(emberMaterial);
+            if (dustMaterials != null)
+            {
+                foreach (Material dust in dustMaterials)
+                    shadow.Apply(dust);
+            }
+            if (fireMaterials != null)
+            {
+                foreach (Material fire in fireMaterials)
+                    shadow.Apply(fire);
+            }
+            shadow.Strike();
 
             int heroCount = Mathf.Clamp(Mathf.RoundToInt(count * 0.14f), 2, 4);
             int midCount = Mathf.Clamp(Mathf.RoundToInt(count * 0.28f), 4, 8);
@@ -778,6 +806,18 @@ public static class DebrisBurst
                 float settled = chunk.RiseSeconds + chunk.FallSeconds + chunk.BounceSeconds;
                 chunk.ExitAt = Mathf.Max(settled + 0.12f, Random.Range(0.48f, 0.57f));
 
+                // Where StepChunks' drag curve would leave this piece, so a slab in the way can
+                // cut the throw short and the chunk piles against it instead of going through. The
+                // hero pieces loft high enough to clear a shield, and those are left alone.
+                float carry = chunk.RiseSeconds + chunk.FallSeconds + chunk.SkidSeconds;
+                float travel =
+                    chunk.HorizontalSpeed
+                    * chunk.DragSeconds
+                    * (1f - Mathf.Exp(-carry / chunk.DragSeconds));
+                float allowed = shadow.Reach(outward, travel, chunk.ApexHeight);
+                if (allowed < travel)
+                    chunk.HorizontalSpeed *= travel > 0.001f ? allowed / travel : 0f;
+
                 Mesh mesh = BuildChunkMesh();
                 chunkMeshes[i] = mesh;
 
@@ -825,10 +865,11 @@ public static class DebrisBurst
                 float angle = (i / (float)Mathf.Max(1, lobeCount - 1)) * Mathf.PI * 2f
                     + Random.Range(-0.5f, 0.5f);
                 float offset = i == 0 ? 0f : Random.Range(0.20f, 0.36f) * Cell;
-                Vector3 center =
+                Vector3 center = InShadow(
                     transform.position
                     + new Vector3(Mathf.Cos(angle) * offset, 0f, Mathf.Sin(angle) * offset)
-                    + Vector3.up * (i == 0 ? 0.46f : Random.Range(0.18f, DustCeiling));
+                    + Vector3.up * (i == 0 ? 0.46f : Random.Range(0.18f, DustCeiling))
+                );
 
                 float heading = Random.Range(0f, 360f);
                 Card card = MakeCard(dustMaterials[i % dustMaterials.Length], center, heading);
@@ -868,9 +909,10 @@ public static class DebrisBurst
                 float radians = heading * Mathf.Deg2Rad;
                 Vector3 outward = new(Mathf.Sin(radians), 0f, Mathf.Cos(radians));
 
+                float standoff = Random.Range(0.08f, 0.16f) * Cell;
                 Vector3 center =
                     transform.position
-                    + outward * (Random.Range(0.08f, 0.16f) * Cell)
+                    + outward * standoff
                     + Vector3.up * Random.Range(0.14f, SurgeHeight + 0.07f);
 
                 Card card = MakeCard(surgeMaterial, center, heading);
@@ -878,6 +920,13 @@ public static class DebrisBurst
                 // full width inside two frames without anything sliding on afterwards.
                 card.Push = outward * (Random.Range(12f, 16f) * sizeScale);
                 card.PushDrag = Random.Range(0.045f, 0.065f);
+
+                // The skirt is ground-level pressure, so a slab ends it outright. Scaled rather
+                // than dropped: a lick that stops at the shield is the whole point of the read.
+                float extent = standoff + card.Push.magnitude * card.PushDrag;
+                float licked = shadow.Reach(outward, extent, center.y);
+                if (licked < extent)
+                    card.Push *= extent > 0.001f ? licked / extent : 0f;
                 card.Drift = Vector3.up * Random.Range(0.25f, 0.55f);
                 card.StartAt = i == 0 ? 0f : Random.Range(0.004f, 0.024f);
                 card.GrowSeconds = Random.Range(0.030f, 0.046f);
@@ -924,6 +973,28 @@ public static class DebrisBurst
                 card.SettleSeconds = 0.22f;
                 cards[i] = card;
             }
+        }
+
+        /// <summary>
+        /// <paramref name="place"/> pulled back to the near face of any slab standing between it
+        /// and the blast, so displaced material banks up against the shield instead of appearing
+        /// behind it. Height is kept: what was lofted stays lofted.
+        /// </summary>
+        Vector3 InShadow(Vector3 place)
+        {
+            Vector3 outward = new(place.x - transform.position.x, 0f, place.z - transform.position.z);
+            float distance = outward.magnitude;
+            if (distance < 0.001f)
+                return place;
+
+            float allowed = shadow.Reach(outward, distance, place.y);
+            return allowed >= distance
+                ? place
+                : new Vector3(
+                    transform.position.x + outward.x * (allowed / distance),
+                    place.y,
+                    transform.position.z + outward.z * (allowed / distance)
+                );
         }
 
         Card MakeCard(Material material, Vector3 center, float heading)
@@ -997,10 +1068,11 @@ public static class DebrisBurst
                 float offset = i == 0
                     ? Random.Range(0f, 0.05f) * Cell
                     : Random.Range(0.10f, 0.30f) * Cell;
-                Vector3 center =
+                Vector3 center = InShadow(
                     transform.position
                     + new Vector3(Mathf.Cos(angle) * offset, 0f, Mathf.Sin(angle) * offset)
-                    + Vector3.up * Random.Range(FireFloor, FireFloor + 0.48f);
+                    + Vector3.up * Random.Range(FireFloor, FireFloor + 0.48f)
+                );
 
                 float heading = Random.Range(0f, 360f);
                 GameObject node = new("DebrisFire");
@@ -1575,6 +1647,7 @@ public static class DebrisBurst
         )
         {
             GameObject host = new(name);
+            host.SetActive(false);
             host.transform.SetParent(transform, worldPositionStays: false);
 
             ParticleSystem system = host.AddComponent<ParticleSystem>();
@@ -1600,6 +1673,21 @@ public static class DebrisBurst
             ParticleSystem.ShapeModule shape = system.shape;
             shape.enabled = false;
 
+            // Sparks and slivers are the only matter here small enough to be worth bouncing rather
+            // than stopping, and a slab is the only thing on the board they can be thrown at, so
+            // the collider set is exactly the raised shields and only when one is standing.
+            if (shadow.Any)
+            {
+                ParticleSystem.CollisionModule collision = system.collision;
+                collision.enabled = true;
+                collision.type = ParticleSystemCollisionType.World;
+                collision.mode = ParticleSystemCollisionMode.Collision3D;
+                collision.collidesWith = BlastShadow.ShieldMask;
+                collision.dampen = 0.68f;
+                collision.bounce = 0.22f;
+                collision.lifetimeLoss = 0.35f;
+            }
+
             ParticleSystemRenderer systemRenderer = host.GetComponent<ParticleSystemRenderer>();
             if (systemRenderer != null)
             {
@@ -1611,7 +1699,7 @@ public static class DebrisBurst
                 systemRenderer.alignment = ParticleSystemRenderSpace.View;
             }
 
-            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            host.SetActive(true);
             return system;
         }
 

@@ -5,6 +5,9 @@ public enum GameMode : byte
 {
     Elimination = 0,
     KingOfTheHill = 1,
+
+    // 2 is retired (was Capture the Flag) and older peers can still send it.
+    EscortThePresident = 3,
 }
 
 public enum OpponentType : byte
@@ -35,8 +38,14 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     public static MatchOptions Current => current;
     public bool IsBotMatch => opponentType == OpponentType.AI;
     public bool IsKingOfTheHill => gameMode == GameMode.KingOfTheHill;
+    public bool IsEscort => gameMode == GameMode.EscortThePresident;
     public string GameModeDisplayName =>
-        IsKingOfTheHill ? "King of the Hill" : "Elimination";
+        gameMode switch
+        {
+            GameMode.KingOfTheHill => "King of the Hill",
+            GameMode.EscortThePresident => "Escort the President",
+            _ => "Elimination",
+        };
     public MapDefinition Map => MapCatalog.ById(mapId);
 
     // The single point where the live board is chosen. Both peers reach this through the
@@ -56,13 +65,12 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     public MatchOptions Sanitized()
     {
         MatchOptions sanitized = this;
-        if (
-            sanitized.gameMode != GameMode.Elimination
-            && sanitized.gameMode != GameMode.KingOfTheHill
-        )
+        sanitized.gameMode = sanitized.gameMode switch
         {
-            sanitized.gameMode = GameMode.Elimination;
-        }
+            GameMode.Elimination or GameMode.KingOfTheHill or GameMode.EscortThePresident =>
+                sanitized.gameMode,
+            _ => GameMode.Elimination,
+        };
 
         if (
             sanitized.opponentType != OpponentType.Player

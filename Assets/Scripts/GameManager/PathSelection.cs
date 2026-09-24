@@ -35,6 +35,12 @@ public class PathSelection : MonoBehaviour
 
     public void MovementSelection(int moveDist)
     {
+        if (Mouse.CameraGestureActive)
+        {
+            CancelCurrentDrag();
+            return;
+        }
+
         if (PlanMovement.Instance?.CanEditPlan != true)
         {
             pathDragActive = false;
@@ -43,15 +49,15 @@ public class PathSelection : MonoBehaviour
 
         moveDist =
             moveDist == -1 ? SelectedUnit.GetComponent<Movement>().unitData.moveDist : moveDist;
-        if (Input.GetMouseButtonDown(0))
+        if (Mouse.PrimaryPointerDown)
         {
             TryStartPath();
         }
-        else if (Input.GetMouseButton(0) && pathDragActive)
+        else if (Mouse.PrimaryPointerHeld && pathDragActive)
         {
             ExtendPath(moveDist);
         }
-        else if (Input.GetMouseButtonUp(0))
+        else if (Mouse.PrimaryPointerUp)
         {
             SettleRouteEnd();
             pathDragActive = false;
@@ -151,18 +157,33 @@ public class PathSelection : MonoBehaviour
     {
         abilityTapUnit = null;
         Vector3? pointer = Mouse.GetGridPointUnderMouse();
-        if (pointer == null || SelectedUnit == null)
+        if (pointer == null)
             return false;
+
+        Vector3 pressedCell = GridSystem.GetNearestGridCell(pointer.Value);
 
         // A press on the selected unit while it has drawn nothing may turn out to be the click that
         // turns it to its ability. Only the release can say, since this is also the press a route
         // is drawn out from.
-        bool pressedIdleSelection =
-            CurrentPlan?.Count == 1
-            && GridSystem.GetNearestGridCell(pointer.Value)
-                == GridSystem.GetNearestGridCell(SelectedUnit);
-        if (pressedIdleSelection)
+        if (
+            SelectedUnit != null
+            && CurrentPlan?.Count == 1
+            && pressedCell == GridSystem.GetNearestGridCell(SelectedUnit)
+        )
+        {
             abilityTapUnit = SelectedUnit;
+        }
+
+        // A unit standing on the pressed square outranks anything drawn across it, its own route
+        // included. Routes run over squares their team is standing on all the time — a unit is
+        // always sitting on the first cell of its own — so reading such a press as a grab on the
+        // route would take the press off the unit that was plainly pointed at, and where the two
+        // lie on one square there is no way to point at the unit any more precisely.
+        if (PlanMovement.Instance.TrySelectUnitForMovementAtCell(pressedCell))
+        {
+            TruncatePlan(0);
+            return CurrentRibbon != null;
+        }
 
         // Pressing on a drawn route grabs that route and trims it back to the pressed cell. The
         // pick uses the exact pointer position, so where routes share a cell you grab the one you
@@ -182,17 +203,9 @@ public class PathSelection : MonoBehaviour
             return CurrentRibbon != null;
         }
 
-        // Pressing another friendly unit starts a fresh route for it. Preparing movement also makes
-        // this gesture work when the previously selected unit was targeting an ability.
-        if (
-            PlanMovement.Instance.TrySelectUnitForMovementAtCell(
-                GridSystem.GetNearestGridCell(pointer.Value)
-            )
-        )
-        {
-            TruncatePlan(0);
-            return CurrentRibbon != null;
-        }
+        // Nothing to take on this square: put the selection down so a click away clears the board.
+        if (SelectedUnit != null)
+            PlanMovement.Instance.SwitchToUnit(null);
         return false;
     }
 

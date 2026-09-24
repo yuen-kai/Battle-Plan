@@ -22,9 +22,10 @@ public class CoverVariant : MonoBehaviour
 
 #if UNITY_EDITOR
     /// <summary>
-    /// DEV: forces one silhouette on every wall, for capture. The container and stack variants
-    /// carry deep grooves in a dark slate body; up close they are depot detail, but at the board
-    /// scale a trailer shoots from they collapse into black slots that read as a broken texture.
+    /// DEV: forces one silhouette on every wall, for capture. This existed because the container
+    /// and stack variants carried grooves that collapsed into black slots at board scale and read
+    /// as a broken texture. Those bodies are unbroken boxes now, so the override is only a capture
+    /// convenience rather than a way around an artefact.
     /// </summary>
     public static int devForcedVariant = -1;
 #endif
@@ -73,9 +74,10 @@ public class CoverVariant : MonoBehaviour
     }
 
     /// <summary>
-    /// Turns the detailed face of a block toward the middle of the board, in 90° steps. Only the
-    /// visual child is rotated; the root's transform and its collider are never touched.
-    /// Folding leaves the magnitudes unchanged, so this stays mirror-symmetric too.
+    /// Turns the detailed face of a block toward the middle of the board, in 90° steps — now only
+    /// the pillar's lit ID strip, since the bodies are unbroken on all four sides. Only the visual
+    /// child is rotated; the root's transform and its collider are never touched. Folding leaves
+    /// the magnitudes unchanged, so this stays mirror-symmetric too.
     /// </summary>
     public static float YawForCell(int column, int row)
     {
@@ -89,14 +91,16 @@ public class CoverVariant : MonoBehaviour
         int foldedColumn = Mathf.Min(column, GridSystem.ColumnCount - 1 - column);
         int foldedRow = Mathf.Min(row, GridSystem.RowCount - 1 - row);
 
-        // The five folded groups the 18-wall layout collapses into, each given a form that
-        // matches the tactical job that group of cells does.
+        // The five folded groups the 18-wall layout collapses into. Only the pillar group still
+        // looks different: slots 0, 1 and 2 all carry the same unbroken box now that the grooved
+        // bodies are gone, so the table is a place to hang a future form rather than a live
+        // distinction between three.
         if (foldedColumn == 7)
             return 3; // Central approach plug — the pillar is the board's primary landmark.
         if (foldedRow <= 1)
-            return 1; // Deployment-rank shoulder — depot containers.
+            return 1; // Deployment-rank shoulder.
         if (foldedColumn == 5)
-            return 2; // Hill shoulder — stacked blocks mark the contested corners.
+            return 2; // Hill shoulder — the contested corners.
         return 0; // Flank spine and edge closers — the quiet base block.
     }
 }

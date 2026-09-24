@@ -45,6 +45,13 @@ public class GameplayNetworkEditModeTests
         Assert.That(sanitizedKingOfTheHill.IsKingOfTheHill, Is.True);
         Assert.That(sanitizedKingOfTheHill.GameModeDisplayName, Is.EqualTo("King of the Hill"));
 
+        MatchOptions escort = defaults;
+        escort.gameMode = GameMode.EscortThePresident;
+        MatchOptions sanitizedEscort = escort.Sanitized();
+        Assert.That(sanitizedEscort.gameMode, Is.EqualTo(GameMode.EscortThePresident));
+        Assert.That(sanitizedEscort.IsEscort, Is.True);
+        Assert.That(sanitizedEscort.GameModeDisplayName, Is.EqualTo("Escort the President"));
+
         MatchOptions unsupported = defaults;
         unsupported.gameMode = RetiredGameModeId;
         Assert.That(unsupported.Sanitized().gameMode, Is.EqualTo(GameMode.Elimination));
@@ -661,16 +668,16 @@ public class GameplayNetworkEditModeTests
     [Test]
     public void ShieldFootprint_WidensByOneGridCellPerSide()
     {
-        const string prefabPath = "Assets/Prefabs/Units/Shotgunner.prefab";
+        const string prefabPath = "Assets/Prefabs/Units/Ramrod.prefab";
         GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
         Assert.That(prefab, Is.Not.Null, $"Could not load {prefabPath}.");
-        Assert.That(Shield.ShieldWidthIncreaseCellsPerSide, Is.EqualTo(1));
+        Assert.That(ShieldRush.ShieldWidthIncreaseCellsPerSide, Is.EqualTo(1));
 
         GameObject instance = Object.Instantiate(prefab);
         try
         {
             Transform shield = instance.transform.Find("Shield");
-            Assert.That(shield, Is.Not.Null, "Shotgunner prefab must keep its Shield child.");
+            Assert.That(shield, Is.Not.Null, "Ramrod prefab must keep its Shield child.");
             BoxCollider shieldCollider = shield.GetComponent<BoxCollider>();
             Assert.That(
                 shieldCollider,
@@ -681,7 +688,7 @@ public class GameplayNetworkEditModeTests
                 shieldCollider.size.x * shield.lossyScale.x
             );
 
-            Assert.That(Shield.TryExpandShieldFootprint(shield), Is.True);
+            Assert.That(ShieldRush.TryExpandShieldFootprint(shield), Is.True);
 
             float widthAfter = Mathf.Abs(
                 shieldCollider.size.x * shield.lossyScale.x
@@ -689,7 +696,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 widthAfter - widthBefore,
                 Is.EqualTo(
-                        Shield.ShieldWidthIncreaseCellsPerSide * 2f * GameLoop.cellSize
+                        ShieldRush.ShieldWidthIncreaseCellsPerSide * 2f * GameLoop.cellSize
                     )
                     .Within(0.001f)
             );
@@ -703,14 +710,14 @@ public class GameplayNetworkEditModeTests
     [TestCase(
         GameLoop.HostTeamIndex,
         "BlueTeam",
-        Shield.BlueShieldLayerName,
+        ShieldRush.BlueShieldLayerName,
         "Assets/Prefabs/Projectiles/BulletBlue.prefab",
         "Assets/Prefabs/Projectiles/BulletRed.prefab"
     )]
     [TestCase(
         GameLoop.OpponentTeamIndex,
         "RedTeam",
-        Shield.RedShieldLayerName,
+        ShieldRush.RedShieldLayerName,
         "Assets/Prefabs/Projectiles/BulletRed.prefab",
         "Assets/Prefabs/Projectiles/BulletBlue.prefab"
     )]
@@ -722,16 +729,16 @@ public class GameplayNetworkEditModeTests
         string enemyBulletPath
     )
     {
-        const string shotgunnerPrefabPath = "Assets/Prefabs/Units/Shotgunner.prefab";
+        const string ramrodPrefabPath = "Assets/Prefabs/Units/Ramrod.prefab";
         GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
-            shotgunnerPrefabPath
+            ramrodPrefabPath
         );
         GameObject friendlyBulletPrefab =
             UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(friendlyBulletPath);
         GameObject enemyBulletPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
             enemyBulletPath
         );
-        Assert.That(prefab, Is.Not.Null, $"Could not load {shotgunnerPrefabPath}.");
+        Assert.That(prefab, Is.Not.Null, $"Could not load {ramrodPrefabPath}.");
         Assert.That(friendlyBulletPrefab, Is.Not.Null, $"Could not load {friendlyBulletPath}.");
         Assert.That(enemyBulletPrefab, Is.Not.Null, $"Could not load {enemyBulletPath}.");
 
@@ -747,7 +754,7 @@ public class GameplayNetworkEditModeTests
 
             GameLoop.SetGroupLayer(instance, teamLayer);
             Transform shield = instance.transform.Find("Shield");
-            Assert.That(shield, Is.Not.Null, "Shotgunner must keep its Shield child.");
+            Assert.That(shield, Is.Not.Null, "Ramrod must keep its Shield child.");
             BoxCollider shieldCollider = shield.GetComponent<BoxCollider>();
             Assert.That(shieldCollider, Is.Not.Null);
             Assert.That(shieldCollider.enabled, Is.True);
@@ -755,10 +762,10 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 shield.CompareTag("Untagged"),
                 Is.True,
-                "Bullet.OnCollisionEnter must block and despawn without treating the shield as a unit."
+                "A shield must block the swept projectile query without being treated as a unit."
             );
             Assert.That(
-                Shield.TryApplyCollisionLayer(shield, teamIndex),
+                ShieldRush.TryApplyCollisionLayer(shield, teamIndex),
                 Is.True,
                 "Replicated shield state must restore the dedicated team-shield layer."
             );
@@ -766,7 +773,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(shield.gameObject.activeInHierarchy, Is.True);
             Assert.That(
                 shield.gameObject.layer,
-                Is.EqualTo(Shield.GetCollisionLayerForTeam(teamIndex))
+                Is.EqualTo(ShieldRush.GetCollisionLayerForTeam(teamIndex))
             );
             Assert.That(
                 shield.gameObject.layer,
@@ -784,7 +791,7 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 unitTargetingMask & (1 << instance.layer),
                 Is.Not.Zero,
-                "The Shotgunner body behind its own shield must remain targetable."
+                "The Ramrod body behind its own shield must remain targetable."
             );
             Assert.That(
                 boardSelectionMask & shieldLayerBit,
@@ -892,103 +899,15 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void ShieldRushBoost_OnlySelectsNearbyLivingAllies()
-    {
-        Vector2Int casterCell = new(4, 4);
-        int casterTeamIndex = GameLoop.HostTeamIndex;
-
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(6, 4),
-                casterTeamIndex,
-                true,
-                false
-            ),
-            Is.True,
-            "A living ally exactly two cells away is inside the rush radius."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(5, 5),
-                casterTeamIndex,
-                true,
-                false
-            ),
-            Is.True,
-            "A nearby diagonal ally is inside the radial rush boost."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                casterCell,
-                casterTeamIndex,
-                true,
-                true
-            ),
-            Is.False,
-            "The caster uses its fixed dash speed and does not buff itself."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(5, 4),
-                GameLoop.OpponentTeamIndex,
-                true,
-                false
-            ),
-            Is.False,
-            "Nearby enemies never receive an allied rush boost."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(5, 4),
-                casterTeamIndex,
-                false,
-                false
-            ),
-            Is.False,
-            "Dead allies never receive the rush boost."
-        );
-        Assert.That(
-            Shield.IsEligibleAllyForSpeedBoost(
-                casterCell,
-                casterTeamIndex,
-                new Vector2Int(6, 6),
-                casterTeamIndex,
-                true,
-                false
-            ),
-            Is.False,
-            "Living allies outside the two-cell radius are not boosted."
-        );
-    }
-
-    [Test]
-    public void ShieldRushBoost_ExpiresAndRestoresBaseMoveSpeed()
+    public void TimedMoveSpeedBoost_ExpiresAndRestoresBaseMoveSpeed()
     {
         const float boostStartedAt = 10f;
         const float baseMoveSpeed = 2f;
+        const float multiplier = 1.5f;
+        const float duration = 3f;
         Movement.TimedMoveSpeedBoost speedBoost = new();
 
-        Assert.That(Shield.AllySpeedBoostRadiusCells, Is.EqualTo(2f).Within(0.001f));
-        Assert.That(Shield.AllySpeedBoostMultiplier, Is.EqualTo(1.5f).Within(0.001f));
-        Assert.That(Shield.AllySpeedBoostDurationSeconds, Is.EqualTo(3f).Within(0.001f));
-        Assert.That(
-            speedBoost.TrySet(
-                Shield.AllySpeedBoostMultiplier,
-                Shield.AllySpeedBoostDurationSeconds,
-                boostStartedAt
-            ),
-            Is.True
-        );
+        Assert.That(speedBoost.TrySet(multiplier, duration, boostStartedAt), Is.True);
         Assert.That(
             speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt - 0.001f),
             Is.EqualTo(baseMoveSpeed).Within(0.001f)
@@ -996,30 +915,25 @@ public class GameplayNetworkEditModeTests
         Assert.That(speedBoost.IsActive(boostStartedAt - 0.001f), Is.False);
         Assert.That(
             speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 1f),
-            Is.EqualTo(baseMoveSpeed * Shield.AllySpeedBoostMultiplier).Within(0.001f)
+            Is.EqualTo(baseMoveSpeed * multiplier).Within(0.001f)
         );
         Assert.That(speedBoost.IsActive(boostStartedAt + 1f), Is.True);
         Assert.That(
-            speedBoost.GetEffectiveSpeed(
-                baseMoveSpeed,
-                boostStartedAt + Shield.AllySpeedBoostDurationSeconds
-            ),
+            speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + duration),
             Is.EqualTo(baseMoveSpeed).Within(0.001f),
-            "The boost restores base speed at the exact end of the shield window."
+            "The boost restores base speed at the exact end of its window."
         );
         Assert.That(
-            speedBoost.IsActive(boostStartedAt + Shield.AllySpeedBoostDurationSeconds),
+            speedBoost.IsActive(boostStartedAt + duration),
             Is.False,
             "The active-state decision ends exactly with the gameplay speed boost."
         );
         Assert.That(
-            speedBoost.TrySet(
-                Shield.AllySpeedBoostMultiplier,
-                Shield.AllySpeedBoostDurationSeconds,
-                boostStartedAt
-            ),
-            Is.True
+            speedBoost.TrySet(multiplier, float.PositiveInfinity, boostStartedAt),
+            Is.False,
+            "A timed boost needs a real deadline; an open-ended one goes through TrySetUntilCleared."
         );
+        Assert.That(speedBoost.TrySet(multiplier, duration, boostStartedAt), Is.True);
         speedBoost.Clear();
         Assert.That(
             speedBoost.GetEffectiveSpeed(baseMoveSpeed, boostStartedAt + 1f),
@@ -1034,9 +948,9 @@ public class GameplayNetworkEditModeTests
     }
 
     [Test]
-    public void ShieldRushBoostIndicator_BuildsLocalGroundVisualWithoutColliders()
+    public void MoveSpeedBoostIndicator_BuildsLocalGroundVisualWithoutColliders()
     {
-        GameObject unit = new("Shield Rush indicator test unit");
+        GameObject unit = new("Move speed boost indicator test unit");
         unit.transform.position = Vector3.up;
         unit.AddComponent<CapsuleCollider>();
         MeshRenderer hiddenUnitRenderer = unit.AddComponent<MeshRenderer>();
@@ -1354,7 +1268,7 @@ public class GameplayNetworkEditModeTests
     }
 
     /// <summary>
-    /// Shield Rush's ring was being drawn inside the base plate the unit stands on, where depth
+    /// The speed boost ring was being drawn inside the base plate the unit stands on, where depth
     /// testing hid it and every one of its streaks. Every unit prefab carries such a plate, so a
     /// ground effect that only clears the board plane is invisible in every real match.
     /// </summary>
@@ -2181,7 +2095,7 @@ public class GameplayNetworkEditModeTests
         {
             "Commander",
             "PogoRider",
-            "Shotgunner",
+            "Ramrod",
             "Sniper",
             "Soldier",
         };
@@ -2199,6 +2113,16 @@ public class GameplayNetworkEditModeTests
         );
         for (int index = 1; index < catalog.units.Count; index++)
         {
+            if (catalog.units[index].unitModel?.GetComponent<PresidentialRecall>() != null)
+            {
+                Assert.That(
+                    catalog.units[index].IsRosterEligible,
+                    Is.False,
+                    "The president is substituted into a crew, never chosen into one."
+                );
+                continue;
+            }
+
             Assert.That(
                 catalog.units[index].IsRosterEligible,
                 Is.True,
@@ -3282,7 +3206,7 @@ public class GameplayNetworkEditModeTests
     // === No-new-mode / no-size-drift guards (Wave 1) ===
 
     [Test]
-    public void SupportedGameModes_RemainEliminationAndKingOfTheHillOnly()
+    public void SupportedGameModes_AreExactlyTheOnesTheBuildCanPlay()
     {
         List<GameMode> supported = new();
         foreach (GameMode mode in System.Enum.GetValues(typeof(GameMode)))
@@ -3294,9 +3218,14 @@ public class GameplayNetworkEditModeTests
         }
 
         CollectionAssert.AreEquivalent(
-            new[] { GameMode.Elimination, GameMode.KingOfTheHill },
+            new[]
+            {
+                GameMode.Elimination,
+                GameMode.KingOfTheHill,
+                GameMode.EscortThePresident,
+            },
             supported,
-            "Only Elimination and King of the Hill may survive sanitization."
+            "Only a mode the build can actually play may survive sanitization."
         );
 
         MatchOptions retired = MatchOptions.Default;

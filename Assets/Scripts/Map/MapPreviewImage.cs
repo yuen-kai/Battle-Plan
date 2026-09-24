@@ -1,12 +1,20 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Draws a plan view of a board: deck, hill, cover and both deployments.
+/// Draws a plan view of a board as one mode will set it up: deck, cover, both deployments, and
+/// the objective pad if the mode has one.
 ///
 /// This lives in runtime code rather than the editor because the character-select screen has to
 /// show whichever board the lobby picked, and a single baked thumbnail can only ever be right for
 /// one of them. <c>MapPreviewGenerator</c> bakes the shipped PNG from the same routine, so the
 /// menu art and the in-game panel can never disagree.
+///
+/// Nothing here decides where a crew stands or where the objective is. All of it comes from the
+/// same routines the match runs — <see cref="GameLoop.CreateSpawnLayout"/>,
+/// <see cref="GameLoop.EscortExtractionCellsFor(GameMode, int, int)"/> and the board's own
+/// <see cref="MapDefinition.HillCells"/> — because a preview drawn from a second copy of the rules
+/// is a preview that will eventually lie. What this file owns is how those facts are coloured in.
 /// </summary>
 public static class MapPreviewImage
 {
@@ -44,7 +52,22 @@ public static class MapPreviewImage
     private static readonly Color32 TableRim = new(94, 83, 70, 255); // --bp-table      #5E5346
 
     // The hill pad is TeamPalette's own unclaimed cream, which is the board's --bp-ground-paint.
+    // Painted only for King of the Hill, because that is the only mode that paints it in the
+    // match: GameLoop draws the pad at runtime and skips it otherwise. Showing it on every mode
+    // told an Elimination player their board had an objective on it.
     private static readonly Color32 HillCell = TeamPalette.HillUnclaimed;
+
+    // How far an extraction pad is mixed from the deck toward the crew that owns it. The solid
+    // team colour is already spoken for — it is the unit marker — so a pad that took it would
+    // read as five more units standing on the far rank. Half way is unmistakably that crew's
+    // colour and unmistakably floor.
+    private const float ExtractionPadMix = 0.5f;
+
+    /// <summary>
+    /// The leg the preview draws. Escort alternates which crew escorts and which digs in, and a
+    /// lobby is always looking at the start of the series.
+    /// </summary>
+    private const int PreviewLegNumber = 1;
 
     // Team identity, and the preview is where a player first learns which colour is theirs. Shape
     // carries the same information (circle friendly, diamond enemy), which is the one place in the
@@ -61,14 +84,18 @@ public static class MapPreviewImage
     private static readonly Color32 RedRankTick = TeamPalette.EnemyBright;
 
     /// <summary>
-    /// A texture of the given board. The caller owns it and should destroy it when the view that
-    /// shows it goes away.
+    /// A texture of the given board as the given mode will actually set it up. The caller owns it
+    /// and should destroy it when the view that shows it goes away.
+    ///
+    /// The mode is a parameter rather than read from <see cref="MatchOptions.Current"/> because
+    /// both callers are lobbies: the options they are drawing are the ones being chosen, which
+    /// have not been committed anywhere yet.
     /// </summary>
-    public static Texture2D CreateTexture(MapDefinition map)
+    public static Texture2D CreateTexture(MapDefinition map, GameMode gameMode)
     {
         Texture2D texture = new(PreviewWidth, PreviewHeight, TextureFormat.RGBA32, false)
         {
-            name = $"MapPreview_{map?.Id.ToString() ?? "Active"}",
+            name = $"MapPreview_{map?.Id.ToString() ?? "Active"}_{gameMode}",
         };
 
         Color32[] pixels = new Color32[PreviewWidth * PreviewHeight];
@@ -83,7 +110,7 @@ public static class MapPreviewImage
         {
             if (map != null)
                 MapCatalog.SetActive(map);
-            DrawBoard(texture, MapCatalog.Active);
+            DrawBoard(texture, MapCatalog.Active, gameMode);
         }
         finally
         {
@@ -94,9 +121,9 @@ public static class MapPreviewImage
         return texture;
     }
 
-    public static byte[] EncodePng(MapDefinition map)
+    public static byte[] EncodePng(MapDefinition map, GameMode gameMode)
     {
-        Texture2D texture = CreateTexture(map);
+        Texture2D texture = CreateTexture(map, gameMode);
         try
         {
             return texture.EncodeToPNG();
@@ -110,8 +137,10 @@ public static class MapPreviewImage
         }
     }
 
-    private static void DrawBoard(Texture2D texture, MapDefinition map)
+    private static void DrawBoard(Texture2D texture, MapDefinition map, GameMode gameMode)
     {
+        Dictionary<Vector2Int, Color32> objective = BuildObjectivePaint(map, gameMode);
+
         // Cells are drawn inset, so the field underneath is what shows through as grid lines.
         DrawRect(
             texture,
@@ -133,7 +162,7 @@ public static class MapPreviewImage
                     BoardBottom + row * CellSize + 2,
                     CellSize - 4,
                     CellSize - 4,
-                    map.HillCells.Contains(cell) ? HillCell : DeckColour(cell)
+                    objective.TryGetValue(cell, out Color32 paint) ? paint : DeckColour(cell)
                 );
             }
         }
@@ -141,8 +170,9 @@ public static class MapPreviewImage
         foreach (Vector2Int wall in map.Walls)
             DrawWall(texture, wall);
 
-        DrawSpawns(texture, GameLoop.HostTeamIndex, BlueSpawn, BlueRankTick, false);
-        DrawSpawns(texture, GameLoop.OpponentTeamIndex, RedSpawn, RedRankTick, true);
+        List<Vector2Int[]> layout = GameLoop.CreateSpawnLayout(gameMode, PreviewLegNumber);
+        DrawSpawns(texture, layout, GameLoop.HostTeamIndex, BlueSpawn, BlueRankTick, false);
+        DrawSpawns(texture, layout, GameLoop.OpponentTeamIndex, RedSpawn, RedRankTick, true);
 
         // The board's own edge, in the colour of the table it sits on, rather than the amber it
         // used to carry. Amber means "the objective" everywhere else in the game, and a frame is
@@ -156,6 +186,73 @@ public static class MapPreviewImage
         DrawRect(texture, BoardLeft - 6, BoardBottom, 6, boardHeight, TableRim);
         DrawRect(texture, BoardLeft + boardWidth, BoardBottom, 6, boardHeight, TableRim);
     }
+
+    /// <summary>
+    /// Which cells carry objective paint, and in what colour. Every mode with an objective gets a
+    /// flat fill rather than the thin boundary the match outlines the same cells with: that
+    /// boundary is 0.12 m on a 2.7 m cell, which lands under a pixel once the plate is shown at
+    /// the size a lobby shows it.
+    ///
+    /// Elimination returns nothing, which is the point — it has no objective, and painting one
+    /// told a player their board had something on it to fight over.
+    /// </summary>
+    private static Dictionary<Vector2Int, Color32> BuildObjectivePaint(
+        MapDefinition map,
+        GameMode gameMode
+    )
+    {
+        Dictionary<Vector2Int, Color32> paint = new();
+
+        if (gameMode == GameMode.KingOfTheHill)
+        {
+            foreach (Vector2Int cell in map.HillCells)
+                paint[cell] = HillCell;
+            return paint;
+        }
+
+        // An extraction zone belongs to whoever is escorting, and it takes that crew's colour for
+        // the reason the match does: the pad is one side's finish line and the other side's last
+        // stand, and a neutral pad would say neither. On the first leg only one crew is escorting,
+        // so only one pad exists — which, read together with a defence deployed in front of it, is
+        // the whole shape of the mode in one picture.
+        for (int teamIndex = 0; teamIndex < GameLoop.TeamCount; teamIndex++)
+        {
+            Color32 pad = ExtractionPadColour(teamIndex);
+            foreach (
+                Vector2Int cell in GameLoop.EscortExtractionCellsFor(
+                    gameMode,
+                    PreviewLegNumber,
+                    teamIndex
+                )
+            )
+            {
+                paint[cell] = pad;
+            }
+        }
+        return paint;
+    }
+
+    private static Color32 ExtractionPadColour(int teamIndex) =>
+        Blend(DeckLight, TeamPalette.ForTeamIndex(teamIndex), ExtractionPadMix);
+
+    private static Color32 Blend(Color32 from, Color32 to, float amount) =>
+        new(
+            (byte)Mathf.RoundToInt(Mathf.Lerp(from.r, to.r, amount)),
+            (byte)Mathf.RoundToInt(Mathf.Lerp(from.g, to.g, amount)),
+            (byte)Mathf.RoundToInt(Mathf.Lerp(from.b, to.b, amount)),
+            255
+        );
+
+    /// <summary>
+    /// Where a board cell lands in the image, so a caller can ask what got drawn on a given square
+    /// without knowing the plate's margins. Only the tests need this; it is here rather than
+    /// duplicated there so the margins stay in one place.
+    /// </summary>
+    public static Vector2Int CellCenterPixel(Vector2Int cell) =>
+        new(
+            BoardLeft + cell.x * CellSize + CellSize / 2,
+            BoardBottom + cell.y * CellSize + CellSize / 2
+        );
 
     /// <summary>
     /// The checker parity ArenaBuilder.BuildDeck lays the deck out with. A is the lighter square.
@@ -184,20 +281,23 @@ public static class MapPreviewImage
     /// twenty pixels across at display size; at this thumbnail's scale its hole and its stroke are
     /// both under five pixels and collapse into each other. A filled token behind a cover-coloured
     /// rim keeps the shape readable and holds the red against a deck it is only 1.8:1 from.
+    ///
+    /// The tick stays in the margin at the marker's column even when the marker itself is inboard,
+    /// which is where an escort defence deploys. Its job is the colour key, not the row.
     /// </summary>
     private static void DrawSpawns(
         Texture2D texture,
+        List<Vector2Int[]> layout,
         int teamIndex,
         Color32 color,
         Color32 rankTick,
         bool diamond
     )
     {
-        Vector2Int[] spawns = GameLoop.CreateSpawnPositions(
-            false,
-            teamIndex,
-            RosterRules.UnitsPerPlayer
-        );
+        Vector2Int[] spawns =
+            teamIndex >= 0 && teamIndex < layout.Count
+                ? layout[teamIndex]
+                : System.Array.Empty<Vector2Int>();
         foreach (Vector2Int spawn in spawns)
         {
             int centerX = BoardLeft + spawn.x * CellSize + CellSize / 2;

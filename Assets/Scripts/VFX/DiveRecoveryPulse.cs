@@ -22,7 +22,7 @@ public sealed class DiveRecoveryPulse : MonoBehaviour
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
     // Amber, matching the language the rest of the dodge already uses, and far enough from the
-    // white of a hit flash and the teal of Shield Rush to never be mistaken for either.
+    // white of a hit flash and the teal of the speed boost to never be mistaken for either.
     private static readonly Color RecoveryColor = new(1f, 0.52f, 0.12f, 1f);
 
     // A slow first beat that tightens as the unit gets its feet back under it. Ending well short

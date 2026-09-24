@@ -30,7 +30,7 @@
                         </ui:Button>
                     </ui:VisualElement>
 
-                    <ui:ScrollView mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" class="join-content">
+                    <ui:ScrollView name="join-content" mode="Vertical" class="join-content" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto">
                         <ui:VisualElement name="create-panel" class="join-panel">
                             <ui:Label text="Mode" class="section-label join-section-label join-section-label--first" picking-mode="Ignore" />
                             <ui:VisualElement class="mode-row">
@@ -41,17 +41,25 @@
                                         <ui:Label text="Knock out the other crew." class="toy-button__label mode-option__detail" />
                                     </ui:VisualElement>
                                 </ui:Button>
-                                <ui:Button name="king-button" class="button mode-option mode-option--last">
+                                <ui:Button name="king-button" class="button mode-option">
                                     <ui:VisualElement class="toy-icon toy-icon--hill mode-option__icon" picking-mode="Ignore" />
                                     <ui:VisualElement class="option-copy" picking-mode="Ignore">
                                         <ui:Label text="King of the Hill" class="toy-button__label mode-option__name" />
                                         <ui:Label text="Hold the middle." class="toy-button__label mode-option__detail" />
                                     </ui:VisualElement>
                                 </ui:Button>
+                                <ui:Button name="escort-button" class="button mode-option mode-option--last">
+                                    <ui:VisualElement class="toy-icon toy-icon--escort mode-option__icon" picking-mode="Ignore" />
+                                    <ui:VisualElement class="option-copy" picking-mode="Ignore">
+                                        <ui:Label text="Escort the President" class="toy-button__label mode-option__name" />
+                                        <ui:Label text="Walk him across. Then swap sides." class="toy-button__label mode-option__detail" />
+                                    </ui:VisualElement>
+                                </ui:Button>
                             </ui:VisualElement>
 
                             <ui:Label text="Board" class="section-label join-section-label" picking-mode="Ignore" />
                             <ui:VisualElement name="map-row" class="map-row" />
+                            <ui:VisualElement name="map-preview" class="map-preview" picking-mode="Ignore" />
                             <ui:Label name="map-caption" class="label label--muted map-caption-line" picking-mode="Ignore" />
 
                             <ui:Label text="Opponent" class="section-label join-section-label" picking-mode="Ignore" />

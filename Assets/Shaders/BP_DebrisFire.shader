@@ -17,6 +17,11 @@ Shader "BattlePlan/DebrisFire"
         _ToneSpread ("Tone Spread", Range(0, 2)) = 1.2
         _Cut ("Cut", Range(0, 2)) = 0.3
         _CoreCut ("Core Cut", Range(0, 2)) = 0.52
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -54,7 +59,14 @@ Shader "BattlePlan/DebrisFire"
                 float _ToneSpread;
                 float _Cut;
                 float _CoreCut;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -68,12 +80,14 @@ Shader "BattlePlan/DebrisFire"
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 half4 color : COLOR;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 OUT.color = IN.color;
                 return OUT;
@@ -82,7 +96,7 @@ Shader "BattlePlan/DebrisFire"
             half4 frag(Varyings IN) : SV_Target
             {
                 half4 fire = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                clip(fire.a * IN.color.a - _Cut);
+                clip(fire.a * IN.color.a * BlastShadow(IN.positionWS) - _Cut);
 
                 // Green is the body's own hot-to-cool structure; a flat interior reads as a decal.
                 float3 body = _Tone.xyz * (_ToneFloor + fire.g * _ToneSpread);
@@ -119,7 +133,14 @@ Shader "BattlePlan/DebrisFire"
                 float _ToneSpread;
                 float _Cut;
                 float _CoreCut;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct DepthAttributes
             {
@@ -133,12 +154,14 @@ Shader "BattlePlan/DebrisFire"
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 half4 color : COLOR;
+                float3 positionWS : TEXCOORD1;
             };
 
             DepthVaryings DepthVert(DepthAttributes IN)
             {
                 DepthVaryings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 OUT.color = IN.color;
                 return OUT;
@@ -147,7 +170,7 @@ Shader "BattlePlan/DebrisFire"
             half4 DepthFrag(DepthVaryings IN) : SV_Target
             {
                 half4 fire = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                clip(fire.a * IN.color.a - _Cut);
+                clip(fire.a * IN.color.a * BlastShadow(IN.positionWS) - _Cut);
                 return 0;
             }
             ENDHLSL

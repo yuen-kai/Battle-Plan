@@ -200,13 +200,37 @@ public class NetworkHandler : NetworkBehaviour
             return;
         }
 
+        if (SandboxSession.IsActive)
+        {
+            // The sandbox composes both crews itself, so it goes straight to the board rather than
+            // through character selection — same as the tutorial above.
+            GameLoop.ResetMatchState();
+            GameLoop.ConfigureTeam(
+                GameLoop.HostTeamIndex,
+                NetworkManager.ServerClientId,
+                SandboxSession.BuildRoster(GameLoop.HostTeamIndex)
+            );
+            GameLoop.ConfigureTeam(
+                GameLoop.OpponentTeamIndex,
+                GameLoop.BotParticipantId,
+                SandboxSession.BuildRoster(GameLoop.OpponentTeamIndex)
+            );
+
+            sceneLoadRequested = true;
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
         if (GameLoop.devMode)
         {
             GameLoop.ResetMatchState();
             GameLoop.ConfigureTeam(
                 GameLoop.HostTeamIndex,
                 NetworkManager.ServerClientId,
-                options.IsBotMatch ? GameLoop.DevBotHostRoster : GameLoop.DevHostRoster
+                GameLoop.ResolveDevRoster(
+                    GameLoop.HostTeamIndex,
+                    options.IsBotMatch ? GameLoop.DevBotHostRoster : GameLoop.DevHostRoster
+                )
             );
 
             if (options.IsBotMatch)
@@ -214,7 +238,10 @@ public class NetworkHandler : NetworkBehaviour
                 GameLoop.ConfigureTeam(
                     GameLoop.OpponentTeamIndex,
                     GameLoop.BotParticipantId,
-                    GameLoop.DefaultBotRoster
+                    GameLoop.ResolveDevRoster(
+                        GameLoop.OpponentTeamIndex,
+                        GameLoop.DefaultBotRoster
+                    )
                 );
             }
             else
@@ -226,7 +253,10 @@ public class NetworkHandler : NetworkBehaviour
                 GameLoop.ConfigureTeam(
                     GameLoop.OpponentTeamIndex,
                     opponentClientId,
-                    GameLoop.DevOpponentRoster
+                    GameLoop.ResolveDevRoster(
+                        GameLoop.OpponentTeamIndex,
+                        GameLoop.DevOpponentRoster
+                    )
                 );
             }
 

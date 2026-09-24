@@ -46,7 +46,7 @@ public class TutorialDirector : MonoBehaviour
     private const int MaxRoundsWaitingToThrow = 3;
 
     private Stage stage = Stage.Move;
-    private string lastPhase = string.Empty;
+    private GameLoop.Phase? lastPhase;
     private string activeInstruction = string.Empty;
     private string activeLesson = string.Empty;
     private bool playerQueuedAbility;
@@ -62,19 +62,19 @@ public class TutorialDirector : MonoBehaviour
 
         PrepareHud();
 
-        string phase = GameLoop.currentPhase;
+        GameLoop.Phase phase = GameLoop.currentPhase;
         if (phase != lastPhase)
         {
             OnPhaseEntered(phase);
             lastPhase = phase;
         }
 
-        if (phase == "planning")
+        if (phase == GameLoop.Phase.Planning)
         {
             playerQueuedAbility |= HasQueuedAbility();
             ShowInstruction(PlanningInstruction());
         }
-        else if (phase == "dodging")
+        else if (phase == GameLoop.Phase.Dodging)
         {
             LatchDodgeAlerts();
             ShowInstruction(
@@ -117,11 +117,11 @@ public class TutorialDirector : MonoBehaviour
         GameLoop.Instance?.ExitToMainMenu();
     }
 
-    private void OnPhaseEntered(string phase)
+    private void OnPhaseEntered(GameLoop.Phase phase)
     {
         switch (phase)
         {
-            case "planning":
+            case GameLoop.Phase.Planning:
                 playerQueuedAbility = false;
                 enemyWasAlerted = false;
                 playerWasAlerted = false;
@@ -129,12 +129,12 @@ public class TutorialDirector : MonoBehaviour
                     ShowLesson(ClosingLesson);
                 break;
 
-            case "dodging":
+            case GameLoop.Phase.Dodging:
                 LatchDodgeAlerts();
                 ShowInstruction(string.Empty);
                 break;
 
-            case "executing":
+            case GameLoop.Phase.Executing:
                 // A dodge window can open and close without ever surfacing to Update, so the round
                 // record is read again here rather than relying on having seen the phase.
                 LatchDodgeAlerts();

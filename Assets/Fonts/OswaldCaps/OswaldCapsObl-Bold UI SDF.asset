@@ -72,6 +72,7 @@ MonoBehaviour:
   m_Version: 1.1.0
   m_Material: {fileID: -1444923193596496902}
   m_SourceFontFileGUID: 545bbb9955e7d48b893e0b50ed915a8b
+  m_ShowObsoleteProperties: 0
   m_fontAssetCreationEditorSettings:
     sourceFontFileGUID: 
     faceIndex: 0

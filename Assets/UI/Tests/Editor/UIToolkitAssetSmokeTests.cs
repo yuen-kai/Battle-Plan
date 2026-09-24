@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using NUnit.Framework;
 using UnityEditor;
@@ -30,15 +31,12 @@ public class UIToolkitAssetSmokeTests
                 "play-button",
                 "tutorial-button",
                 "settings-button",
-                "controls-button",
                 "credits-button",
                 "quit-button",
                 "settings-modal",
-                "controls-modal",
                 "credits-modal",
                 "quality-dropdown",
                 "settings-close-button",
-                "controls-close-button",
                 "credits-close-button",
             },
         },
@@ -48,6 +46,7 @@ public class UIToolkitAssetSmokeTests
             new[]
             {
                 "screen",
+                "join-content",
                 "create-panel",
                 "join-panel",
                 "show-create-button",
@@ -57,6 +56,9 @@ public class UIToolkitAssetSmokeTests
                 "king-button",
                 "player-opponent-button",
                 "ai-opponent-button",
+                "map-row",
+                "map-preview",
+                "map-caption",
                 "local-multiplayer-row",
                 "local-multiplayer-toggle",
                 "fog-toggle",
@@ -80,9 +82,8 @@ public class UIToolkitAssetSmokeTests
             {
                 "screen",
                 "roster-options",
+                "class-filters",
                 "selected-roster",
-                "roster-instruction",
-                "roster-count-label",
                 "confirm-selection-button",
                 "selection-status",
                 "mode-summary",
@@ -115,10 +116,6 @@ public class UIToolkitAssetSmokeTests
                 "planning-commit-status",
                 "lock-in-button",
                 "exit-match-button",
-                "controls-button",
-                "controls-overlay",
-                "controls-scroll",
-                "controls-close-button",
                 "deployment-overlay",
                 "deployment-status",
                 "results-overlay",
@@ -169,8 +166,6 @@ public class UIToolkitAssetSmokeTests
                 "unit-option-button",
                 "unit-option-portrait",
                 "unit-option-name",
-                "unit-option-description",
-                "unit-option-ability",
                 "unit-option-status",
             },
         },
@@ -258,11 +253,9 @@ public class UIToolkitAssetSmokeTests
     [Test]
     public void GameHudLockInExposesReversibleWaitingState()
     {
-        string markup = File.ReadAllText("Assets/UI/Game/GameHUD.uxml");
         string styles = File.ReadAllText("Assets/UI/Game/GameHUD.uss");
         string controller = File.ReadAllText("Assets/Scripts/Menus/GameHUDController.cs");
 
-        Assert.That(markup, Does.Contain("unlock while waiting"));
         Assert.That(controller, Does.Contain("ShowPlanningCommitUnlocking"));
         Assert.That(controller, Does.Contain("\"Unlock\""));
         Assert.That(controller, Does.Contain("planner.TryUnlock()"));
@@ -657,7 +650,6 @@ public class UIToolkitAssetSmokeTests
         VisualElement hudTop = tree.Q<VisualElement>(className: "hud-top");
         VisualElement hillReadout = tree.Q<VisualElement>("hill-status-readout");
         VisualElement deployment = tree.Q<VisualElement>("deployment-overlay");
-        VisualElement controls = tree.Q<VisualElement>("controls-overlay");
         VisualElement results = tree.Q<VisualElement>("results-overlay");
         VisualElement unitCards = tree.Q<VisualElement>("unit-cards");
         VisualElement enemyCards = tree.Q<VisualElement>("enemy-unit-cards");
@@ -668,13 +660,11 @@ public class UIToolkitAssetSmokeTests
         Assert.That(tree.Q<Label>("match-type-label"), Is.Null);
         Assert.That(tree.Q<Label>("fog-label"), Is.Null);
         Assert.That(deployment, Is.Not.Null);
-        Assert.That(controls, Is.Not.Null);
         Assert.That(results, Is.Not.Null);
         Assert.That(unitCards, Is.Not.Null);
         Assert.That(enemyCards, Is.Not.Null);
         Assert.That(hudTop.ClassListContains("toybox-ui"), Is.True);
         Assert.That(deployment.ClassListContains("toybox-ui"), Is.True);
-        Assert.That(controls.ClassListContains("toybox-ui"), Is.True);
         Assert.That(results.ClassListContains("toybox-ui"), Is.True);
         Assert.That(hudTop.Q<VisualElement>("unit-cards"), Is.Null);
         Assert.That(hudTop.Q<VisualElement>("enemy-unit-cards"), Is.Null);
@@ -869,11 +859,10 @@ public class UIToolkitAssetSmokeTests
         Assert.That(joinStyle, Does.Contain(".toybox-ui.join-screen .mode-option"));
         Assert.That(
             rosterStyle,
-            Does.Contain(".toybox-ui.roster-screen .roster-heading")
-        );
-        Assert.That(
-            rosterStyle,
-            Does.Contain(".compact .roster-body {\n    height: 300px;")
+            Does.Contain(".roster-screen .roster-frame {"),
+            "The roster frame rule has to be two classes deep, or the shared "
+                + ".compact .screen-frame puts the page inset back and the console stops "
+                + "reaching the bottom edge on every aspect narrower than 16:9."
         );
         Assert.That(
             rosterStyle,
@@ -939,7 +928,7 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
-    public void JoinOffersEliminationAndKingOfTheHillWithNoDisabledModes()
+    public void JoinOffersEveryPlayableModeWithNoDisabledButtons()
     {
         const string assetPath = "Assets/UI/Join/JoinGame.uxml";
         VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
@@ -948,22 +937,31 @@ public class UIToolkitAssetSmokeTests
         TemplateContainer tree = asset.Instantiate();
         Button elimination = tree.Q<Button>("elimination-button");
         Button king = tree.Q<Button>("king-button");
+        Button escort = tree.Q<Button>("escort-button");
 
         Assert.That(elimination, Is.Not.Null);
         Assert.That(king, Is.Not.Null);
+        Assert.That(escort, Is.Not.Null);
         Assert.That(elimination.enabledSelf, Is.True);
         Assert.That(king.enabledSelf, Is.True);
+        Assert.That(escort.enabledSelf, Is.True);
 
+        // Named rather than counted: this assembly cannot reference GameMode.
         List<Button> modeOptions = tree.Query<Button>(className: "mode-option").ToList();
         Assert.That(
-            modeOptions.Count,
-            Is.EqualTo(2),
-            "The mode row must only advertise modes the build can actually play."
+            modeOptions.Select(option => option.name).ToArray(),
+            Is.EquivalentTo(new[] { "elimination-button", "king-button", "escort-button" }),
+            "The mode row must advertise exactly the modes JoinGameUIController handles."
         );
         Assert.That(
             modeOptions.TrueForAll(option => option.enabledSelf),
             Is.True,
             "A disabled mode button advertises a mode that does not exist."
+        );
+        Assert.That(
+            modeOptions.Count(option => option.ClassListContains("mode-option--last")),
+            Is.EqualTo(1),
+            "Exactly one tile closes the row, and it is the one that drops its right margin."
         );
     }
 
@@ -1097,7 +1095,7 @@ public class UIToolkitAssetSmokeTests
     }
 
     [Test]
-    public void GameHudExposesTargetFeedbackAndControlsElements()
+    public void GameHudExposesTargetFeedbackAndResultsElements()
     {
         const string assetPath = "Assets/UI/Game/GameHUD.uxml";
         VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
@@ -1109,57 +1107,9 @@ public class UIToolkitAssetSmokeTests
             Is.Not.Null,
             "GameHUDController binds target-feedback-label as a Label for ability/target feedback."
         );
-        Assert.That(
-            tree.Q<Button>("controls-button"),
-            Is.Not.Null,
-            "GameHUDController wires controls-button to open the in-match controls overlay."
-        );
-        Assert.That(
-            tree.Q<VisualElement>("controls-overlay"),
-            Is.Not.Null,
-            "GameHUDController shows and hides controls-overlay."
-        );
-        Assert.That(
-            tree.Q<Button>("controls-close-button"),
-            Is.Not.Null,
-            "GameHUDController wires controls-close-button to dismiss the overlay."
-        );
-        ScrollView controlsScroll = tree.Q<ScrollView>("controls-scroll");
         ScrollView resultsScroll = tree.Q<ScrollView>("results-scroll");
-        Assert.That(controlsScroll, Is.Not.Null);
         Assert.That(resultsScroll, Is.Not.Null);
-        Assert.That(controlsScroll.focusable, Is.True);
         Assert.That(resultsScroll.focusable, Is.True);
-    }
-
-    [Test]
-    public void TitleControlsModalExposesControlGuidanceContent()
-    {
-        const string assetPath = "Assets/UI/Title/TitleScreen.uxml";
-        VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(assetPath);
-        Assert.That(asset, Is.Not.Null, $"Could not import {assetPath}.");
-
-        TemplateContainer tree = asset.Instantiate();
-        VisualElement controlsModal = tree.Q<VisualElement>("controls-modal");
-        Assert.That(controlsModal, Is.Not.Null, "TitleScreen must expose the controls modal.");
-        Assert.That(
-            controlsModal.Q<Button>("controls-close-button"),
-            Is.Not.Null,
-            "The controls modal must be dismissible."
-        );
-
-        var labels = controlsModal.Query<Label>().ToList();
-        int populated = 0;
-        foreach (Label label in labels)
-        {
-            if (!string.IsNullOrWhiteSpace(label.text))
-                populated++;
-        }
-        Assert.That(
-            populated,
-            Is.GreaterThanOrEqualTo(4),
-            "The controls modal must document the core controls, not sit empty."
-        );
     }
 
     [Test]

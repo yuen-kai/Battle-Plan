@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Draws the path an ability travels — the Shotgunner's rush across the board, the Soldier's
+/// Draws the path an ability travels — the Ramrod's rush across the board, the Soldier's
 /// grenade arc, the Pogo Rider's jump — from points the ability itself sampled. Ground runs lie
 /// flat and end in the same chevron a planned route does, so they read as movement; lobs are drawn
 /// through the air over a faint track on the board, which is what tells you where an arc that has

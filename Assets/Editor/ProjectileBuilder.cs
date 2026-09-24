@@ -45,7 +45,7 @@ public static class ProjectileBuilder
     private const string RoundRedPrefabPath = "Assets/Prefabs/Projectiles/BulletRed.prefab";
     private const string PelletBluePrefabPath = "Assets/Prefabs/Projectiles/PelletBlue.prefab";
     private const string PelletRedPrefabPath = "Assets/Prefabs/Projectiles/PelletRed.prefab";
-    private const string ShotgunnerDataPath = "Assets/UnitStats/Shotgunner.asset";
+    private const string RamrodDataPath = "Assets/UnitStats/Ramrod.asset";
     private const string GrenadePrefabPath = "Assets/Prefabs/Projectiles/Grenade.prefab";
 
     private const string GrenadeMaterialPath = "Assets/Materials/Projectiles/Grenade.mat";
@@ -128,10 +128,10 @@ public static class ProjectileBuilder
     // ================================================================= the pellet
 
     /// <summary>
-    /// One piece of shot, for the Shotgunner.
+    /// One piece of shot, for the Ramrod.
     ///
     /// <para>
-    /// It is a ball, and being a ball is the point. The Shotgunner empties ten rounds at hundredth-
+    /// It is a ball, and being a ball is the point. The Ramrod empties ten rounds at hundredth-
     /// of-a-second intervals through a 25 degree cone: the direction of that is carried by the
     /// spread, not by any one piece in it, and shot has no nose to point anywhere. What it must not
     /// look like is the rifle round, and length does that on its own — a piece of shot is under
@@ -245,7 +245,7 @@ public static class ProjectileBuilder
     }
 
     /// <summary>
-    /// The Shotgunner's shot, as variants of the two rounds rather than prefabs of their own. The
+    /// The Ramrod's shot, as variants of the two rounds rather than prefabs of their own. The
     /// <c>Bullet</c> script, the rigidbody, the team materials and — the one that matters — the
     /// <c>SphereCollider</c> the hit test is measured off all stay inherited, so this changes what
     /// a blast looks like and nothing whatsoever about what it does.
@@ -257,10 +257,10 @@ public static class ProjectileBuilder
         if (!blue || !red)
             return false;
 
-        var data = AssetDatabase.LoadAssetAtPath<UnitData>(ShotgunnerDataPath);
+        var data = AssetDatabase.LoadAssetAtPath<UnitData>(RamrodDataPath);
         if (data == null)
         {
-            Debug.LogError($"[Projectiles] Missing {ShotgunnerDataPath}.");
+            Debug.LogError($"[Projectiles] Missing {RamrodDataPath}.");
             return false;
         }
 

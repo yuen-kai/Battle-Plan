@@ -24,6 +24,11 @@ Shader "BattlePlan/DebrisMatter"
         _EmberEdge ("Ember Edge", Range(1, 24)) = 1
         _EmberFill ("Ember Fill", Range(0, 1)) = 1
         _Cut ("Cut", Range(0, 2)) = 0.36
+        _BlastShadow ("Blast Shadow (originX, originZ, slabs, feather)", Vector) = (0, 0, 0, 0.3)
+        _BlastSlab0 ("Slab 0 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge0 ("Slab 0 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
+        _BlastSlab1 ("Slab 1 (centreX, centreZ, normalX, normalZ)", Vector) = (0, 0, 0, 0)
+        _BlastSlabEdge1 ("Slab 1 Edge (rightX, rightZ, halfWidth, top)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -65,7 +70,14 @@ Shader "BattlePlan/DebrisMatter"
                 float _EmberEdge;
                 float _EmberFill;
                 float _Cut;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct Attributes
             {
@@ -79,12 +91,14 @@ Shader "BattlePlan/DebrisMatter"
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 half4 color : COLOR;
+                float3 positionWS : TEXCOORD1;
             };
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 OUT.color = IN.color;
                 return OUT;
@@ -93,7 +107,7 @@ Shader "BattlePlan/DebrisMatter"
             half4 frag(Varyings IN) : SV_Target
             {
                 half4 matter = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                clip(matter.a * IN.color.a - _Cut);
+                clip(matter.a * IN.color.a * BlastShadow(IN.positionWS) - _Cut);
 
                 // Green is a baked value break-up: a lobe with a flat interior reads as a decal.
                 float3 grey = _Tone.xyz * (_ToneFloor + matter.g * _ToneSpread);
@@ -136,7 +150,14 @@ Shader "BattlePlan/DebrisMatter"
                 float _EmberEdge;
                 float _EmberFill;
                 float _Cut;
+                float4 _BlastShadow;
+                float4 _BlastSlab0;
+                float4 _BlastSlabEdge0;
+                float4 _BlastSlab1;
+                float4 _BlastSlabEdge1;
             CBUFFER_END
+
+            #include "BP_BlastShadow.hlsl"
 
             struct DepthAttributes
             {
@@ -150,12 +171,14 @@ Shader "BattlePlan/DebrisMatter"
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 half4 color : COLOR;
+                float3 positionWS : TEXCOORD1;
             };
 
             DepthVaryings DepthVert(DepthAttributes IN)
             {
                 DepthVaryings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _MainTex);
                 OUT.color = IN.color;
                 return OUT;
@@ -164,7 +187,7 @@ Shader "BattlePlan/DebrisMatter"
             half4 DepthFrag(DepthVaryings IN) : SV_Target
             {
                 half4 matter = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
-                clip(matter.a * IN.color.a - _Cut);
+                clip(matter.a * IN.color.a * BlastShadow(IN.positionWS) - _Cut);
                 return 0;
             }
             ENDHLSL

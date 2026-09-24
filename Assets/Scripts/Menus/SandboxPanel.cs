@@ -1,0 +1,512 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+/// <summary>
+/// The sandbox's controls, in the running game rather than in an Editor window: compose both crews,
+/// hold the board open to be rearranged by hand, and put it back. A designer never leaves the board
+/// to change what is on it.
+///
+/// It docks inside the HUD's own visual tree instead of standing up a second panel. That is what
+/// makes it pick like the HUD — <see cref="GameHUDController.IsPointerOverUI"/> reads one panel, and
+/// a click on a sandbox control must not also land on the board behind it — and it means the game's
+/// stylesheets already apply.
+///
+/// Crew composition lives on the unit cards and on the right-hand quick-add catalog. The cards are
+/// the crew as fielded; the catalog is for stacking several units onto a side without opening the
+/// modal each time. Slot swaps and removals still happen on the card that already stands for that
+/// unit.
+/// </summary>
+public sealed class SandboxPanel
+{
+    private const string LayoutPath = "Assets/UI/Game/SandboxPanel.uxml";
+    private const string StylePath = "Assets/UI/Game/SandboxPanel.uss";
+
+    private static bool layoutReported;
+
+    private readonly VisualElement layer;
+    private readonly VisualElement body;
+    private readonly Button collapseButton;
+    private readonly Button moveButton;
+    private readonly Label ownCount;
+    private readonly Label enemyCount;
+    private readonly Toggle fog;
+    private readonly Toggle ownImmortal;
+    private readonly Toggle enemyImmortal;
+    private readonly Label hint;
+    private readonly Label quickCount;
+    private readonly Button teamBlue;
+    private readonly Button teamRed;
+    private readonly VisualElement quickGrid;
+    private readonly VisualElement picker;
+    private readonly VisualElement pickerPanel;
+    private readonly VisualElement pickerGrid;
+    private readonly Label pickerTitle;
+
+    private Button ownAddSlot;
+    private Button enemyAddSlot;
+    private Action<int> pickedAction;
+    private bool collapsed;
+    private int quickAddTeamIndex = GameLoop.HostTeamIndex;
+    private string appliedSignature;
+
+    private SandboxPanel(VisualElement layer)
+    {
+        this.layer = layer;
+        body = layer.Q<VisualElement>("sandbox-body");
+        collapseButton = layer.Q<Button>("sandbox-collapse");
+        moveButton = layer.Q<Button>("sandbox-move");
+        ownCount = layer.Q<Label>("sandbox-own-count");
+        enemyCount = layer.Q<Label>("sandbox-enemy-count");
+        fog = layer.Q<Toggle>("sandbox-fog");
+        ownImmortal = layer.Q<Toggle>("sandbox-own-immortal");
+        enemyImmortal = layer.Q<Toggle>("sandbox-enemy-immortal");
+        hint = layer.Q<Label>("sandbox-hint");
+        quickCount = layer.Q<Label>("sandbox-quick-count");
+        teamBlue = layer.Q<Button>("sandbox-team-blue");
+        teamRed = layer.Q<Button>("sandbox-team-red");
+        quickGrid = layer.Q<VisualElement>("sandbox-quick-grid");
+        picker = layer.Q<VisualElement>("sandbox-picker");
+        pickerPanel = layer.Q<VisualElement>("sandbox-picker-panel");
+        pickerGrid = layer.Q<VisualElement>("sandbox-picker-grid");
+        pickerTitle = layer.Q<Label>("sandbox-picker-title");
+
+        collapseButton.clicked += ToggleCollapsed;
+        moveButton.clicked += ToggleBoardEdit;
+        layer.Q<Button>("sandbox-reset").clicked += () => Rebuild();
+        layer.Q<Button>("sandbox-clear").clicked += ClearCrews;
+        layer.Q<Button>("sandbox-recharge").clicked += () =>
+            GameLoop.Instance?.SandboxClearAbilityCooldowns();
+        layer.Q<Button>("sandbox-copy").clicked += CopyRound;
+        layer.Q<Button>("sandbox-picker-close").clicked += ClosePicker;
+        teamBlue.clicked += () => SetQuickAddTeam(GameLoop.HostTeamIndex);
+        teamRed.clicked += () => SetQuickAddTeam(GameLoop.OpponentTeamIndex);
+        fog.RegisterValueChangedCallback(evt => SetFog(evt.newValue));
+        ownImmortal.RegisterValueChangedCallback(evt => SetImmortal(OwnTeamIndex, evt.newValue));
+        enemyImmortal.RegisterValueChangedCallback(evt =>
+            SetImmortal(EnemyTeamIndex, evt.newValue)
+        );
+        picker.RegisterCallback<KeyDownEvent>(OnPickerKeyDown);
+    }
+
+    public static SandboxPanel TryCreate()
+    {
+        if (GameHUDController.Instance?.Root == null || GameLoop.Instance == null)
+            return null;
+
+        VisualTreeAsset layout = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            LayoutPath
+        );
+        if (layout == null)
+        {
+            // Creation is retried every frame until the HUD exists, so a missing asset is said once
+            // rather than once per frame for the rest of the session.
+            if (!layoutReported)
+                Debug.LogError($"[Sandbox] No panel layout at {LayoutPath}.");
+            layoutReported = true;
+            return null;
+        }
+
+        // Instantiate wraps the tree in a container of its own, which would otherwise size itself to
+        // its content and collapse the full-bleed layer inside it.
+        VisualElement layer = layout.Instantiate();
+        layer.style.position = Position.Absolute;
+        layer.style.left = 0;
+        layer.style.right = 0;
+        layer.style.top = 0;
+        layer.style.bottom = 0;
+        layer.pickingMode = PickingMode.Ignore;
+        StyleSheet style = UnityEditor.AssetDatabase.LoadAssetAtPath<StyleSheet>(StylePath);
+        if (style != null)
+            layer.styleSheets.Add(style);
+
+        SandboxPanel panel = new(layer);
+        panel.Attach();
+        return panel;
+    }
+
+    public void Dispose()
+    {
+        ownAddSlot?.RemoveFromHierarchy();
+        enemyAddSlot?.RemoveFromHierarchy();
+        ownAddSlot = null;
+        enemyAddSlot = null;
+        layer.RemoveFromHierarchy();
+    }
+
+    /// <summary>
+    /// Keeps the panel on the live HUD and its readouts on the live setup. The HUD rebuilds its tree
+    /// whenever the Game scene is re-enabled, which takes the panel and the add-unit tiles with it,
+    /// so being attached is checked rather than assumed.
+    /// </summary>
+    public void Tick()
+    {
+        if (GameHUDController.Instance?.Root == null)
+            return;
+
+        if (layer.parent == null || ownAddSlot?.parent == null || enemyAddSlot?.parent == null)
+            Attach();
+
+        string signature = BuildSignature();
+        if (signature == appliedSignature)
+            return;
+
+        appliedSignature = signature;
+        Refresh();
+    }
+
+    private void Attach()
+    {
+        GameHUDController hud = GameHUDController.Instance;
+        if (layer.parent != hud.Root)
+        {
+            layer.RemoveFromHierarchy();
+            hud.Root.Add(layer);
+        }
+
+        hud.EnableSandboxEnemyCardPresses();
+        ownAddSlot = AttachAddSlot(ownAddSlot, hud.CardsStrip, OwnTeamIndex);
+        enemyAddSlot = AttachAddSlot(enemyAddSlot, hud.EnemyCardsStrip, EnemyTeamIndex);
+        EnsureQuickAddGrid();
+        appliedSignature = null;
+    }
+
+    /// <summary>
+    /// The tile that closes a card strip. It belongs on the strip rather than in the panel: the
+    /// strip is the crew, so the slot that is not filled yet is read at the end of it.
+    /// </summary>
+    private Button AttachAddSlot(Button existing, VisualElement strip, int teamIndex)
+    {
+        if (strip == null)
+            return existing;
+
+        Button slot = existing;
+        if (slot == null)
+        {
+            slot = new Button(() => OpenPicker($"{CrewName(teamIndex)} · new unit", catalogIndex =>
+            {
+                SandboxSession.TryAddUnit(teamIndex, catalogIndex);
+                Rebuild();
+            }))
+            {
+                text = "+ Add",
+                tooltip = "Field another unit on this side",
+                name = $"sandbox-add-slot-{teamIndex}",
+            };
+            slot.AddToClassList("sandbox-add-slot");
+        }
+        if (slot.parent != strip)
+        {
+            slot.RemoveFromHierarchy();
+            strip.Add(slot);
+        }
+        return slot;
+    }
+
+    private void Refresh()
+    {
+        GameHUDController hud = GameHUDController.Instance;
+        SandboxCrew own = SandboxSession.Crew(OwnTeamIndex);
+        SandboxCrew enemy = SandboxSession.Crew(EnemyTeamIndex);
+
+        ownCount.text = $"{own.Count} / {SandboxSession.MaxUnitsPerTeam}";
+        enemyCount.text = $"{enemy.Count} / {SandboxSession.MaxUnitsPerTeam}";
+        fog.SetValueWithoutNotify(SandboxSession.FogOfWar);
+        ownImmortal.SetValueWithoutNotify(own.immortal);
+        enemyImmortal.SetValueWithoutNotify(enemy.immortal);
+
+        bool editing = SandboxSession.BoardEditActive;
+        bool fogging = SandboxSession.FogOfWar;
+        moveButton.EnableInClassList("sandbox-button--armed", editing);
+        moveButton.text = editing ? "Moving units" : "Move units";
+        hint.text = editing
+            ? "Drag any unit to an empty square, between rounds. Turn this off to give orders again."
+            : fogging
+                ? "Fog hides each crew from the other, so a unit you cannot see is a unit you "
+                    + "cannot order. Turn fog off to plan the far side."
+                : "Tap a unit on either side to give it a route or an ability, then lock in to run "
+                    + "the round. Unplanned units hold. Swap or drop a unit on its own card.";
+
+        ownAddSlot?.SetEnabled(own.Count < SandboxSession.MaxUnitsPerTeam);
+        enemyAddSlot?.SetEnabled(enemy.Count < SandboxSession.MaxUnitsPerTeam);
+        RefreshQuickAdd();
+
+        hud.SetSandboxCrewControls(false, own.Count, slot => OpenSlotMenu(OwnTeamIndex, slot));
+        hud.SetSandboxCrewControls(true, enemy.Count, slot => OpenSlotMenu(EnemyTeamIndex, slot));
+    }
+
+    private void SetQuickAddTeam(int teamIndex)
+    {
+        if (quickAddTeamIndex == teamIndex)
+            return;
+        quickAddTeamIndex = teamIndex;
+        RefreshQuickAdd();
+    }
+
+    /// <summary>
+    /// Fills the right-hand catalog once. Tiles stay up so each press fields another unit instead of
+    /// closing a modal, which is the whole point of having the catalog beside the board.
+    /// </summary>
+    private void EnsureQuickAddGrid()
+    {
+        if (quickGrid == null || quickGrid.childCount > 0)
+            return;
+
+        List<UnitData> catalog = GameLoop.Instance?.allUnits?.units;
+        if (catalog == null)
+            return;
+
+        for (int catalogIndex = 0; catalogIndex < catalog.Count; catalogIndex++)
+        {
+            UnitData unit = catalog[catalogIndex];
+            if (unit == null || unit.unitModel == null)
+                continue;
+            int index = catalogIndex;
+            quickGrid.Add(BuildPick(unit, () => QuickAddUnit(index)));
+        }
+    }
+
+    private void RefreshQuickAdd()
+    {
+        EnsureQuickAddGrid();
+        SandboxCrew crew = SandboxSession.Crew(quickAddTeamIndex);
+        bool room = crew.Count < SandboxSession.MaxUnitsPerTeam;
+        quickCount.text = $"{crew.Count} / {SandboxSession.MaxUnitsPerTeam}";
+        teamBlue.EnableInClassList(
+            "sandbox-team--selected",
+            quickAddTeamIndex == GameLoop.HostTeamIndex
+        );
+        teamRed.EnableInClassList(
+            "sandbox-team--selected",
+            quickAddTeamIndex == GameLoop.OpponentTeamIndex
+        );
+        foreach (VisualElement child in quickGrid.Children())
+            child.SetEnabled(room);
+    }
+
+    private void QuickAddUnit(int catalogIndex)
+    {
+        if (!SandboxSession.TryAddUnit(quickAddTeamIndex, catalogIndex))
+        {
+            GameHUDController.Instance?.SetTargetFeedback(
+                SandboxSession.Crew(quickAddTeamIndex).Count >= SandboxSession.MaxUnitsPerTeam
+                    ? "That crew is full."
+                    : "No free square left for another unit.",
+                true
+            );
+            return;
+        }
+        Rebuild();
+    }
+
+    /// <summary>
+    /// What pressing a character's portrait offers: any other character for that slot, or taking it
+    /// off the board. One list rather than a menu in front of a list — changing and removing are the
+    /// same decision about the same slot.
+    /// </summary>
+    private void OpenSlotMenu(int teamIndex, int slot)
+    {
+        SandboxCrew crew = SandboxSession.Crew(teamIndex);
+        if (!crew.HasSlot(slot))
+            return;
+
+        OpenPicker(
+            $"{CrewName(teamIndex)} · slot {slot + 1}",
+            catalogIndex =>
+            {
+                SandboxSession.ReplaceUnit(teamIndex, slot, catalogIndex);
+                Rebuild();
+            },
+            crew.Count > 1 ? () => RemoveUnit(teamIndex, slot) : null
+        );
+    }
+
+    /// <summary>
+    /// What the panel is showing right now. Comparing it is what keeps the panel off the per-frame
+    /// path: rebinding the cards' controls every frame would re-close the picker under the pointer.
+    /// </summary>
+    private string BuildSignature()
+    {
+        SandboxCrew own = SandboxSession.Crew(OwnTeamIndex);
+        SandboxCrew enemy = SandboxSession.Crew(EnemyTeamIndex);
+        return $"{own.Count}:{own.immortal}:{enemy.Count}:{enemy.immortal}:"
+            + $"{SandboxSession.FogOfWar}:{SandboxSession.BoardEditActive}:{GameLoop.currentPhase}";
+    }
+
+    private void RemoveUnit(int teamIndex, int slot)
+    {
+        if (!SandboxSession.RemoveUnit(teamIndex, slot))
+        {
+            GameHUDController.Instance?.SetTargetFeedback(
+                "A side needs at least one unit on it.",
+                true
+            );
+            return;
+        }
+        Rebuild();
+    }
+
+    private void ClearCrews()
+    {
+        SandboxSession.ResetAllCrews();
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        SandboxLauncher.SaveSetup();
+        GameLoop.Instance?.RequestSandboxRebuild();
+        appliedSignature = null;
+    }
+
+    private void SetImmortal(int teamIndex, bool immortal)
+    {
+        SandboxSession.Crew(teamIndex).immortal = immortal;
+        SandboxLauncher.SaveSetup();
+        appliedSignature = null;
+    }
+
+    /// <summary>
+    /// Fog is a live match-wide setting rather than a board one, so it takes hold on the running
+    /// round instead of waiting for a rebuild. Remembered with the rest of the setup all the same.
+    /// </summary>
+    private void SetFog(bool enabled)
+    {
+        SandboxSession.FogOfWar = enabled;
+        SandboxLauncher.SaveSetup();
+        GameLoop.Instance?.SetFogOfWarEnabled(enabled);
+        appliedSignature = null;
+    }
+
+    /// <summary>
+    /// Puts the round on the clipboard: the board as it stands and the orders standing on it, in
+    /// text a coding agent can be handed to write a test case from. Logged as well, so a paste that
+    /// goes astray is still recoverable from the console.
+    /// </summary>
+    private void CopyRound()
+    {
+        string summary = SandboxRoundSummary.Build();
+        GUIUtility.systemCopyBuffer = summary;
+        Debug.Log(summary);
+        GameHUDController.Instance?.SetTargetFeedback("Round copied to the clipboard.", false);
+    }
+
+    private void ToggleBoardEdit()
+    {
+        SandboxSession.BoardEditActive = !SandboxSession.BoardEditActive;
+        appliedSignature = null;
+    }
+
+    private void ToggleCollapsed()
+    {
+        collapsed = !collapsed;
+        body.EnableInClassList("hidden", collapsed);
+        collapseButton.text = collapsed ? "+" : "–";
+    }
+
+    private void OpenPicker(string title, Action<int> onPicked, Action onRemove = null)
+    {
+        List<UnitData> catalog = GameLoop.Instance?.allUnits?.units;
+        if (catalog == null)
+            return;
+
+        pickedAction = onPicked;
+        pickerTitle.text = title;
+        pickerGrid.Clear();
+        if (onRemove != null)
+            pickerGrid.Add(BuildRemoveTile(onRemove));
+        for (int catalogIndex = 0; catalogIndex < catalog.Count; catalogIndex++)
+        {
+            UnitData unit = catalog[catalogIndex];
+            if (unit == null || unit.unitModel == null)
+                continue;
+            int index = catalogIndex;
+            pickerGrid.Add(BuildPick(unit, () =>
+            {
+                Action<int> picked = pickedAction;
+                ClosePicker();
+                picked?.Invoke(index);
+            }));
+        }
+
+        picker.RemoveFromClassList("hidden");
+        pickerPanel.Focus();
+    }
+
+    private VisualElement BuildRemoveTile(Action onRemove)
+    {
+        Button remove = new(() =>
+        {
+            ClosePicker();
+            onRemove();
+        })
+        {
+            tooltip = "Take this unit off the board",
+        };
+        remove.AddToClassList("sandbox-pick");
+        remove.AddToClassList("sandbox-pick--remove");
+
+        Label glyph = new("×");
+        glyph.AddToClassList("sandbox-pick__glyph");
+        remove.Add(glyph);
+
+        Label name = new("Remove");
+        name.AddToClassList("sandbox-pick__name");
+        remove.Add(name);
+        return remove;
+    }
+
+    private VisualElement BuildPick(UnitData unit, Action onPicked)
+    {
+        Button pick = new(onPicked)
+        {
+            tooltip = string.IsNullOrWhiteSpace(unit.abilityName)
+                ? "No ability"
+                : unit.abilityName,
+        };
+        pick.AddToClassList("sandbox-pick");
+
+        VisualElement portrait = new();
+        portrait.AddToClassList("sandbox-pick__portrait");
+        if (unit.unitSprite != null)
+            portrait.style.backgroundImage = new StyleBackground(unit.unitSprite);
+        pick.Add(portrait);
+
+        Label name = new(unit.unitName);
+        name.AddToClassList("sandbox-pick__name");
+        pick.Add(name);
+        return pick;
+    }
+
+    private void ClosePicker()
+    {
+        pickedAction = null;
+        picker.AddToClassList("hidden");
+    }
+
+    private void OnPickerKeyDown(KeyDownEvent evt)
+    {
+        if (evt.keyCode != KeyCode.Escape)
+            return;
+        ClosePicker();
+        evt.StopPropagation();
+    }
+
+    private static int OwnTeamIndex
+    {
+        get
+        {
+            int localTeamIndex =
+                GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1;
+            return localTeamIndex >= 0 ? localTeamIndex : GameLoop.HostTeamIndex;
+        }
+    }
+
+    private static int EnemyTeamIndex => GameLoop.TeamCount - 1 - OwnTeamIndex;
+
+    private static string CrewName(int teamIndex) =>
+        teamIndex == OwnTeamIndex ? "Your crew" : "Enemy crew";
+}
+#endif

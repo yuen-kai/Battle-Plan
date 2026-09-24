@@ -13,17 +13,14 @@ MonoBehaviour:
   m_Name: PogoRider
   m_EditorClassIdentifier: 
   unitModel: {fileID: 4136433947033533029, guid: 3eb6c2c5d9298ff4b8ca8b857d53c353, type: 3}
-  unitName: PogoRider
+  unitName: Pogo Rider
   unitClass: 3
-  unitDescription: Boing
-  playStyle: Ranges around the edges to flank and disrupt rather than trade.
+  playStyle: Can be quickly positioned anywhere on the board. Deals backstab damage.
   weaponName: Triple-burst pogostick rifle
-  strengths: Map control, flanking, and disruption.
-  weaknesses: Low damage output, so it loses a straight fight.
   unitSprite: {fileID: 21300000, guid: df6007334322e4f2ba2c65c2120a1daa, type: 3}
   unavailableForRoster: 0
   abilityName: Pogo
-  abilityDescription: Leap up to 6 cells, ignoring terrain. Hits harder from behind.
+  abilityDescription: 'Quickly jumps up to 6 cells away, allowing for easy repositions '
   abilitySprite: {fileID: 21300000, guid: df6007334322e4f2ba2c65c2120a1daa, type: 3}
   moveDist: 5
   moveSpeed: 2
@@ -33,14 +30,21 @@ MonoBehaviour:
   redBulletPrefab: {fileID: 5793367004619842165, guid: cd808d6b90b2a964da30d95c1f92bf68, type: 3}
   timeBetweenShots: 0.5
   magazineSize: 3
-  reloadTime: 1
+  reloadTime: 1.35
   bulletSpread: 3
+  fireRateRampShots: 0
+  fireRateRampStartDelay: 0
+  fireRateRampResetDelay: 1.5
+  canShootWhileMoving: 0
   bulletSpeed: 5
   targetRange: 7
   bulletRange: 7
   damage: 12
   backstabMultiplier: 2
   backstabAngle: 90
+  bulletExplodesOnImpact: 0
+  bulletAoeRadius: 0
+  bulletPierces: 0
   findTargetTime: 0
   targetLockDuration: 0
   aimRotationSpeed: 270

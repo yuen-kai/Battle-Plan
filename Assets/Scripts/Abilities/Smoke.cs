@@ -54,8 +54,8 @@ public class Smoke : Ability
     /// <summary>
     /// Throws the canister, then deploys the screen where it lands. Registering the footprint on
     /// impact rather than in one batch at the top of the round is what makes the throw honest: the
-    /// cloud a player can see and the occluder that stops a shot begin at the same moment, paid for
-    /// with the brief sightline the flight leaves open.
+    /// cloud a player can see and the occluder that denies a shot begin at the same moment, paid
+    /// for with the brief sightline the flight leaves open.
     /// </summary>
     public override IEnumerator ExecuteAbility(Vector3 abilitySquare, float AreaRadius = 0)
     {

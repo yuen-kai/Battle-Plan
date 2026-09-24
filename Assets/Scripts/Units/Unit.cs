@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -9,6 +10,8 @@ public class Unit : NetworkBehaviour
     private readonly NetworkVariable<int> teamIndex = new(-1);
     private readonly NetworkVariable<int> rosterSlot = new(-1);
     private readonly NetworkVariable<int> abilityCooldownRoundsRemaining = new(0);
+
+    private readonly NetworkVariable<StunState> stunState = new();
 
     public int TeamIndex => teamIndex.Value;
     public int RosterSlot => rosterSlot.Value;
@@ -22,10 +25,17 @@ public class Unit : NetworkBehaviour
         && GameLoop.Instance.LocalTeamIndex >= 0
         && TeamIndex == GameLoop.Instance.LocalTeamIndex;
 
+    public bool IsStunned => IsStunnedAt(stunState.Value, CurrentServerTime);
+
     [HideInInspector]
     public bool selectMovement = true;
 
     private AbilityStatusRing abilityStatusRing;
+    private StunPulse stunPulse;
+    private Coroutine stunCoroutine;
+
+    private double CurrentServerTime =>
+        NetworkManager != null ? NetworkManager.ServerTime.Time : 0.0;
 
     public override void OnNetworkSpawn()
     {
@@ -33,15 +43,17 @@ public class Unit : NetworkBehaviour
         teamIndex.OnValueChanged += OnTeamIndexChanged;
         abilityCooldownRoundsRemaining.OnValueChanged += OnAbilityCooldownRoundsChanged;
         RefreshTeamPresentation();
-        // Not animated: the cooldown a unit spawns with, or comes back out of fog with, is state
-        // that was already true before this client could see it, not a recharge to play out.
         RefreshAbilityStatusRing(animate: false);
+
+        stunState.OnValueChanged += OnStunStateChanged;
+        RefreshStunPresentation(stunState.Value);
     }
 
     public override void OnNetworkDespawn()
     {
         teamIndex.OnValueChanged -= OnTeamIndexChanged;
         abilityCooldownRoundsRemaining.OnValueChanged -= OnAbilityCooldownRoundsChanged;
+        stunState.OnValueChanged -= OnStunStateChanged;
         base.OnNetworkDespawn();
     }
 
@@ -78,6 +90,73 @@ public class Unit : NetworkBehaviour
         rosterSlot.Value = value;
     }
 
+    public void ApplyStun(float duration)
+    {
+        if (!IsServer || duration <= 0f)
+            return;
+
+        Movement movement = GetComponent<Movement>();
+        Shooting shooting = GetComponent<Shooting>();
+        if (movement == null || shooting == null)
+            return;
+
+        if (stunCoroutine != null)
+            StopCoroutine(stunCoroutine);
+
+        stunState.Value = new StunState(NetworkManager.ServerTime.Time, duration);
+        GetComponent<Ability>()?.InterruptForStun();
+
+        movement.PauseMovement();
+        movement.moving = false;
+        transform.position =
+            GridSystem.GetNearestGridCell(transform.position) + Helper.heightOffset(transform);
+        Physics.SyncTransforms();
+        shooting.StandDown();
+        stunCoroutine = StartCoroutine(ResumeAfterStun(duration));
+    }
+
+    private IEnumerator ResumeAfterStun(float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        stunCoroutine = null;
+        ClearStun();
+    }
+
+    private void ClearStun()
+    {
+        if (IsServer && stunState.Value.Active)
+            stunState.Value = default;
+
+        TryResumeShooting(true);
+    }
+
+    public static bool IsStunnedAt(StunState state, double serverTime)
+    {
+        return state.Active && state.ProgressAt(serverTime) < 1f;
+    }
+
+    public void PauseShootingForAbility()
+    {
+        Movement movement = GetComponent<Movement>();
+        if (movement != null)
+        {
+            movement.PauseMovement();
+            movement.moving = false;
+        }
+        GetComponent<Shooting>()?.PauseShooting();
+    }
+
+    public void ResumeShootingAfterAbility()
+    {
+        TryResumeShooting(onlyIfWeaponsStillFree: true);
+    }
+
+    private void TryResumeShooting(bool onlyIfWeaponsStillFree = false)
+    {
+        if (!IsStunned)
+            GetComponent<Movement>()?.transitionToShooting(onlyIfWeaponsStillFree);
+    }
+
     public bool TryStartAbilityCooldown()
     {
         if (!IsServer)
@@ -96,6 +175,31 @@ public class Unit : NetworkBehaviour
         }
 
         abilityCooldownRoundsRemaining.Value = remaining;
+        return true;
+    }
+
+    public bool RefundAbilityCooldown()
+    {
+        if (!IsServer)
+            return false;
+
+        int remaining = abilityCooldownRoundsRemaining.Value;
+        if (!RefundAbilityCooldown(ref remaining))
+            return false;
+
+        abilityCooldownRoundsRemaining.Value = remaining;
+        return true;
+    }
+
+    /// <summary>
+    /// Hands the ability straight back, for the sandbox. Reports whether anything was recharging.
+    /// </summary>
+    public bool ClearAbilityCooldown()
+    {
+        if (!IsServer || abilityCooldownRoundsRemaining.Value == 0)
+            return false;
+
+        abilityCooldownRoundsRemaining.Value = 0;
         return true;
     }
 
@@ -141,6 +245,16 @@ public class Unit : NetworkBehaviour
         return true;
     }
 
+    public static bool RefundAbilityCooldown(ref int remainingRounds)
+    {
+        remainingRounds = Mathf.Max(0, remainingRounds);
+        if (remainingRounds == 0)
+            return false;
+
+        remainingRounds = 0;
+        return true;
+    }
+
     private void OnTeamIndexChanged(int previousValue, int newValue)
     {
         RefreshTeamPresentation();
@@ -169,6 +283,20 @@ public class Unit : NetworkBehaviour
             return;
 
         abilityStatusRing.SetCharge(AbilityCooldownRoundsRemaining, configuredRounds, animate);
+    }
+
+    private void OnStunStateChanged(StunState previousValue, StunState newValue)
+    {
+        RefreshStunPresentation(newValue);
+    }
+
+    private void RefreshStunPresentation(StunState state)
+    {
+        if (state.Active && stunPulse == null)
+            stunPulse = StunPulse.Attach(gameObject);
+
+        if (stunPulse != null)
+            stunPulse.SetStun(state);
     }
 
     public void RefreshTeamPresentation()
@@ -241,5 +369,56 @@ public class Unit : NetworkBehaviour
     private UnitData GetUnitData()
     {
         return GetComponent<Shooting>()?.unitData ?? GetComponent<Movement>()?.unitData;
+    }
+}
+
+/// <summary>
+/// A stun as replicated: when it landed on the server clock and how long it holds. Mirrors
+/// Movement's DiveRecoveryState — the indicator's fill is a pure function of elapsed time, so this
+/// is written once per stun instead of every frame, and a peer that fog reveals midway through
+/// still draws the right point in it.
+/// </summary>
+public struct StunState : INetworkSerializable, System.IEquatable<StunState>
+{
+    public bool Active;
+    public double StartServerTime;
+    public float Duration;
+
+    public StunState(double startServerTime, float duration)
+    {
+        Active = true;
+        StartServerTime = startServerTime;
+        Duration = Mathf.Max(0.0001f, duration);
+    }
+
+    /// <summary>Stun position, 0 the instant it lands through 1 once it has worn off.</summary>
+    public float ProgressAt(double serverTime)
+    {
+        return Mathf.Clamp01((float)((serverTime - StartServerTime) / Duration));
+    }
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref Active);
+        serializer.SerializeValue(ref StartServerTime);
+        serializer.SerializeValue(ref Duration);
+    }
+
+    public bool Equals(StunState other)
+    {
+        return Active == other.Active
+            && StartServerTime.Equals(other.StartServerTime)
+            && Duration.Equals(other.Duration);
+    }
+
+    public override bool Equals(object obj)
+    {
+        return obj is StunState other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return System.HashCode.Combine(Active, StartServerTime, Duration);
     }
 }

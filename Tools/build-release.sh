@@ -2,8 +2,15 @@
 #
 # Automate a Battle Plan release build across platforms.
 #
-#   ./Tools/build-release.sh              # build mac, windows, linux, webgl
-#   ./Tools/build-release.sh mac windows  # build a subset
+#   ./Tools/build-release.sh                      # next version, all platforms
+#   ./Tools/build-release.sh mac windows          # next version, subset
+#   ./Tools/build-release.sh --version 2 mac      # explicit version
+#   ./Tools/build-release.sh --force              # reuse an existing version folder
+#
+# Without --version the next version is derived from the highest existing
+# Builds/Version<major>[.<minor>] folder with its minor bumped by one, so
+# Version1 yields 1.1. Legacy zero-padded folders (Version01..Version04) use a
+# superseded scheme and are ignored. Artifacts are named BattlePlan<version>.
 #
 # Runs Unity once per platform in batch mode via Assets/Editor/BuildScript.cs,
 # then packages each output to match the Builds/VersionNN convention: macOS
@@ -19,15 +26,40 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-UNITY="/Applications/Unity/Hub/Editor/6000.3.1f1/Unity.app/Contents/MacOS/Unity"
-PRODUCT="BattlePlan1"
-OUT_DIR="$PROJECT_DIR/Builds/Version1"
+UNITY_VERSION="$(awk '/^m_EditorVersion:/ { print $2 }' "$PROJECT_DIR/ProjectSettings/ProjectVersion.txt")"
+UNITY="/Applications/Unity/Hub/Editor/$UNITY_VERSION/Unity.app/Contents/MacOS/Unity"
 LOG_DIR="$PROJECT_DIR/Logs/builds"
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 step() { printf '\n==> %s\n' "$1"; }
 
-[ -x "$UNITY" ] || die "Unity 6000.3.1f1 not found at $UNITY"
+source "$SCRIPT_DIR/lib-version.sh"
+
+VERSION=""
+FORCE=0
+targets=()
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--version) [ $# -ge 2 ] || die "--version needs a value"; VERSION="$2"; shift 2 ;;
+	--force) FORCE=1; shift ;;
+	-*) die "unknown option: $1" ;;
+	mac | windows | linux | webgl) targets+=("$1"); shift ;;
+	*) die "unknown target: $1 (expected mac|windows|linux|webgl)" ;;
+	esac
+done
+
+[ -n "$VERSION" ] || VERSION="$(next_version "$PROJECT_DIR/Builds")"
+[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "invalid version: $VERSION (expected N or N.N)"
+
+PRODUCT="BattlePlan$VERSION"
+OUT_DIR="$PROJECT_DIR/Builds/Version$VERSION"
+
+if [ -e "$OUT_DIR" ] && [ "$FORCE" -eq 0 ]; then
+	die "$OUT_DIR already exists - pass --force to build into it, or --version to pick another"
+fi
+
+[ -n "$UNITY_VERSION" ] || die "could not read m_EditorVersion from ProjectSettings/ProjectVersion.txt"
+[ -x "$UNITY" ] || die "Unity $UNITY_VERSION (required by this project) not found at $UNITY"
 if [ -f "$PROJECT_DIR/Temp/UnityLockfile" ] && lsof "$PROJECT_DIR/Temp/UnityLockfile" >/dev/null 2>&1; then
 	die "Unity already has this project open - close it first (batch mode needs exclusive access)"
 fi
@@ -41,6 +73,7 @@ run_build() {
 		-projectPath "$PROJECT_DIR" \
 		-buildTarget "$target" \
 		-executeMethod "$method" \
+		-buildVersion "$VERSION" \
 		-logFile "$logfile"; then
 		tail -n 60 "$logfile" >&2
 		die "$method failed - see $logfile"
@@ -85,8 +118,9 @@ build_webgl() {
 	rm -rf "$OUT_DIR/${PRODUCT}Web"
 }
 
-targets=("$@")
 [ ${#targets[@]} -eq 0 ] && targets=(mac windows linux webgl)
+
+step "Building version $VERSION with Unity $UNITY_VERSION -> $OUT_DIR"
 
 for t in "${targets[@]}"; do
 	case "$t" in
@@ -94,7 +128,6 @@ for t in "${targets[@]}"; do
 	windows) build_windows ;;
 	linux) build_linux ;;
 	webgl) build_webgl ;;
-	*) die "unknown target: $t (expected mac|windows|linux|webgl)" ;;
 	esac
 done
 
