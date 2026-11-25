@@ -38,9 +38,13 @@ public static class DevInput
     }
 
     /// <summary>Start a one-client development match against the real authoritative bot.</summary>
-    public static void StartBotMatch(float speed = -1f, bool fogOfWar = true)
+    public static void StartBotMatch(
+        float speed = -1f,
+        bool fogOfWar = true,
+        MapId mapId = MapId.Concourse
+    )
     {
-        StartConfiguredMatch(GameMode.Elimination, OpponentType.AI, speed, fogOfWar);
+        StartConfiguredMatch(GameMode.Elimination, OpponentType.AI, speed, fogOfWar, mapId);
     }
 
     /// <summary>
@@ -87,7 +91,8 @@ public static class DevInput
         GameMode gameMode,
         OpponentType opponentType,
         float speed,
-        bool fogOfWar
+        bool fogOfWar,
+        MapId mapId = MapId.Concourse
     )
     {
         GameLoop.devMode = true;
@@ -104,6 +109,7 @@ public static class DevInput
         options.gameMode = gameMode;
         options.opponentType = opponentType;
         options.fogOfWar = fogOfWar;
+        options.mapId = mapId;
         MatchOptions.SetCurrent(options);
         GameLoop.ResetMatchState();
         StartHost();

@@ -393,7 +393,12 @@ public class Shooting : NetworkBehaviour
         );
 
         if (consumeAmmo)
+        {
             currentAmmo--;
+#if UNITY_EDITOR
+            DevParityLog.NoteShot(gameObject);
+#endif
+        }
 
         GetComponent<AnimationHandler>()?.TriggerAnimation("Shoot");
     }

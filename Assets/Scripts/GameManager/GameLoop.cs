@@ -617,6 +617,19 @@ public class GameLoop : NetworkBehaviour
     public static int[] devHostRosterOverride;
     public static int[] devOpponentRosterOverride;
 
+    /// <summary>
+    /// DEV: lets <see cref="DevSubmitPlansServer"/> replace the bot's orders, so a solo match can
+    /// have both crews scripted (the simulator parity recorder plans both sides itself).
+    /// </summary>
+    public static bool devOverrideBotPlans;
+
+#endif
+
+    private static bool DevOverridesBotPlans =>
+#if UNITY_EDITOR
+        devOverrideBotPlans;
+#else
+        false;
 #endif
 
     /// <summary>The crew a dev team actually fields, once any shoot override is applied.</summary>
@@ -2100,6 +2113,9 @@ public class GameLoop : NetworkBehaviour
 
             // Both crews' final orders, captured while dives are still distinguishable from moves.
             RecordBattleReportPlans(paths);
+#if UNITY_EDITOR
+            DevParityLog.BeginRound(this, paths);
+#endif
 
             ExecuteMoves(paths);
 
@@ -2158,6 +2174,9 @@ public class GameLoop : NetworkBehaviour
 
             if (matchEnded)
                 yield break;
+#if UNITY_EDITOR
+            DevParityLog.EndRound();
+#endif
 
             acceptingSmokeRegistrations = false;
             HideAbilityTelegraphsClientRpc();
@@ -3391,6 +3410,8 @@ public class GameLoop : NetworkBehaviour
     // Units whose movement this round is a dodge dive (executed at diveSpeed, then held down for
     // DodgeRecoverySeconds before the dodger can shoot).
     private readonly HashSet<GameObject> diveUnitsThisRound = new();
+
+    public bool IsDivingThisRound(GameObject unit) => diveUnitsThisRound.Contains(unit);
 
     /// <summary>
     /// Dodge responses are movement-only. Rejecting ability-flagged plans prevents their looser
@@ -7208,7 +7229,7 @@ public class GameLoop : NetworkBehaviour
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
             // A solo-bot dev run exercises the real bot. Dev input may not replace its orders.
-            if (botPlayer != null && teamIndex == botPlayer.TeamIndex)
+            if (botPlayer != null && teamIndex == botPlayer.TeamIndex && !DevOverridesBotPlans)
                 continue;
 
             foreach (var kvp in SanitizePaths(submitted, teamIndex))
