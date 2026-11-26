@@ -136,7 +136,9 @@ python3 evaluate.py runs/<run>/pool/u*.pt --champion models/bot.pt --opponents s
 
 A candidate passes only if its win − loss margin against the champion is above zero by more than its
 95% interval (both sides and fog modes pooled), and it is not clearly worse than the champion against
-any other opponent: the scripted bots and every earlier champion (`runs/hall/`).
+any other opponent: the scripted bots and every earlier champion (`runs/hall/`). A candidate that
+falls just short against the champion can be replayed against it on fresh seeds with more games
+(`--seed 60000000 --matches 1200`); new seeds keep the retest independent of the first result.
 
 ### Current bot
 
@@ -148,14 +150,16 @@ any other opponent: the scripted bots and every earlier champion (`runs/hall/`).
 | v1 | Round 2 below, update 200 | +26% ±6% margin |
 | v2 | Round 3 below, update 240 | +13% ±7% margin |
 | v3 | Round 6 below, final update | +13% ±7% margin |
+| v4 | Round 7 below, final update | +6% ±4% margin over 2,400 fresh games |
 
-| v3 against (400 paired games each) | Fog: win / loss | Fog off: win / loss |
+| v4 against (400 paired games each) | Fog: win / loss | Fog off: win / loss |
 |---|---|---|
-| Scripted bot | 70% / 18% | 68% / 22% |
-| Scripted bot, no random moves | 67% / 23% | 62% / 28% |
-| v0 | 67% / 24% | 64% / 32% |
-| v1 | 62% / 35% | 57% / 41% |
-| v2 | 54% / 42% | 55% / 42% |
+| Scripted bot | 72% / 20% | 69% / 23% |
+| Scripted bot, no random moves | 70% / 23% | 67% / 26% |
+| v0 | 66% / 25% | 68% / 27% |
+| v1 | 60% / 35% | 60% / 35% |
+| v2 | 56% / 40% | 55% / 43% |
+| v3 (1,200 each) | 51% / 46% | 52% / 46% |
 
 Self-play rounds from v0:
 
@@ -173,6 +177,8 @@ Self-play rounds from v0:
    point it had settled into.
 6. Round 5 with `--lr 3e-5`: held v2's level against the scripted bot from the start and beat v2
    by 13%.
+7. Round 6's recipe from v3 with v0–v3 as anchors: +4% ±7% against v3 in the gate and a few points
+   better than v3 against every other opponent; 2,400 more games on fresh seeds put it at +6% ±4%.
 
 Reward (`battlesim/reward.py`), per round:
 
