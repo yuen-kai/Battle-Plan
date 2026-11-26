@@ -179,6 +179,10 @@ Self-play rounds from v0:
    by 13%.
 7. Round 6's recipe from v3 with v0–v3 as anchors: +4% ±7% against v3 in the gate and a few points
    better than v3 against every other opponent; 2,400 more games on fresh seeds put it at +6% ±4%.
+8. Exploiter check: a copy of v4 trained for 2M steps against nothing but v4 (`--anchors
+   runs/hall/bot-v4.pt --anchor-share 1.0 --lr 1e-4`) never pulled ahead: +1% ±4% over 2,400 fresh
+   games. A dedicated attacker finding no weakness, after round 7's gain shrank to 6%, puts v4 at
+   about the limit of this network and recipe.
 
 Reward (`battlesim/reward.py`), per round:
 
