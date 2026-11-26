@@ -17,7 +17,7 @@ from battlesim.observe import (
     encode_decision,
 )
 from battlesim.paths import RIGHT, STAY, UP
-from battlesim.reward import Reward, fire_superiority
+from battlesim.reward import Reward
 from battlesim.sim import Config
 from train import NetOpponent, Policy, Slot
 
@@ -93,18 +93,6 @@ def test_a_teammates_planned_grenade_shows_its_area_and_where_caught_enemies_can
     escape = planes[ESCAPE]
     assert escape[target[1], target[0]] == 1.0
     assert escape.sum() > 1
-
-
-def test_fire_superiority_rewards_outgunning_the_other_side():
-    game = Game(map_name="Concourse", config=Config(fog_of_war=False), seed=3)
-    match = game.match
-    assert abs(fire_superiority(match, 0) + fire_superiority(match, 1)) < 1e-9
-    shooters = match.living(0)[:2]
-    victim = match.living(1)[0]
-    for offset, shooter in zip((-1, 1), shooters):
-        shooter.x, shooter.y = victim.x + offset, victim.y - 2
-    match._positions_version += 1
-    assert fire_superiority(match, 0) > fire_superiority(match, 1)
 
 
 def test_combos_count_layered_abilities_and_hits_through_a_dive():

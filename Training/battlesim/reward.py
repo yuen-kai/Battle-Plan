@@ -3,14 +3,6 @@ from dataclasses import dataclass
 TEAM_SIZE = 5
 
 
-def fire_superiority(match, team):
-    def pressure(attackers, targets):
-        return sum(min(2, sum(match.line_of_sight(a, t) for a in attackers)) for t in targets) / (2 * TEAM_SIZE)
-
-    own, enemy = match.living(team), match.living(1 - team)
-    return pressure(own, enemy) - pressure(enemy, own)
-
-
 @dataclass
 class Reward:
     win: float = 1.0
@@ -18,7 +10,6 @@ class Reward:
     draw: float = -0.5
     hp_weight: float = 0.5
     count_weight: float = 0.5
-    support_weight: float = 0.0
     combo_weight: float = 0.0
     round_cost: float = 0.01
     shaping_fade: float = 0.8
@@ -39,10 +30,7 @@ class Reward:
 
         own_hp, own_alive = standing(team)
         enemy_hp, enemy_alive = standing(1 - team)
-        value = self.hp_weight * (own_hp - enemy_hp) + self.count_weight * (own_alive - enemy_alive)
-        if self.support_weight:
-            value += self.support_weight * fire_superiority(match, team)
-        return value
+        return self.hp_weight * (own_hp - enemy_hp) + self.count_weight * (own_alive - enemy_alive)
 
     def round_reward(self, before, match, team):
         after = 0.0 if match.finished else self.potential(match, team)

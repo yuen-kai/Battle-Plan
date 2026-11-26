@@ -429,8 +429,6 @@ def main():
     parser.add_argument("--draw-reward", type=float, default=-0.5)
     parser.add_argument("--hp-weight", type=float, default=0.5)
     parser.add_argument("--count-weight", type=float, default=0.5)
-    parser.add_argument("--support-weight", type=float, default=0.0,
-                        help="fading potential for how many of your units can shoot each enemy, minus the reverse")
     parser.add_argument("--combo-weight", type=float, default=0.0,
                         help="fading bonus for enemies hit by two teammates' abilities, or hit by one after diving")
     parser.add_argument("--round-cost", type=float, default=0.01)
@@ -479,7 +477,6 @@ def main():
         draw=args.draw_reward,
         hp_weight=args.hp_weight,
         count_weight=args.count_weight,
-        support_weight=args.support_weight,
         combo_weight=args.combo_weight,
         round_cost=args.round_cost,
         shaping_fade=args.shaping_fade,
