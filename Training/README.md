@@ -194,6 +194,21 @@ Reward (`battlesim/reward.py`), per round:
 - Discounting (`--gamma` 0.98, `--lam` 0.95) applies per round, not per decision, so a win twenty
   rounds away still counts for about two thirds.
 
+## Playing it in Unity
+
+```bash
+python3 export_unity.py
+```
+
+writes `models/bot.pt` as float16 weights to `Assets/Resources/TrainedBot.bytes` (5 MB; float16 picks
+the same action as float32 in 99.98% of decisions) and refreshes `fixtures/trained_bot_logits.bin`,
+which `TrainedBotNetworkEditModeTests` uses to check the C# network against PyTorch. In the game,
+**Trained bot** under the AI opponent (Elimination only) hands the bot's planning and dodges to
+`TrainedBotPlayer.cs`, which encodes each decision the way `observe.py` does and runs the network
+with Burst in `TrainedBotNetwork.cs`. It was trained on the original five units, so crews built from
+the newer units are outside what it has seen. `DevTrainedBotDuel.Run()` (editor, Play mode) plays it
+against the scripted bot.
+
 ## Layout
 
 - `battlesim/units.py`, `maps.py`, `spawns.py`: game data loaded from the Unity project.
@@ -206,3 +221,4 @@ Reward (`battlesim/reward.py`), per round:
 - `battlesim/observe.py`: board-to-tensor encoding for a policy network.
 - `battlesim/baselines.py`: a scripted opponent for testing.
 - `parity.py`: replays recorded Unity rounds and reports agreement.
+- `export_unity.py`: exports the policy for Unity and writes the C# parity fixture.

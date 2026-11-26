@@ -23,6 +23,7 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
     public OpponentType opponentType;
     public bool fogOfWar;
     public MapId mapId;
+    public bool trainedBot;
 
     private static MatchOptions current = Default;
 
@@ -37,6 +38,7 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
 
     public static MatchOptions Current => current;
     public bool IsBotMatch => opponentType == OpponentType.AI;
+    public bool UsesTrainedBot => IsBotMatch && gameMode == GameMode.Elimination && trainedBot;
     public bool IsKingOfTheHill => gameMode == GameMode.KingOfTheHill;
     public bool IsEscort => gameMode == GameMode.EscortThePresident;
     public string GameModeDisplayName =>
@@ -97,6 +99,7 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
         serializer.SerializeValue(ref serializedOpponentType);
         serializer.SerializeValue(ref fogOfWar);
         serializer.SerializeValue(ref serializedMapId);
+        serializer.SerializeValue(ref trainedBot);
 
         if (!serializer.IsReader)
             return;
@@ -112,7 +115,8 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
         return gameMode == other.gameMode
             && opponentType == other.opponentType
             && fogOfWar == other.fogOfWar
-            && mapId == other.mapId;
+            && mapId == other.mapId
+            && trainedBot == other.trainedBot;
     }
 
     public override bool Equals(object obj)
@@ -122,7 +126,7 @@ public struct MatchOptions : INetworkSerializable, IEquatable<MatchOptions>
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(gameMode, opponentType, fogOfWar, mapId);
+        return HashCode.Combine(gameMode, opponentType, fogOfWar, mapId, trainedBot);
     }
 
     public static bool operator ==(MatchOptions left, MatchOptions right)

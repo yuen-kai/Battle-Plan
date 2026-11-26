@@ -50,6 +50,8 @@ public class JoinGameUIController : MonoBehaviour
     private Button playerOpponentButton;
     private Button aiOpponentButton;
     private Toggle fogToggle;
+    private Toggle trainedBotToggle;
+    private VisualElement trainedBotRow;
     private Toggle localMultiplayerToggle;
     private VisualElement mapRow;
     private VisualElement mapPreview;
@@ -173,6 +175,7 @@ public class JoinGameUIController : MonoBehaviour
 
         pendingOptions = options;
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
+        trainedBotToggle?.SetValueWithoutNotify(pendingOptions.trainedBot);
 
         // Deferred a frame: this runs from OnEnable, which is not ordered against the scene's
         // NetworkManager waking up, and CreateMatch needs the singleton.
@@ -231,6 +234,8 @@ public class JoinGameUIController : MonoBehaviour
         playerOpponentButton = RequireElement<Button>("player-opponent-button");
         aiOpponentButton = RequireElement<Button>("ai-opponent-button");
         fogToggle = RequireElement<Toggle>("fog-toggle");
+        trainedBotToggle = RequireElement<Toggle>("trained-bot-toggle");
+        trainedBotRow = RequireElement<VisualElement>("trained-bot-row");
         localMultiplayerToggle = RequireElement<Toggle>("local-multiplayer-toggle");
         mapRow = RequireElement<VisualElement>("map-row");
         mapPreview = RequireElement<VisualElement>("map-preview");
@@ -287,6 +292,8 @@ public class JoinGameUIController : MonoBehaviour
             cancelJoinButton.clicked += CancelJoin;
         if (fogToggle != null)
             fogToggle.RegisterValueChangedCallback(OnFogChanged);
+        if (trainedBotToggle != null)
+            trainedBotToggle.RegisterValueChangedCallback(OnTrainedBotChanged);
         if (localMultiplayerToggle != null)
         {
             localMultiplayerToggle.RegisterValueChangedCallback(OnLocalMultiplayerChanged);
@@ -344,6 +351,8 @@ public class JoinGameUIController : MonoBehaviour
             cancelJoinButton.clicked -= CancelJoin;
         if (fogToggle != null)
             fogToggle.UnregisterValueChangedCallback(OnFogChanged);
+        if (trainedBotToggle != null)
+            trainedBotToggle.UnregisterValueChangedCallback(OnTrainedBotChanged);
         if (localMultiplayerToggle != null)
         {
             localMultiplayerToggle.UnregisterValueChangedCallback(OnLocalMultiplayerChanged);
@@ -414,6 +423,7 @@ public class JoinGameUIController : MonoBehaviour
         kingButton?.SetEnabled(true);
         escortButton?.SetEnabled(true);
         fogToggle?.SetValueWithoutNotify(pendingOptions.fogOfWar);
+        trainedBotToggle?.SetValueWithoutNotify(pendingOptions.trainedBot);
         joinCodeInput?.SetValueWithoutNotify(string.Empty);
         localMultiplayerToggle?.SetValueWithoutNotify(false);
         SetGameMode(pendingOptions.gameMode);
@@ -563,6 +573,7 @@ public class JoinGameUIController : MonoBehaviour
             pendingOptions.gameMode == GameMode.EscortThePresident
         );
         ShowMapPreview();
+        UpdateTrainedBotAvailability();
         SetCreateStatus(string.Empty, false);
     }
 
@@ -586,6 +597,7 @@ public class JoinGameUIController : MonoBehaviour
         }
 
         UpdateLocalMultiplayerAvailability();
+        UpdateTrainedBotAvailability();
         UpdateCreateActionText();
         ResetRelayState();
         SetCreateStatus(string.Empty, false);
@@ -594,6 +606,18 @@ public class JoinGameUIController : MonoBehaviour
     private void OnFogChanged(ChangeEvent<bool> evt)
     {
         pendingOptions.fogOfWar = evt.newValue;
+    }
+
+    private void OnTrainedBotChanged(ChangeEvent<bool> evt)
+    {
+        pendingOptions.trainedBot = evt.newValue;
+    }
+
+    private void UpdateTrainedBotAvailability()
+    {
+        bool visible =
+            pendingOptions.IsBotMatch && pendingOptions.gameMode == GameMode.Elimination;
+        trainedBotRow?.EnableInClassList("hidden", !visible);
     }
 
     private void OnLocalMultiplayerChanged(ChangeEvent<bool> evt)
@@ -1165,6 +1189,7 @@ public class JoinGameUIController : MonoBehaviour
         playerOpponentButton?.SetEnabled(enabled);
         aiOpponentButton?.SetEnabled(enabled);
         fogToggle?.SetEnabled(enabled);
+        trainedBotToggle?.SetEnabled(enabled);
         joinCodeInput?.SetEnabled(enabled);
         cancelHostButton?.SetEnabled(!enabled);
         cancelJoinButton?.SetEnabled(!enabled);

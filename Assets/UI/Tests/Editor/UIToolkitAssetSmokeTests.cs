@@ -62,6 +62,8 @@ public class UIToolkitAssetSmokeTests
                 "local-multiplayer-row",
                 "local-multiplayer-toggle",
                 "fog-toggle",
+                "trained-bot-row",
+                "trained-bot-toggle",
                 "create-match-button",
                 "create-error-label",
                 "join-code-input",

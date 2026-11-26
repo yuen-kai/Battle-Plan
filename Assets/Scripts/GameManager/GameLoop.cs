@@ -421,6 +421,14 @@ public class GameLoop : NetworkBehaviour
     private PathsDict dodgeDivePaths;
     private readonly HashSet<int> dodgeResponsesReceived = new();
     private int maxDiveRangeThisRound;
+#if UNITY_EDITOR
+    public IReadOnlyList<(GameObject unit, Vector3 square, UnitData data)> DevDodgeActivations
+    {
+        get;
+        private set;
+    }
+    public int DevMaxDiveRange => maxDiveRangeThisRound;
+#endif
 
     // A dive buys distance by throwing the unit off its feet, and it cannot shoot until it is back
     // on them. Without that cost the dodge is free: the dive is quick enough (diveSpeed 4 over at
@@ -1141,7 +1149,7 @@ public class GameLoop : NetworkBehaviour
             PublishEscortState();
 
             botPlayer = replicatedMatchOptions.Value.IsBotMatch
-                ? new BotPlayer(this, OpponentTeamIndex)
+                ? new BotPlayer(this, OpponentTeamIndex, replicatedMatchOptions.Value.UsesTrainedBot)
                 : null;
         }
         else
@@ -2100,6 +2108,9 @@ public class GameLoop : NetworkBehaviour
             // before movement and abilities start so lines/discs cannot linger into resolution.
             HideAbilityTelegraphsClientRpc();
             currentPhase = Phase.Executing;
+            IEnumerator botWatch = botPlayer?.WatchExecution();
+            if (botWatch != null)
+                StartCoroutine(botWatch);
             // Smoke is thrown now rather than placed, so each screen registers when its own
             // canister lands instead of all of them up front. The window has to stay open for as
             // long as abilities are still resolving.
@@ -3110,6 +3121,9 @@ public class GameLoop : NetworkBehaviour
     )
     {
         currentPhase = Phase.Dodging;
+#if UNITY_EDITOR
+        DevDodgeActivations = activations;
+#endif
         HidePlanningCommitClientRpc();
 
         // Telegraph every activation to all clients (both players see what's coming — the

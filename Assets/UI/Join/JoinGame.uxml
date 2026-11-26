@@ -88,6 +88,13 @@
                                 </ui:VisualElement>
                             </ui:VisualElement>
 
+                            <ui:VisualElement name="trained-bot-row" class="option-strip trained-bot-row hidden">
+                                <ui:VisualElement class="toy-icon toy-icon--bot option-strip__icon" picking-mode="Ignore" />
+                                <ui:VisualElement class="option-strip__copy">
+                                    <ui:Toggle name="trained-bot-toggle" text="Trained bot" value="false" class="toggle trained-bot-toggle" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+
                             <ui:VisualElement name="local-multiplayer-row" class="option-strip local-multiplayer-row hidden">
                                 <ui:VisualElement class="toy-icon toy-icon--join option-strip__icon" picking-mode="Ignore" />
                                 <ui:VisualElement class="option-strip__copy">

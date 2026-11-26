@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -161,6 +162,7 @@ public sealed class BotPlayer
     private readonly HashSet<Vector2Int> visibleEnemyCells = new();
     private readonly HashSet<Vector2Int> observedCells = new();
     private readonly Dictionary<Vector2Int, int> lastObservedEpoch = new();
+    private readonly TrainedBotPlayer trainedBot;
     private int observationEpoch;
 
     public int TeamIndex { get; }
@@ -171,17 +173,31 @@ public sealed class BotPlayer
     public int AbilityContributionCount { get; private set; }
     public bool LastPlanUsedAbility { get; private set; }
 
-    public BotPlayer(GameLoop gameLoop, int teamIndex)
+    public BotPlayer(GameLoop gameLoop, int teamIndex, bool useTrainedBot = false)
     {
         this.gameLoop = gameLoop ?? throw new ArgumentNullException(nameof(gameLoop));
         TeamIndex = teamIndex;
+        trainedBot = useTrainedBot ? new TrainedBotPlayer(gameLoop, teamIndex) : null;
     }
+
+    public IEnumerator WatchExecution() => trainedBot?.WatchExecution();
 
     public PathsDict CreatePlanningContribution(int roundNumber)
     {
         PlanningContributionCount++;
         LastPlanUsedAbility = false;
         RefreshObservation();
+        if (trainedBot != null)
+        {
+            PathsDict trainedPlans = trainedBot.CreatePlanningContribution(
+                roundNumber,
+                out bool usedAbility
+            );
+            LastPlanUsedAbility = usedAbility;
+            if (usedAbility)
+                AbilityContributionCount++;
+            return trainedPlans;
+        }
 
         GameObject[] botUnits = GameLoop
             .GetTeamUnits(TeamIndex)
@@ -439,6 +455,8 @@ public sealed class BotPlayer
         PathsDict dives = new();
         if (alertedUnits == null || alertedUnits.Count == 0)
             return dives;
+        if (trainedBot != null)
+            return trainedBot.CreateDodgeContribution(alertedUnits, activations, maxDiveRange);
 
         List<BotDodgeThreat> threats = activations
             .Where(activation =>

@@ -882,7 +882,10 @@ public class CharacterSelectionUIController : NetworkBehaviour
         if (modeSummary != null)
             modeSummary.text = options.GameModeDisplayName;
         if (opponentSummary != null)
-            opponentSummary.text = options.IsBotMatch ? "AI" : "Player";
+            opponentSummary.text =
+                options.UsesTrainedBot ? "Trained AI"
+                : options.IsBotMatch ? "AI"
+                : "Player";
         if (fogSummary != null)
             fogSummary.text = options.fogOfWar ? "Fog on" : "Fog off";
         UpdateMapPanel(options.Map, options.gameMode);

@@ -41,10 +41,18 @@ public static class DevInput
     public static void StartBotMatch(
         float speed = -1f,
         bool fogOfWar = true,
-        MapId mapId = MapId.Concourse
+        MapId mapId = MapId.Concourse,
+        bool trainedBot = false
     )
     {
-        StartConfiguredMatch(GameMode.Elimination, OpponentType.AI, speed, fogOfWar, mapId);
+        StartConfiguredMatch(
+            GameMode.Elimination,
+            OpponentType.AI,
+            speed,
+            fogOfWar,
+            mapId,
+            trainedBot
+        );
     }
 
     /// <summary>
@@ -92,7 +100,8 @@ public static class DevInput
         OpponentType opponentType,
         float speed,
         bool fogOfWar,
-        MapId mapId = MapId.Concourse
+        MapId mapId = MapId.Concourse,
+        bool trainedBot = false
     )
     {
         GameLoop.devMode = true;
@@ -110,6 +119,7 @@ public static class DevInput
         options.opponentType = opponentType;
         options.fogOfWar = fogOfWar;
         options.mapId = mapId;
+        options.trainedBot = trainedBot;
         MatchOptions.SetCurrent(options);
         GameLoop.ResetMatchState();
         StartHost();
