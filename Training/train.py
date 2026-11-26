@@ -369,6 +369,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--minibatch", type=int, default=1024)
     parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--lr-end", type=float, default=None, help="learning rate at the end of training, reached linearly; constant if unset")
     parser.add_argument("--gamma", type=float, default=0.98, help="discount per round")
     parser.add_argument("--lam", type=float, default=0.95, help="GAE lambda per round")
     parser.add_argument("--draw-reward", type=float, default=-0.5)
@@ -447,6 +448,9 @@ def main():
         progress = (update - 1) / updates
         fog_share = fog_schedule(progress)
         reward.progress = progress
+        lr = args.lr if args.lr_end is None else args.lr + (args.lr_end - args.lr) * progress
+        for group in optimizer.param_groups:
+            group["lr"] = lr
         games.set_progress(progress, fog_share)
         buf = {k: [] for k in ("planes", "scalars", "masks", "privileged", "actions", "logp", "values", "rewards", "dones", "boundaries")}
         entropy_share = []
@@ -529,6 +533,7 @@ def main():
             "rollout_s": update_start - rollout_start,
             "update_s": time.perf_counter() - update_start,
             "shaping": reward.shaping_scale(),
+            "lr": lr,
             "fog_share": fog_share,
             "entropy": float(np.mean(entropy_share)) if entropy_share else None,
             "explained_variance": explained,

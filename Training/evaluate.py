@@ -32,6 +32,11 @@ def interval(successes, total):
     return p, half
 
 
+def margin_interval(wins, losses, total):
+    win, loss = wins / total, losses / total
+    return win - loss, 1.96 * math.sqrt((win + loss - (win - loss) ** 2) / total)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate trained policies against scripted bots or other checkpoints.")
     parser.add_argument("checkpoints", nargs="+")
@@ -61,10 +66,12 @@ def main():
                     n = sum(totals.values())
                     win, win_half = interval(totals["win"], n)
                     loss, loss_half = interval(totals["loss"], n)
-                    margins.append(win - loss)
+                    margin, margin_half = margin_interval(totals["win"], totals["loss"], n)
+                    margins.append(margin)
                     print(
                         f"  vs {Path(opponent).stem if opponent not in OPPONENTS else opponent:12} {mode:5} n={n}: "
-                        f"win {win:.0%} ±{win_half:.0%}  loss {loss:.0%} ±{loss_half:.0%}  draw {totals['draw'] / n:.0%}",
+                        f"win {win:.0%} ±{win_half:.0%}  loss {loss:.0%} ±{loss_half:.0%}  draw {totals['draw'] / n:.0%}  "
+                        f"margin {margin:+.0%} ±{margin_half:.0%}",
                         flush=True,
                     )
             scores[checkpoint] = sum(margins) / len(margins)
