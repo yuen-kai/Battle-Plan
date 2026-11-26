@@ -1,7 +1,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 
 /// <summary>
@@ -76,12 +79,14 @@ public sealed class TrainedBotPlayer
 
     private readonly struct Telegraph
     {
+        public readonly GameObject Caster;
         public readonly bool Friendly;
         public readonly Vector2Int Target;
         public readonly List<Vector2Int> Cells;
 
-        public Telegraph(bool friendly, Vector2Int target, List<Vector2Int> cells)
+        public Telegraph(GameObject caster, bool friendly, Vector2Int target, List<Vector2Int> cells)
         {
+            Caster = caster;
             Friendly = friendly;
             Target = target;
             Cells = cells;
@@ -131,6 +136,7 @@ public sealed class TrainedBotPlayer
                 FillPlanningMask(path, data.moveDist, claimed, targets);
                 Encode(unit, path, claimed, completedRounds, null, null, 0);
                 int action = Decide();
+                RecordDecision(unit, path, claimed, completedRounds, null, null, 0, action);
                 if (action >= MoveActions)
                 {
                     Vector2Int target = ActionCell(action);
@@ -179,6 +185,7 @@ public sealed class TrainedBotPlayer
                 FillStepMask(path, maxDiveRange);
                 Encode(unit, path, noClaims, gameLoop.RoundNumber, telegraphs, alertedCells, maxDiveRange);
                 int action = Decide();
+                RecordDecision(unit, path, noClaims, gameLoop.RoundNumber, telegraphs, alertedCells, maxDiveRange, action);
                 if (action <= Stay || action >= MoveActions)
                     break;
                 path.Add(path[^1] + Steps[action]);
@@ -342,7 +349,7 @@ public sealed class TrainedBotPlayer
             _ when data.abilityRadius > 0f => DiscCells(target, data.abilityRadius),
             _ => new List<Vector2Int> { target },
         };
-        return new Telegraph(GameLoop.GetTeamIndex(caster) == teamIndex, target, cells);
+        return new Telegraph(caster, GameLoop.GetTeamIndex(caster) == teamIndex, target, cells);
     }
 
     private static List<Vector2Int> DiscCells(Vector2Int centre, float radius)
@@ -564,4 +571,93 @@ public sealed class TrainedBotPlayer
     }
 
     private static Vector3 World(Vector2Int cell) => GameLoop.gridCoordToWorld(cell);
+
+    public static Action<string> DevDecisionRecorded;
+
+    [Conditional("UNITY_EDITOR")]
+    private void RecordDecision(
+        GameObject unit,
+        List<Vector2Int> path,
+        HashSet<Vector2Int> claimed,
+        int round,
+        List<Telegraph> telegraphs,
+        HashSet<Vector2Int> alertedCells,
+        int maxDive,
+        int action
+    )
+    {
+        if (DevDecisionRecorded == null)
+            return;
+
+        StringBuilder json = new();
+        json.Append("{\"round\":").Append(round)
+            .Append(",\"team\":").Append(teamIndex)
+            .Append(",\"fog\":").Append(gameLoop.FogOfWarEnabled ? "true" : "false")
+            .Append(",\"dodge\":").Append(telegraphs != null ? "true" : "false")
+            .Append(",\"maxDive\":").Append(maxDive)
+            .Append(",\"unit\":").Append(Slot(unit))
+            .Append(",\"action\":").Append(action);
+        AppendCells(json, "path", path);
+        AppendCells(json, "claimed", claimed);
+        AppendCells(json, "walls", GameLoop.wallLayout);
+        AppendCells(json, "smoke", gameLoop.ActiveSmokeCells);
+        AppendCells(json, "visible", visibleCells);
+        AppendCells(json, "alerted", alertedCells ?? new HashSet<Vector2Int>());
+
+        json.Append(",\"units\":[");
+        IEnumerable<GameObject> everyone = GameLoop
+            .GetTeamUnits(teamIndex)
+            .Concat(enemyRoster)
+            .Where(member => member != null);
+        json.Append(string.Join(",", everyone.Select(member =>
+        {
+            UnitData data = member.GetComponent<Movement>().unitData;
+            Vector3 position = member.transform.position / GridSystem.CellSize;
+            return "{\"team\":" + GameLoop.GetTeamIndex(member)
+                + ",\"slot\":" + Slot(member)
+                + ",\"type\":\"" + data.name.Replace(" (Clone)", "") + "\""
+                + ",\"x\":" + Number(position.x)
+                + ",\"y\":" + Number(position.z)
+                + ",\"hp\":" + Number(member.GetComponent<Health>().CurrentHealth)
+                + ",\"alive\":" + (IsLiving(member) ? "true" : "false")
+                + ",\"cooldown\":" + Cooldown(member).ToString(CultureInfo.InvariantCulture) + "}";
+        })));
+        json.Append(']');
+
+        json.Append(",\"memory\":[");
+        json.Append(string.Join(",", lastKnown.Values.Select(sighting =>
+            "{\"x\":" + sighting.Cell.x + ",\"y\":" + sighting.Cell.y + ",\"type\":" + sighting.Type
+            + ",\"hp\":" + Number(sighting.HpFraction) + ",\"round\":" + sighting.Round + "}")));
+        json.Append(']');
+
+        json.Append(",\"telegraphs\":[");
+        json.Append(string.Join(",", (telegraphs ?? new List<Telegraph>()).Select(telegraph =>
+        {
+            StringBuilder entry = new();
+            entry.Append("{\"team\":").Append(GameLoop.GetTeamIndex(telegraph.Caster))
+                .Append(",\"slot\":").Append(Slot(telegraph.Caster))
+                .Append(",\"tx\":").Append(telegraph.Target.x)
+                .Append(",\"ty\":").Append(telegraph.Target.y);
+            AppendCells(entry, "cells", telegraph.Cells);
+            return entry.Append('}').ToString();
+        })));
+        json.Append(']');
+
+        json.Append(",\"planes\":[");
+        json.Append(string.Join(",", Enumerable.Range(0, planes.Length)
+            .Where(i => planes[i] != 0f)
+            .Select(i => "[" + i + "," + Number(planes[i]) + "]")));
+        json.Append("],\"scalars\":[").Append(string.Join(",", scalars.Select(Number))).Append(']');
+        json.Append(",\"mask\":[").Append(string.Join(",", Enumerable.Range(0, mask.Length).Where(i => mask[i]))).Append("]}");
+        DevDecisionRecorded(json.ToString());
+    }
+
+    private static void AppendCells(StringBuilder json, string key, IEnumerable<Vector2Int> cells)
+    {
+        json.Append(",\"").Append(key).Append("\":[")
+            .Append(string.Join(",", cells.Select(cell => "[" + cell.x + "," + cell.y + "]")))
+            .Append(']');
+    }
+
+    private static string Number(float value) => value.ToString("R", CultureInfo.InvariantCulture);
 }

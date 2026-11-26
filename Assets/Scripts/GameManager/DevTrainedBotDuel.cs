@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
@@ -18,7 +19,7 @@ public static class DevTrainedBotDuel
     public static bool IsDone => DevTrainedBotDuelRunner.Instance != null && DevTrainedBotDuelRunner.Instance.Done;
     public static string Report => DevTrainedBotDuelRunner.Instance?.Report ?? "<duel not started>";
 
-    public static void Run(int matches = 8, float speed = 10f, bool exitPlayWhenDone = true)
+    public static void Run(int matches = 8, float speed = 10f, bool exitPlayWhenDone = true, bool record = false)
     {
         if (!Application.isPlaying)
         {
@@ -34,6 +35,7 @@ public static class DevTrainedBotDuel
         duel.matches = matches;
         duel.speed = speed;
         duel.exitPlayWhenDone = exitPlayWhenDone;
+        duel.record = record;
     }
 }
 
@@ -48,6 +50,8 @@ public sealed class DevTrainedBotDuelRunner : MonoBehaviour
     public int matches;
     public float speed;
     public bool exitPlayWhenDone;
+    public bool record;
+    public string RecordingPath { get; private set; }
     public bool Done { get; private set; }
     public string Report { get; private set; } = "running";
 
@@ -67,6 +71,7 @@ public sealed class DevTrainedBotDuelRunner : MonoBehaviour
 
     private void OnDestroy()
     {
+        StopRecording();
         Application.logMessageReceived -= CountErrors;
         if (Instance == this)
             Instance = null;
@@ -78,10 +83,29 @@ public sealed class DevTrainedBotDuelRunner : MonoBehaviour
             errors++;
     }
 
+    private StreamWriter recording;
+
+    private void StopRecording()
+    {
+        TrainedBotPlayer.DevDecisionRecorded = null;
+        recording?.Dispose();
+        recording = null;
+    }
+
     private IEnumerator Start()
     {
         yield return null;
         GameLoop.devUseProductionSpawns = true;
+        if (record)
+        {
+            RecordingPath = Path.GetFullPath(Path.Combine(
+                Application.dataPath, "..", "Training", "runs",
+                $"unity-decisions-{System.DateTime.Now:yyyyMMdd-HHmmss}.jsonl"
+            ));
+            Directory.CreateDirectory(Path.GetDirectoryName(RecordingPath));
+            recording = new StreamWriter(RecordingPath);
+            TrainedBotPlayer.DevDecisionRecorded = recording.WriteLine;
+        }
 
         for (int match = 0; match < matches; match++)
         {
@@ -116,9 +140,12 @@ public sealed class DevTrainedBotDuelRunner : MonoBehaviour
             {
                 if (GameLoop.currentPhase == GameLoop.Phase.Planning)
                 {
-                    Stopwatch timer = Stopwatch.StartNew();
-                    probe.CreatePlanningContribution(loop.RoundNumber, out _);
-                    planningMilliseconds.Add(timer.Elapsed.TotalMilliseconds);
+                    if (!record)
+                    {
+                        Stopwatch timer = Stopwatch.StartNew();
+                        probe.CreatePlanningContribution(loop.RoundNumber, out _);
+                        planningMilliseconds.Add(timer.Elapsed.TotalMilliseconds);
+                    }
                     loop.DevSubmitPlansServer(classic.CreatePlanningContribution(loop.RoundNumber));
                     rounds++;
                     while (GameLoop.currentPhase == GameLoop.Phase.Planning && Time.realtimeSinceStartup < matchDeadline)
@@ -166,6 +193,7 @@ public sealed class DevTrainedBotDuelRunner : MonoBehaviour
         GameLoop.devUseProductionSpawns = false;
         GameLoop.devHostRosterOverride = null;
         GameLoop.devOpponentRosterOverride = null;
+        StopRecording();
         yield return TearDownMatch();
         Time.timeScale = 1f;
 
@@ -174,6 +202,7 @@ public sealed class DevTrainedBotDuelRunner : MonoBehaviour
         lines.Add(
             $"RESULT: trained {trainedWins} / scripted {classicWins} / draws {draws}; "
                 + $"planning {meanMs:F0} ms mean, {maxMs:F0} ms max; errors {errors}"
+                + (RecordingPath != null ? $"; decisions in {RecordingPath}" : "")
         );
         Report = string.Join("\n", lines);
         Debug.Log("[DUEL] " + lines[^1]);
