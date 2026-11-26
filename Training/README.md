@@ -72,11 +72,13 @@ containing each ability correlate 0.96–0.99 on team damage.
 ## Training
 
 ```bash
-python3 train.py --init models/bot.pt --fog-start 0.5 --fog-end 0.5 --entropy 0.003 --benchmark models/bot.pt
+python3 train.py --init models/bot.pt --anchors runs/hall/*.pt --anchor-share 0.3 --scripted-share 0.2 \
+  --lr 3e-5 --lr-end 0 --rollout 128 --hp-weight 0 --count-weight 0 --critic-warmup 5 \
+  --fog-start 0.5 --fog-end 0.5 --entropy 0.003 --benchmark models/bot.pt
 ```
 
-Self-play PPO: the learner only ever fights saved copies of itself and never copies another player's
-moves. `--init` continues from a trained checkpoint; without it training starts from random weights.
+Self-play PPO: the learner fights saved copies of itself, plus the scripted bots when
+`--scripted-share` is set, and never copies another player's moves. `--init` continues from a trained checkpoint; without it training starts from random weights.
 The policy picks each unit's path a step at a time or an ability target cell (155 masked actions),
 and dives during dodge windows. Checkpoints and logs go to `Training/runs/` (gitignored):
 `policy.pt` is the latest weights, `best.pt` the best evaluation, `log.jsonl` one record per update,
@@ -90,6 +92,9 @@ and dives during dodge windows. Checkpoints and logs go to `Training/runs/` (git
 - Anchors: `--anchors` keeps checkpoints such as every past champion in the pool for the whole run
   (`--anchor-share` of games, 20% by default), so the learner can't drift into a style that only
   beats its recent selves.
+- Scripted opponents: `--scripted-share` puts the scripted bot, with and without its random moves,
+  in the pool too. Nets trained only against nets drift toward beating net habits and lose ground
+  against a different style; these are opponents only, never moves to copy.
 - Fog of war: `Config(fog_of_war=False)` matches the game's fog-off option, where every enemy is
   observable (`CanTeamObserveUnit` is always true) but smoke and walls still block shots. One policy
   plays both modes; a scalar tells it which. Training starts fog-off and ramps to 60% fog games
@@ -108,7 +113,7 @@ and dives during dodge windows. Checkpoints and logs go to `Training/runs/` (git
   (1 = uniform), value explained variance, KL, clip fraction, results against the pool and how long
   the rollout and update took. Every `--eval-every` updates it plays the scripted bot in
   `battlesim/baselines.py` and any `--benchmark` checkpoints with fog on and off; `best.pt` is the
-  checkpoint with the best mean win − loss. These are yardsticks only, never training opponents.
+  checkpoint with the best mean win − loss. Evaluation games are never trained on.
 - The scripted bot dodges away from the threat, then away from known enemies, then at random. An
   earlier version broke dodge ties toward the top of the board, which sent team 0 toward the enemy
   and team 1 away from it, and gave team 1 a 16-point edge in scripted mirror matches.
@@ -142,13 +147,15 @@ any other opponent: the scripted bots and every earlier champion (`runs/hall/`).
 | v0 | Earlier pipeline, since removed: copied the scripted bot, PPO against it, then self-play | — |
 | v1 | Round 2 below, update 200 | +26% ±6% margin |
 | v2 | Round 3 below, update 240 | +13% ±7% margin |
+| v3 | Round 6 below, final update | +13% ±7% margin |
 
-| v2 against (400 paired games each) | Fog: win / loss | Fog off: win / loss |
+| v3 against (400 paired games each) | Fog: win / loss | Fog off: win / loss |
 |---|---|---|
-| Scripted bot | 69% / 18% | 66% / 24% |
-| Scripted bot, no random moves | 71% / 20% | 59% / 32% |
-| v0 | 62% / 27% | 62% / 32% |
-| v1 | 53% / 40% | 54% / 42% |
+| Scripted bot | 70% / 18% | 68% / 22% |
+| Scripted bot, no random moves | 67% / 23% | 62% / 28% |
+| v0 | 67% / 24% | 64% / 32% |
+| v1 | 62% / 35% | 57% / 41% |
+| v2 | 54% / 42% | 55% / 42% |
 
 Self-play rounds from v0:
 
@@ -158,6 +165,14 @@ Self-play rounds from v0:
    --hp-weight 0 --count-weight 0 --critic-warmup 5 --fog-start 0.5 --fog-end 0.5 --entropy 0.003`,
    4M steps: improved against every opponent and levelled off after about 2.3M steps.
 3. The same recipe from v1 with v0 and v1 as anchors: a smaller gain, about half of round 2's.
+4. The same recipe from v2 with v0–v2 as anchors: beat v2 by 10% ±7% and v1 by 21%, but fell from
+   +46% to +36% against the scripted bot, so the gate rejected it.
+5. Round 4 plus `--scripted-share 0.2`: level with v2 and still 10% behind it against the scripted
+   bot. Both rounds lost that ground within the first 40 updates. v2 came from the end of round 3,
+   where the learning rate had decayed to almost nothing, and restarting at 1e-4 knocked it off the
+   point it had settled into.
+6. Round 5 with `--lr 3e-5`: held v2's level against the scripted bot from the start and beat v2
+   by 13%.
 
 Reward (`battlesim/reward.py`), per round:
 
