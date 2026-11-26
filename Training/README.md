@@ -135,17 +135,26 @@ any other opponent: the scripted bots and every earlier champion (`runs/hall/`).
 
 ### Current bot
 
-`models/bot.pt` (not committed) plays both fog modes. It came from an earlier pipeline, since
-removed, that first trained the network to copy the scripted bot, then ran PPO against it, then
-self-play (`runs/20261125-182444-main`, `runs/20261125-194210-selfplay`, snapshot u140).
+`models/bot.pt` plays both fog modes. Each version had to pass the gate above.
 
-| Opponent (400 paired games each) | Fog: win / loss | Fog off: win / loss |
+| Version | How it was made | vs previous champion, both fog modes |
 |---|---|---|
-| Scripted bot | 54% / 26% | 57% / 32% |
-| Scripted bot, no random moves | 55% / 28% | 50% / 36% |
+| v0 | Earlier pipeline, since removed: copied the scripted bot, PPO against it, then self-play | — |
+| v1 | Round 2 below, update 200 | +26% ±6% margin |
 
-In that earlier work, PPO from scratch against the scripted bot reached only about 10–20% wins
-after 1M steps; starting fog-off and ramping fog in did roughly twice as well as fog from the start.
+| v1 against (400 paired games each) | Fog: win / loss | Fog off: win / loss |
+|---|---|---|
+| Scripted bot | 70% / 19% | 61% / 30% |
+| Scripted bot, no random moves | 66% / 23% | 62% / 31% |
+| v0 | 56% / 28% | 58% / 35% |
+
+Self-play rounds from v0:
+
+1. Plain self-play (`--lr 3e-4`, shaping on, no anchors): drifted in circles. It beat its recent
+   selves 57% / 35% while sliding to 37% / 49% against v0, so it was stopped at 1.7M steps.
+2. `--anchors runs/hall/bot-v0.pt --anchor-share 0.3 --lr 1e-4 --lr-end 0 --rollout 128
+   --hp-weight 0 --count-weight 0 --critic-warmup 5 --fog-start 0.5 --fog-end 0.5 --entropy 0.003`,
+   4M steps: improved against every opponent and levelled off after about 2.3M steps.
 
 Reward (`battlesim/reward.py`), per round:
 
