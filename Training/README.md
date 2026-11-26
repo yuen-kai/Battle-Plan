@@ -183,6 +183,11 @@ Self-play rounds from v0:
    runs/hall/bot-v4.pt --anchor-share 1.0 --lr 1e-4`) never pulled ahead: +1% ±4% over 2,400 fresh
    games. A dedicated attacker finding no weakness, after round 7's gain shrank to 6%, puts v4 at
    about the limit of this network and recipe.
+9. Teamwork round from v4 grown into the team-plan inputs, with the revision pass, `--focus-weight
+   1.0 --combo-weight 0.2`, v0–v4 as anchors and round 6's recipe otherwise: every snapshot tied v4
+   (−0.1% to +2.0% ±6.8%) and the gate rejected them all. Play barely changed against v4: 1.3
+   steps per unit to v4's 1.5, the same ability use, about 0.03 combos per round and no
+   measurable focus.
 
 Reward (`battlesim/reward.py`), per round:
 
