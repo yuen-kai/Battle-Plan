@@ -230,7 +230,9 @@ class VecGames:
         fog = self.rng.random() < self.fog_share
         factories, weights = zip(*self.opponents)
         opponent = self.rng.choices(factories, weights=weights)[0]
-        return Slot(self.next_seed, opponent, self.max_rounds, self.reward, fog)
+        slot = Slot(self.next_seed, opponent, self.max_rounds, self.reward, fog)
+        slot.opponent_path = getattr(opponent, "path", None)
+        return slot
 
     def set_opponents(self, opponents):
         self.opponents = opponents
@@ -255,7 +257,7 @@ class VecGames:
             dones.append(done)
             boundaries.append(boundary)
             if done:
-                finished.append((slot.episode_return, slot.outcome(), slot.fog))
+                finished.append((slot.episode_return, slot.outcome(), slot.opponent_path))
                 self.slots[i] = self._new_slot()
         return (
             np.array(rewards, dtype=np.float32),
@@ -390,6 +392,7 @@ def main():
     parser.add_argument("--anchor-share", type=float, default=0.2, help="share of games against the anchors")
     parser.add_argument("--clip", type=float, default=0.2)
     parser.add_argument("--entropy", type=float, default=0.005)
+    parser.add_argument("--critic-warmup", type=int, default=0, help="updates at the start that train only the value network")
     parser.add_argument("--max-rounds", type=int, default=30)
     parser.add_argument("--eval-every", type=int, default=20)
     parser.add_argument("--eval-matches", type=int, default=100)
@@ -424,6 +427,7 @@ def main():
         gamma=args.gamma,
     )
     fog_schedule = FogSchedule(args.fog_start, args.fog_end, args.fog_ramp_begin, args.fog_ramp_end)
+    anchors = set(args.anchors)
     pool = [str(run_dir / "pool" / "u0.pt")]
     torch.save(cpu_state(policy), pool[0])
     settings = (args.envs, pool_opponents(pool, args.latest_share, args.anchors, args.anchor_share), args.max_rounds, args.seed * 1_000_000, reward, fog_schedule(0.0))
@@ -511,7 +515,9 @@ def main():
                 ratio = log_ratio.exp()
                 adv = flat["adv"][idx]
                 policy_loss = -torch.min(ratio * adv, ratio.clamp(1 - args.clip, 1 + args.clip) * adv).mean()
-                loss = policy_loss + 0.5 * value_loss - args.entropy * dist.entropy().mean()
+                loss = 0.5 * value_loss
+                if update > args.critic_warmup:
+                    loss = loss + policy_loss - args.entropy * dist.entropy().mean()
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
@@ -549,14 +555,13 @@ def main():
             f"fog {fog_share:.0%} ent {record['entropy']:.2f} ev {explained:.2f} kl {record['approx_kl']:.3f}"
         )
         if recent:
-            outcomes = [outcome for _, outcome, _ in recent]
-            record.update(
-                train_return=float(np.mean([r for r, *_ in recent])),
-                matches=len(recent),
-                train_win=outcomes.count("win") / len(outcomes),
-                train_loss=outcomes.count("loss") / len(outcomes),
-            )
-            summary += f" return {record['train_return']:+.2f} vs pool {record['train_win']:.0%}/{record['train_loss']:.0%}"
+            record.update(train_return=float(np.mean([r for r, *_ in recent])), matches=len(recent))
+            summary += f" return {record['train_return']:+.2f}"
+            for group, outcomes in (("pool", [o for _, o, path in recent if path not in anchors]), ("anchors", [o for _, o, path in recent if path in anchors])):
+                if outcomes:
+                    win, loss = outcomes.count("win") / len(outcomes), outcomes.count("loss") / len(outcomes)
+                    record.update({f"train_{group}_win": win, f"train_{group}_loss": loss})
+                    summary += f" vs {group} {win:.0%}/{loss:.0%}"
         recent = []
         if update % args.eval_every == 0 or update == updates:
             results = run_eval()
