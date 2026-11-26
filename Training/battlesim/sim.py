@@ -429,6 +429,22 @@ class Match:
 
     def fire(self, unit, target):
         self.shots_fired[unit.uid] = self.shots_fired.get(unit.uid, 0) + 1
+        shares, flights = self.cone_shares(unit, target)
+        if not shares:
+            return
+        if self.config.sample_hits:
+            roll, picked = self.rng.random(), {}
+            for enemy, share in sorted(shares.items(), key=lambda item: item[0].uid):
+                roll -= share
+                if roll < 0:
+                    picked = {enemy: 1.0}
+                    break
+            shares = picked
+        origin = (unit.x, unit.y)
+        for enemy, share in shares.items():
+            self.shots.append(Shot(self.time + flights[enemy.uid], unit, enemy, unit.stats.damage * share, origin))
+
+    def cone_shares(self, unit, target):
         stats = unit.stats
         origin = (unit.x, unit.y)
         aim = math.atan2(target.y - unit.y, target.x - unit.x)
@@ -452,22 +468,12 @@ class Match:
             flights[enemy.uid] = flight
             obstacles.append((max(0.0, dist - reach), offset - half_width, offset + half_width, enemy))
         if not obstacles:
-            return
+            return {}, flights
         for near, centre, lo, hi in self.board.wall_obstacles(origin, stats.bulletRange, PROJECTILE_RADIUS):
             offset = geometry.wrap_angle(centre - aim)
             if offset + hi >= -spread and offset + lo <= spread:
                 obstacles.append((near, offset + lo, offset + hi, None))
-        shares = geometry.first_hit_shares(obstacles, spread)
-        if self.config.sample_hits:
-            roll, picked = self.rng.random(), {}
-            for enemy, share in sorted(shares.items(), key=lambda item: item[0].uid):
-                roll -= share
-                if roll < 0:
-                    picked = {enemy: 1.0}
-                    break
-            shares = picked
-        for enemy, share in shares.items():
-            self.shots.append(Shot(self.time + flights[enemy.uid], unit, enemy, stats.damage * share, origin))
+        return geometry.first_hit_shares(obstacles, spread), flights
 
     def contact_flight(self, origin, enemy, reach, speed, max_flight):
         if enemy.motion is None:

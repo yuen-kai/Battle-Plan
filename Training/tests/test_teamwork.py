@@ -17,8 +17,10 @@ from battlesim.observe import (
     encode_decision,
 )
 from battlesim.paths import RIGHT, STAY, UP
-from battlesim.reward import Reward
-from battlesim.sim import Config
+from battlesim.maps import MapLayout
+from battlesim.reward import Reward, focus_score, incoming_fire
+from battlesim.sim import Config, Match
+from battlesim.units import load_roster
 from train import NetOpponent, Policy, Slot
 
 MODEL = Path(__file__).resolve().parents[1] / "models" / "bot.pt"
@@ -93,6 +95,30 @@ def test_a_teammates_planned_grenade_shows_its_area_and_where_caught_enemies_can
     escape = planes[ESCAPE]
     assert escape[target[1], target[0]] == 1.0
     assert escape.sum() > 1
+
+
+def duel(types, ours, theirs):
+    stats = load_roster()
+    rosters = [[stats[types[0]]] * len(ours), [stats[types[1]]] * len(theirs)]
+    spawns = [[(7 + dx, 5 + dy) for dx, dy in offsets] for offsets in (ours, theirs)]
+    match = Match(MapLayout("open", frozenset()), rosters, spawns, Config(fog_of_war=False))
+    return match, match.units
+
+
+def test_focus_pays_when_two_guns_meet_one_target_that_can_answer_only_one():
+    match, (a, b, x) = duel(("Soldier", "Soldier"), [(0, -2), (-2, 0)], [(0, 0)])
+    assert match.find_nearest_enemy(a) is x and match.find_nearest_enemy(b) is x
+    ours, theirs = incoming_fire(match, 0), incoming_fire(match, 1)
+    assert ours[x.uid] > 1.5 and sum(theirs.values()) <= 1.0 + 1e-9
+    assert focus_score(match, 0) > 0
+    assert abs(focus_score(match, 0) + focus_score(match, 1)) < 1e-12
+
+
+def test_focus_counts_stray_hits_from_the_bullet_cone():
+    match, (ramrod, target, bystander) = duel(("Ramrod", "Soldier"), [(0, 0)], [(0, 2), (1, 2)])
+    assert match.find_nearest_enemy(ramrod) is target
+    fire = incoming_fire(match, 0)
+    assert 0 < fire[bystander.uid] < fire[target.uid]
 
 
 def test_combos_count_layered_abilities_and_hits_through_a_dive():

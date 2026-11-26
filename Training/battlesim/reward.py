@@ -1,6 +1,26 @@
 from dataclasses import dataclass
 
 TEAM_SIZE = 5
+FOCUS_CAP = 3.0
+
+
+def incoming_fire(match, team):
+    fire = {}
+    for shooter in match.living(team):
+        target = match.find_nearest_enemy(shooter)
+        if target is None:
+            continue
+        shares, _ = match.cone_shares(shooter, target)
+        for enemy, share in shares.items():
+            fire[enemy.uid] = fire.get(enemy.uid, 0.0) + share
+    return fire
+
+
+def focus_score(match, team):
+    def concentration(fire):
+        return sum(min(FOCUS_CAP, amount) ** 2 for amount in fire.values()) / TEAM_SIZE ** 2
+
+    return concentration(incoming_fire(match, team)) - concentration(incoming_fire(match, 1 - team))
 
 
 @dataclass
@@ -10,6 +30,7 @@ class Reward:
     draw: float = -0.5
     hp_weight: float = 0.5
     count_weight: float = 0.5
+    focus_weight: float = 0.0
     combo_weight: float = 0.0
     round_cost: float = 0.01
     shaping_fade: float = 0.8
@@ -30,7 +51,10 @@ class Reward:
 
         own_hp, own_alive = standing(team)
         enemy_hp, enemy_alive = standing(1 - team)
-        return self.hp_weight * (own_hp - enemy_hp) + self.count_weight * (own_alive - enemy_alive)
+        value = self.hp_weight * (own_hp - enemy_hp) + self.count_weight * (own_alive - enemy_alive)
+        if self.focus_weight:
+            value += self.focus_weight * focus_score(match, team)
+        return value
 
     def round_reward(self, before, match, team):
         after = 0.0 if match.finished else self.potential(match, team)
