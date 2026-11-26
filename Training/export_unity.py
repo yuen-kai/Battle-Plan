@@ -17,17 +17,17 @@ ACTOR = [
     "target_head.weight", "target_head.bias", "step_head.weight", "step_head.bias",
     "move_logits.weight", "move_logits.bias",
 ]
-MAGIC = b"BPNN"
+MAGIC = b"BPN2"
 
 
 def half_rounded(state):
     return {key: value.half().float() if key in ACTOR else value for key, value in state.items()}
 
 
-def write_weights(state, path):
+def write_weights(policy, state, path):
     flat = np.concatenate([state[key].numpy().ravel() for key in ACTOR]).astype(np.float16)
     with open(path, "wb") as file:
-        file.write(MAGIC + struct.pack("<i", flat.size))
+        file.write(MAGIC + struct.pack("<iii", policy.planes, policy.scalars, flat.size))
         file.write(flat.tobytes())
     return flat.size
 
@@ -36,7 +36,7 @@ def collect(policy, games, seed):
     rng = random.Random(seed)
     samples = []
     for game in range(games):
-        slot = Slot(seed + game, advance_policy, 30, Reward(), fog=game % 2 == 0)
+        slot = Slot(seed + game, advance_policy, 30, Reward(), fog=game % 2 == 0, inputs=(policy.planes, policy.scalars))
         done = False
         while not done:
             planes, scalars, mask, _ = slot.observe()
@@ -68,12 +68,9 @@ def main():
     args = parser.parse_args()
 
     state = torch.load(args.checkpoint, map_location="cpu")
-    count = write_weights(state, args.out)
-    print(f"wrote {count:,} weights ({count * 2 / 1e6:.1f} MB) to {args.out}")
-
-    full, half = Policy(), Policy()
-    full.load_state_dict(state)
-    half.load_state_dict(half_rounded(state))
+    full, half = Policy.from_state(state), Policy.from_state(half_rounded(state))
+    count = write_weights(full, state, args.out)
+    print(f"wrote {count:,} weights ({count * 2 / 1e6:.1f} MB, {full.planes} layers, {full.scalars} numbers) to {args.out}")
     full.eval()
     half.eval()
     samples, rng = collect(half, args.games, seed=90_000_000)

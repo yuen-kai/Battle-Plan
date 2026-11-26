@@ -14,8 +14,9 @@ public class TrainedBotNetworkEditModeTests
     {
         using BinaryReader reader = new(File.OpenRead(FixturePath));
         int samples = reader.ReadInt32();
-        float[] planes = new float[TrainedBotNetwork.Planes * TrainedBotNetwork.Cells];
-        float[] scalars = new float[TrainedBotNetwork.Scalars];
+        TrainedBotNetwork network = TrainedBotNetwork.Shared;
+        float[] planes = new float[network.Planes * TrainedBotNetwork.Cells];
+        float[] scalars = new float[network.Scalars];
         bool[] mask = new bool[TrainedBotNetwork.Actions];
         float[] expected = new float[TrainedBotNetwork.Actions];
         float[] actual = new float[TrainedBotNetwork.Actions];
@@ -28,7 +29,7 @@ public class TrainedBotNetworkEditModeTests
                 mask[i] = reader.ReadByte() != 0;
             Read(reader, expected);
 
-            int chosen = TrainedBotNetwork.Shared.Evaluate(planes, scalars, mask, actual);
+            int chosen = network.Evaluate(planes, scalars, mask, actual);
 
             int best = 0;
             for (int i = 0; i < expected.Length; i++)

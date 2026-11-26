@@ -26,11 +26,13 @@ ROOT = Path(__file__).resolve().parent
 PLANE_NAMES = [
     "wall", "visible", "smoke", "own hp", "own cooldown", "enemy hp", "memory age", "active path",
     "active head", "claimed", "enemy threat", "enemy marker", "own marker", "alerted",
-] + [f"own {name}" for name in UNIT_TYPES] + [f"enemy {name}" for name in UNIT_TYPES]
+] + [f"own {name}" for name in UNIT_TYPES] + [f"enemy {name}" for name in UNIT_TYPES] + [
+    "team path",
+] + [f"ally {name} ability" for name in UNIT_TYPES] + ["escape"]
 SCALAR_NAMES = [f"unit {name}" for name in UNIT_TYPES] + [
     "steps taken", "move distance", "hp", "cooldown", "round", "own alive", "enemies alive",
     "dodge", "max dive", "fog", "team",
-] + [f"enemy {slot} {field}" for slot in range(5) for field in [*UNIT_TYPES, "hp", "alive", "cooldown"]]
+] + [f"enemy {slot} {field}" for slot in range(5) for field in [*UNIT_TYPES, "hp", "alive", "cooldown"]] + ["revising"]
 
 
 def rebuild(record, stats):
@@ -59,9 +61,14 @@ def simulate(record, stats):
     unit = by_slot[(team, record["unit"])]
     path = [tuple(cell) for cell in record["path"]]
     claimed = set(map(tuple, record["claimed"]))
+    teammates = [
+        (by_slot[(team, mate["slot"])], [tuple(c) for c in mate["path"]], tuple(mate["target"]) if mate["target"] else None)
+        for mate in record.get("teammates", [])
+    ]
     builder = SimpleNamespace(
         match=match, team=team, unit=unit, paths={unit.uid: path}, claimed=claimed,
-        dodge=record["dodge"], max_dive=record["maxDive"],
+        dodge=record["dodge"], max_dive=record["maxDive"], revising=record.get("revising", False),
+        teammate_plans=lambda: teammates,
     )
     memory = SimpleNamespace(last_known={
         index: ((m["x"], m["y"]), UNIT_TYPES[m["type"]], m["hp"], m["round"])
@@ -93,8 +100,8 @@ def simulate(record, stats):
 def choose(policy, planes, scalars, mask, team):
     with torch.no_grad():
         logits = policy.logits(
-            torch.from_numpy(np.ascontiguousarray(canonical_planes(planes, team))[None]),
-            torch.from_numpy(scalars[None]),
+            torch.from_numpy(np.ascontiguousarray(canonical_planes(planes[: policy.planes], team))[None]),
+            torch.from_numpy(scalars[None, : policy.scalars]),
             torch.from_numpy(canonical_mask(mask, team)[None]),
         )[0]
     return world_action(int(logits.argmax()), team)
@@ -108,8 +115,7 @@ def main():
 
     records = [json.loads(line) for line in Path(args.recording).read_text().splitlines() if line.strip()]
     stats = {name: load_unit(name) for name in {u["type"] for r in records for u in r["units"]}}
-    policy = Policy()
-    policy.load_state_dict(torch.load(args.checkpoint, map_location="cpu"))
+    policy = Policy.from_state(torch.load(args.checkpoint, map_location="cpu"))
     policy.eval()
 
     plane_misses, scalar_misses, examples = Counter(), Counter(), {}

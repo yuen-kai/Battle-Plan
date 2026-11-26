@@ -7,22 +7,22 @@ using UnityEngine;
 /// <summary>
 /// The self-play policy from <c>Training/</c>, exported by <c>Training/export_unity.py</c> as
 /// float16 weights in <c>Resources/TrainedBot.bytes</c>. Inputs are already in the network's
-/// canonical frame: team 1 sees the board rotated 180°, exactly as in training.
+/// canonical frame: team 1 sees the board rotated 180°, exactly as in training. The export names
+/// how many board layers and numbers it reads, which are always a prefix of the full encoding.
 /// </summary>
 public sealed class TrainedBotNetwork : IDisposable
 {
-    public const int Planes = 24;
     public const int Cells = GridSystem.RowCount * GridSystem.ColumnCount;
-    public const int Scalars = 56;
     public const int MoveActions = 5;
     public const int Actions = MoveActions + Cells;
     public const int ActiveHeadPlane = 8;
+    public const int LegacyPlanes = 24;
     public const string ResourceName = "TrainedBot";
 
     private const int Width = 64;
     private const int Hidden = 256;
-    private const int BodyInputs = Width * Cells + Scalars;
-    private static readonly byte[] Magic = { (byte)'B', (byte)'P', (byte)'N', (byte)'N' };
+    private const int HeaderBytes = 16;
+    private static readonly byte[] Magic = { (byte)'B', (byte)'P', (byte)'N', (byte)'2' };
 
     private static TrainedBotNetwork shared;
 
@@ -39,15 +39,21 @@ public sealed class TrainedBotNetwork : IDisposable
 
     public static TrainedBotNetwork Shared => shared ??= Load();
 
-    private TrainedBotNetwork(NativeArray<float> weights)
+    public int Planes { get; }
+    public int Scalars { get; }
+    public bool Revises => Planes > LegacyPlanes;
+
+    private TrainedBotNetwork(NativeArray<float> weights, int planeCount, int scalarCount)
     {
         this.weights = weights;
-        planes = new NativeArray<float>(Planes * Cells, Allocator.Persistent);
-        scalars = new NativeArray<float>(Scalars, Allocator.Persistent);
+        Planes = planeCount;
+        Scalars = scalarCount;
+        planes = new NativeArray<float>(planeCount * Cells, Allocator.Persistent);
+        scalars = new NativeArray<float>(scalarCount, Allocator.Persistent);
         mask = new NativeArray<byte>(Actions, Allocator.Persistent);
         boardA = new NativeArray<float>(Width * Cells, Allocator.Persistent);
         boardB = new NativeArray<float>(Width * Cells, Allocator.Persistent);
-        patches = new NativeArray<float>(Cells * Width * 9, Allocator.Persistent);
+        patches = new NativeArray<float>(Cells * Mathf.Max(Width, planeCount) * 9, Allocator.Persistent);
         features = new NativeArray<float>(Hidden, Allocator.Persistent);
         context = new NativeArray<float>(Width, Allocator.Persistent);
         logits = new NativeArray<float>(Actions, Allocator.Persistent);
@@ -71,25 +77,31 @@ public sealed class TrainedBotNetwork : IDisposable
                 throw new InvalidOperationException($"{ResourceName}.bytes is not a policy export.");
         }
 
-        int count = BitConverter.ToInt32(bytes, Magic.Length);
-        if (count != Forward.WeightCount || bytes.Length != 8 + count * 2)
+        int planeCount = BitConverter.ToInt32(bytes, 4);
+        int scalarCount = BitConverter.ToInt32(bytes, 8);
+        int count = BitConverter.ToInt32(bytes, 12);
+        int expected = Forward.WeightCount(planeCount, scalarCount);
+        if (count != expected || bytes.Length != HeaderBytes + count * 2)
         {
             throw new InvalidOperationException(
-                $"{ResourceName}.bytes holds {count} weights; this network needs {Forward.WeightCount}."
+                $"{ResourceName}.bytes holds {count} weights; {planeCount} layers and {scalarCount} numbers need {expected}."
             );
         }
 
         NativeArray<float> weights = new(count, Allocator.Persistent);
         for (int i = 0; i < count; i++)
-            weights[i] = Mathf.HalfToFloat(BitConverter.ToUInt16(bytes, 8 + i * 2));
-        return new TrainedBotNetwork(weights);
+            weights[i] = Mathf.HalfToFloat(BitConverter.ToUInt16(bytes, HeaderBytes + i * 2));
+        return new TrainedBotNetwork(weights, planeCount, scalarCount);
     }
 
-    /// <summary>Fills <paramref name="output"/> with masked logits and returns the best action.</summary>
+    /// <summary>
+    /// Reads the first <see cref="Planes"/> layers and <see cref="Scalars"/> numbers, fills
+    /// <paramref name="output"/> with masked logits, and returns the best action.
+    /// </summary>
     public int Evaluate(float[] inputPlanes, float[] inputScalars, bool[] legal, float[] output = null)
     {
-        planes.CopyFrom(inputPlanes);
-        scalars.CopyFrom(inputScalars);
+        NativeArray<float>.Copy(inputPlanes, planes, Planes * Cells);
+        NativeArray<float>.Copy(inputScalars, scalars, Scalars);
         int legalTargets = 0;
         for (int i = 0; i < Actions; i++)
         {
@@ -110,6 +122,8 @@ public sealed class TrainedBotNetwork : IDisposable
             Features = features,
             Context = context,
             Logits = logits,
+            InputPlanes = Planes,
+            InputScalars = Scalars,
             TargetOffset = Mathf.Log(Mathf.Max(1, legalTargets)),
         }.Run();
 
@@ -149,24 +163,6 @@ public sealed class TrainedBotNetwork : IDisposable
     [BurstCompile(FloatMode = FloatMode.Fast, CompileSynchronously = true, DisableSafetyChecks = true)]
     private struct Forward : IJob
     {
-        private const int Conv0W = 0;
-        private const int Conv0B = Conv0W + Width * TrainedBotNetwork.Planes * 9;
-        private const int Conv1W = Conv0B + Width;
-        private const int Conv1B = Conv1W + Width * Width * 9;
-        private const int Conv2W = Conv1B + Width;
-        private const int Conv2B = Conv2W + Width * Width * 9;
-        private const int BodyW = Conv2B + Width;
-        private const int BodyB = BodyW + Hidden * BodyInputs;
-        private const int ContextW = BodyB + Hidden;
-        private const int ContextB = ContextW + Width * Hidden;
-        private const int TargetW = ContextB + Width;
-        private const int TargetB = TargetW + Width;
-        private const int StepW = TargetB + 1;
-        private const int StepB = StepW + Width;
-        private const int MoveW = StepB + 1;
-        private const int MoveB = MoveW + MoveActions * Hidden;
-        public const int WeightCount = MoveB + MoveActions;
-
         private const int Rows = GridSystem.RowCount;
         private const int Columns = GridSystem.ColumnCount;
 
@@ -180,30 +176,58 @@ public sealed class TrainedBotNetwork : IDisposable
         public NativeArray<float> Features;
         public NativeArray<float> Context;
         public NativeArray<float> Logits;
+        public int InputPlanes;
+        public int InputScalars;
         public float TargetOffset;
+
+        public static int WeightCount(int planeCount, int scalarCount)
+        {
+            int convolutions = Width * planeCount * 9 + Width + 2 * (Width * Width * 9 + Width);
+            int body = Hidden * (Width * Cells + scalarCount) + Hidden;
+            int heads = Width * Hidden + Width + 2 * (Width + 1) + MoveActions * Hidden + MoveActions;
+            return convolutions + body + heads;
+        }
 
         public void Execute()
         {
-            Convolve(Planes, TrainedBotNetwork.Planes, A, Conv0W, Conv0B);
-            Convolve(A, Width, B, Conv1W, Conv1B);
-            Convolve(B, Width, A, Conv2W, Conv2B);
+            int conv0W = 0;
+            int conv0B = conv0W + Width * InputPlanes * 9;
+            int conv1W = conv0B + Width;
+            int conv1B = conv1W + Width * Width * 9;
+            int conv2W = conv1B + Width;
+            int conv2B = conv2W + Width * Width * 9;
+            int bodyInputs = Width * Cells + InputScalars;
+            int bodyW = conv2B + Width;
+            int bodyB = bodyW + Hidden * bodyInputs;
+            int contextW = bodyB + Hidden;
+            int contextB = contextW + Width * Hidden;
+            int targetW = contextB + Width;
+            int targetB = targetW + Width;
+            int stepW = targetB + 1;
+            int stepB = stepW + Width;
+            int moveW = stepB + 1;
+            int moveB = moveW + MoveActions * Hidden;
+
+            Convolve(Planes, InputPlanes, A, conv0W, conv0B);
+            Convolve(A, Width, B, conv1W, conv1B);
+            Convolve(B, Width, A, conv2W, conv2B);
 
             for (int j = 0; j < Hidden; j++)
             {
-                int row = BodyW + j * BodyInputs;
-                float sum = W[BodyB + j];
+                int row = bodyW + j * bodyInputs;
+                float sum = W[bodyB + j];
                 for (int k = 0; k < Width * Cells; k++)
                     sum += W[row + k] * A[k];
-                for (int k = 0; k < TrainedBotNetwork.Scalars; k++)
+                for (int k = 0; k < InputScalars; k++)
                     sum += W[row + Width * Cells + k] * Scalars[k];
                 Features[j] = Relu(sum);
             }
 
             for (int c = 0; c < Width; c++)
             {
-                float sum = W[ContextB + c];
+                float sum = W[contextB + c];
                 for (int j = 0; j < Hidden; j++)
-                    sum += W[ContextW + c * Hidden + j] * Features[j];
+                    sum += W[contextW + c * Hidden + j] * Features[j];
                 Context[c] = sum;
             }
 
@@ -226,16 +250,16 @@ public sealed class TrainedBotNetwork : IDisposable
                 int x = headX + (m == 2 ? 1 : m == 4 ? -1 : 0);
                 int y = headY + (m == 1 ? 1 : m == 3 ? -1 : 0);
                 int cell = x >= 0 && x < Columns && y >= 0 && y < Rows ? y * Columns + x : head;
-                float sum = W[MoveB + m] + CellScore(StepW, StepB, cell);
+                float sum = W[moveB + m] + CellScore(stepW, stepB, cell);
                 for (int j = 0; j < Hidden; j++)
-                    sum += W[MoveW + m * Hidden + j] * Features[j];
+                    sum += W[moveW + m * Hidden + j] * Features[j];
                 Logits[m] = sum;
             }
 
             for (int p = 0; p < Cells; p++)
             {
                 Logits[MoveActions + p] =
-                    Mask[MoveActions + p] != 0 ? CellScore(TargetW, TargetB, p) - TargetOffset : 0f;
+                    Mask[MoveActions + p] != 0 ? CellScore(targetW, targetB, p) - TargetOffset : 0f;
             }
 
             for (int a = 0; a < Actions; a++)
