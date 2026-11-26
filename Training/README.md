@@ -187,7 +187,13 @@ Self-play rounds from v0:
    1.0 --combo-weight 0.2`, v0–v4 as anchors and round 6's recipe otherwise: every snapshot tied v4
    (−0.1% to +2.0% ±6.8%) and the gate rejected them all. Play barely changed against v4: 1.3
    steps per unit to v4's 1.5, the same ability use, about 0.03 combos per round and no
-   measurable focus.
+   measurable focus. A potential-based bonus cannot change which strategy is best, so the focus
+   term could never have pushed it; only the combo bonus did, and combos are rare.
+10. The focus bonus paid on real hits instead (`Match.focused_hits`: each extra teammate, up to two,
+    whose bullets or damaging abilities hit the same enemy in a round), with `--lr 1e-4
+    --focus-weight 0.5 --combo-weight 1.0 --shaping-fade 0.5`. Stopped at update 120 of 366:
+    focused hits per round stayed at v4's level (0.49 and 0.38 at updates 80 and 120, against 0.42),
+    entropy climbed from 0.13 to 0.22 and it slipped behind v4 (40% / 55% with fog).
 
 Reward (`battlesim/reward.py`), per round:
 
