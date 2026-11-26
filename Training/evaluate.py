@@ -1,18 +1,13 @@
 import argparse
 import math
 import multiprocessing as mp
-from functools import partial
 from pathlib import Path
 
 import torch
 
-from battlesim.baselines import advance_policy
-from train import NetOpponent, cached_policy, evaluate
+from train import SCRIPTED, NetOpponent, cached_policy, evaluate
 
-OPPONENTS = {
-    "scripted": advance_policy,
-    "teacher": partial(advance_policy, explore_bias=0.0),
-}
+OPPONENTS = {bot.name: bot for bot in SCRIPTED}
 
 
 def opponent_for(name):

@@ -180,6 +180,10 @@ class NetOpponent:
     path: str
     greedy: bool = False
 
+    @property
+    def name(self):
+        return self.path
+
     def __call__(self, rng):
         policy = cached_policy(self.path)
 
@@ -202,9 +206,22 @@ class NetOpponent:
         return choose
 
 
-def pool_opponents(pool, latest_share, anchors=(), anchor_share=0.0):
-    own = 1.0 - anchor_share if anchors else 1.0
+@dataclass(frozen=True)
+class ScriptedOpponent:
+    name: str
+    explore_bias: float
+
+    def __call__(self, rng):
+        return advance_policy(rng, explore_bias=self.explore_bias)
+
+
+SCRIPTED = (ScriptedOpponent("scripted", 0.3), ScriptedOpponent("teacher", 0.0))
+
+
+def pool_opponents(pool, latest_share, anchors=(), anchor_share=0.0, scripted_share=0.0):
     fixed = [(NetOpponent(path), anchor_share / len(anchors)) for path in anchors]
+    fixed += [(bot, scripted_share / len(SCRIPTED)) for bot in SCRIPTED if scripted_share]
+    own = 1.0 - sum(weight for _, weight in fixed)
     if len(pool) == 1:
         return [(NetOpponent(pool[0]), own)] + fixed
     older = own * (1 - latest_share) / (len(pool) - 1)
@@ -231,7 +248,7 @@ class VecGames:
         factories, weights = zip(*self.opponents)
         opponent = self.rng.choices(factories, weights=weights)[0]
         slot = Slot(self.next_seed, opponent, self.max_rounds, self.reward, fog)
-        slot.opponent_path = getattr(opponent, "path", None)
+        slot.opponent_name = opponent.name
         return slot
 
     def set_opponents(self, opponents):
@@ -257,7 +274,7 @@ class VecGames:
             dones.append(done)
             boundaries.append(boundary)
             if done:
-                finished.append((slot.episode_return, slot.outcome(), slot.opponent_path))
+                finished.append((slot.episode_return, slot.outcome(), slot.opponent_name))
                 self.slots[i] = self._new_slot()
         return (
             np.array(rewards, dtype=np.float32),
@@ -390,6 +407,8 @@ def main():
     parser.add_argument("--latest-share", type=float, default=0.5, help="share of games against the newest copy; older copies split the rest")
     parser.add_argument("--anchors", nargs="*", default=[], help="checkpoints that stay in the opponent pool for the whole run, such as past champions")
     parser.add_argument("--anchor-share", type=float, default=0.2, help="share of games against the anchors")
+    parser.add_argument("--scripted-share", type=float, default=0.0, help="share of games against the scripted bots, "
+                        "so the learner keeps beating a style unlike its own")
     parser.add_argument("--clip", type=float, default=0.2)
     parser.add_argument("--entropy", type=float, default=0.005)
     parser.add_argument("--critic-warmup", type=int, default=0, help="updates at the start that train only the value network")
@@ -428,9 +447,17 @@ def main():
     )
     fog_schedule = FogSchedule(args.fog_start, args.fog_end, args.fog_ramp_begin, args.fog_ramp_end)
     anchors = set(args.anchors)
+    scripted = {bot.name for bot in SCRIPTED}
     pool = [str(run_dir / "pool" / "u0.pt")]
     torch.save(cpu_state(policy), pool[0])
-    settings = (args.envs, pool_opponents(pool, args.latest_share, args.anchors, args.anchor_share), args.max_rounds, args.seed * 1_000_000, reward, fog_schedule(0.0))
+
+    def opponents():
+        return pool_opponents(pool, args.latest_share, args.anchors, args.anchor_share, args.scripted_share)
+
+    def group(name):
+        return "anchors" if name in anchors else "scripted" if name in scripted else "pool"
+
+    settings = (args.envs, opponents(), args.max_rounds, args.seed * 1_000_000, reward, fog_schedule(0.0))
     games = ParallelGames(args.workers, *settings) if args.workers else VecGames(*settings)
     eval_seed = 10_000_000
     benchmarks = {"scripted": advance_policy, **{Path(path).stem: NetOpponent(path, greedy=True) for path in args.benchmark}}
@@ -457,8 +484,8 @@ def main():
         fog_share = fog_schedule(progress)
         reward.progress = progress
         lr = args.lr if args.lr_end is None else args.lr + (args.lr_end - args.lr) * progress
-        for group in optimizer.param_groups:
-            group["lr"] = lr
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
         games.set_progress(progress, fog_share)
         buf = {k: [] for k in ("planes", "scalars", "masks", "privileged", "actions", "logp", "values", "rewards", "dones", "boundaries")}
         entropy_share = []
@@ -533,7 +560,7 @@ def main():
                 if int(Path(retired).stem[1:]) % 100:
                     Path(retired).unlink()
             del pool[: -args.pool_size]
-            games.set_opponents(pool_opponents(pool, args.latest_share, args.anchors, args.anchor_share))
+            games.set_opponents(opponents())
 
         steps = update * batch
         record = {
@@ -557,11 +584,12 @@ def main():
         if recent:
             record.update(train_return=float(np.mean([r for r, *_ in recent])), matches=len(recent))
             summary += f" return {record['train_return']:+.2f}"
-            for group, outcomes in (("pool", [o for _, o, path in recent if path not in anchors]), ("anchors", [o for _, o, path in recent if path in anchors])):
+            for kind in ("pool", "anchors", "scripted"):
+                outcomes = [o for _, o, name in recent if group(name) == kind]
                 if outcomes:
                     win, loss = outcomes.count("win") / len(outcomes), outcomes.count("loss") / len(outcomes)
-                    record.update({f"train_{group}_win": win, f"train_{group}_loss": loss})
-                    summary += f" vs {group} {win:.0%}/{loss:.0%}"
+                    record.update({f"train_{kind}_win": win, f"train_{kind}_loss": loss})
+                    summary += f" vs {kind} {win:.0%}/{loss:.0%}"
         recent = []
         if update % args.eval_every == 0 or update == updates:
             results = run_eval()

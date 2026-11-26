@@ -98,11 +98,13 @@ def test_fog_schedule_ramps_between_shares():
 
 
 def test_newest_copy_gets_its_share_and_older_copies_split_the_rest():
-    assert [(o.path, w) for o, w in pool_opponents(["a"], 0.5)] == [("a", 1.0)]
-    weights = {o.path: w for o, w in pool_opponents(["a", "b", "c"], 0.5)}
+    assert [(o.name, w) for o, w in pool_opponents(["a"], 0.5)] == [("a", 1.0)]
+    weights = {o.name: w for o, w in pool_opponents(["a", "b", "c"], 0.5)}
     assert weights == {"a": 0.25, "b": 0.25, "c": 0.5}
-    weights = {o.path: w for o, w in pool_opponents(["a", "b", "c"], 0.5, ["x", "y"], 0.2)}
+    weights = {o.name: w for o, w in pool_opponents(["a", "b", "c"], 0.5, ["x", "y"], 0.2)}
     assert weights == pytest.approx({"a": 0.2, "b": 0.2, "c": 0.4, "x": 0.1, "y": 0.1})
+    weights = {o.name: w for o, w in pool_opponents(["a", "b"], 0.5, ["x"], 0.2, 0.2)}
+    assert weights == pytest.approx({"a": 0.3, "b": 0.3, "x": 0.2, "scripted": 0.1, "teacher": 0.1})
 
 
 def test_gate_needs_a_clear_win_over_the_champion_and_no_regression_elsewhere():
