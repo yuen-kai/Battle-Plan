@@ -1,7 +1,10 @@
 import argparse
 import json
+import math
+import multiprocessing as mp
 import random
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -10,99 +13,236 @@ import torch.nn as nn
 
 from battlesim.baselines import advance_policy
 from battlesim.env import MOVE_ACTIONS, DodgeBuilder, Game, PathBuilder
-from battlesim.observe import PLANE_COUNT, SCALAR_COUNT, encode_decision
+from battlesim.maps import COLUMNS, ROWS, in_bounds
+from battlesim.observe import (
+    ACTIVE_HEAD,
+    PLANE_COUNT,
+    PRIVILEGED_COUNT,
+    SCALAR_COUNT,
+    canonical_mask,
+    canonical_planes,
+    encode_decision,
+    encode_privileged,
+    world_action,
+)
+from battlesim.paths import STEPS
 from battlesim.reward import Reward
-from battlesim.maps import COLUMNS, ROWS
 from battlesim.sim import Config
 
 RUNS_DIR = Path(__file__).resolve().parent / "runs"
+CELLS = ROWS * COLUMNS
+
+
+def neighbour_table():
+    table = torch.zeros(CELLS, MOVE_ACTIONS, dtype=torch.long)
+    for y in range(ROWS):
+        for x in range(COLUMNS):
+            index = y * COLUMNS + x
+            table[index, 0] = index
+            for move, (dx, dy) in STEPS.items():
+                nx, ny = x + dx, y + dy
+                table[index, move] = ny * COLUMNS + nx if in_bounds((nx, ny)) else index
+    return table
 
 
 class Policy(nn.Module):
-    def __init__(self, width=32, hidden=256):
+    def __init__(self, width=64, hidden=256, critic_width=32):
         super().__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(PLANE_COUNT, width, 3, padding=1),
             nn.ReLU(),
             nn.Conv2d(width, width, 3, padding=1),
             nn.ReLU(),
+            nn.Conv2d(width, width, 3, padding=1),
+            nn.ReLU(),
         )
-        self.body = nn.Sequential(
-            nn.Linear(width * ROWS * COLUMNS + SCALAR_COUNT, hidden), nn.ReLU()
-        )
+        self.body = nn.Sequential(nn.Linear(width * CELLS + SCALAR_COUNT, hidden), nn.ReLU())
         self.context = nn.Linear(hidden, width)
         self.target_head = nn.Conv2d(width, 1, 1)
+        self.step_head = nn.Conv2d(width, 1, 1)
         self.move_logits = nn.Linear(hidden, MOVE_ACTIONS)
-        self.value = nn.Linear(hidden, 1)
+        self.critic_conv = nn.Sequential(
+            nn.Conv2d(PLANE_COUNT + PRIVILEGED_COUNT, critic_width, 3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(critic_width, critic_width, 3, padding=1),
+            nn.ReLU(),
+        )
+        self.critic_body = nn.Sequential(
+            nn.Linear(critic_width * CELLS + SCALAR_COUNT, hidden), nn.ReLU(), nn.Linear(hidden, 1)
+        )
+        self.register_buffer("neighbours", neighbour_table())
 
-    def forward(self, planes, scalars, masks):
+    def logits(self, planes, scalars, masks):
         board = self.conv(planes)
         features = self.body(torch.cat([board.flatten(1), scalars], dim=1))
         conditioned = torch.relu(board + self.context(features)[:, :, None, None])
-        targets = self.target_head(conditioned).flatten(1)
-        logits = torch.cat([self.move_logits(features), targets], dim=1).masked_fill(~masks, -1e9)
-        return logits, self.value(features).squeeze(-1)
+        legal_targets = masks[:, MOVE_ACTIONS:].sum(dim=1).clamp(min=1).float()
+        targets = self.target_head(conditioned).flatten(1) - legal_targets.log()[:, None]
+        head = planes[:, ACTIVE_HEAD].flatten(1).argmax(dim=1)
+        steps = self.step_head(conditioned).flatten(1).gather(1, self.neighbours[head])
+        moves = self.move_logits(features) + steps
+        return torch.cat([moves, targets], dim=1).masked_fill(~masks, -1e9)
+
+    def value(self, planes, scalars, privileged):
+        board = self.critic_conv(torch.cat([planes, privileged], dim=1))
+        return self.critic_body(torch.cat([board.flatten(1), scalars], dim=1)).squeeze(-1)
+
+
+@dataclass
+class FogSchedule:
+    start: float = 0.0
+    end: float = 0.7
+    ramp_begin: float = 0.2
+    ramp_end: float = 0.6
+
+    def __call__(self, progress):
+        if progress >= self.ramp_end:
+            return self.end
+        if progress <= self.ramp_begin:
+            return self.start
+        share = (progress - self.ramp_begin) / (self.ramp_end - self.ramp_begin)
+        return self.start + share * (self.end - self.start)
 
 
 class Slot:
-    def __init__(self, seed, opponent, max_rounds, reward):
+    def __init__(self, seed, opponent, max_rounds, reward, fog, team=None):
         self.reward = reward
         self.rng = random.Random(seed)
-        self.game = Game(config=Config(max_rounds=max_rounds), seed=seed)
+        self.team = self.rng.randrange(2) if team is None else team
+        self.fog = fog
+        self.game = Game(config=Config(max_rounds=max_rounds, fog_of_war=fog), seed=seed)
         self.opponent = opponent(self.rng)
-        self.builder = PathBuilder(self.game.match, 0)
+        self.builder = PathBuilder(self.game.match, self.team)
         self.opponent_dives = {}
         self.episode_return = 0.0
 
     def observe(self):
-        planes, scalars = encode_decision(self.builder, self.game.memory[0])
-        return planes, scalars, np.array(self.builder.mask(), dtype=bool)
+        planes, scalars = encode_decision(self.builder, self.game.memory[self.team])
+        privileged = encode_privileged(self.game.match, self.team)
+        mask = np.array(self.builder.mask(), dtype=bool)
+        return (
+            canonical_planes(planes, self.team),
+            scalars,
+            canonical_mask(mask, self.team),
+            canonical_planes(privileged, self.team),
+        )
+
+    def outcome(self):
+        winner = self.game.match.winner
+        return "draw" if winner is None else "win" if winner == self.team else "loss"
 
     def step(self, action):
-        self.builder.act(action)
+        self.builder.act(world_action(action, self.team))
         if not self.builder.done:
             return 0.0, False, False
         match = self.game.match
+        enemy = 1 - self.team
         if self.builder.dodge:
             dives = self.builder.dives()
         else:
             plans = self.builder.plans()
-            plans.update(self.game.plan(1, self.opponent))
+            plans.update(self.game.plan(enemy, self.opponent))
             alerted = match.begin_round(plans)
-            self.opponent_dives = self.game.dodge(1, alerted[1], self.opponent) if 1 in alerted else {}
-            if 0 in alerted:
-                self.builder = DodgeBuilder(match, 0, alerted[0])
+            self.opponent_dives = self.game.dodge(enemy, alerted[enemy], self.opponent) if enemy in alerted else {}
+            if self.team in alerted:
+                self.builder = DodgeBuilder(match, self.team, alerted[self.team])
                 return 0.0, False, False
             dives = {}
         match.apply_dodges({**dives, **self.opponent_dives})
-        before = self.reward.potential(match, 0)
+        before = self.reward.potential(match, self.team)
         self.game.finish_round()
-        reward = self.reward.round_reward(before, match, 0)
+        reward = self.reward.round_reward(before, match, self.team)
         if match.finished:
             return reward, True, True
-        self.builder = PathBuilder(match, 0)
+        self.builder = PathBuilder(match, self.team)
         return reward, False, True
 
 
+POLICY_CACHE = {}
+
+
+def cached_policy(path):
+    if path not in POLICY_CACHE:
+        policy = Policy()
+        policy.load_state_dict(torch.load(path, map_location="cpu"))
+        policy.eval()
+        POLICY_CACHE[path] = policy
+    return POLICY_CACHE[path]
+
+
+def keep_cached(paths):
+    for path in set(POLICY_CACHE) - set(paths):
+        del POLICY_CACHE[path]
+
+
+@dataclass(frozen=True)
+class NetOpponent:
+    path: str
+    greedy: bool = False
+
+    def __call__(self, rng):
+        policy = cached_policy(self.path)
+
+        def choose(builder, memory):
+            team = builder.team
+            planes, scalars = encode_decision(builder, memory)
+            mask = canonical_mask(np.array(builder.mask(), dtype=bool), team)
+            with torch.no_grad():
+                logits = policy.logits(
+                    torch.from_numpy(canonical_planes(planes, team)[None]),
+                    torch.from_numpy(scalars[None]),
+                    torch.from_numpy(mask[None]),
+                )[0]
+            if self.greedy:
+                action = int(logits.argmax())
+            else:
+                action = rng.choices(range(len(logits)), weights=torch.softmax(logits, 0).tolist())[0]
+            return world_action(action, team)
+
+        return choose
+
+
+def pool_opponents(pool, latest_share):
+    if len(pool) == 1:
+        return [(NetOpponent(pool[0]), 1.0)]
+    older = (1 - latest_share) / (len(pool) - 1)
+    return [(NetOpponent(path), older) for path in pool[:-1]] + [(NetOpponent(pool[-1]), latest_share)]
+
+
+def stack(observations):
+    return tuple(torch.from_numpy(np.stack(part)) for part in zip(*observations))
+
+
 class VecGames:
-    def __init__(self, count, opponent, max_rounds, seed, reward):
+    def __init__(self, count, opponents, max_rounds, seed, reward, fog_share):
         self.reward = reward
-        self.opponent = opponent
+        self.opponents = opponents
         self.max_rounds = max_rounds
+        self.fog_share = fog_share
+        self.rng = random.Random(seed)
         self.next_seed = seed
         self.slots = [self._new_slot() for _ in range(count)]
 
     def _new_slot(self):
         self.next_seed += 1
-        return Slot(self.next_seed, self.opponent, self.max_rounds, self.reward)
+        fog = self.rng.random() < self.fog_share
+        factories, weights = zip(*self.opponents)
+        opponent = self.rng.choices(factories, weights=weights)[0]
+        return Slot(self.next_seed, opponent, self.max_rounds, self.reward, fog)
+
+    def set_opponents(self, opponents):
+        self.opponents = opponents
+        keep_cached(factory.path for factory, _ in opponents if isinstance(factory, NetOpponent))
+
+    def set_progress(self, progress, fog_share):
+        self.reward.progress = progress
+        self.fog_share = fog_share
+
+    def observe_arrays(self):
+        return tuple(np.stack(part) for part in zip(*(slot.observe() for slot in self.slots)))
 
     def observe(self):
-        planes, scalars, masks = zip(*(slot.observe() for slot in self.slots))
-        return (
-            torch.from_numpy(np.stack(planes)),
-            torch.from_numpy(np.stack(scalars)),
-            torch.from_numpy(np.stack(masks)),
-        )
+        return tuple(torch.from_numpy(part) for part in self.observe_arrays())
 
     def step(self, actions):
         rewards, dones, boundaries, finished = [], [], [], []
@@ -113,7 +253,7 @@ class VecGames:
             dones.append(done)
             boundaries.append(boundary)
             if done:
-                finished.append((slot.episode_return, slot.game.match.winner))
+                finished.append((slot.episode_return, slot.outcome(), slot.fog))
                 self.slots[i] = self._new_slot()
         return (
             np.array(rewards, dtype=np.float32),
@@ -121,6 +261,63 @@ class VecGames:
             np.array(boundaries, dtype=bool),
             finished,
         )
+
+
+def game_worker(connection, settings):
+    torch.set_num_threads(1)
+    games = VecGames(*settings)
+    while True:
+        command, data = connection.recv()
+        if command == "step":
+            connection.send(games.step(data) + (games.observe_arrays(),))
+        elif command == "observe":
+            connection.send(games.observe_arrays())
+        elif command == "progress":
+            games.set_progress(*data)
+        elif command == "opponents":
+            games.set_opponents(data)
+        else:
+            return
+
+
+class ParallelGames:
+    def __init__(self, workers, count, opponents, max_rounds, seed, reward, fog_share):
+        context = mp.get_context("spawn")
+        self.sizes = [count // workers + (k < count % workers) for k in range(workers)]
+        self.connections = []
+        for k, size in enumerate(self.sizes):
+            parent, child = context.Pipe()
+            settings = (size, opponents, max_rounds, seed + k * 100_000, reward, fog_share)
+            context.Process(target=game_worker, args=(child, settings), daemon=True).start()
+            self.connections.append(parent)
+        for connection in self.connections:
+            connection.send(("observe", None))
+        self.latest = [connection.recv() for connection in self.connections]
+
+    def set_progress(self, progress, fog_share):
+        for connection in self.connections:
+            connection.send(("progress", (progress, fog_share)))
+
+    def set_opponents(self, opponents):
+        for connection in self.connections:
+            connection.send(("opponents", opponents))
+
+    def observe(self):
+        return tuple(torch.from_numpy(np.concatenate(parts)) for parts in zip(*self.latest))
+
+    def step(self, actions):
+        offset = 0
+        for connection, size in zip(self.connections, self.sizes):
+            connection.send(("step", actions[offset : offset + size]))
+            offset += size
+        results = [connection.recv() for connection in self.connections]
+        self.latest = [result[4] for result in results]
+        rewards, dones, boundaries = (np.concatenate([result[k] for result in results]) for k in range(3))
+        return rewards, dones, boundaries, [match for result in results for match in result[3]]
+
+    def close(self):
+        for connection in self.connections:
+            connection.send(("close", None))
 
 
 def round_advantages(rewards, values, next_values, dones, boundaries, gamma, lam):
@@ -136,32 +333,39 @@ def round_advantages(rewards, values, next_values, dones, boundaries, gamma, lam
     return advantages
 
 
-def evaluate(policy, opponent, matches, seed, max_rounds):
-    results = {0: 0, 1: 0, None: 0}
-    games = [Slot(seed + i, opponent, max_rounds, Reward()) for i in range(matches)]
+def cpu_state(policy):
+    return {key: value.detach().cpu() for key, value in policy.state_dict().items()}
+
+
+def evaluate(policy, opponent, matches, seed, max_rounds, fog):
+    device = next(policy.parameters()).device
+    counts = {"win": 0, "loss": 0, "draw": 0}
+    games = [Slot(seed + i // 2, opponent, max_rounds, Reward(), fog, team=i % 2) for i in range(matches)]
     live = list(range(matches))
     with torch.no_grad():
         while live:
-            obs = [games[i].observe() for i in live]
-            planes, scalars, masks = (torch.from_numpy(np.stack(x)) for x in zip(*obs))
-            logits, _ = policy(planes, scalars, masks)
-            actions = logits.argmax(dim=1).tolist()
+            planes, scalars, masks, _ = (part.to(device) for part in stack(games[i].observe() for i in live))
+            actions = policy.logits(planes, scalars, masks).argmax(dim=1).tolist()
             still = []
             for i, action in zip(live, actions):
                 _, done, _ = games[i].step(action)
                 if done:
-                    results[games[i].game.match.winner] += 1
+                    counts[games[i].outcome()] += 1
                 else:
                     still.append(i)
             live = still
-    return results[0] / matches, results[1] / matches, results[None] / matches
+    return {key: value / matches for key, value in counts.items()}
+
+
+def eval_score(results):
+    return sum(r["win"] - r["loss"] for r in results.values()) / len(results)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="PPO on the Battle Plan simulator.")
-    parser.add_argument("--steps", type=int, default=1_000_000)
-    parser.add_argument("--envs", type=int, default=64)
-    parser.add_argument("--rollout", type=int, default=128)
+    parser = argparse.ArgumentParser(description="Self-play PPO on the Battle Plan simulator.")
+    parser.add_argument("--steps", type=int, default=4_000_000)
+    parser.add_argument("--envs", type=int, default=128)
+    parser.add_argument("--rollout", type=int, default=64)
     parser.add_argument("--epochs", type=int, default=4)
     parser.add_argument("--minibatch", type=int, default=1024)
     parser.add_argument("--lr", type=float, default=3e-4)
@@ -172,20 +376,39 @@ def main():
     parser.add_argument("--count-weight", type=float, default=0.5)
     parser.add_argument("--round-cost", type=float, default=0.01)
     parser.add_argument("--shaping-fade", type=float, default=0.8, help="fraction of training after which shaping is off")
+    parser.add_argument("--fog-start", type=float, default=0.0, help="share of fog-of-war games at the start")
+    parser.add_argument("--fog-end", type=float, default=0.6, help="share of fog-of-war games after the ramp")
+    parser.add_argument("--fog-ramp-begin", type=float, default=0.2)
+    parser.add_argument("--fog-ramp-end", type=float, default=0.6)
+    parser.add_argument("--snapshot-every", type=int, default=10, help="updates between copies of the learner added to the opponent pool")
+    parser.add_argument("--pool-size", type=int, default=20)
+    parser.add_argument("--latest-share", type=float, default=0.5, help="share of games against the newest copy; older copies split the rest")
     parser.add_argument("--clip", type=float, default=0.2)
-    parser.add_argument("--entropy", type=float, default=0.01)
+    parser.add_argument("--entropy", type=float, default=0.005)
     parser.add_argument("--max-rounds", type=int, default=30)
-    parser.add_argument("--eval-every", type=int, default=10)
+    parser.add_argument("--eval-every", type=int, default=20)
     parser.add_argument("--eval-matches", type=int, default=100)
+    parser.add_argument("--benchmark", nargs="*", default=[], help="checkpoints to evaluate against alongside the scripted bot")
+    parser.add_argument("--init", type=str, default=None, help="policy weights to start from")
+    parser.add_argument("--threads", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=7, help="simulator processes; 0 runs games in this process")
+    parser.add_argument("--device", type=str, default="mps" if torch.backends.mps.is_available() else "cpu")
+    parser.add_argument("--name", type=str, default="")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
-    run_dir = RUNS_DIR / time.strftime("%Y%m%d-%H%M%S")
-    run_dir.mkdir(parents=True, exist_ok=True)
+    if args.threads:
+        torch.set_num_threads(args.threads)
+    run_dir = RUNS_DIR / (time.strftime("%Y%m%d-%H%M%S") + (f"-{args.name}" if args.name else ""))
+    (run_dir / "pool").mkdir(parents=True, exist_ok=True)
+    (run_dir / "config.json").write_text(json.dumps(vars(args), indent=2))
     log = (run_dir / "log.jsonl").open("w")
 
-    policy = Policy()
+    device = torch.device(args.device)
+    policy = Policy().to(device)
+    if args.init:
+        policy.load_state_dict(torch.load(args.init, map_location=device))
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.lr)
     reward = Reward(
         draw=args.draw_reward,
@@ -195,88 +418,155 @@ def main():
         shaping_fade=args.shaping_fade,
         gamma=args.gamma,
     )
-    games = VecGames(args.envs, advance_policy, args.max_rounds, args.seed * 1_000_000, reward)
+    fog_schedule = FogSchedule(args.fog_start, args.fog_end, args.fog_ramp_begin, args.fog_ramp_end)
+    pool = [str(run_dir / "pool" / "u0.pt")]
+    torch.save(cpu_state(policy), pool[0])
+    settings = (args.envs, pool_opponents(pool, args.latest_share), args.max_rounds, args.seed * 1_000_000, reward, fog_schedule(0.0))
+    games = ParallelGames(args.workers, *settings) if args.workers else VecGames(*settings)
     eval_seed = 10_000_000
+    benchmarks = {"scripted": advance_policy, **{Path(path).stem: NetOpponent(path, greedy=True) for path in args.benchmark}}
 
-    baseline = evaluate(policy, advance_policy, args.eval_matches, eval_seed, args.max_rounds)
-    print(f"untrained vs scripted: win {baseline[0]:.0%} loss {baseline[1]:.0%} draw {baseline[2]:.0%}", flush=True)
+    def run_eval():
+        return {
+            f"{name} {mode}": evaluate(policy, opponent, args.eval_matches, eval_seed, args.max_rounds, fog)
+            for name, opponent in benchmarks.items()
+            for mode, fog in (("fog", True), ("clear", False))
+        }
 
-    updates = args.steps // (args.envs * args.rollout)
+    def describe(results):
+        return "  ".join(f"{key} {r['win']:.0%}/{r['loss']:.0%}" for key, r in results.items())
+
+    print(f"untrained (win/loss): {describe(run_eval())}", flush=True)
+
+    batch = args.envs * args.rollout
+    updates = args.steps // batch
+    best = -math.inf
     recent = []
     start = time.perf_counter()
     for update in range(1, updates + 1):
-        reward.progress = (update - 1) / updates
-        buf = {k: [] for k in ("planes", "scalars", "masks", "actions", "logp", "values", "rewards", "dones", "boundaries")}
+        progress = (update - 1) / updates
+        fog_share = fog_schedule(progress)
+        reward.progress = progress
+        games.set_progress(progress, fog_share)
+        buf = {k: [] for k in ("planes", "scalars", "masks", "privileged", "actions", "logp", "values", "rewards", "dones", "boundaries")}
+        entropy_share = []
+        rollout_start = time.perf_counter()
         for _ in range(args.rollout):
-            planes, scalars, masks = games.observe()
+            planes, scalars, masks, privileged = (part.to(device) for part in games.observe())
             with torch.no_grad():
-                logits, values = policy(planes, scalars, masks)
+                logits = policy.logits(planes, scalars, masks)
+                values = policy.value(planes, scalars, privileged)
                 dist = torch.distributions.Categorical(logits=logits)
                 actions = dist.sample()
+                legal = masks.sum(dim=1)
+                choice = legal > 1
+                if choice.any():
+                    entropy_share.append((dist.entropy()[choice] / legal[choice].float().log()).mean().item())
             rewards, dones, boundaries, finished = games.step(actions.tolist())
             recent.extend(finished)
             for key, value in (
-                ("planes", planes), ("scalars", scalars), ("masks", masks), ("actions", actions),
-                ("logp", dist.log_prob(actions)), ("values", values),
+                ("planes", planes), ("scalars", scalars), ("masks", masks), ("privileged", privileged),
+                ("actions", actions), ("logp", dist.log_prob(actions)), ("values", values),
                 ("rewards", torch.from_numpy(rewards)), ("dones", torch.from_numpy(dones)),
                 ("boundaries", torch.from_numpy(boundaries)),
             ):
                 buf[key].append(value)
         with torch.no_grad():
-            _, next_values = policy(*games.observe())
+            planes, scalars, _, privileged = (part.to(device) for part in games.observe())
+            next_values = policy.value(planes, scalars, privileged).cpu()
+        update_start = time.perf_counter()
 
-        values = torch.stack(buf["values"])
+        values = torch.stack(buf["values"]).cpu()
         rewards = torch.stack(buf["rewards"])
         dones = torch.stack(buf["dones"])
         boundaries = torch.stack(buf["boundaries"])
         advantages = round_advantages(rewards, values, next_values, dones, boundaries, args.gamma, args.lam)
         returns = advantages + values
+        explained = 1 - (returns - values).var().item() / max(returns.var().item(), 1e-8)
 
-        flat = {
-            "planes": torch.cat(buf["planes"]), "scalars": torch.cat(buf["scalars"]),
-            "masks": torch.cat(buf["masks"]), "actions": torch.cat(buf["actions"]),
-            "logp": torch.cat(buf["logp"]), "adv": advantages.flatten(), "ret": returns.flatten(),
-        }
+        flat = {key: torch.cat(buf[key]) for key in ("planes", "scalars", "masks", "privileged", "actions", "logp")}
+        flat["adv"] = advantages.flatten()
+        flat["ret"] = returns.flatten()
+        flat = {key: value.to(device) for key, value in flat.items()}
         flat["adv"] = (flat["adv"] - flat["adv"].mean()) / (flat["adv"].std() + 1e-8)
         size = flat["actions"].shape[0]
+        kls, clips = [], []
         for _ in range(args.epochs):
-            order = torch.randperm(size)
+            order = torch.randperm(size, device=device)
             for begin in range(0, size, args.minibatch):
                 idx = order[begin : begin + args.minibatch]
-                logits, value = policy(flat["planes"][idx], flat["scalars"][idx], flat["masks"][idx])
+                logits = policy.logits(flat["planes"][idx], flat["scalars"][idx], flat["masks"][idx])
+                value = policy.value(flat["planes"][idx], flat["scalars"][idx], flat["privileged"][idx])
+                value_loss = (value - flat["ret"][idx]).pow(2).mean()
                 dist = torch.distributions.Categorical(logits=logits)
-                ratio = (dist.log_prob(flat["actions"][idx]) - flat["logp"][idx]).exp()
+                log_ratio = dist.log_prob(flat["actions"][idx]) - flat["logp"][idx]
+                ratio = log_ratio.exp()
                 adv = flat["adv"][idx]
                 policy_loss = -torch.min(ratio * adv, ratio.clamp(1 - args.clip, 1 + args.clip) * adv).mean()
-                value_loss = (value - flat["ret"][idx]).pow(2).mean()
                 loss = policy_loss + 0.5 * value_loss - args.entropy * dist.entropy().mean()
                 optimizer.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
                 optimizer.step()
+                with torch.no_grad():
+                    kls.append(((ratio - 1) - log_ratio).mean().item())
+                    clips.append(((ratio - 1).abs() > args.clip).float().mean().item())
+        if update % args.snapshot_every == 0:
+            snapshot = run_dir / "pool" / f"u{update}.pt"
+            torch.save(cpu_state(policy), snapshot)
+            pool.append(str(snapshot))
+            for retired in pool[: -args.pool_size]:
+                if int(Path(retired).stem[1:]) % 100:
+                    Path(retired).unlink()
+            del pool[: -args.pool_size]
+            games.set_opponents(pool_opponents(pool, args.latest_share))
 
-        steps = update * args.envs * args.rollout
-        elapsed = time.perf_counter() - start
-        record = {"update": update, "steps": steps, "steps_per_s": steps / elapsed, "shaping": reward.shaping_scale()}
+        steps = update * batch
+        record = {
+            "update": update,
+            "steps": steps,
+            "steps_per_s": steps / (time.perf_counter() - start),
+            "rollout_s": update_start - rollout_start,
+            "update_s": time.perf_counter() - update_start,
+            "shaping": reward.shaping_scale(),
+            "fog_share": fog_share,
+            "entropy": float(np.mean(entropy_share)) if entropy_share else None,
+            "explained_variance": explained,
+            "approx_kl": float(np.mean(kls)),
+            "clip_frac": float(np.mean(clips)),
+        }
+        summary = (
+            f"update {update}/{updates} steps {steps:,} ({record['steps_per_s']:.0f}/s) "
+            f"fog {fog_share:.0%} ent {record['entropy']:.2f} ev {explained:.2f} kl {record['approx_kl']:.3f}"
+        )
         if recent:
-            record["train_return"] = float(np.mean([r for r, _ in recent]))
-            record["train_win"] = float(np.mean([w == 0 for _, w in recent]))
-            record["matches"] = len(recent)
+            outcomes = [outcome for _, outcome, _ in recent]
+            record.update(
+                train_return=float(np.mean([r for r, *_ in recent])),
+                matches=len(recent),
+                train_win=outcomes.count("win") / len(outcomes),
+                train_loss=outcomes.count("loss") / len(outcomes),
+            )
+            summary += f" return {record['train_return']:+.2f} vs pool {record['train_win']:.0%}/{record['train_loss']:.0%}"
         recent = []
         if update % args.eval_every == 0 or update == updates:
-            win, loss_rate, draw = evaluate(policy, advance_policy, args.eval_matches, eval_seed, args.max_rounds)
-            record.update(eval_win=win, eval_loss=loss_rate, eval_draw=draw)
-            torch.save(policy.state_dict(), run_dir / "policy.pt")
+            results = run_eval()
+            for key, r in results.items():
+                record.update({f"eval_{key.replace(' ', '_')}_{outcome}": value for outcome, value in r.items()})
+            score = eval_score(results)
+            record["eval_score"] = score
+            torch.save(cpu_state(policy), run_dir / "policy.pt")
+            if score > best:
+                best = score
+                torch.save(cpu_state(policy), run_dir / "best.pt")
+            summary += f" | eval {score:+.2f} {describe(results)}"
         log.write(json.dumps(record) + "\n")
         log.flush()
-        summary = f"update {update}/{updates} steps {steps:,} ({record['steps_per_s']:.0f}/s)"
-        if "train_win" in record:
-            summary += f" train win {record['train_win']:.0%} return {record['train_return']:+.2f}"
-        if "eval_win" in record:
-            summary += f" | eval vs scripted: win {record['eval_win']:.0%} loss {record['eval_loss']:.0%} draw {record['eval_draw']:.0%}"
         print(summary, flush=True)
 
-    print(f"saved {run_dir / 'policy.pt'}")
+    if args.workers:
+        games.close()
+    print(f"saved {run_dir / 'policy.pt'} (best eval score {best:+.2f} in {run_dir / 'best.pt'})")
 
 
 if __name__ == "__main__":

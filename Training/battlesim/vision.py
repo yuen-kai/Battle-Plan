@@ -80,12 +80,21 @@ def has_grid_line_of_sight(viewer, target, walls):
     return True
 
 
+CONTACT_CACHE_LIMIT = 100_000
+
+
+@lru_cache(maxsize=None)
+def shared_board(walls):
+    return Board(walls)
+
+
 class Board:
     def __init__(self, walls):
         self.walls = frozenset(walls)
         self.polygons = {cell: self._polygon(cell) for cell in self.walls}
         self._viewer_cache = {}
         self._obstacle_cache = {}
+        self._contact_cache = {}
 
     def _polygon(self, cell):
         cx, cy = cell
@@ -162,6 +171,14 @@ class Board:
         return self.first_wall_contact(start, end, radius) is not None
 
     def first_wall_contact(self, start, end, radius):
+        key = (start, end, radius)
+        if key not in self._contact_cache:
+            if len(self._contact_cache) >= CONTACT_CACHE_LIMIT:
+                self._contact_cache.clear()
+            self._contact_cache[key] = self._compute_first_wall_contact(start, end, radius)
+        return self._contact_cache[key]
+
+    def _compute_first_wall_contact(self, start, end, radius):
         dx, dy = end[0] - start[0], end[1] - start[1]
         length = math.hypot(dx, dy)
         if length <= 1e-9:

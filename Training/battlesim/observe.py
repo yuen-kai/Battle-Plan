@@ -19,7 +19,12 @@ OWN_TYPE = 14
 ENEMY_TYPE = OWN_TYPE + N_TYPES
 PLANE_COUNT = ENEMY_TYPE + N_TYPES
 CARD_FEATURES = N_TYPES + 3
-SCALAR_COUNT = N_TYPES + 9 + TEAM_SIZE * CARD_FEATURES
+SCALAR_COUNT = N_TYPES + 11 + TEAM_SIZE * CARD_FEATURES
+TRUE_ENEMY_HP = 0
+TRUE_ENEMY_COOLDOWN = 1
+TRUE_ENEMY_TYPE = 2
+PRIVILEGED_COUNT = TRUE_ENEMY_TYPE + N_TYPES
+MOVE_MIRROR = (0, 3, 4, 1, 2)
 
 
 def encode_decision(builder, memory):
@@ -63,7 +68,7 @@ def encode_decision(builder, memory):
     scalars[TYPE_INDEX[unit.stats.name]] = 1.0
     own = match.living(team)
     enemies = [u for u in match.units if u.team != team]
-    scalars[N_TYPES:N_TYPES + 9] = (
+    scalars[N_TYPES:N_TYPES + 11] = (
         (len(path) - 1) / MAX_MOVE,
         unit.stats.moveDist / MAX_MOVE,
         unit.hp / unit.stats.maxHealth,
@@ -73,8 +78,10 @@ def encode_decision(builder, memory):
         sum(e.alive for e in enemies) / TEAM_SIZE,
         float(builder.dodge),
         (builder.max_dive if builder.dodge else 0) / 2.0,
+        float(match.config.fog_of_war),
+        float(team),
     )
-    offset = N_TYPES + 9
+    offset = N_TYPES + 11
     for enemy in sorted(enemies, key=lambda e: e.slot)[:TEAM_SIZE]:
         scalars[offset + TYPE_INDEX[enemy.stats.name]] = 1.0
         scalars[offset + N_TYPES] = max(0.0, enemy.hp) / enemy.stats.maxHealth
@@ -82,3 +89,32 @@ def encode_decision(builder, memory):
         scalars[offset + N_TYPES + 2] = enemy.cooldown / MAX_COOLDOWN
         offset += CARD_FEATURES
     return planes, scalars
+
+
+def encode_privileged(match, team):
+    planes = np.zeros((PRIVILEGED_COUNT, ROWS, COLUMNS), dtype=np.float32)
+    for enemy in match.living(1 - team):
+        x, y = enemy.cell
+        planes[TRUE_ENEMY_HP, y, x] = enemy.hp / enemy.stats.maxHealth
+        planes[TRUE_ENEMY_COOLDOWN, y, x] = enemy.cooldown / MAX_COOLDOWN
+        planes[TRUE_ENEMY_TYPE + TYPE_INDEX[enemy.stats.name], y, x] = 1.0
+    return planes
+
+
+def canonical_planes(planes, team):
+    return np.ascontiguousarray(planes[:, ::-1, ::-1]) if team == 1 else planes
+
+
+def canonical_mask(mask, team):
+    if team != 1:
+        return mask
+    moves = mask[:len(MOVE_MIRROR)]
+    return np.concatenate([moves[list(MOVE_MIRROR)], mask[len(MOVE_MIRROR):][::-1]])
+
+
+def world_action(action, team):
+    if team != 1:
+        return action
+    if action < len(MOVE_MIRROR):
+        return MOVE_MIRROR[action]
+    return len(MOVE_MIRROR) + ROWS * COLUMNS - 1 - (action - len(MOVE_MIRROR))

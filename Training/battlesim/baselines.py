@@ -10,7 +10,7 @@ def manhattan(a, b):
 def advance_policy(rng, explore_bias=0.3, ability_chance=0.6):
     def choose(builder, memory):
         if builder.dodge:
-            return dodge_step(builder)
+            return dodge_step(builder, memory, rng)
         mask = builder.mask()
         unit = builder.unit
         head = builder.paths[unit.uid][-1]
@@ -56,18 +56,26 @@ def ability_target(unit, head, goals, legal, enemies_known, rng):
     return None
 
 
-def dodge_step(builder):
+def dodge_step(builder, memory, rng):
     mask = builder.mask()
     head = builder.paths[builder.unit.uid][-1]
     threats = [target for team, _, target, _ in builder.match.pending["telegraphs"] if team != builder.team]
     if not threats:
         return STAY
+    enemies = [cell for cell, *_ in memory.last_known.values()]
 
     def safety(cell):
         return min(manhattan(cell, t) for t in threats)
 
+    def enemy_distance(cell):
+        return min((manhattan(cell, e) for e in enemies), default=0)
+
     options = [a for a in range(1, MOVE_ACTIONS) if mask[a]]
-    best = max(options, key=lambda a: safety(step_cell(head, a)), default=STAY)
+    best = max(
+        options,
+        key=lambda a: (safety(step_cell(head, a)), enemy_distance(step_cell(head, a)), rng.random()),
+        default=STAY,
+    )
     if best == STAY or safety(step_cell(head, best)) <= safety(head):
         return STAY
     return best

@@ -2,11 +2,12 @@ import math
 import random
 from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
 
 from . import geometry
 from .maps import COLUMNS, ROWS, in_bounds
 from .paths import is_legal_path
-from .vision import PROJECTILE_RADIUS, Board, body_radius, ray_circle, segment_crosses_cells
+from .vision import PROJECTILE_RADIUS, body_radius, ray_circle, segment_crosses_cells, shared_board
 
 SHOT_ZONE_WEIGHTS = (1.0, 1.0, 1.0)
 BULLET_MAX_LIFETIME = 8.0
@@ -41,6 +42,15 @@ class Config:
     sample_hits: bool = False
     max_rounds: int = 40
     unity_frame_delays: bool = True
+    fog_of_war: bool = True
+
+
+ALL_CELLS = frozenset((x, y) for x in range(COLUMNS) for y in range(ROWS))
+
+
+@lru_cache(maxsize=65536)
+def smoke_between(start, end, smoke):
+    return segment_crosses_cells(start, end, smoke)
 
 
 def to_cell(x, y):
@@ -184,7 +194,7 @@ class Match:
     def __init__(self, layout, rosters, spawns, config=None, seed=None):
         self.layout = layout
         self.walls = layout.walls
-        self.board = Board(layout.walls)
+        self.board = shared_board(layout.walls)
         self.config = config or Config()
         self.rng = random.Random(seed)
         self.round_number = 0
@@ -221,6 +231,8 @@ class Match:
         return unit.stunned_until > self.time + 1e-9
 
     def visible_cells(self, team):
+        if not self.config.fog_of_war:
+            return ALL_CELLS
         stamp = (self.time, self.smoke, self._positions_version)
         cached = self._visible.get(team)
         if cached is not None and cached[2] == stamp:
@@ -236,6 +248,8 @@ class Match:
         return cells
 
     def can_observe(self, team, enemy):
+        if not self.config.fog_of_war:
+            return True
         if self.reveals.get((enemy.uid, team), -1.0) >= self.time:
             return True
         return enemy.cell in self.visible_cells(team)
@@ -251,7 +265,7 @@ class Match:
     def line_of_sight(self, unit, enemy):
         if not enemy.alive or not enemy.collider or not self.can_observe(unit.team, enemy):
             return False
-        if self.smoke and segment_crosses_cells((unit.x, unit.y), (enemy.x, enemy.y), self.smoke):
+        if self.smoke and smoke_between((unit.x, unit.y), (enemy.x, enemy.y), self.smoke):
             return False
         sx, sy = unit.x, unit.y
         dx, dy = enemy.x - sx, enemy.y - sy
@@ -1040,7 +1054,7 @@ class Match:
             if body is not None:
                 wall_t = self.board.first_wall_contact((ox, oy), (ox + ux * far, oy + uy * far), RAY)
                 if (wall_t is None or wall_t > body_t) and not (
-                    self.smoke and segment_crosses_cells((ox, oy), (body.x, body.y), self.smoke)
+                    self.smoke and smoke_between((ox, oy), (body.x, body.y), self.smoke)
                 ):
                     self.spawn(self.area_lock_beam(sniper, body), sniper)
                     return

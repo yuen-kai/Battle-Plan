@@ -1,6 +1,11 @@
+import random
+
 import pytest
 
+from battlesim.baselines import advance_policy
+from battlesim.env import DodgeBuilder, TeamMemory
 from battlesim.maps import MapLayout
+from battlesim.paths import DOWN, STAY, UP
 from battlesim.sim import Match
 from battlesim.units import load_roster
 
@@ -64,6 +69,22 @@ def test_grenade_alerts_and_a_straight_two_cell_dive_escapes():
     assert target.hp == pytest.approx(160)
     assert target.cell == (9, 6)
     assert outside.hp == pytest.approx(160)
+
+
+def test_scripted_dodge_never_steps_toward_known_enemies_on_either_side():
+    for team, dodger_cell, thrower_cell, forward in ((0, (7, 3), (7, 7), UP), (1, (7, 6), (7, 2), DOWN)):
+        cells = {team: [("Ramrod", dodger_cell)], 1 - team: [("Soldier", thrower_cell)]}
+        match = board(cells[0], cells[1])
+        thrower = unit(match, 1 - team)
+        alerted = match.begin_round({thrower.uid: ("ability", dodger_cell)})
+        memory = TeamMemory()
+        memory.last_known[thrower.uid] = (thrower_cell, "Soldier", 1.0, 0)
+        moves = {
+            advance_policy(random.Random(seed))(DodgeBuilder(match, team, alerted[team]), memory)
+            for seed in range(40)
+        }
+        assert forward not in moves and STAY not in moves
+        assert len(moves) > 1
 
 
 def test_diving_cancels_the_divers_own_ability_without_spending_it():
