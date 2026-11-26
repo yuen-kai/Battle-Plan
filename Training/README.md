@@ -141,12 +141,14 @@ any other opponent: the scripted bots and every earlier champion (`runs/hall/`).
 |---|---|---|
 | v0 | Earlier pipeline, since removed: copied the scripted bot, PPO against it, then self-play | — |
 | v1 | Round 2 below, update 200 | +26% ±6% margin |
+| v2 | Round 3 below, update 240 | +13% ±7% margin |
 
-| v1 against (400 paired games each) | Fog: win / loss | Fog off: win / loss |
+| v2 against (400 paired games each) | Fog: win / loss | Fog off: win / loss |
 |---|---|---|
-| Scripted bot | 70% / 19% | 61% / 30% |
-| Scripted bot, no random moves | 66% / 23% | 62% / 31% |
-| v0 | 56% / 28% | 58% / 35% |
+| Scripted bot | 69% / 18% | 66% / 24% |
+| Scripted bot, no random moves | 71% / 20% | 59% / 32% |
+| v0 | 62% / 27% | 62% / 32% |
+| v1 | 53% / 40% | 54% / 42% |
 
 Self-play rounds from v0:
 
@@ -155,6 +157,7 @@ Self-play rounds from v0:
 2. `--anchors runs/hall/bot-v0.pt --anchor-share 0.3 --lr 1e-4 --lr-end 0 --rollout 128
    --hp-weight 0 --count-weight 0 --critic-warmup 5 --fog-start 0.5 --fog-end 0.5 --entropy 0.003`,
    4M steps: improved against every opponent and levelled off after about 2.3M steps.
+3. The same recipe from v1 with v0 and v1 as anchors: a smaller gain, about half of round 2's.
 
 Reward (`battlesim/reward.py`), per round:
 
