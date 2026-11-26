@@ -45,13 +45,17 @@ class TeamMemory:
 class PathBuilder:
     dodge = False
 
-    def __init__(self, match, team):
+    def __init__(self, match, team, revise=False, rng=None):
         self.match = match
         self.team = team
         self.units = sorted(match.living(team), key=lambda u: u.uid)
+        if rng is not None:
+            rng.shuffle(self.units)
         self.paths = {u.uid: [u.cell] for u in self.units}
         self.abilities = {}
         self.index = 0
+        self.revise = revise
+        self.revising = False
         self.claimed = set()
         self._targets = {}
 
@@ -62,6 +66,26 @@ class PathBuilder:
     @property
     def unit(self):
         return self.units[self.index]
+
+    def teammate_plans(self):
+        visible = self.units if self.revising else self.units[: self.index]
+        current = self.unit
+        return [(u, self.paths[u.uid], self.abilities.get(u.uid)) for u in visible if u is not current]
+
+    def end_cell(self, unit):
+        target = self.abilities.get(unit.uid)
+        return self.match.caster_end_cell(unit, target) if target is not None else self.paths[unit.uid][-1]
+
+    def next_unit(self):
+        self.index += 1
+        if self.index >= len(self.units) and self.revise and not self.revising:
+            self.revising = True
+            self.index = 0
+        if self.revising and not self.done:
+            unit = self.unit
+            self.paths[unit.uid] = [unit.cell]
+            self.abilities.pop(unit.uid, None)
+            self.claimed = {self.end_cell(other) for other in self.units if other is not unit}
 
     def ability_targets(self, unit):
         if unit.uid not in self._targets:
@@ -88,14 +112,14 @@ class PathBuilder:
             target = action_target(action)
             self.abilities[unit.uid] = target
             self.claimed.add(self.match.caster_end_cell(unit, target))
-            self.index += 1
+            self.next_unit()
             return
         if action != STAY:
             path.append(step_cell(path[-1], action))
             if len(path) - 1 < unit.stats.moveDist:
                 return
         self.claimed.add(path[-1])
-        self.index += 1
+        self.next_unit()
 
     def plans(self):
         plans = dict(self.paths)
@@ -106,6 +130,10 @@ class PathBuilder:
 
 class DodgeBuilder:
     dodge = True
+    revising = False
+
+    def teammate_plans(self):
+        return []
 
     def __init__(self, match, team, alerted):
         self.match = match
@@ -175,7 +203,9 @@ class Game:
         return builder
 
     def plan(self, team, policy):
-        return self.run_builder(PathBuilder(self.match, team), policy).plans()
+        revise = getattr(policy, "revise", False)
+        builder = PathBuilder(self.match, team, revise=revise, rng=self.rng if revise else None)
+        return self.run_builder(builder, policy).plans()
 
     def dodge(self, team, uids, policy):
         return self.run_builder(DodgeBuilder(self.match, team, uids), policy).dives()

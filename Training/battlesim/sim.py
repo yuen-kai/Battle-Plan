@@ -221,6 +221,9 @@ class Match:
         self.being_shoved = {}
         self.last_seen = ({}, {})
         self.pending = None
+        self.ability_affected = {}
+        self.ability_damaged = set()
+        self.round_dives = set()
 
     # ---------- queries ----------
 
@@ -510,6 +513,17 @@ class Match:
 
     # ---------- stun and shoves ----------
 
+    def note_ability_hit(self, victim, caster, damaged):
+        self.ability_affected.setdefault(victim.uid, set()).add(caster.uid)
+        if damaged:
+            self.ability_damaged.add(victim.uid)
+
+    def combos(self, team):
+        enemies = {u.uid for u in self.units if u.team != team}
+        layered = sum(len(casters) >= 2 for uid, casters in self.ability_affected.items() if uid in enemies)
+        trapped = len(self.ability_damaged & self.round_dives & enemies)
+        return layered + trapped
+
     def apply_stun(self, unit, seconds):
         if seconds <= 0 or not unit.alive:
             return
@@ -759,6 +773,7 @@ class Match:
         pending = self.pending
         self.pending = None
         paths, abilities, dives = pending["paths"], pending["abilities"], pending["dives"]
+        self.ability_affected, self.ability_damaged, self.round_dives = {}, set(), set(dives)
         self.round_start = self.time
         self.return_fire_until = -1.0
         self.tasks = []
@@ -995,6 +1010,7 @@ class Match:
             if dist > enemy.radius and self.splash_blocked((ox, oy), enemy, dist):
                 continue
             self.apply_damage(enemy, GRENADE_DAMAGE, soldier.team)
+            self.note_ability_hit(enemy, soldier, damaged=True)
 
     def splash_blocked(self, origin, enemy, dist):
         ux, uy = (enemy.x - origin[0]) / dist, (enemy.y - origin[1]) / dist
@@ -1065,6 +1081,7 @@ class Match:
     def area_lock_beam(self, sniper, victim):
         yield math.hypot(victim.x - sniper.x, victim.y - sniper.y) / AREA_LOCK_BEAM_SPEED + AREA_LOCK_IMPACT_HOLD
         self.apply_damage(victim, AREA_LOCK_DAMAGE, sniper.team)
+        self.note_ability_hit(victim, sniper, damaged=True)
         yield from self.area_lock_cleanup(sniper)
 
     def area_lock_cleanup(self, sniper):
@@ -1114,6 +1131,7 @@ class Match:
                 continue
             if math.hypot(victim.x - ramrod.x, victim.y - ramrod.y) <= RAM_CONTACT:
                 victims.remove(victim)
+                self.note_ability_hit(victim, ramrod, damaged=False)
                 self.spawn(self.knockback(victim, direction), ramrod)
 
     def knockback(self, victim, direction):

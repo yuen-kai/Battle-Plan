@@ -16,6 +16,7 @@ from battlesim.env import MOVE_ACTIONS, DodgeBuilder, Game, PathBuilder
 from battlesim.maps import COLUMNS, ROWS, in_bounds
 from battlesim.observe import (
     ACTIVE_HEAD,
+    LEGACY_PLANES,
     PLANE_COUNT,
     PRIVILEGED_COUNT,
     SCALAR_COUNT,
@@ -46,29 +47,32 @@ def neighbour_table():
 
 
 class Policy(nn.Module):
-    def __init__(self, width=64, hidden=256, critic_width=32):
+    def __init__(self, width=64, hidden=256, critic_width=32, planes=PLANE_COUNT, scalars=SCALAR_COUNT):
         super().__init__()
+        self.planes = planes
+        self.scalars = scalars
+        self.revise = planes > LEGACY_PLANES
         self.conv = nn.Sequential(
-            nn.Conv2d(PLANE_COUNT, width, 3, padding=1),
+            nn.Conv2d(planes, width, 3, padding=1),
             nn.ReLU(),
             nn.Conv2d(width, width, 3, padding=1),
             nn.ReLU(),
             nn.Conv2d(width, width, 3, padding=1),
             nn.ReLU(),
         )
-        self.body = nn.Sequential(nn.Linear(width * CELLS + SCALAR_COUNT, hidden), nn.ReLU())
+        self.body = nn.Sequential(nn.Linear(width * CELLS + scalars, hidden), nn.ReLU())
         self.context = nn.Linear(hidden, width)
         self.target_head = nn.Conv2d(width, 1, 1)
         self.step_head = nn.Conv2d(width, 1, 1)
         self.move_logits = nn.Linear(hidden, MOVE_ACTIONS)
         self.critic_conv = nn.Sequential(
-            nn.Conv2d(PLANE_COUNT + PRIVILEGED_COUNT, critic_width, 3, padding=1),
+            nn.Conv2d(planes + PRIVILEGED_COUNT, critic_width, 3, padding=1),
             nn.ReLU(),
             nn.Conv2d(critic_width, critic_width, 3, padding=1),
             nn.ReLU(),
         )
         self.critic_body = nn.Sequential(
-            nn.Linear(critic_width * CELLS + SCALAR_COUNT, hidden), nn.ReLU(), nn.Linear(hidden, 1)
+            nn.Linear(critic_width * CELLS + scalars, hidden), nn.ReLU(), nn.Linear(hidden, 1)
         )
         self.register_buffer("neighbours", neighbour_table())
 
@@ -82,6 +86,29 @@ class Policy(nn.Module):
         steps = self.step_head(conditioned).flatten(1).gather(1, self.neighbours[head])
         moves = self.move_logits(features) + steps
         return torch.cat([moves, targets], dim=1).masked_fill(~masks, -1e9)
+
+    @classmethod
+    def from_state(cls, state):
+        width = state["conv.0.weight"].shape[0]
+        planes = state["conv.0.weight"].shape[1]
+        policy = cls(width=width, planes=planes, scalars=state["body.0.weight"].shape[1] - width * CELLS)
+        policy.load_state_dict(state)
+        return policy
+
+    def adopt(self, state):
+        state = dict(state)
+        old_planes = state["conv.0.weight"].shape[1]
+        grown = self.state_dict()
+        for key in ("conv.0.weight", "critic_conv.0.weight"):
+            weight = torch.zeros_like(grown[key])
+            weight[:, :old_planes] = state[key][:, :old_planes]
+            weight[:, self.planes:] = state[key][:, old_planes:]
+            state[key] = weight
+        for key in ("body.0.weight", "critic_body.0.weight"):
+            weight = torch.zeros_like(grown[key])
+            weight[:, : state[key].shape[1]] = state[key]
+            state[key] = weight
+        self.load_state_dict(state)
 
     def value(self, planes, scalars, privileged):
         board = self.critic_conv(torch.cat([planes, privileged], dim=1))
@@ -105,24 +132,29 @@ class FogSchedule:
 
 
 class Slot:
-    def __init__(self, seed, opponent, max_rounds, reward, fog, team=None):
+    def __init__(self, seed, opponent, max_rounds, reward, fog, team=None, inputs=(PLANE_COUNT, SCALAR_COUNT)):
         self.reward = reward
         self.rng = random.Random(seed)
         self.team = self.rng.randrange(2) if team is None else team
         self.fog = fog
+        self.inputs = inputs
+        self.revise = inputs[0] > LEGACY_PLANES
         self.game = Game(config=Config(max_rounds=max_rounds, fog_of_war=fog), seed=seed)
         self.opponent = opponent(self.rng)
-        self.builder = PathBuilder(self.game.match, self.team)
+        self.builder = self.new_builder()
         self.opponent_dives = {}
         self.episode_return = 0.0
+
+    def new_builder(self):
+        return PathBuilder(self.game.match, self.team, revise=self.revise, rng=self.rng if self.revise else None)
 
     def observe(self):
         planes, scalars = encode_decision(self.builder, self.game.memory[self.team])
         privileged = encode_privileged(self.game.match, self.team)
         mask = np.array(self.builder.mask(), dtype=bool)
         return (
-            canonical_planes(planes, self.team),
-            scalars,
+            canonical_planes(planes[: self.inputs[0]], self.team),
+            scalars[: self.inputs[1]],
             canonical_mask(mask, self.team),
             canonical_planes(privileged, self.team),
         )
@@ -154,7 +186,7 @@ class Slot:
         reward = self.reward.round_reward(before, match, self.team)
         if match.finished:
             return reward, True, True
-        self.builder = PathBuilder(match, self.team)
+        self.builder = self.new_builder()
         return reward, False, True
 
 
@@ -163,8 +195,7 @@ POLICY_CACHE = {}
 
 def cached_policy(path):
     if path not in POLICY_CACHE:
-        policy = Policy()
-        policy.load_state_dict(torch.load(path, map_location="cpu"))
+        policy = Policy.from_state(torch.load(path, map_location="cpu"))
         policy.eval()
         POLICY_CACHE[path] = policy
     return POLICY_CACHE[path]
@@ -193,8 +224,8 @@ class NetOpponent:
             mask = canonical_mask(np.array(builder.mask(), dtype=bool), team)
             with torch.no_grad():
                 logits = policy.logits(
-                    torch.from_numpy(canonical_planes(planes, team)[None]),
-                    torch.from_numpy(scalars[None]),
+                    torch.from_numpy(np.ascontiguousarray(canonical_planes(planes[: policy.planes], team))[None]),
+                    torch.from_numpy(scalars[None, : policy.scalars]),
                     torch.from_numpy(mask[None]),
                 )[0]
             if self.greedy:
@@ -203,6 +234,7 @@ class NetOpponent:
                 action = rng.choices(range(len(logits)), weights=torch.softmax(logits, 0).tolist())[0]
             return world_action(action, team)
 
+        choose.revise = policy.revise
         return choose
 
 
@@ -361,7 +393,8 @@ def cpu_state(policy):
 def evaluate(policy, opponent, matches, seed, max_rounds, fog):
     device = next(policy.parameters()).device
     counts = {"win": 0, "loss": 0, "draw": 0}
-    games = [Slot(seed + i // 2, opponent, max_rounds, Reward(), fog, team=i % 2) for i in range(matches)]
+    inputs = (policy.planes, policy.scalars)
+    games = [Slot(seed + i // 2, opponent, max_rounds, Reward(), fog, team=i % 2, inputs=inputs) for i in range(matches)]
     live = list(range(matches))
     with torch.no_grad():
         while live:
@@ -396,6 +429,10 @@ def main():
     parser.add_argument("--draw-reward", type=float, default=-0.5)
     parser.add_argument("--hp-weight", type=float, default=0.5)
     parser.add_argument("--count-weight", type=float, default=0.5)
+    parser.add_argument("--support-weight", type=float, default=0.0,
+                        help="fading potential for how many of your units can shoot each enemy, minus the reverse")
+    parser.add_argument("--combo-weight", type=float, default=0.0,
+                        help="fading bonus for enemies hit by two teammates' abilities, or hit by one after diving")
     parser.add_argument("--round-cost", type=float, default=0.01)
     parser.add_argument("--shaping-fade", type=float, default=0.8, help="fraction of training after which shaping is off")
     parser.add_argument("--fog-start", type=float, default=0.0, help="share of fog-of-war games at the start")
@@ -433,14 +470,17 @@ def main():
     log = (run_dir / "log.jsonl").open("w")
 
     device = torch.device(args.device)
-    policy = Policy().to(device)
+    policy = Policy()
     if args.init:
-        policy.load_state_dict(torch.load(args.init, map_location=device))
+        policy.adopt(torch.load(args.init, map_location="cpu"))
+    policy.to(device)
     optimizer = torch.optim.Adam(policy.parameters(), lr=args.lr)
     reward = Reward(
         draw=args.draw_reward,
         hp_weight=args.hp_weight,
         count_weight=args.count_weight,
+        support_weight=args.support_weight,
+        combo_weight=args.combo_weight,
         round_cost=args.round_cost,
         shaping_fade=args.shaping_fade,
         gamma=args.gamma,

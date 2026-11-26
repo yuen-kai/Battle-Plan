@@ -1,6 +1,8 @@
 import numpy as np
 
-from .maps import COLUMNS, ROWS
+from .maps import COLUMNS, ROWS, in_bounds
+from .paths import STEPS
+from .sim import DEFAULT_HALF_HEIGHT, HALF_HEIGHT
 from .units import ORIGINAL_FIVE
 
 UNIT_TYPES = ORIGINAL_FIVE
@@ -17,9 +19,15 @@ MAX_COOLDOWN = 4.0
 ) = range(14)
 OWN_TYPE = 14
 ENEMY_TYPE = OWN_TYPE + N_TYPES
-PLANE_COUNT = ENEMY_TYPE + N_TYPES
+LEGACY_PLANES = ENEMY_TYPE + N_TYPES
+TEAM_PATH = LEGACY_PLANES
+ALLY_ABILITY = TEAM_PATH + 1
+ESCAPE = ALLY_ABILITY + N_TYPES
+PLANE_COUNT = ESCAPE + 1
 CARD_FEATURES = N_TYPES + 3
-SCALAR_COUNT = N_TYPES + 11 + TEAM_SIZE * CARD_FEATURES
+LEGACY_SCALARS = N_TYPES + 11 + TEAM_SIZE * CARD_FEATURES
+REVISING = LEGACY_SCALARS
+SCALAR_COUNT = LEGACY_SCALARS + 1
 TRUE_ENEMY_HP = 0
 TRUE_ENEMY_COOLDOWN = 1
 TRUE_ENEMY_TYPE = 2
@@ -53,6 +61,16 @@ def encode_decision(builder, memory):
     planes[ACTIVE_HEAD, y, x] = 1.0
     for x, y in builder.claimed:
         planes[CLAIMED, y, x] = 1.0
+    for ally, path_so_far, target in builder.teammate_plans():
+        if target is None:
+            for x, y in path_so_far[1:]:
+                planes[TEAM_PATH, y, x] = 1.0
+            continue
+        for x, y in match.telegraph_cells(ally, target):
+            if in_bounds((x, y)):
+                planes[ALLY_ABILITY + TYPE_INDEX[ally.stats.name], y, x] = 1.0
+        for x, y in escape_cells(match, ally, target, memory):
+            planes[ESCAPE, y, x] = 1.0
     if builder.dodge:
         for caster_team, _, target, cells in match.pending["telegraphs"]:
             own_side = caster_team == team
@@ -88,7 +106,40 @@ def encode_decision(builder, memory):
         scalars[offset + N_TYPES + 1] = float(enemy.alive)
         scalars[offset + N_TYPES + 2] = enemy.cooldown / MAX_COOLDOWN
         offset += CARD_FEATURES
+    scalars[REVISING] = float(builder.revising)
     return planes, scalars
+
+
+def escape_cells(match, caster, target, memory):
+    stats = caster.stats
+    if stats.responseRange <= 0:
+        return set()
+    end = match.line_endpoint(caster, target) if stats.responseDistLine else None
+    cells = set()
+    for cell, name, _, _ in memory.last_known.values():
+        if end is not None:
+            alerted = match.segment_distance((caster.x, caster.y), end, cell) <= stats.responseRange
+        else:
+            half_height = HALF_HEIGHT.get(name, DEFAULT_HALF_HEIGHT)
+            reach = 2.7 * stats.responseRange
+            alerted = 2.7 ** 2 * ((cell[0] - target[0]) ** 2 + (cell[1] - target[1]) ** 2) + half_height ** 2 <= reach ** 2
+        if alerted:
+            cells |= dive_reach(cell, stats.diveRange, match.walls)
+    return cells
+
+
+def dive_reach(start, steps, walls):
+    reached, frontier = {start}, [(start,)]
+    for _ in range(steps):
+        frontier = [
+            path + (nxt,)
+            for path in frontier
+            for dx, dy in STEPS.values()
+            for nxt in [(path[-1][0] + dx, path[-1][1] + dy)]
+            if in_bounds(nxt) and nxt not in walls and nxt not in path
+        ]
+        reached.update(path[-1] for path in frontier)
+    return reached
 
 
 def encode_privileged(match, team):
