@@ -18,7 +18,7 @@ from battlesim.observe import (
 )
 from battlesim.paths import RIGHT, STAY, UP
 from battlesim.maps import MapLayout
-from battlesim.reward import Reward, focus_score, incoming_fire
+from battlesim.reward import Reward
 from battlesim.sim import Config, Match
 from battlesim.units import load_roster
 from train import NetOpponent, Policy, Slot
@@ -105,20 +105,36 @@ def duel(types, ours, theirs):
     return match, match.units
 
 
-def test_focus_pays_when_two_guns_meet_one_target_that_can_answer_only_one():
+def hold_still(match):
+    match.begin_round({u.uid: [u.cell] for u in match.living(0) + match.living(1)})
+    match.apply_dodges({})
+    match.execute()
+
+
+def test_two_guns_landing_on_one_enemy_count_as_focus():
     match, (a, b, x) = duel(("Soldier", "Soldier"), [(0, -2), (-2, 0)], [(0, 0)])
-    assert match.find_nearest_enemy(a) is x and match.find_nearest_enemy(b) is x
-    ours, theirs = incoming_fire(match, 0), incoming_fire(match, 1)
-    assert ours[x.uid] > 1.5 and sum(theirs.values()) <= 1.0 + 1e-9
-    assert focus_score(match, 0) > 0
-    assert abs(focus_score(match, 0) + focus_score(match, 1)) < 1e-12
+    hold_still(match)
+    assert set(match.round_hits[x.uid]) == {a.uid, b.uid}
+    assert match.focused_hits(0) == 1.0 and match.focused_hits(1) == 0.0
 
 
 def test_focus_counts_stray_hits_from_the_bullet_cone():
     match, (ramrod, target, bystander) = duel(("Ramrod", "Soldier"), [(0, 0)], [(0, 2), (1, 2)])
-    assert match.find_nearest_enemy(ramrod) is target
-    fire = incoming_fire(match, 0)
-    assert 0 < fire[bystander.uid] < fire[target.uid]
+    hold_still(match)
+    assert 0 < match.round_hits[bystander.uid][ramrod.uid] < match.round_hits[target.uid][ramrod.uid]
+
+
+def test_focus_caps_each_attacker_at_one_gun_and_each_enemy_at_three():
+    match, (a, b, c, d, x) = duel(("Soldier", "Soldier"), [(0, -2), (-2, 0), (2, 0), (0, 2)], [(0, 0)])
+    match.note_hit(x, a, 2.5)
+    assert match.focused_hits(0) == 0.0
+    match.note_hit(x, b, 0.25)
+    assert match.focused_hits(0) == 0.25
+    for attacker in (b, c, d):
+        match.note_hit(x, attacker, 1.0)
+    assert match.focused_hits(0) == 2.0
+    reward = Reward(focus_weight=1.0, hp_weight=0, count_weight=0, round_cost=0)
+    assert reward.round_reward(0.0, match, 0) > 0 > reward.round_reward(0.0, match, 1)
 
 
 def test_combos_count_layered_abilities_and_hits_through_a_dive():

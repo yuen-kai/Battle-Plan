@@ -430,8 +430,8 @@ def main():
     parser.add_argument("--hp-weight", type=float, default=0.5)
     parser.add_argument("--count-weight", type=float, default=0.5)
     parser.add_argument("--focus-weight", type=float, default=0.0,
-                        help="fading potential for how concentrated each side's fire is, counting stray hits in the "
-                        "bullet cone; squared per target so ganging up pays")
+                        help="fading bonus per extra teammate (up to two) whose bullets or abilities hit the same enemy "
+                        "in a round, stray hits in the bullet cone included")
     parser.add_argument("--combo-weight", type=float, default=0.0,
                         help="fading bonus for enemies hit by two teammates' abilities, or hit by one after diving")
     parser.add_argument("--round-cost", type=float, default=0.01)

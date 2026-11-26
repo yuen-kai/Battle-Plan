@@ -224,6 +224,7 @@ class Match:
         self.ability_affected = {}
         self.ability_damaged = set()
         self.round_dives = set()
+        self.round_hits = {}
 
     # ---------- queries ----------
 
@@ -494,6 +495,7 @@ class Match:
                 continue
             damage = shot.damage
             stats = shot.shooter.stats
+            self.note_hit(target, shot.shooter, damage / stats.damage)
             if stats.backstabMultiplier > 1 and self.is_backstab(shot):
                 damage *= stats.backstabMultiplier
             self.apply_damage(target, damage, shot.shooter.team)
@@ -519,16 +521,29 @@ class Match:
 
     # ---------- stun and shoves ----------
 
+    def note_hit(self, victim, attacker, share):
+        hits = self.round_hits.setdefault(victim.uid, {})
+        hits[attacker.uid] = hits.get(attacker.uid, 0.0) + share
+
     def note_ability_hit(self, victim, caster, damaged):
         self.ability_affected.setdefault(victim.uid, set()).add(caster.uid)
         if damaged:
             self.ability_damaged.add(victim.uid)
+            self.note_hit(victim, caster, 1.0)
 
     def combos(self, team):
         enemies = {u.uid for u in self.units if u.team != team}
         layered = sum(len(casters) >= 2 for uid, casters in self.ability_affected.items() if uid in enemies)
         trapped = len(self.ability_damaged & self.round_dives & enemies)
         return layered + trapped
+
+    def focused_hits(self, team, cap=3.0):
+        enemies = {u.uid for u in self.units if u.team != team}
+        return sum(
+            max(0.0, min(cap, sum(min(1.0, share) for share in hits.values())) - 1.0)
+            for uid, hits in self.round_hits.items()
+            if uid in enemies
+        )
 
     def apply_stun(self, unit, seconds):
         if seconds <= 0 or not unit.alive:
@@ -780,6 +795,7 @@ class Match:
         self.pending = None
         paths, abilities, dives = pending["paths"], pending["abilities"], pending["dives"]
         self.ability_affected, self.ability_damaged, self.round_dives = {}, set(), set(dives)
+        self.round_hits = {}
         self.round_start = self.time
         self.return_fire_until = -1.0
         self.tasks = []
