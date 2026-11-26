@@ -202,11 +202,13 @@ class NetOpponent:
         return choose
 
 
-def pool_opponents(pool, latest_share):
+def pool_opponents(pool, latest_share, anchors=(), anchor_share=0.0):
+    own = 1.0 - anchor_share if anchors else 1.0
+    fixed = [(NetOpponent(path), anchor_share / len(anchors)) for path in anchors]
     if len(pool) == 1:
-        return [(NetOpponent(pool[0]), 1.0)]
-    older = (1 - latest_share) / (len(pool) - 1)
-    return [(NetOpponent(path), older) for path in pool[:-1]] + [(NetOpponent(pool[-1]), latest_share)]
+        return [(NetOpponent(pool[0]), own)] + fixed
+    older = own * (1 - latest_share) / (len(pool) - 1)
+    return [(NetOpponent(path), older) for path in pool[:-1]] + [(NetOpponent(pool[-1]), own * latest_share)] + fixed
 
 
 def stack(observations):
@@ -384,6 +386,8 @@ def main():
     parser.add_argument("--snapshot-every", type=int, default=10, help="updates between copies of the learner added to the opponent pool")
     parser.add_argument("--pool-size", type=int, default=20)
     parser.add_argument("--latest-share", type=float, default=0.5, help="share of games against the newest copy; older copies split the rest")
+    parser.add_argument("--anchors", nargs="*", default=[], help="checkpoints that stay in the opponent pool for the whole run, such as past champions")
+    parser.add_argument("--anchor-share", type=float, default=0.2, help="share of games against the anchors")
     parser.add_argument("--clip", type=float, default=0.2)
     parser.add_argument("--entropy", type=float, default=0.005)
     parser.add_argument("--max-rounds", type=int, default=30)
@@ -422,7 +426,7 @@ def main():
     fog_schedule = FogSchedule(args.fog_start, args.fog_end, args.fog_ramp_begin, args.fog_ramp_end)
     pool = [str(run_dir / "pool" / "u0.pt")]
     torch.save(cpu_state(policy), pool[0])
-    settings = (args.envs, pool_opponents(pool, args.latest_share), args.max_rounds, args.seed * 1_000_000, reward, fog_schedule(0.0))
+    settings = (args.envs, pool_opponents(pool, args.latest_share, args.anchors, args.anchor_share), args.max_rounds, args.seed * 1_000_000, reward, fog_schedule(0.0))
     games = ParallelGames(args.workers, *settings) if args.workers else VecGames(*settings)
     eval_seed = 10_000_000
     benchmarks = {"scripted": advance_policy, **{Path(path).stem: NetOpponent(path, greedy=True) for path in args.benchmark}}
@@ -523,7 +527,7 @@ def main():
                 if int(Path(retired).stem[1:]) % 100:
                     Path(retired).unlink()
             del pool[: -args.pool_size]
-            games.set_opponents(pool_opponents(pool, args.latest_share))
+            games.set_opponents(pool_opponents(pool, args.latest_share, args.anchors, args.anchor_share))
 
         steps = update * batch
         record = {

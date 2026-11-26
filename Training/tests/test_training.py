@@ -101,6 +101,23 @@ def test_newest_copy_gets_its_share_and_older_copies_split_the_rest():
     assert [(o.path, w) for o, w in pool_opponents(["a"], 0.5)] == [("a", 1.0)]
     weights = {o.path: w for o, w in pool_opponents(["a", "b", "c"], 0.5)}
     assert weights == {"a": 0.25, "b": 0.25, "c": 0.5}
+    weights = {o.path: w for o, w in pool_opponents(["a", "b", "c"], 0.5, ["x", "y"], 0.2)}
+    assert weights == pytest.approx({"a": 0.2, "b": 0.2, "c": 0.4, "x": 0.1, "y": 0.1})
+
+
+def test_gate_needs_a_clear_win_over_the_champion_and_no_regression_elsewhere():
+    from evaluate import gate
+
+    def counts(win, loss, draw):
+        return {mode: {"win": win, "loss": loss, "draw": draw} for mode in ("fog", "clear")}
+
+    champion = {"scripted": counts(110, 50, 40), "old.pt": counts(90, 70, 40)}
+    steady = {"champ.pt": counts(120, 60, 20), "scripted": counts(112, 48, 40), "old.pt": counts(95, 65, 40)}
+    circular = {"champ.pt": counts(120, 60, 20), "scripted": counts(112, 48, 40), "old.pt": counts(50, 120, 30)}
+    narrow = {"champ.pt": counts(85, 80, 35), "scripted": counts(112, 48, 40), "old.pt": counts(95, 65, 40)}
+    assert gate(steady, champion, "champ.pt")[0]
+    assert not gate(circular, champion, "champ.pt")[0]
+    assert not gate(narrow, champion, "champ.pt")[0]
 
 
 def test_net_opponent_plays_legal_moves_from_either_side(tmp_path):

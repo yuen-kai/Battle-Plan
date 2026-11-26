@@ -87,6 +87,9 @@ and dives during dodge windows. Checkpoints and logs go to `Training/runs/` (git
   of games and older copies split the rest, so the learner keeps pace with itself without forgetting
   how to beat earlier styles. Copies that leave the pool are deleted except every 100th update, kept
   for tournaments.
+- Anchors: `--anchors` keeps checkpoints such as every past champion in the pool for the whole run
+  (`--anchor-share` of games, 20% by default), so the learner can't drift into a style that only
+  beats its recent selves.
 - Fog of war: `Config(fog_of_war=False)` matches the game's fog-off option, where every enemy is
   observable (`CanTeamObserveUnit` is always true) but smoke and walls still block shots. One policy
   plays both modes; a scalar tells it which. Training starts fog-off and ramps to 60% fog games
@@ -118,6 +121,17 @@ python3 evaluate.py runs/<run>/policy.pt --opponents scripted teacher runs/<othe
 
 Evaluation plays every seed twice with sides swapped, so a mirror match is exactly even and map,
 roster and side luck cancel out of comparisons.
+
+Promoting a new bot goes through a gate that guards against circular progress, where each new bot
+beats the last one by exploiting it while getting worse against older styles:
+
+```bash
+python3 evaluate.py runs/<run>/pool/u*.pt --champion models/bot.pt --opponents scripted teacher runs/hall/*.pt
+```
+
+A candidate passes only if its win − loss margin against the champion is above zero by more than its
+95% interval (both sides and fog modes pooled), and it is not clearly worse than the champion against
+any other opponent: the scripted bots and every earlier champion (`runs/hall/`).
 
 ### Current bot
 

@@ -37,23 +37,56 @@ def margin_interval(wins, losses, total):
     return win - loss, 1.96 * math.sqrt((win + loss - (win - loss) ** 2) / total)
 
 
+def label(opponent):
+    return opponent if opponent in OPPONENTS else Path(opponent).stem
+
+
+def pooled(by_mode):
+    wins = sum(t["win"] for t in by_mode.values())
+    losses = sum(t["loss"] for t in by_mode.values())
+    total = sum(sum(t.values()) for t in by_mode.values())
+    return margin_interval(wins, losses, total)
+
+
+def gate(candidate, champion, champion_path):
+    margin, half = pooled(candidate[champion_path])
+    reasons = [f"vs {label(champion_path)} {margin:+.1%} ±{half:.1%}" + ("" if margin - half > 0 else " (not clearly ahead)")]
+    passed = margin - half > 0
+    for opponent, by_mode in candidate.items():
+        if opponent == champion_path or opponent not in champion:
+            continue
+        mine, mine_half = pooled(by_mode)
+        theirs, theirs_half = pooled(champion[opponent])
+        worse = mine - theirs < -math.hypot(mine_half, theirs_half)
+        passed &= not worse
+        reasons.append(f"vs {label(opponent)} {mine:+.1%} (champion {theirs:+.1%})" + (" WORSE" if worse else ""))
+    return passed, reasons
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate trained policies against scripted bots or other checkpoints.")
     parser.add_argument("checkpoints", nargs="+")
     parser.add_argument("--opponents", nargs="+", default=["scripted", "teacher"], help="scripted, teacher, or checkpoint paths")
+    parser.add_argument("--champion", help="current best checkpoint; a candidate passes only if it clearly beats it "
+                        "and does no worse than it against every other opponent")
     parser.add_argument("--matches", type=int, default=400, help="per opponent and fog mode, split evenly between sides")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--max-rounds", type=int, default=30)
     parser.add_argument("--seed", type=int, default=50_000_000)
     args = parser.parse_args()
 
+    checkpoints = list(dict.fromkeys(([args.champion] if args.champion else []) + args.checkpoints))
+    opponents = list(dict.fromkeys(args.opponents + ([args.champion] if args.champion else [])))
     chunk = 20
-    scores = {}
+    results = {}
     with mp.get_context("spawn").Pool(args.workers) as pool:
-        for checkpoint in args.checkpoints:
+        for checkpoint in checkpoints:
             print(checkpoint, flush=True)
-            margins = []
-            for opponent in args.opponents:
+            results[checkpoint] = {}
+            for opponent in opponents:
+                if opponent == checkpoint:
+                    continue
+                results[checkpoint][opponent] = {}
                 for mode, fog in (("fog", True), ("clear", False)):
                     jobs = [
                         (checkpoint, opponent, chunk, args.seed + begin, fog, args.max_rounds)
@@ -63,22 +96,29 @@ def main():
                     for result in pool.map(play_chunk, jobs):
                         for key, value in result.items():
                             totals[key] += value
+                    results[checkpoint][opponent][mode] = totals
                     n = sum(totals.values())
                     win, win_half = interval(totals["win"], n)
                     loss, loss_half = interval(totals["loss"], n)
                     margin, margin_half = margin_interval(totals["win"], totals["loss"], n)
-                    margins.append(margin)
                     print(
-                        f"  vs {Path(opponent).stem if opponent not in OPPONENTS else opponent:12} {mode:5} n={n}: "
+                        f"  vs {label(opponent):12} {mode:5} n={n}: "
                         f"win {win:.0%} ±{win_half:.0%}  loss {loss:.0%} ±{loss_half:.0%}  draw {totals['draw'] / n:.0%}  "
                         f"margin {margin:+.0%} ±{margin_half:.0%}",
                         flush=True,
                     )
-            scores[checkpoint] = sum(margins) / len(margins)
-    if len(scores) > 1:
+    if len(results) > 1:
         print("\nscore = mean(win - loss) over every opponent and fog mode")
+        scores = {c: sum(pooled(by_mode)[0] for by_mode in r.values()) / len(r) for c, r in results.items() if r}
         for checkpoint, score in sorted(scores.items(), key=lambda item: -item[1]):
             print(f"  {score:+.2f}  {checkpoint}")
+    if args.champion:
+        print(f"\ngate against {args.champion}")
+        for checkpoint in checkpoints[1:]:
+            passed, reasons = gate(results[checkpoint], results[args.champion], args.champion)
+            print(f"  {'PASS' if passed else 'fail'}  {checkpoint}")
+            for reason in reasons:
+                print(f"        {reason}")
 
 
 if __name__ == "__main__":
