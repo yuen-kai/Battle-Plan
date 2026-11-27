@@ -223,6 +223,14 @@ public class ReplayPlan : INetworkSerializable
     /// <summary>Whether a filtered copy may draw where the ability came from.</summary>
     public bool originKnown = true;
 
+    /// <summary>
+    /// The order as committed in planning, before a dodge window could replace it, in the planner's
+    /// own form: a route of cells, or an ability's [start, target]. A branch opened on the round
+    /// starts from it.
+    /// </summary>
+    public bool orderIsAbility;
+    public List<Vector2Int> order = new();
+
     public bool IsAbility => kind == ReplayPlanKind.Ability;
 
     public ReplayPlan Clone()
@@ -230,6 +238,7 @@ public class ReplayPlan : INetworkSerializable
         ReplayPlan copy = (ReplayPlan)MemberwiseClone();
         copy.route = new List<Vector2Int>(route);
         copy.abilityPath = new List<Vector3>(abilityPath);
+        copy.order = new List<Vector2Int>(order);
         return copy;
     }
 
@@ -242,6 +251,8 @@ public class ReplayPlan : INetworkSerializable
         kind = (ReplayPlanKind)kindByte;
 
         ReplayRound.SerializeCells(serializer, ref route);
+        serializer.SerializeValue(ref orderIsAbility);
+        ReplayRound.SerializeCells(serializer, ref order);
         if (kind != ReplayPlanKind.Ability)
             return;
 
@@ -572,6 +583,8 @@ public class ReplayRound
             }
 
             ReplayPlan seen = plan.Clone();
+            seen.orderIsAbility = false;
+            seen.order.Clear();
             if (plan.IsAbility)
             {
                 seen.originKnown = frames.Count > 0 && (frames[0][plan.unitIndex].flags & seenBit) != 0;
@@ -601,6 +614,50 @@ public class ReplayRound
         }
 
         return copy;
+    }
+
+    /// <summary>
+    /// The same round with the two crews' indices traded, so a player who sat in the second seat
+    /// can replay it from the first one without either crew changing hands.
+    /// </summary>
+    public ReplayRound MirrorTeams()
+    {
+        ReplayRound copy = FilterForTeam(-1);
+        for (int i = 0; i < copy.units.Count; i++)
+        {
+            ReplayUnit unit = copy.units[i];
+            unit.teamIndex = (byte)(GameLoop.TeamCount - 1 - unit.teamIndex);
+            copy.units[i] = unit;
+        }
+        for (int f = 0; f < frames.Count; f++)
+        {
+            for (int i = 0; i < copy.frames[f].Length; i++)
+                copy.frames[f][i].flags = MirrorSeenBy(frames[f][i].flags) | ReplaySampleFlags.Known;
+        }
+        for (int e = 0; e < copy.events.Count; e++)
+        {
+            ReplayEvent replayEvent = copy.events[e];
+            replayEvent.seenBy = MirrorSeenBy(replayEvent.seenBy);
+            copy.events[e] = replayEvent;
+        }
+        if (hasHill && hill.Status == HillControlStatus.Controlled)
+            copy.hill = new HillControlState(
+                hill.Status,
+                GameLoop.TeamCount - 1 - hill.ControllingTeamIndex,
+                hill.Streak
+            );
+        return copy;
+    }
+
+    private static ReplaySampleFlags MirrorSeenBy(ReplaySampleFlags flags)
+    {
+        ReplaySampleFlags seen = ReplaySampleFlags.SeenByTeam0 | ReplaySampleFlags.SeenByTeam1;
+        ReplaySampleFlags mirrored = ReplaySampleFlags.None;
+        if ((flags & ReplaySampleFlags.SeenByTeam0) != 0)
+            mirrored |= ReplaySampleFlags.SeenByTeam1;
+        if ((flags & ReplaySampleFlags.SeenByTeam1) != 0)
+            mirrored |= ReplaySampleFlags.SeenByTeam0;
+        return (flags & ~seen) | mirrored;
     }
 
     public ReplayRoundHeader BuildHeader() =>
@@ -832,6 +889,20 @@ public class ReplayArchive
     private int branchFrom = -1;
 
     public bool HasBranch => branchFrom >= 0;
+
+    /// <summary>Whether a round is still arriving, which leaves the copy held for it out of date.</summary>
+    public bool IsAssembling => pending.Count > 0;
+
+    /// <summary>A round that arrives whole rather than in chunks: a canon line carried into a fresh board.</summary>
+    public void Store(ReplayRound round)
+    {
+        if (round == null)
+            return;
+        rounds[round.roundNumber] = round;
+        expected.Remove(round.roundNumber);
+        pending.Remove(round.roundNumber);
+        Changed?.Invoke();
+    }
 
     /// <summary>The line being shown: canon up to the branch point, then the branch's own rounds.</summary>
     public IReadOnlyCollection<int> RoundNumbers

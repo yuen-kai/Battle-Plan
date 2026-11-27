@@ -221,6 +221,25 @@ public class NetworkHandler : NetworkBehaviour
             return;
         }
 
+        if (ReplayCopySession.IsActive)
+        {
+            GameLoop.ResetMatchState();
+            GameLoop.ConfigureTeam(
+                GameLoop.HostTeamIndex,
+                NetworkManager.ServerClientId,
+                ReplayCopySession.BuildRoster(GameLoop.HostTeamIndex)
+            );
+            GameLoop.ConfigureTeam(
+                GameLoop.OpponentTeamIndex,
+                GameLoop.BotParticipantId,
+                ReplayCopySession.BuildRoster(GameLoop.OpponentTeamIndex)
+            );
+
+            sceneLoadRequested = true;
+            NetworkManager.SceneManager.LoadScene("Game", LoadSceneMode.Single);
+            return;
+        }
+
         if (GameLoop.devMode)
         {
             GameLoop.ResetMatchState();

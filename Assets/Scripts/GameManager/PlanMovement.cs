@@ -264,6 +264,7 @@ public partial class PlanMovement : MonoBehaviour
 
         InitializeVisuals();
         planningInitialized = true;
+        ApplySeededPlans(units == null);
         // Select the first unit up front so planning (and especially the dodge window, where
         // cards don't map to the alerted subset) is immediately usable without a card click.
         selectedUnit = null;
@@ -336,6 +337,37 @@ public partial class PlanMovement : MonoBehaviour
             // Orders locked in earlier are final now that the deadline has passed. Seal the chip
             // instead of leaving a live Unlock the server can only answer with "Locked".
             GameHUDController.Instance?.ShowPlanningCommitLocked();
+    }
+
+    private PathsDict seededPlans;
+
+    /// <summary>
+    /// Orders the next round opens with already drawn, for the player to edit rather than start
+    /// over: a replay branch begins from what was actually played.
+    /// </summary>
+    public void SeedNextPlanning(PathsDict orders)
+    {
+        seededPlans = orders;
+    }
+
+    private void ApplySeededPlans(bool roundPlanning)
+    {
+        PathsDict seed = seededPlans;
+        seededPlans = null;
+        if (!roundPlanning || seed == null)
+            return;
+
+        foreach (GameObject unit in teamCharacters)
+        {
+            if (unit == null || !seed.TryGetValue(unit, out (bool, List<Vector3>) order))
+                continue;
+            plans[unit] = (order.Item1, new List<Vector3>(order.Item2));
+            if (!order.Item1)
+                EnsureRibbon(unit);
+        }
+        RefreshAllRibbons();
+        RefreshAbilityIndicators();
+        RefreshUnitCards();
     }
 
     /// <summary>

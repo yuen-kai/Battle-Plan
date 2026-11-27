@@ -61,12 +61,15 @@ public class ReplayEditModeTests
             abilityRadiusCells = 1.5f,
             abilityPathKind = AbilityPathKind.Lob,
             abilityPath = new List<Vector3> { Cell(1, 1), Cell(2, 2) + Vector3.up * 2f, Cell(4, 4) },
+            orderIsAbility = true,
+            order = new List<Vector2Int> { new(1, 1), new(4, 4) },
         });
         round.plans.Add(new ReplayPlan
         {
             unitIndex = 1,
             kind = ReplayPlanKind.Move,
             route = new List<Vector2Int> { new(5, 2), new(6, 2), new(7, 2) },
+            order = new List<Vector2Int> { new(5, 2), new(6, 2), new(7, 2) },
         });
 
         round.events.Add(new ReplayEvent
@@ -470,5 +473,87 @@ public class ReplayEditModeTests
         Assert.That(archive.RoundNumbers, Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
         Assert.That(archive.TryGet(4, out ReplayRound four), Is.True);
         Assert.That(four.events, Is.Not.Empty);
+    }
+
+    [Test]
+    public void Orders_SurviveShippingButStayOffAnEnemysCopy()
+    {
+        ReplayRound read = Ship(BuildRound().FilterForTeam(-1));
+        Assert.That(read.plans[0].orderIsAbility, Is.True);
+        Assert.That(read.plans[0].order, Is.EqualTo(new[] { new Vector2Int(1, 1), new Vector2Int(4, 4) }));
+        Assert.That(read.plans[1].order.Count, Is.EqualTo(3));
+
+        ReplayRound seen = BuildRound().FilterForTeam(Viewer);
+        ReplayPlan enemy = seen.plans.Find(plan => plan.unitIndex == 1);
+        Assert.That(enemy, Is.Not.Null);
+        Assert.That(enemy.order, Is.Empty);
+        Assert.That(seen.plans.Find(plan => plan.unitIndex == 0).order.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void MirrorTeams_TradesSeatsWithoutMovingAnything()
+    {
+        ReplayRound round = BuildRound();
+        round.hasHill = true;
+        round.hill = new HillControlState(HillControlStatus.Controlled, Viewer, 2);
+        ReplayRound mirrored = round.FilterForTeam(-1).MirrorTeams();
+
+        Assert.That(mirrored.units[0].teamIndex, Is.EqualTo(Opponent));
+        Assert.That(mirrored.units[1].teamIndex, Is.EqualTo(Viewer));
+        Assert.That(mirrored.units[1].rosterSlot, Is.EqualTo(1));
+        Assert.That(mirrored.hill.ControllingTeamIndex, Is.EqualTo(Opponent));
+        Assert.That(mirrored.hill.Streak, Is.EqualTo(2));
+        Assert.That(mirrored.frames[60][1].Known, Is.True);
+        Assert.That(mirrored.frames[60][1].Position, Is.EqualTo(round.frames[60][1].Position));
+        Assert.That(mirrored.events.Count, Is.EqualTo(round.events.Count));
+        Assert.That(round.units[0].teamIndex, Is.EqualTo(Viewer));
+    }
+
+    [Test]
+    public void ReplayCopy_SeatsTheSecondPlayerAsHostWithTheirOwnCrewAndView()
+    {
+        try
+        {
+            ReplayCopySession.Begin(
+                new[] { BuildRound().FilterForTeam(-1) },
+                new MatchOptions { opponentType = OpponentType.Player, fogOfWar = true },
+                MatchResult.ForWinner(Opponent, MatchResultReason.Elimination),
+                Opponent,
+                HillControlState.Empty,
+                3,
+                1.5f
+            );
+
+            Assert.That(ReplayCopySession.SeatMirrored, Is.True);
+            Assert.That(ReplayCopySession.Options.IsBotMatch, Is.True);
+            Assert.That(ReplayCopySession.Options.fogOfWar, Is.False);
+            Assert.That(ReplayCopySession.Result.WinningTeamIndex, Is.EqualTo(GameLoop.HostTeamIndex));
+            Assert.That(ReplayCopySession.CameraSeat(GameLoop.HostTeamIndex), Is.EqualTo(Opponent));
+
+            int[] own = ReplayCopySession.BuildRoster(GameLoop.HostTeamIndex);
+            Assert.That(own.Length, Is.EqualTo(RosterRules.UnitsPerPlayer));
+            Assert.That(own[1], Is.EqualTo(4));
+            Assert.That(ReplayCopySession.BuildRoster(GameLoop.OpponentTeamIndex)[0], Is.EqualTo(2));
+            Assert.That(ReplayCopySession.Rounds[0].units[1].teamIndex, Is.EqualTo(GameLoop.HostTeamIndex));
+        }
+        finally
+        {
+            ReplayCopySession.End();
+        }
+        Assert.That(ReplayCopySession.IsActive, Is.False);
+        Assert.That(ReplayCopySession.CameraSeat(GameLoop.HostTeamIndex), Is.EqualTo(GameLoop.HostTeamIndex));
+    }
+
+    [Test]
+    public void Archive_HoldsAStoredRoundAndReportsOneStillArriving()
+    {
+        ReplayArchive archive = new();
+        archive.Store(BuildRound().FilterForTeam(-1));
+        Assert.That(archive.TryGet(3, out _), Is.True);
+        Assert.That(archive.IsAssembling, Is.False);
+
+        archive.Receive(RoundTrip(BuildRound().FilterForTeam(-1).BuildHeader()));
+        Assert.That(archive.IsAssembling, Is.True);
+        Assert.That(archive.TryGet(3, out _), Is.True);
     }
 }

@@ -186,7 +186,7 @@ public class ReplayViewer : MonoBehaviour
     {
         int target = -1;
         if (
-            loop.CanBranch
+            (loop.CanBranch || loop.CanCopyForBranch)
             && timelapseElapsed < 0f
             && Archive.TryGet(shownRound, out ReplayRound round)
         )
@@ -217,9 +217,34 @@ public class ReplayViewer : MonoBehaviour
             return;
 
         settleTarget = -1;
+        if (!loop.CanBranch)
+        {
+            loop.LeaveForReplayCopy(shownRound, shownTime);
+            return;
+        }
         inBranchSession = true;
         Close(false);
         loop.BeginBranchPlanning(target);
+    }
+
+    public bool TryGetPostMatchPosition(out int round, out float time)
+    {
+        round = IsViewing && postMatch ? shownRound : -1;
+        time = round >= 0 ? shownTime : 0f;
+        return round >= 0;
+    }
+
+    /// <summary>Reopens the full replay on a given moment, which is how a copied match picks up where its room left off.</summary>
+    public void OpenPostMatchAt(int roundNumber, float time)
+    {
+        ReplayArchive archive = Archive;
+        if (!MatchOver || archive == null || !archive.TryGet(roundNumber, out ReplayRound round))
+            return;
+
+        BindHud();
+        boundHud?.HideResultsForReplay();
+        Open(true);
+        ShowAt(roundNumber, Mathf.Clamp(time, 0f, round.Duration));
     }
 
     private static bool BothCrewsStanding(ReplayRound round)

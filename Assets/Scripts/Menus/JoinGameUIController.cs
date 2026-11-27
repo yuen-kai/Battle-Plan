@@ -108,7 +108,7 @@ public class JoinGameUIController : MonoBehaviour
         CacheTransportDefaults();
         RegisterCallbacks();
         ConfigureInitialState();
-        if (!TryStartTutorialMatch() && !TryStartSandboxMatch())
+        if (!TryStartTutorialMatch() && !TryStartSandboxMatch() && !TryStartReplayCopyMatch())
             ShowPanel(PanelState.Create, true);
     }
 
@@ -154,6 +154,22 @@ public class JoinGameUIController : MonoBehaviour
 
         SandboxSession.HostStartRequested = true;
         StartDirectHostMatch(SandboxSession.BuildMatchOptions(), () => SandboxSession.IsActive);
+        return true;
+    }
+
+    private bool TryStartReplayCopyMatch()
+    {
+        if (!ReplayCopySession.IsActive)
+            return false;
+
+        if (ReplayCopySession.HostStartRequested)
+        {
+            ReplayCopySession.End();
+            return false;
+        }
+
+        ReplayCopySession.HostStartRequested = true;
+        StartDirectHostMatch(ReplayCopySession.Options, () => ReplayCopySession.IsActive);
         return true;
     }
 

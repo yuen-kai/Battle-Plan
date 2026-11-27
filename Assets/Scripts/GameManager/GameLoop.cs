@@ -1203,6 +1203,14 @@ public class GameLoop : NetworkBehaviour
         if (IsClient && FogOfWarEnabled)
             StartClientFog();
 
+        if (IsServer && ReplayCopySession.IsActive)
+        {
+            StartGame();
+            InitializeCameraPosition();
+            StartCoroutine(StandUpReplayCopy());
+            return;
+        }
+
         if (IsServer)
         {
             BeginReconnectGraceForMatch();
@@ -1472,6 +1480,7 @@ public class GameLoop : NetworkBehaviour
         ClientRpcParams clientRpcParams = default
     )
     {
+        teamIndex = ReplayCopySession.CameraSeat(teamIndex);
         if (teamIndex >= 0 && teamIndex < spawns.Count && teamIndex < cameraRotations.Length)
         {
             if (teamCameraParent != null)
@@ -1889,6 +1898,10 @@ public class GameLoop : NetworkBehaviour
     /// </summary>
     private IEnumerator ExecuteRoundOrders(PathsDict paths)
     {
+        PathsDict committedOrders = new();
+        foreach (var entry in paths)
+            committedOrders[entry.Key] = (entry.Value.Item1, new List<Vector3>(entry.Value.Item2 ?? new List<Vector3>()));
+
         // === ABILITY DODGE PHASE (start of execution, when applicable) ===
         // Ability plans were chosen during planning; before any movement, threatened enemies
         // get a chance to dodge. Dive paths returned here have already replaced the dodgers'
@@ -1931,7 +1944,7 @@ public class GameLoop : NetworkBehaviour
         // Both crews' final orders, captured while dives are still distinguishable from moves.
         if (!branchExecuting)
             RecordBattleReportPlans(paths);
-        BeginReplayRound(paths, activations);
+        BeginReplayRound(paths, activations, committedOrders);
 
         ExecuteMoves(paths);
 
@@ -6290,6 +6303,7 @@ public class GameLoop : NetworkBehaviour
         // rather than leaking its one-a-side crew size into it. (The tutorial closes itself in
         // EndMatch instead, because it always reaches a result; the sandbox is exited by hand.)
         SandboxSession.End();
+        ReplayCopySession.End();
         GameHUDController.Instance?.SetResultButtonsEnabled(false, false);
         ReconnectSession.Clear();
         NetworkManager networkManager = NetworkManager.Singleton;
@@ -6314,6 +6328,7 @@ public class GameLoop : NetworkBehaviour
 
     private static void ReturnToTitleScreen()
     {
+        ReplayCopySession.End();
         MatchOptions.Reset();
         EscortSeries.End();
         ResetMatchState();
@@ -6399,6 +6414,15 @@ public class GameLoop : NetworkBehaviour
 
         if (!IsServer)
         {
+            if (rematchClosed && CanCopyForBranch)
+            {
+                int resumeRound = -1;
+                float resumeTime = 0f;
+                GetComponent<ReplayViewer>()?.TryGetPostMatchPosition(out resumeRound, out resumeTime);
+                LeaveForReplayCopy(resumeRound, resumeTime);
+                return;
+            }
+
             disconnectRecoveryStarted = true;
             if (!matchEnded && ReconnectSession.CanAttemptRejoin)
             {
@@ -7905,15 +7929,114 @@ public class GameLoop : NetworkBehaviour
     }
 
     [ClientRpc]
-    private void RematchClosedClientRpc() =>
+    private void RematchClosedClientRpc()
+    {
+        rematchClosed = true;
         GameHUDController.Instance?.SetResultButtonsEnabled(false, true);
+    }
 
     public bool CanBranch =>
         IsServer
         && IsClient
+        && Options.IsBotMatch
         && LastMatchResult.HasValue
         && NetworkManager != null
         && NetworkManager.ConnectedClientsIds.Count == 1;
+
+    private bool leavingForReplayCopy;
+
+    /// <summary>
+    /// A match against another person branches on a board of this player's own instead, since the
+    /// one they shared cannot test two lines at once. Escort is left out: its legs rebuild the board
+    /// between rounds, which a single recorded line cannot stand back up.
+    /// </summary>
+    public bool CanCopyForBranch =>
+        IsClient
+        && !Options.IsBotMatch
+        && !Options.IsEscort
+        && LastMatchResult.HasValue
+        && !leavingForReplayCopy
+        && LocalTeamIndex >= 0
+        && Replays.Count > 0
+        && !Replays.IsAssembling;
+
+    /// <summary>
+    /// Leaves the room for a private copy of the finished match, reopened at
+    /// <paramref name="resumeRound"/> (or on the results, for -1). Whoever is left behind in the
+    /// replay follows into a copy of their own once the room closes under them.
+    /// </summary>
+    public void LeaveForReplayCopy(int resumeRound, float resumeTime)
+    {
+        if (!CanCopyForBranch)
+            return;
+
+        leavingForReplayCopy = true;
+        disconnectRecoveryStarted = true;
+        List<ReplayRound> line = new();
+        foreach (int number in Replays.RoundNumbers)
+        {
+            if (Replays.TryGet(number, out ReplayRound round))
+                line.Add(round);
+        }
+        ReplayCopySession.Begin(
+            line,
+            Options,
+            LastMatchResult.Value,
+            LocalTeamIndex,
+            replicatedHillControl.Value,
+            resumeRound,
+            resumeTime
+        );
+        ReconnectSession.Clear();
+        StartCoroutine(LoadReplayCopyAfterShutdown());
+    }
+
+    private IEnumerator LoadReplayCopyAfterShutdown()
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager != null && manager.IsListening && !manager.ShutdownInProgress)
+        {
+            if (manager.IsServer)
+                NetworkHelper.CleanupAllNetworkObjects();
+            manager.Shutdown();
+        }
+        while (manager != null && (manager.IsListening || manager.ShutdownInProgress))
+            yield return null;
+
+        ResetMatchState();
+        SceneManager.LoadScene("JoinGame");
+    }
+
+    /// <summary>
+    /// Stands a copied match up as it finished: the recorded line in the archive, the board as the
+    /// last round left it, and the result already given, with the replay reopened where it was.
+    /// </summary>
+    private IEnumerator StandUpReplayCopy()
+    {
+        yield return null;
+        foreach (ReplayRound round in ReplayCopySession.Rounds)
+            Replays.Store(round);
+
+        matchEnded = true;
+        rematchClosed = true;
+        currentPhase = Phase.Idle;
+        LastMatchResult = ReplayCopySession.Result;
+        if (Replays.TryGet(Replays.LatestRoundNumber, out ReplayRound last))
+        {
+            roundNumber = last.roundNumber;
+            RestoreBoardFrom(last, true);
+        }
+        if (Options.IsKingOfTheHill)
+            replicatedHillControl.Value = ReplayCopySession.FinalHill;
+        SetCardsInteractableClientRpc(false);
+        EndGameClientRpc(ReplayCopySession.Result);
+        RematchClosedClientRpc();
+
+        yield return null;
+        int resumeRound = ReplayCopySession.ResumeRound;
+        if (resumeRound >= 0)
+            GetComponent<ReplayViewer>()?.OpenPostMatchAt(resumeRound, ReplayCopySession.ResumeTime);
+    }
 
     /// <summary>
     /// Opens orders for <paramref name="roundNumber"/>. A round already in the replay is set up from
@@ -7993,6 +8116,8 @@ public class GameLoop : NetworkBehaviour
         dodgeAlertedTeamsThisRound.Clear();
         SandboxSession.ConsumeEnemyPlan();
         SandboxSession.ConsumeEnemyDodge();
+        if (opening != null && PlanMovement.Instance != null)
+            PlanMovement.Instance.SeedNextPlanning(BuildRecordedOrders(opening));
         currentPhase = Phase.Planning;
         double endTime = NetworkManager.Singleton.ServerTime.Time + SandboxSession.PlanningSeconds;
         planningDeadline = endTime;
@@ -8059,7 +8184,7 @@ public class GameLoop : NetworkBehaviour
     /// smoke then lying on it; the hill as it was held. Nothing is played while it happens — this is
     /// setting a board, not a round.
     /// </summary>
-    private void RestoreBoardFrom(ReplayRound opening)
+    private void RestoreBoardFrom(ReplayRound opening, bool asItEnded = false)
     {
         Health.SuppressPresentation = true;
         try
@@ -8072,7 +8197,7 @@ public class GameLoop : NetworkBehaviour
                 if (unit == null || opening.frames.Count == 0)
                     continue;
 
-                ReplaySample sample = opening.frames[0][i];
+                ReplaySample sample = asItEnded ? opening.frames[^1][i] : opening.frames[0][i];
                 Health health = unit.GetComponent<Health>();
                 bool wasAlive = health != null && health.IsAlive;
                 health?.ServerRestoreState(
@@ -8093,7 +8218,7 @@ public class GameLoop : NetworkBehaviour
                 Unit identity = unit.GetComponent<Unit>();
                 if (identity != null)
                 {
-                    identity.ServerRestoreState(recorded.startCooldown);
+                    identity.ServerRestoreState(asItEnded ? sample.cooldown : recorded.startCooldown);
                     NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
                 }
                 unit.GetComponent<Ability>()?.ResetForRespawn();
@@ -8111,11 +8236,11 @@ public class GameLoop : NetworkBehaviour
                 }
             }
 
-            RestoreCoverAsOf(opening.roundNumber);
+            RestoreCoverAsOf(asItEnded ? opening.roundNumber + 1 : opening.roundNumber);
 
             ClearActiveSmokeCells();
             smokeDeployments.Clear();
-            if (opening.smokeCells.Count > 0)
+            if (!asItEnded && opening.smokeCells.Count > 0)
             {
                 smokeDeployments.Add(new SmokeDeployment(new HashSet<Vector2Int>(opening.smokeCells), 1));
                 RebuildActiveSmokeCellsFromDeployments();
@@ -8124,13 +8249,37 @@ public class GameLoop : NetworkBehaviour
                 );
             }
 
-            if (opening.hasHill)
+            if (opening.hasHill && !asItEnded)
                 replicatedHillControl.Value = opening.hill;
         }
         finally
         {
             Health.SuppressPresentation = false;
         }
+    }
+
+    /// <summary>The orders both crews gave for a recorded round, as the planner holds them, for a branch to start from.</summary>
+    private PathsDict BuildRecordedOrders(ReplayRound round)
+    {
+        PathsDict orders = new();
+        foreach (ReplayPlan plan in round.plans)
+        {
+            if (plan.unitIndex >= round.units.Count || plan.order.Count == 0)
+                continue;
+            ReplayUnit recorded = round.units[plan.unitIndex];
+            GameObject[] crew = GetTeamUnits(recorded.teamIndex);
+            GameObject unit = recorded.rosterSlot < crew.Length ? crew[recorded.rosterSlot] : null;
+            if (!IsLivingUnit(unit))
+                continue;
+            if (plan.orderIsAbility && unit.GetComponent<Unit>()?.CanUseAbility != true)
+                continue;
+
+            List<Vector3> order = plan.order
+                .Select(cell => new Vector3(cell.x * GridSystem.CellSize, 0f, cell.y * GridSystem.CellSize))
+                .ToList();
+            orders[unit] = (plan.orderIsAbility, order);
+        }
+        return orders;
     }
 
     /// <summary>Every wall of the map back up, less the ones destroyed before this round began.</summary>
@@ -8192,7 +8341,8 @@ public class GameLoop : NetworkBehaviour
     /// </summary>
     private void BeginReplayRound(
         PathsDict paths,
-        List<(GameObject unit, Vector3 square, UnitData data)> activations
+        List<(GameObject unit, Vector3 square, UnitData data)> activations,
+        PathsDict committedOrders
     )
     {
         recordingReplayRound = null;
@@ -8251,6 +8401,13 @@ public class GameLoop : NetworkBehaviour
                     ? committed
                     : (false, null);
             plan.route = ToGridPath(route);
+            if (committedOrders.TryGetValue(unit, out var ordered) && ordered.Item2.Count > 0)
+            {
+                plan.orderIsAbility = ordered.Item1;
+                plan.order = ordered.Item1
+                    ? ordered.Item2.Select(GridSystem.ConvertToGridCoords).ToList()
+                    : ToGridPath(ordered.Item2);
+            }
             if (diveUnitsThisRound.Contains(unit))
                 plan.kind = ReplayPlanKind.Dodge;
             else if (isAbility)
