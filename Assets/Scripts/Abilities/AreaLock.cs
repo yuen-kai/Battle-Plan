@@ -204,6 +204,7 @@ public class AreaLock : Ability
         // Shorten the beam to the victim and surge into them, mirrored on clients
         serverBeam.SetPositions(startPos, endPos);
         StartRushClientRpc(rushDuration, startPos, endPos);
+        GameLoop.Instance?.RecordReplayFx(ReplayFxCue.LaserRush, gameObject, startPos, endPos, rushDuration);
 
         yield return StartCoroutine(serverBeam.Rush(rushDuration));
 

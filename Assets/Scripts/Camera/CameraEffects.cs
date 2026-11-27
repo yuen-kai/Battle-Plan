@@ -33,6 +33,16 @@ public class CameraEffects : NetworkBehaviour
     [ClientRpc]
     public void CameraShakeClientRpc(float shakeDuration = 0.5f, float shakeIntensity = 0.1f)
     {
+        // The host runs this body as a client too, which is where the shake joins the replay: the
+        // RPC is the one path every shake on the board takes.
+        if (IsServer)
+            GameLoop.Instance?.RecordReplayFx(
+                ReplayFxCue.CameraShake,
+                null,
+                Vector3.zero,
+                Vector3.zero,
+                shakeIntensity
+            );
         StartCoroutine(CameraShake(shakeDuration, shakeIntensity));
     }
 
@@ -57,7 +67,7 @@ public class CameraEffects : NetworkBehaviour
     /// routed through here leans the same way. Callers that know where the impact landed should
     /// reach <see cref="ImpactCamera.Punch"/> directly and pass it.
     /// </summary>
-    private static void PunchAtViewCentre(float shakeIntensity)
+    public static void PunchAtViewCentre(float shakeIntensity)
     {
         Camera teamCamera = GameLoop.Instance != null ? GameLoop.Instance.TeamCamera : null;
         if (teamCamera == null)

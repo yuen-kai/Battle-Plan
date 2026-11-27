@@ -227,13 +227,21 @@ public class Bullet : MonoBehaviour
             if (isAuthoritative && isFirstEnemyHit)
                 ApplyDirectHitDamage(hitObject);
 
+            if (isAuthoritative)
+                GameLoop.Instance?.RecordReplayFx(
+                    ReplayFxCue.BulletBlast,
+                    null,
+                    impactPosition,
+                    impactPosition,
+                    aoeRadius
+                );
             Blast.Explode(
                 impactPosition,
                 aoeRadius,
                 enemyTeam,
                 ShieldRush.GetEnemyShieldMask(GetShooterTeamIndex(enemyTeam)),
                 damage,
-                () => PlayImpactExplosion(impactPosition),
+                () => PlayImpactExplosion(impactPosition, aoeRadius),
                 authoritative: isAuthoritative,
                 alreadyHit: hitTargets
             );
@@ -254,7 +262,7 @@ public class Bullet : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private void PlayImpactExplosion(Vector3 impactPosition)
+    public static void PlayImpactExplosion(Vector3 impactPosition, float aoeRadius)
     {
         if (aoeRadius <= 0f)
             return;

@@ -46,6 +46,9 @@ public class ArcSurge : Ability
         foreach (BlockedStrike strike in blocked)
             GameLoop.Instance?.ReportShieldBlockedDamage(strike.ShieldOwner, strike.Point);
 
+        Vector3[] strikes = StrikePoints(targets, blocked);
+        foreach (Vector3 strike in strikes)
+            GameLoop.Instance?.RecordReplayFx(ReplayFxCue.ArcStrike, gameObject, transform.position, strike);
         GameLoop.Instance?.RecordReplayFx(
             ReplayFxCue.ArcZap,
             gameObject,
@@ -53,12 +56,7 @@ public class ArcSurge : Ability
             HandOrigin(),
             AreaRadius
         );
-        ShowZapClientRpc(
-            transform.position,
-            HandOrigin(),
-            StrikePoints(targets, blocked),
-            AreaRadius
-        );
+        ShowZapClientRpc(transform.position, HandOrigin(), strikes, AreaRadius);
 
         yield return new WaitForSeconds(RecoverySeconds);
         CompleteInterruptibleAbilityAction();
@@ -281,7 +279,15 @@ public class ArcSurge : Ability
     protected override void OnAbilityInterrupted()
     {
         if (IsServer && IsSpawned)
+        {
             CancelChargeClientRpc(NetworkObjectId);
+            GameLoop.Instance?.RecordReplayFx(
+                ReplayFxCue.ArcCancel,
+                gameObject,
+                transform.position,
+                transform.position
+            );
+        }
     }
 
     private Vector3 HandOrigin()

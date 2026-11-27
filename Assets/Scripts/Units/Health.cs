@@ -106,7 +106,47 @@ public class Health : NetworkBehaviour
             return;
 
         unitCanvas.forward = view.transform.forward;
-        unitCanvas.position = CanvasPosition(view.transform);
+        unitCanvas.position = CanvasPosition(transform.position, unitCanvasHeight, view.transform);
+    }
+
+    /// <summary>The canvas lift this unit's bar is authored at, read the way spawn reads it.</summary>
+    public static float AuthoredCanvasHeight(Transform unit, Transform canvas) =>
+        canvas is RectTransform canvasRect ? canvasRect.anchoredPosition.y * unit.localScale.y : 0f;
+
+    /// <summary>
+    /// Draws a health bar on any body that carries the unit canvas, live or a replay copy: billboarded
+    /// to the board camera, lifted clear of its unit, sized to its maximum and filled to its health.
+    /// </summary>
+    public static void ShowHealthBar(
+        Transform unit,
+        Transform canvas,
+        float canvasHeight,
+        float health,
+        float maxHealth
+    )
+    {
+        if (canvas == null)
+            return;
+
+        Camera view = GameLoop.ViewCamera;
+        if (view != null)
+        {
+            canvas.forward = view.transform.forward;
+            canvas.position = CanvasPosition(unit.position, canvasHeight, view.transform);
+        }
+
+        Transform bar = canvas.Find("HealthBar");
+        Transform fill = bar != null ? bar.Find("HealthFill") : null;
+        if (bar != null)
+            bar.localScale = new Vector3(Mathf.Clamp(maxHealth / TypicalMaxHealth, 0f, 1f), 1f, 1f);
+        if (fill == null)
+            return;
+
+        float fraction = maxHealth > 0f ? Mathf.Clamp01(health / maxHealth) : 0f;
+        fill.localScale = new Vector3(fraction, 1f, 1f);
+        UnityEngine.UI.Image image = fill.GetComponent<UnityEngine.UI.Image>();
+        if (image != null)
+            image.color = TeamPalette.ForHealthFraction(fraction);
     }
 
     /// <summary>
@@ -128,10 +168,9 @@ public class Health : NetworkBehaviour
     /// new can come between the two.
     /// </para>
     /// </summary>
-    private Vector3 CanvasPosition(Transform lens)
+    private static Vector3 CanvasPosition(Vector3 unitPosition, float canvasHeight, Transform lens)
     {
-        Vector3 unitPosition = transform.position;
-        Vector3 canvasPosition = unitPosition + Vector3.up * unitCanvasHeight;
+        Vector3 canvasPosition = unitPosition + Vector3.up * canvasHeight;
 
         Vector3 toUnit = unitPosition - lens.position;
         Vector3 toCanvas = canvasPosition - lens.position;
@@ -180,7 +219,18 @@ public class Health : NetworkBehaviour
             TutorialSession.IsActive
             || SandboxSession.IsImmortal(GetComponent<Unit>()?.TeamIndex ?? -1);
         float floor = cannotBeKilled ? 1f : 0f;
+        float before = currentHealth.Value;
         currentHealth.Value = Mathf.Max(floor, currentHealth.Value - damage * damageTakenMultiplier);
+        if (currentHealth.Value < before)
+        {
+            GameLoop.Instance?.RecordReplayDamage(
+                gameObject,
+                before - currentHealth.Value,
+                crit,
+                currentHealth.Value <= 0f,
+                HitOrigin()
+            );
+        }
         if (currentHealth.Value > 0f)
         {
             GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
@@ -361,7 +411,7 @@ public class Health : NetworkBehaviour
     /// file already drew between a graze and a real hit; a killing blow always gets the loudest
     /// badge, because it is the last thing that unit will ever show the player.
     /// </summary>
-    private static DamageTone ToneFor(float severity, bool lethal)
+    public static DamageTone ToneFor(float severity, bool lethal)
     {
         if (lethal || severity >= 0.7f)
             return DamageTone.Critical;

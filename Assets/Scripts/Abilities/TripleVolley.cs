@@ -57,7 +57,9 @@ public class TripleVolley : Ability
                 origin,
                 fanDirection,
                 data.bulletRange * GameLoop.cellSize,
-                data.bulletSpeed * GameLoop.cellSize
+                data.bulletSpeed * GameLoop.cellSize,
+                pierces: true,
+                volley: true
             );
         }
 
@@ -142,7 +144,7 @@ public class TripleVolley : Ability
             : data.redBulletPrefab;
     }
 
-    private static void ApplyVolleyVisualDimensions(GameObject projectile)
+    public static void ApplyVolleyVisualDimensions(GameObject projectile)
     {
         Renderer visual = projectile.GetComponentInChildren<Renderer>();
         if (visual == null)

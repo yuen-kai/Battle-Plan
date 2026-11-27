@@ -330,8 +330,13 @@ public class Unit : NetworkBehaviour
         // The friendly cone stays near-white on purpose: it is a light volume, not a team badge,
         // and paint-coloured light reads as an effect. Only the enemy cone carries team identity,
         // and it now carries the shared enemy red rather than a sixth one of its own.
+        ConfigureVisionCone(cone, IsFriendlyToLocalPlayer, GetUnitData());
+    }
+
+    public static void ConfigureVisionCone(VisionConeVisual cone, bool friendly, UnitData unitData)
+    {
         cone.SetColor(
-            IsFriendlyToLocalPlayer
+            friendly
                 ? new Color(0.92f, 0.95f, 1f, 0.18f)
                 : TeamPalette.EnemyBright.WithAlpha(0.10f)
         );
@@ -339,7 +344,6 @@ public class Unit : NetworkBehaviour
         // The flashlight is the weapon envelope, not fog vision:
         // bulletSpread is one side of center, while VisionConeVisual expects the full angle.
         // targetRange is stored in cells, so convert it to world distance.
-        UnitData unitData = GetUnitData();
         if (unitData != null)
         {
             cone.SetWeaponEnvelope(unitData.bulletSpread, unitData.targetRange * GameLoop.cellSize);

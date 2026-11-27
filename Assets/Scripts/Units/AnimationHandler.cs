@@ -123,7 +123,12 @@ public class AnimationHandler : NetworkBehaviour
         held = animationName;
         Enter(animationName);
         Publish(animationName);
+        if (IsServer && IsSpawned)
+            GameLoop.Instance?.RecordReplayAnimation(gameObject, animationName, false);
     }
+
+    /// <summary>The state this rig falls back to between one-shots.</summary>
+    public string HeldState => held;
 
     /// <summary>
     /// Plays a one-shot and returns to whatever was being held once <paramref name="delay"/> is up.
@@ -134,6 +139,8 @@ public class AnimationHandler : NetworkBehaviour
     {
         Enter(animationName);
         Publish(animationName);
+        if (IsServer && IsSpawned)
+            GameLoop.Instance?.RecordReplayAnimation(gameObject, animationName, true);
         StartCoroutine(PlayAnimationWithDelay(held, delay));
     }
 

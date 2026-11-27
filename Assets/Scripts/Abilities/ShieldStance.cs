@@ -112,7 +112,27 @@ public class ShieldStance : Ability
         Unit identity = GetComponent<Unit>();
         ShieldRush.TryApplyCollisionLayer(shieldTransform, identity != null ? identity.TeamIndex : -1);
 
-        Vector2Int direction = shieldDirection.Value;
+        PoseShield(shieldTransform, loweredLocalPosition, loweredLocalRotation, shieldDirection.Value, active);
+    }
+
+    public bool IsShieldRaised => shieldActive.Value;
+    public Vector2Int ShieldDirection => shieldDirection.Value;
+
+    /// <summary>
+    /// Raises or lowers a shield slab on whatever body carries it — the live caster, or a replay copy
+    /// of one — planted on <paramref name="direction"/> from the authored lowered pose.
+    /// </summary>
+    public static void PoseShield(
+        Transform shieldTransform,
+        Vector3 loweredLocalPosition,
+        Quaternion loweredLocalRotation,
+        Vector2Int direction,
+        bool active
+    )
+    {
+        if (shieldTransform == null)
+            return;
+
         if (active && direction != Vector2Int.zero)
         {
             // The lock lives on the shield itself rather than here: Ability disables its own
@@ -134,9 +154,9 @@ public class ShieldStance : Ability
             // slab planted on that side for as long as it is raised.
             facing.pinsWorldOffset = true;
             facing.worldOffset = Quaternion.LookRotation(worldDirection, Vector3.up)
-                * ScaledLoweredOffset();
+                * ScaledLoweredOffset(shieldTransform, loweredLocalPosition);
         }
-        else if (capturedLoweredTransform)
+        else
         {
             FixedWorldFacing facing = shieldTransform.GetComponent<FixedWorldFacing>();
             if (facing != null)
@@ -189,7 +209,7 @@ public class ShieldStance : Ability
         );
         slab = new RaisedSlab(
             mesh,
-            shieldTransform.parent.position + rotation * ScaledLoweredOffset(),
+            shieldTransform.parent.position + rotation * ScaledLoweredOffset(shieldTransform, loweredLocalPosition),
             rotation,
             Vector3.Scale(shieldTransform.parent.lossyScale, shieldTransform.localScale)
         );
@@ -218,7 +238,7 @@ public class ShieldStance : Ability
     /// so it can be re-aimed at an arbitrary world direction. Read from the captured lowered position
     /// rather than hardcoded, so moving the shield on the prefab moves the raised one with it.
     /// </summary>
-    private Vector3 ScaledLoweredOffset()
+    private static Vector3 ScaledLoweredOffset(Transform shieldTransform, Vector3 loweredLocalPosition)
     {
         Vector3 parentScale = shieldTransform.parent != null
             ? shieldTransform.parent.lossyScale

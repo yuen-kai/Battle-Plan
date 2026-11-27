@@ -2414,6 +2414,7 @@ public class GameLoop : NetworkBehaviour
 
         ShieldBlockPulse.Play(shieldOwner, impactPoint);
         ShieldBlockedDamageClientRpc(owner.NetworkObjectId, impactPoint);
+        RecordReplayFx(ReplayFxCue.ShieldBlock, shieldOwner, impactPoint, impactPoint);
     }
 
     /// <summary>
@@ -2572,7 +2573,7 @@ public class GameLoop : NetworkBehaviour
     /// The opening a destroyed wall leaves has to be as diagonally shootable as any other single
     /// corner.
     /// </summary>
-    private void RefreshWallCornerPlugsAround(Vector2Int cell)
+    public void RefreshWallCornerPlugsAround(Vector2Int cell)
     {
         foreach (Vector2Int offset in WallCornerPlugs.DiagonalOffsets)
         {
@@ -4023,14 +4024,11 @@ public class GameLoop : NetworkBehaviour
     }
 
     /// <summary>
-    /// Steps the live board's own overlays aside for the replay: the fog wash reports what can be
-    /// seen now, and the smoke cloud stands where smoke is now, neither of which is true of a past
-    /// round being shown on the same board.
+    /// Steps the live smoke cloud aside for the replay, which stands its own where smoke was then.
+    /// The fog tiles stay: the replay redraws them for the moment being shown.
     /// </summary>
     public void SetLiveBoardOverlaysVisible(bool visible)
     {
-        if (fogOverlayRoot != null)
-            fogOverlayRoot.SetActive(visible);
         if (clientSmokeVisualRoot != null)
             clientSmokeVisualRoot.SetActive(visible);
     }
@@ -5841,9 +5839,33 @@ public class GameLoop : NetworkBehaviour
     {
         while (IsClient && IsSpawned)
         {
-            UpdateClientFogOverlay();
+            if (!ReplayViewer.IsViewing)
+                UpdateClientFogOverlay();
             yield return new WaitForSeconds(FogUpdateIntervalSeconds);
         }
+    }
+
+    /// <summary>
+    /// Draws the fog a past moment had, worked out from where the replayed crew stood, on the same
+    /// tiles the live fog uses. The live loop stands down while a replay owns them.
+    /// </summary>
+    public void ShowReplayFog(HashSet<Vector2Int> visibleCells) => DrawFogOverlay(visibleCells);
+
+    /// <summary>Hands the board's fog, smoke and objective back to the live match.</summary>
+    public void RestoreLiveBoard()
+    {
+        SetLiveBoardOverlaysVisible(true);
+        UpdateClientFogOverlay();
+        if (Options.IsKingOfTheHill)
+            RefreshKingOfTheHillPresentation(replicatedHillControl.Value);
+    }
+
+    public void ShowReplayHill(HillControlState state)
+    {
+        if (!IsClient || !Options.IsKingOfTheHill)
+            return;
+        EnsureKingOfTheHillOverlay();
+        UpdateKingOfTheHillOverlay(state);
     }
 
     /// <summary>
@@ -5908,7 +5930,11 @@ public class GameLoop : NetworkBehaviour
         // here rather than letting it work its own vision out is the point: the smoke and the dark
         // tiles are then two drawings of one answer and cannot drift apart.
         RefreshSmokeSeenCells(visibleCells);
+        DrawFogOverlay(visibleCells);
+    }
 
+    private void DrawFogOverlay(HashSet<Vector2Int> visibleCells)
+    {
         foreach (var tile in fogOverlayTiles)
         {
             Renderer tileRenderer = tile.Value;
@@ -7924,7 +7950,18 @@ public class GameLoop : NetworkBehaviour
 
         recordingReplayRound = round;
         replayRoundStartTime = Time.time;
+        if (Options.IsKingOfTheHill)
+        {
+            round.hasHill = true;
+            round.hill = replicatedHillControl.Value;
+        }
         CaptureReplayFrame();
+        foreach (GameObject unit in replayUnitObjects)
+        {
+            AnimationHandler rig = unit != null ? unit.GetComponent<AnimationHandler>() : null;
+            if (rig != null && IsLivingUnit(unit))
+                RecordReplayAnimation(unit, rig.HeldState, false);
+        }
         if (replayFrameCoroutine != null)
             StopCoroutine(replayFrameCoroutine);
         replayFrameCoroutine = StartCoroutine(RecordReplayFrames());
@@ -8008,10 +8045,103 @@ public class GameLoop : NetworkBehaviour
                 if (teamIndex == ownTeam || IsSeenForReplay(teamIndex, unit, unit.transform.position))
                     sample.flags |= ReplaySample.SeenBy(teamIndex);
             }
+            CaptureReplayStatus(unit, ref sample);
             frame[i] = sample;
         }
         recordingReplayRound.frames.Add(frame);
         SampleReplayTracks(false);
+    }
+
+    /// <summary>
+    /// What the unit's body is showing, read from the same replicated state its live visuals read,
+    /// so every status a player can see on a unit is kept frame by frame and survives a scrub.
+    /// </summary>
+    private void CaptureReplayStatus(GameObject unit, ref ReplaySample sample)
+    {
+        Unit identity = unit.GetComponent<Unit>();
+        Movement movement = unit.GetComponent<Movement>();
+        Health health = unit.GetComponent<Health>();
+        ShieldStance stance = unit.GetComponent<ShieldStance>();
+        Shooting shooting = unit.GetComponent<Shooting>();
+
+        if (identity != null && identity.IsStunned)
+            sample.status |= ReplayStatus.Stunned;
+        if (movement != null && movement.IsRecoveringFromDive)
+            sample.status |= ReplayStatus.DiveRecovering;
+        if (movement != null && movement.HasSpeedBoostPresentation)
+            sample.status |= ReplayStatus.SpeedBoost;
+        if (health != null && health.HasDamageReduction)
+            sample.status |= ReplayStatus.Guarded;
+        if (stance != null && stance.IsShieldRaised)
+        {
+            sample.status |= ReplayStatus.ShieldUp;
+            sample.shieldDirection = ReplaySample.PackDirection(stance.ShieldDirection);
+        }
+        if (identity != null)
+            sample.cooldown = (byte)Mathf.Clamp(identity.AbilityCooldownRoundsRemaining, 0, byte.MaxValue);
+
+        TargetLockState targetLock = shooting != null ? shooting.CurrentTargetLock : default;
+        if (targetLock.Active)
+        {
+            int target = replayUnitObjects.FindIndex(candidate =>
+                candidate != null
+                && candidate.GetComponent<NetworkObject>()?.NetworkObjectId == targetLock.TargetObjectId
+            );
+            if (target >= 0)
+            {
+                sample.status |= ReplayStatus.Locking;
+                sample.lockTarget = (byte)(target + 1);
+            }
+        }
+    }
+
+    /// <summary>Keeps a state change a unit's rig was asked for, held or one-shot.</summary>
+    public void RecordReplayAnimation(GameObject unit, string state, bool oneShot)
+    {
+        ReplayRound round = recordingReplayRound;
+        if (!IsServer || round == null || string.IsNullOrEmpty(state))
+            return;
+
+        int index = round.animationNames.IndexOf(state);
+        if (index < 0)
+        {
+            round.animationNames.Add(state);
+            index = round.animationNames.Count - 1;
+        }
+        int recorded = RecordReplayEvent(
+            ReplayEventKind.Animation,
+            unit,
+            unit.transform.position,
+            unit.transform.position,
+            ReplayFxCue.None,
+            index
+        );
+        if (recorded >= 0 && oneShot)
+        {
+            ReplayEvent replayEvent = round.events[recorded];
+            replayEvent.detail = ReplayDetail.OneShotAnimation;
+            round.events[recorded] = replayEvent;
+        }
+    }
+
+    /// <summary>One landed hit, which a 10 Hz health sample would merge with its neighbours.</summary>
+    public void RecordReplayDamage(GameObject victim, float amount, bool crit, bool lethal, Vector3 source)
+    {
+        int recorded = RecordReplayEvent(
+            ReplayEventKind.Damage,
+            victim,
+            victim.transform.position,
+            source,
+            ReplayFxCue.None,
+            amount
+        );
+        if (recorded < 0)
+            return;
+        ReplayEvent replayEvent = recordingReplayRound.events[recorded];
+        replayEvent.detail = (byte)(
+            (crit ? ReplayDetail.CritHit : 0) | (lethal ? ReplayDetail.LethalHit : 0)
+        );
+        recordingReplayRound.events[recorded] = replayEvent;
     }
 
     private bool IsSeenForReplay(int teamIndex, GameObject unit, Vector3 position)
@@ -8043,7 +8173,8 @@ public class GameLoop : NetworkBehaviour
             return -1;
 
         int unitIndex = actor != null ? replayUnitObjects.IndexOf(actor) : -1;
-        if (kind != ReplayEventKind.WallDestroyed && unitIndex < 0)
+        bool unowned = kind == ReplayEventKind.WallDestroyed || (kind == ReplayEventKind.Fx && actor == null);
+        if (!unowned && unitIndex < 0)
             return -1;
 
         ReplaySampleFlags seenBy = ReplaySampleFlags.None;
@@ -8053,6 +8184,7 @@ public class GameLoop : NetworkBehaviour
             if (
                 own
                 || kind == ReplayEventKind.WallDestroyed
+                || cue == ReplayFxCue.CameraShake
                 || IsSeenForReplay(teamIndex, actor, from)
                 || IsSeenForReplay(teamIndex, null, to)
             )
@@ -8066,7 +8198,7 @@ public class GameLoop : NetworkBehaviour
             {
                 timeCentiseconds = ReplayNow(),
                 kind = kind,
-                unitIndex = (byte)Mathf.Max(0, unitIndex),
+                unitIndex = unitIndex >= 0 ? (byte)unitIndex : ReplayDetail.NoUnit,
                 from = from,
                 to = to,
                 seenBy = seenBy,
@@ -8192,7 +8324,9 @@ public class GameLoop : NetworkBehaviour
         Vector3 origin,
         Vector3 direction,
         float distance,
-        float speed
+        float speed,
+        bool pierces = false,
+        bool volley = false
     )
     {
         if (!IsServer || recordingReplayRound == null || shooter == null)
@@ -8206,7 +8340,7 @@ public class GameLoop : NetworkBehaviour
                 continue;
             bool stops =
                 hit.collider.gameObject.layer == LayerMask.NameToLayer("Walls")
-                || hit.collider.GetComponentInParent<Unit>() != null;
+                || (!pierces && hit.collider.GetComponentInParent<Unit>() != null);
             if (stops && hit.distance < nearest)
             {
                 nearest = hit.distance;
@@ -8214,7 +8348,14 @@ public class GameLoop : NetworkBehaviour
             }
         }
 
-        RecordReplayEvent(ReplayEventKind.Shot, shooter, origin, end, ReplayFxCue.None, speed);
+        int recorded = RecordReplayEvent(ReplayEventKind.Shot, shooter, origin, end, ReplayFxCue.None, speed);
+        if (recorded < 0)
+            return;
+        ReplayEvent shot = recordingReplayRound.events[recorded];
+        shot.detail = (byte)(
+            (volley ? ReplayDetail.VolleyShot : 0) | (pierces ? ReplayDetail.PiercingShot : 0)
+        );
+        recordingReplayRound.events[recorded] = shot;
     }
 
     /// <summary>Closes the open recording and hands each seat its own view of it. Idempotent.</summary>

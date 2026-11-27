@@ -31,6 +31,12 @@ public class ReplayEditModeTests
             float progress = f / (float)(FrameCount - 1);
             ReplaySample own = ReplaySample.Capture(Cell(1, 1), 90f, 120f, true);
             own.flags |= ReplaySample.SeenBy(Viewer);
+            if (f >= 20 && f <= 35)
+            {
+                own.status = ReplayStatus.ShieldUp | ReplayStatus.Stunned;
+                own.shieldDirection = ReplaySample.PackDirection(Vector2Int.left);
+                own.cooldown = 2;
+            }
             ReplaySample enemy = ReplaySample.Capture(
                 Vector3.Lerp(Cell(5, 2), Cell(7, 2), progress),
                 270f,
@@ -38,6 +44,8 @@ public class ReplayEditModeTests
                 true
             );
             enemy.flags |= ReplaySample.SeenBy(Opponent);
+            enemy.status = ReplayStatus.Locking;
+            enemy.lockTarget = 1;
             if (f <= SeenUntilFrame)
                 enemy.flags |= ReplaySample.SeenBy(Viewer);
             round.frames.Add(new[] { own, enemy });
@@ -97,6 +105,40 @@ public class ReplayEditModeTests
             value = 1.5f,
             seenBy = ReplaySample.SeenBy(Viewer),
         });
+
+        round.animationNames.Add("Aiming");
+        round.animationNames.Add("Shoot");
+        round.events.Add(new ReplayEvent
+        {
+            timeCentiseconds = 610,
+            kind = ReplayEventKind.Animation,
+            unitIndex = 1,
+            value = 1,
+            detail = ReplayDetail.OneShotAnimation,
+            seenBy = ReplaySample.SeenBy(Opponent),
+        });
+        round.events.Add(new ReplayEvent
+        {
+            timeCentiseconds = 650,
+            kind = ReplayEventKind.Damage,
+            unitIndex = 0,
+            from = Cell(1, 1),
+            to = Cell(2, 1),
+            value = 42f,
+            detail = ReplayDetail.CritHit,
+            seenBy = ReplaySample.SeenBy(Viewer) | ReplaySample.SeenBy(Opponent),
+        });
+        round.events.Add(new ReplayEvent
+        {
+            timeCentiseconds = 655,
+            kind = ReplayEventKind.Fx,
+            cue = ReplayFxCue.CameraShake,
+            unitIndex = ReplayDetail.NoUnit,
+            value = 0.1f,
+            seenBy = ReplaySample.SeenBy(Viewer) | ReplaySample.SeenBy(Opponent),
+        });
+        round.hasHill = true;
+        round.hill = new HillControlState(HillControlStatus.Controlled, Opponent, 2);
 
         round.smokeChanges.Add(new ReplaySmokeChange
         {
@@ -159,7 +201,24 @@ public class ReplayEditModeTests
         Assert.That(read.smokeCells, Is.EqualTo(new List<Vector2Int> { new(6, 6) }));
         Assert.That(read.frames.Count, Is.EqualTo(FrameCount));
         Assert.That(read.Duration, Is.EqualTo((FrameCount - 1) * ReplayRound.FrameInterval).Within(1e-4f));
-        Assert.That(read.events.Count, Is.EqualTo(4));
+        Assert.That(read.events.Count, Is.EqualTo(7));
+
+        ReplaySample shielded = read.frames[25][0];
+        Assert.That(shielded.Has(ReplayStatus.ShieldUp), Is.True);
+        Assert.That(shielded.Has(ReplayStatus.Stunned), Is.True);
+        Assert.That(shielded.ShieldFacing, Is.EqualTo(Vector2Int.left));
+        Assert.That(shielded.cooldown, Is.EqualTo(2));
+        Assert.That(read.frames[40][0].Has(ReplayStatus.ShieldUp), Is.False);
+
+        Assert.That(read.animationNames, Is.EqualTo(new List<string> { "Aiming", "Shoot" }));
+        ReplayEvent hit = read.events.Find(e => e.kind == ReplayEventKind.Damage);
+        Assert.That(hit.value, Is.EqualTo(42f));
+        Assert.That(hit.detail & ReplayDetail.CritHit, Is.Not.Zero);
+        Assert.That(read.events.Find(e => e.cue == ReplayFxCue.CameraShake).HasUnit, Is.False);
+
+        Assert.That(read.hasHill, Is.True);
+        Assert.That(read.hill.ControllingTeamIndex, Is.EqualTo(Opponent));
+        Assert.That(read.hill.Streak, Is.EqualTo(2));
 
         ReplayEvent explosion = read.events.Find(e => e.kind == ReplayEventKind.Fx);
         Assert.That(explosion.cue, Is.EqualTo(ReplayFxCue.GrenadeExplosion));
@@ -205,6 +264,15 @@ public class ReplayEditModeTests
         Assert.That(hidden.Known, Is.False);
         Assert.That(hidden.x, Is.Zero);
         Assert.That(hidden.z, Is.Zero);
+        Assert.That(hidden.status, Is.EqualTo(ReplayStatus.None));
+        Assert.That(hidden.lockTarget, Is.Zero);
+        Assert.That(view.frames[SeenUntilFrame][1].Has(ReplayStatus.Locking), Is.True);
+        Assert.That(
+            view.events.Exists(e => e.kind == ReplayEventKind.Animation),
+            Is.False,
+            "an animation the viewer never saw is not handed to it"
+        );
+        Assert.That(view.events.Exists(e => e.cue == ReplayFxCue.CameraShake), Is.True);
         Assert.That(view.frames[FrameCount - 1][0].Known, Is.True);
 
         Assert.That(view.TrySample(1, 1f, out _, out _, out _), Is.True);
@@ -327,6 +395,6 @@ public class ReplayEditModeTests
             Assert.That(size, Is.LessThan(TransportPayload));
             total += size;
         }
-        Assert.That(total, Is.LessThan(24 * 1024));
+        Assert.That(total, Is.LessThan(48 * 1024));
     }
 }

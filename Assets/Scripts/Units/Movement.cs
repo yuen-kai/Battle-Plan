@@ -94,6 +94,7 @@ public class Movement : NetworkBehaviour
 
     /// <summary>True while a dodger is picking itself up and cannot shoot.</summary>
     public bool IsRecoveringFromDive => diveRecovery.Value.Active;
+    public bool HasSpeedBoostPresentation => temporaryMoveSpeedBoostPresentationActive.Value;
 
     public bool CanShootWhileMoving => unitData != null && unitData.canShootWhileMoving;
 

@@ -12,6 +12,8 @@ public class Shooting : NetworkBehaviour
     private TargetLaserVisual targetLaser;
 
     private readonly NetworkVariable<TargetLockState> targetLock = new();
+    private bool replayShotPierces;
+    public TargetLockState CurrentTargetLock => targetLock.Value;
 
     private List<GameObject> bullets = new();
     private int currentAmmo;
@@ -367,6 +369,7 @@ public class Shooting : NetworkBehaviour
         float aoeRadius = unitData.bulletAoeRadius;
         range = range == -1 ? unitData.bulletRange : range;
         bool bulletPierces = pierces ?? unitData.bulletPierces;
+        replayShotPierces = bulletPierces;
 
         Vector3 origin = transform.position;
         bullets.Add(
@@ -396,7 +399,8 @@ public class Shooting : NetworkBehaviour
             origin,
             direction,
             range * GameLoop.cellSize,
-            unitData.bulletSpeed * GameLoop.cellSize
+            unitData.bulletSpeed * GameLoop.cellSize,
+            replayShotPierces
         );
 
         if (consumeAmmo)
@@ -768,6 +772,25 @@ public sealed class TargetLaserVisual : MonoBehaviour
             beamMaterial.SetFloat("_NoiseStrength", 0.2f);
             beam.material = beamMaterial;
         }
+    }
+
+    /// <summary>Draws the lock as it stood at a replayed moment, from the shooter to its mark.</summary>
+    public void ShowAt(Vector3 from, Vector3 to, float progress)
+    {
+        if (beam == null)
+            return;
+        lockState = default;
+        beam.enabled = true;
+        beam.SetPosition(0, from);
+        beam.SetPosition(1, to);
+        beam.startWidth = beam.endWidth = Mathf.Lerp(StartWidth, EndWidth, progress);
+        beam.startColor = beam.endColor = Color.Lerp(StartColor, EndColor, progress);
+    }
+
+    public void Hide()
+    {
+        if (beam != null)
+            beam.enabled = false;
     }
 
     public void SetLock(TargetLockState state)

@@ -31,6 +31,13 @@ public class ReplayViewer : MonoBehaviour
     private const float TrailBreakSeconds = 0.25f;
     private const float DefaultBulletSpeed = 30f;
 
+    // How long a one-shot animation holds before its rig falls back to the held state, matching
+    // AnimationHandler.TriggerAnimation's default.
+    private const float OneShotAnimationSeconds = 1f;
+    private const float CasterFlashSeconds = 0.4f;
+    private const float CasterFlashIntensity = 1.5f;
+    private const float BeamFadeSeconds = 0.2f;
+
     public static bool IsViewing { get; private set; }
 
     private GameLoop loop;
@@ -78,11 +85,35 @@ public class ReplayViewer : MonoBehaviour
     private float poseTime;
     private int smokeChange = -2;
 
+    private readonly Dictionary<int, int> beamRush = new();
+    private readonly HashSet<int> beamsFading = new();
+    private readonly List<(Vector2Int cell, int range)> fogViewers = new();
+
+    /// <summary>
+    /// A unit's body for the replay, plus the presentation pieces its live components would have
+    /// driven: the health bar, the charge dial, status pulses, the boost ring, the guard orb, the
+    /// vision cone, the shield slab and the lock laser. Each is the same visual class the live unit
+    /// uses, handed the state that was recorded instead of the state on the network.
+    /// </summary>
     private sealed class StandIn
     {
         public GameObject body;
         public Animator rig;
-        public string state;
+        public string stateKey;
+        public UnitData data;
+        public bool hasAbility;
+        public Transform canvas;
+        public float canvasHeight;
+        public AbilityStatusRing ring;
+        public StunPulse stun;
+        public DiveRecoveryPulse dive;
+        public SpeedBoostIndicatorVisual boost;
+        public GuardOrbVisual guard;
+        public Transform shield;
+        public Vector3 shieldLoweredPosition;
+        public Quaternion shieldLoweredRotation;
+        public TargetLaserVisual laser;
+        public bool deathPlayed;
     }
 
     public void Bind(GameLoop owner) => loop = owner;
@@ -122,6 +153,9 @@ public class ReplayViewer : MonoBehaviour
     {
         if (!IsViewing)
             return;
+
+        if (Archive != null && Archive.TryGet(shownRound, out ReplayRound shown))
+            BillboardHealthBars(shown);
 
         // Fog and smoke concealment both write these flags on their own schedule.
         foreach ((Renderer renderer, bool _) in hiddenRenderers)
@@ -293,12 +327,15 @@ public class ReplayViewer : MonoBehaviour
         foreach (Vector2Int cell in reshownWalls)
         {
             if (loop != null && loop.TryGetWallInstance(cell, out GameObject wall))
+            {
                 wall.SetActive(false);
+                loop.RefreshWallCornerPlugsAround(cell);
+            }
         }
         reshownWalls.Clear();
 
         if (loop != null)
-            loop.SetLiveBoardOverlaysVisible(true);
+            loop.RestoreLiveBoard();
         PlanMovement.Instance?.SetPlanningVisualsHidden(false);
 
         if (stage != null)
@@ -315,6 +352,8 @@ public class ReplayViewer : MonoBehaviour
         eventVisuals.Clear();
         trackVisuals.Clear();
         trackParticles.Clear();
+        beamRush.Clear();
+        beamsFading.Clear();
         effectsRound = -1;
         cueRound = -1;
         poseRound = -1;
@@ -459,9 +498,12 @@ public class ReplayViewer : MonoBehaviour
         shownTime = Mathf.Clamp(time, 0f, round.Duration);
 
         bool continuous = poseRound == roundNumber && Mathf.Abs(shownTime - poseTime) <= TrailBreakSeconds;
+        if (poseRound != roundNumber && round.hasHill)
+            loop.ShowReplayHill(round.hill);
         PoseStandIns(round, shownTime);
         ShowWallsAt(roundNumber, shownTime);
         ShowSmoke(round, shownTime);
+        ShowFog(round, shownTime);
         ShowEffects(round, shownTime);
         if (!continuous)
             BreakTrails();
@@ -478,6 +520,7 @@ public class ReplayViewer : MonoBehaviour
                 standIn.body.SetActive(false);
         }
 
+        int frame = Mathf.Clamp(Mathf.RoundToInt(time / ReplayRound.FrameInterval), 0, round.frames.Count - 1);
         for (int i = 0; i < round.units.Count; i++)
         {
             ReplayUnit unit = round.units[i];
@@ -488,18 +531,187 @@ public class ReplayViewer : MonoBehaviour
             if (standIn == null)
                 continue;
 
-            bool moving =
-                round.TrySample(i, Mathf.Max(0f, time - ReplayRound.FrameInterval), out Vector3 earlier, out _, out _)
-                && (position - earlier).sqrMagnitude > MovingThreshold * MovingThreshold;
             standIn.body.SetActive(true);
+            if (standIn.deathPlayed)
+            {
+                // A replayed death hides the body it fell out of; scrubbing back before it has to
+                // stand that body up again.
+                foreach (Renderer renderer in standIn.body.GetComponentsInChildren<Renderer>(true))
+                    renderer.forceRenderingOff = false;
+                standIn.deathPlayed = false;
+            }
             standIn.body.transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
 
-            string state = moving ? "Moving" : "Idle";
-            if (standIn.state != state)
+            PoseAnimation(round, i, time, standIn);
+            PoseStatus(round, i, frame, time, nearest, standIn);
+            Health.ShowHealthBar(
+                standIn.body.transform,
+                standIn.canvas,
+                standIn.canvasHeight,
+                nearest.health,
+                unit.maxHealth
+            );
+        }
+    }
+
+    /// <summary>
+    /// The rig's state at this moment, from the states the server asked for: a one-shot for as long
+    /// as it plays, otherwise whatever was last held. A round recorded before states were kept
+    /// falls back to reading movement off the samples.
+    /// </summary>
+    private void PoseAnimation(ReplayRound round, int unitIndex, float time, StandIn standIn)
+    {
+        string held = null;
+        string oneShot = null;
+        int oneShotEvent = -1;
+        for (int e = 0; e < round.events.Count; e++)
+        {
+            ReplayEvent replayEvent = round.events[e];
+            if (replayEvent.kind != ReplayEventKind.Animation || replayEvent.unitIndex != unitIndex)
+                continue;
+            if (replayEvent.Time > time)
+                break;
+
+            int nameIndex = Mathf.RoundToInt(replayEvent.value);
+            if (nameIndex < 0 || nameIndex >= round.animationNames.Count)
+                continue;
+            string name = round.animationNames[nameIndex];
+            if ((replayEvent.detail & ReplayDetail.OneShotAnimation) != 0)
             {
-                standIn.state = state;
-                AnimationHandler.EnterState(standIn.rig, state);
+                oneShot = name;
+                oneShotEvent = e;
+                if (time - replayEvent.Time >= OneShotAnimationSeconds)
+                    oneShot = null;
             }
+            else
+            {
+                held = name;
+                oneShot = null;
+            }
+        }
+
+        if (held == null && oneShot == null)
+        {
+            bool moving =
+                round.TrySample(unitIndex, Mathf.Max(0f, time - ReplayRound.FrameInterval), out Vector3 earlier, out _, out _)
+                && round.TrySample(unitIndex, time, out Vector3 now, out _, out _)
+                && (now - earlier).sqrMagnitude > MovingThreshold * MovingThreshold;
+            held = moving ? "Moving" : "Idle";
+        }
+
+        string state = oneShot ?? held;
+        string key = oneShot != null ? $"{state}#{oneShotEvent}" : state;
+        if (standIn.stateKey == key)
+            return;
+        standIn.stateKey = key;
+        AnimationHandler.EnterState(standIn.rig, state);
+    }
+
+    private void PoseStatus(
+        ReplayRound round,
+        int unitIndex,
+        int frame,
+        float time,
+        ReplaySample sample,
+        StandIn standIn
+    )
+    {
+        double serverNow = NetworkManager.Singleton != null ? NetworkManager.Singleton.ServerTime.Time : 0d;
+
+        if (sample.Has(ReplayStatus.Stunned))
+        {
+            (float started, float length) = StatusRun(round, unitIndex, frame, ReplayStatus.Stunned);
+            standIn.stun ??= StunPulse.Attach(standIn.body);
+            standIn.stun.SetStun(new StunState(serverNow - (time - started), length));
+        }
+        else
+        {
+            standIn.stun?.SetStun(default);
+        }
+
+        if (sample.Has(ReplayStatus.DiveRecovering))
+        {
+            (float started, float length) = StatusRun(round, unitIndex, frame, ReplayStatus.DiveRecovering);
+            standIn.dive ??= DiveRecoveryPulse.Attach(standIn.body);
+            standIn.dive.SetRecovery(new DiveRecoveryState(serverNow - (time - started), length));
+        }
+        else
+        {
+            standIn.dive?.SetRecovery(default);
+        }
+
+        if (sample.Has(ReplayStatus.SpeedBoost))
+            standIn.boost ??= SpeedBoostIndicatorVisual.Create(standIn.body.transform);
+        standIn.boost?.SetVisible(sample.Has(ReplayStatus.SpeedBoost));
+
+        if (sample.Has(ReplayStatus.Guarded))
+            standIn.guard ??= GuardOrbVisual.Attach(standIn.body);
+        standIn.guard?.SetGuarded(sample.Has(ReplayStatus.Guarded));
+
+        int configured = Unit.GetConfiguredAbilityCooldownRounds(standIn.data, standIn.hasAbility);
+        if (configured > 0)
+        {
+            standIn.ring ??= AbilityStatusRing.Create(standIn.body.transform);
+            standIn.ring?.SetCharge(sample.cooldown, configured, false);
+        }
+
+        ShieldStance.PoseShield(
+            standIn.shield,
+            standIn.shieldLoweredPosition,
+            standIn.shieldLoweredRotation,
+            sample.ShieldFacing,
+            sample.Has(ReplayStatus.ShieldUp)
+        );
+
+        int target = sample.lockTarget - 1;
+        if (
+            standIn.laser != null
+            && sample.Has(ReplayStatus.Locking)
+            && round.TrySample(target, time, out Vector3 targetPosition, out _, out ReplaySample targetSample)
+            && targetSample.Alive
+        )
+        {
+            (float started, float length) = StatusRun(round, unitIndex, frame, ReplayStatus.Locking);
+            standIn.laser.ShowAt(
+                standIn.body.transform.position,
+                targetPosition,
+                length > 0f ? Mathf.Clamp01((time - started) / length) : 1f
+            );
+        }
+        else
+        {
+            standIn.laser?.Hide();
+        }
+    }
+
+    /// <summary>When the status lit at <paramref name="frame"/> came on, and how long it stayed on.</summary>
+    private static (float started, float length) StatusRun(ReplayRound round, int unitIndex, int frame, ReplayStatus flag)
+    {
+        int first = frame;
+        while (first > 0 && round.frames[first - 1][unitIndex].Has(flag))
+            first--;
+        int last = frame;
+        while (last < round.frames.Count - 1 && round.frames[last + 1][unitIndex].Has(flag))
+            last++;
+        float started = first * ReplayRound.FrameInterval;
+        return (started, Mathf.Max(ReplayRound.FrameInterval, (last + 1) * ReplayRound.FrameInterval - started));
+    }
+
+    private void BillboardHealthBars(ReplayRound round)
+    {
+        for (int i = 0; i < round.units.Count; i++)
+        {
+            ReplayUnit unit = round.units[i];
+            if (
+                !standIns.TryGetValue((unit.teamIndex, unit.rosterSlot), out StandIn standIn)
+                || standIn.body == null
+                || !standIn.body.activeSelf
+                || !round.TrySample(i, shownTime, out _, out _, out ReplaySample sample)
+            )
+            {
+                continue;
+            }
+            Health.ShowHealthBar(standIn.body.transform, standIn.canvas, standIn.canvasHeight, sample.health, unit.maxHealth);
         }
     }
 
@@ -508,28 +720,64 @@ public class ReplayViewer : MonoBehaviour
         if (standIns.TryGetValue((unit.teamIndex, unit.rosterSlot), out StandIn existing))
             return existing;
 
-        GameObject prefab =
+        UnitData data =
             loop.allUnits != null
             && unit.catalogIndex >= 0
             && unit.catalogIndex < loop.allUnits.units.Count
-                ? loop.allUnits.units[unit.catalogIndex].unitModel
+                ? loop.allUnits.units[unit.catalogIndex]
                 : null;
+        GameObject prefab = data != null ? data.unitModel : null;
         if (prefab == null)
             return null;
 
-        GameObject body = MakeDisplayCopy(prefab, $"ReplayStandIn_{unit.teamIndex}_{unit.rosterSlot}");
-        List<Material> teamMaterials = prefab.GetComponent<Unit>()?.teamMaterials;
-        Unit.ApplyTeamIndicators(
-            body,
-            teamMaterials,
-            GameLoop.IsTeamFriendlyToLocalPlayer(unit.teamIndex)
-        );
+        bool friendly = GameLoop.IsTeamFriendlyToLocalPlayer(unit.teamIndex);
+        GameObject body = MakeDisplayCopy(prefab, $"ReplayStandIn_{unit.teamIndex}_{unit.rosterSlot}", true);
+        Unit.ApplyTeamIndicators(body, prefab.GetComponent<Unit>()?.teamMaterials, friendly);
 
         StandIn standIn = new()
         {
             body = body,
             rig = body.GetComponentInChildren<Animator>(),
+            data = data,
+            hasAbility = prefab.GetComponent<Ability>() != null,
+            canvas = body.transform.Find("UnitCanvas"),
         };
+
+        if (standIn.canvas != null)
+        {
+            standIn.canvas.gameObject.SetActive(true);
+            standIn.canvasHeight = Health.AuthoredCanvasHeight(body.transform, standIn.canvas);
+            foreach (Canvas canvas in standIn.canvas.GetComponentsInChildren<Canvas>(true))
+                canvas.enabled = true;
+            Transform alert = standIn.canvas.Find("Alert");
+            if (alert != null)
+                alert.gameObject.SetActive(false);
+        }
+
+        Transform cone = body.transform.Find("VisionCone");
+        if (cone != null)
+        {
+            cone.gameObject.SetActive(true);
+            Unit.ConfigureVisionCone(cone.gameObject.AddComponent<VisionConeVisual>(), friendly, data);
+        }
+
+        standIn.shield = body.transform.Find("Shield");
+        if (standIn.shield != null)
+        {
+            standIn.shieldLoweredPosition = standIn.shield.localPosition;
+            standIn.shieldLoweredRotation = standIn.shield.localRotation;
+            ShieldRush.TryExpandShieldFootprint(standIn.shield);
+            ShieldMesh.Apply(standIn.shield);
+            standIn.shield.gameObject.SetActive(false);
+        }
+
+        if (prefab.GetComponent<Shooting>() != null)
+        {
+            if (body.GetComponent<LineRenderer>() == null)
+                body.AddComponent<LineRenderer>();
+            standIn.laser = body.AddComponent<TargetLaserVisual>();
+        }
+
         standIns[(unit.teamIndex, unit.rosterSlot)] = standIn;
         return standIn;
     }
@@ -562,7 +810,10 @@ public class ReplayViewer : MonoBehaviour
             if (wantedWalls.Contains(cell))
                 return false;
             if (loop.TryGetWallInstance(cell, out GameObject wall))
+            {
                 wall.SetActive(false);
+                loop.RefreshWallCornerPlugsAround(cell);
+            }
             return true;
         });
 
@@ -576,8 +827,44 @@ public class ReplayViewer : MonoBehaviour
             {
                 wall.SetActive(true);
                 reshownWalls.Add(cell);
+                loop.RefreshWallCornerPlugsAround(cell);
             }
         }
+    }
+
+    /// <summary>
+    /// What this screen's crew could see at this moment, worked out the way the live fog works it
+    /// out — their vision ranges from where they stood, cut by walls and the smoke then standing —
+    /// and drawn on the live fog tiles and the replayed smoke alike.
+    /// </summary>
+    private void ShowFog(ReplayRound round, float time)
+    {
+        int localTeam = loop.LocalTeamIndex;
+        fogViewers.Clear();
+        for (int i = 0; i < round.units.Count; i++)
+        {
+            ReplayUnit unit = round.units[i];
+            if (
+                unit.teamIndex != localTeam
+                || !round.TrySample(i, time, out Vector3 position, out _, out ReplaySample sample)
+                || !sample.Alive
+                || !standIns.TryGetValue((unit.teamIndex, unit.rosterSlot), out StandIn standIn)
+                || standIn.data == null
+            )
+            {
+                continue;
+            }
+            fogViewers.Add((GridSystem.ConvertToGridCoords(position), standIn.data.visionRange));
+        }
+
+        int change = round.smokeChanges.FindLastIndex(candidate => candidate.Time <= time);
+        HashSet<Vector2Int> smoke = new(change >= 0 ? round.smokeChanges[change].cells : round.smokeCells);
+        HashSet<Vector2Int> visible = GridSystem.ComputeVisibleCells(fogViewers, smoke);
+
+        if (loop.FogOfWarEnabled && !postMatch)
+            loop.ShowReplayFog(visible);
+        if (smokeVisual != null)
+            smokeVisual.GetComponent<SmokeScreenVisual>()?.SetSeenCells(visible);
     }
 
     /// <summary>The smoke standing at this moment: the round's opening cloud, then each one thrown.</summary>
@@ -631,19 +918,33 @@ public class ReplayViewer : MonoBehaviour
             effectsRound = round.roundNumber;
         }
 
+        bool advancing =
+            cueRound == round.roundNumber
+            && time > cueTime
+            && time - cueTime <= MaxCueCatchUpSeconds;
+
         for (int i = 0; i < round.events.Count; i++)
         {
             ReplayEvent replayEvent = round.events[i];
             if (replayEvent.kind == ReplayEventKind.Shot)
                 ShowBullet(round, i, replayEvent, time);
             else if (replayEvent.kind == ReplayEventKind.Fx && replayEvent.cue == ReplayFxCue.LaserBeam)
-                ShowBeam(round, i, replayEvent, time);
+                ShowBeam(round, i, replayEvent, time, advancing);
         }
 
         for (int i = 0; i < round.tracks.Count; i++)
             ShowTrack(i, round.tracks[i], time);
 
-        PlayCues(round, time);
+        if (advancing)
+        {
+            foreach (ReplayEvent replayEvent in round.events)
+            {
+                if (replayEvent.Time > cueTime && replayEvent.Time <= time)
+                    PlayCue(round, replayEvent);
+            }
+        }
+        cueRound = round.roundNumber;
+        cueTime = time;
     }
 
     private void ShowBullet(ReplayRound round, int index, ReplayEvent shot, float time)
@@ -658,7 +959,7 @@ public class ReplayViewer : MonoBehaviour
         {
             if (!live)
                 return;
-            bullet = MakeDisplayCopy(ResolveBulletPrefab(round.units[shot.unitIndex]), "ReplayBullet");
+            bullet = shot.HasUnit ? MakeBulletCopy(round.units[shot.unitIndex], shot) : null;
             eventVisuals[index] = bullet;
         }
         if (bullet == null)
@@ -674,7 +975,12 @@ public class ReplayViewer : MonoBehaviour
         );
     }
 
-    private void ShowBeam(ReplayRound round, int index, ReplayEvent beam, float time)
+    /// <summary>
+    /// The held laser, as the live one draws it: pulsing while it is armed, surging down to its
+    /// victim when it fires, and fading as it is put away. A scrub lands on the posed beam rather
+    /// than replaying the surge.
+    /// </summary>
+    private void ShowBeam(ReplayRound round, int index, ReplayEvent beam, float time, bool advancing)
     {
         // The live beam hangs off its caster, so it goes when the caster does.
         float end = beam.value > 0f ? beam.Time + beam.value : round.Duration;
@@ -684,15 +990,56 @@ public class ReplayViewer : MonoBehaviour
             && round.TrySample(beam.unitIndex, time, out _, out _, out ReplaySample caster)
             && caster.Alive;
 
-        if (!eventVisuals.TryGetValue(index, out GameObject visual))
+        eventVisuals.TryGetValue(index, out GameObject visual);
+        if (!live)
         {
-            if (!live)
+            if (visual == null)
                 return;
-            visual = BeamVFX.Create(stage, beam.from, beam.to, AreaLock.LaserGlowColor).gameObject;
-            eventVisuals[index] = visual;
+            if (advancing && visual.activeSelf && time > beam.Time)
+            {
+                BeamVFX fading = visual.GetComponent<BeamVFX>();
+                eventVisuals.Remove(index);
+                beamRush.Remove(index);
+                fading.StartCoroutine(fading.FadeOut(BeamFadeSeconds));
+                return;
+            }
+            visual.SetActive(false);
+            return;
         }
-        if (visual != null)
-            visual.SetActive(live);
+
+        if (visual == null)
+        {
+            BeamVFX created = BeamVFX.Create(stage, beam.from, beam.to, AreaLock.LaserGlowColor);
+            created.Pulse();
+            visual = created.gameObject;
+            eventVisuals[index] = visual;
+            beamRush.Remove(index);
+        }
+        visual.SetActive(true);
+
+        BeamVFX beamFx = visual.GetComponent<BeamVFX>();
+        int rush = round.events.FindIndex(candidate =>
+            candidate.kind == ReplayEventKind.Fx
+            && candidate.cue == ReplayFxCue.LaserRush
+            && candidate.unitIndex == beam.unitIndex
+            && candidate.Time >= beam.Time
+            && candidate.Time <= time
+        );
+        if (rush >= 0)
+        {
+            if (!beamRush.TryGetValue(index, out int started) || started != rush)
+            {
+                beamRush[index] = rush;
+                ReplayEvent surge = round.events[rush];
+                beamFx.SetPositions(surge.from, surge.to);
+                if (advancing && time - surge.Time < surge.value)
+                    beamFx.StartCoroutine(beamFx.Rush(surge.value));
+            }
+        }
+        else if (beamRush.Remove(index))
+        {
+            beamFx.SetPositions(beam.from, beam.to);
+        }
     }
 
     private void ShowTrack(int index, ReplayTrack track, float time)
@@ -729,33 +1076,34 @@ public class ReplayViewer : MonoBehaviour
         }
     }
 
-    private void PlayCues(ReplayRound round, float time)
-    {
-        bool advancing =
-            cueRound == round.roundNumber
-            && time > cueTime
-            && time - cueTime <= MaxCueCatchUpSeconds;
-        if (advancing)
-        {
-            foreach (ReplayEvent replayEvent in round.events)
-            {
-                if (replayEvent.Time > cueTime && replayEvent.Time <= time)
-                    PlayCue(round, replayEvent);
-            }
-        }
-
-        cueRound = round.roundNumber;
-        cueTime = time;
-    }
-
     private void PlayCue(ReplayRound round, ReplayEvent cue)
     {
+        if (cue.kind == ReplayEventKind.Fx && !cue.HasUnit)
+        {
+            if (cue.cue == ReplayFxCue.BulletBlast)
+                Bullet.PlayImpactExplosion(cue.to, cue.value);
+            else if (cue.cue == ReplayFxCue.CameraShake)
+                CameraEffects.PunchAtViewCentre(cue.value);
+            return;
+        }
+        if (!cue.HasUnit || cue.unitIndex >= round.units.Count)
+            return;
+
         ReplayUnit caster = round.units[cue.unitIndex];
         Color team = GameLoop.GetTeamColorForViewer(caster.teamIndex);
+        standIns.TryGetValue((caster.teamIndex, caster.rosterSlot), out StandIn body);
+        bool bodyShown = body?.body != null && body.body.activeInHierarchy;
 
+        if (cue.kind == ReplayEventKind.Damage)
+        {
+            PlayHit(caster, cue, body);
+            return;
+        }
         if (cue.kind == ReplayEventKind.Ability)
         {
             GameLoop.PlayAbilityActivationFx(cue.from, team);
+            if (bodyShown)
+                HitFlash.FlashTarget(body.body, CasterFlashSeconds, CasterFlashIntensity);
             return;
         }
         if (cue.kind == ReplayEventKind.Death)
@@ -781,19 +1129,31 @@ public class ReplayViewer : MonoBehaviour
                 ArcSurge.PlayChargeFx(ulong.MaxValue - cue.unitIndex, cue.from, cue.to, cue.value);
                 break;
             case ReplayFxCue.ArcZap:
-                ArcSurge.PlayZapFx(cue.from, cue.to, StrikePointsNear(round, cue), cue.value, false);
+                ArcSurge.PlayZapFx(cue.from, cue.to, StrikePointsFor(round, cue), cue.value, true);
+                break;
+            case ReplayFxCue.ArcCancel:
+                ArcSurgeVFX.CancelCharge(ulong.MaxValue - cue.unitIndex);
+                break;
+            case ReplayFxCue.ShieldBlock:
+                if (bodyShown)
+                    ShieldBlockPulse.Play(body.body, cue.to);
+                break;
+            case ReplayFxCue.BulletBlast:
+                Bullet.PlayImpactExplosion(cue.to, cue.value);
+                break;
+            case ReplayFxCue.CameraShake:
+                CameraEffects.PunchAtViewCentre(cue.value);
                 break;
             case ReplayFxCue.PogoLanding:
                 Pogo.PlayLandingFx(cue.to, team);
                 break;
             case ReplayFxCue.LeapLaunch:
-                standIns.TryGetValue((caster.teamIndex, caster.rosterSlot), out StandIn leaper);
                 ShatterLeap.PlayLaunchFx(
                     cue.to,
                     cue.value,
                     ShatterLeap.AbilityTime,
                     team,
-                    leaper?.body != null ? leaper.body.transform : null
+                    bodyShown ? body.body.transform : null
                 );
                 break;
             case ReplayFxCue.LeapImpact:
@@ -805,28 +1165,53 @@ public class ReplayViewer : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Where a surge's arcs land. The live effect is handed its victims; the replay finds them the
-    /// way the ability did, as the enemy bodies standing inside its reach at that moment.
-    /// </summary>
-    private Vector3[] StrikePointsNear(ReplayRound round, ReplayEvent zap)
+    /// <summary>Where a surge's arcs landed, recorded strike by strike alongside the zap.</summary>
+    private Vector3[] StrikePointsFor(ReplayRound round, ReplayEvent zap)
     {
         strikePoints.Clear();
-        int casterTeam = round.units[zap.unitIndex].teamIndex;
-        float reach = zap.value * GameLoop.cellSize;
-        for (int i = 0; i < round.units.Count; i++)
+        foreach (ReplayEvent candidate in round.events)
         {
             if (
-                round.units[i].teamIndex != casterTeam
-                && round.TrySample(i, zap.Time, out Vector3 position, out _, out ReplaySample sample)
-                && sample.Alive
-                && Vector3.Distance(position, zap.from) <= reach
+                candidate.kind == ReplayEventKind.Fx
+                && candidate.cue == ReplayFxCue.ArcStrike
+                && candidate.unitIndex == zap.unitIndex
+                && Mathf.Abs(candidate.Time - zap.Time) <= 0.02f
             )
             {
-                strikePoints.Add(position);
+                strikePoints.Add(candidate.to);
             }
         }
         return strikePoints.ToArray();
+    }
+
+    /// <summary>
+    /// A landed hit, as the victim's own health callback draws it live: the body takes the blow
+    /// (or falls, if it was the last) and the number rises off it.
+    /// </summary>
+    private static void PlayHit(ReplayUnit victim, ReplayEvent hit, StandIn standIn)
+    {
+        bool lethal = (hit.detail & ReplayDetail.LethalHit) != 0;
+        bool crit = (hit.detail & ReplayDetail.CritHit) != 0;
+        float severity = hit.value / Mathf.Max(1f, victim.maxHealth);
+        Vector3 position = standIn?.body != null ? standIn.body.transform.position : hit.from;
+
+        if (standIn?.body != null)
+        {
+            if (lethal)
+            {
+                HitReaction.PlayDeath(
+                    standIn.body,
+                    hit.to,
+                    TeamPalette.BrightForViewer(GameLoop.IsTeamFriendlyToLocalPlayer(victim.teamIndex))
+                );
+                standIn.deathPlayed = true;
+            }
+            else if (standIn.body.activeInHierarchy)
+            {
+                HitReaction.Play(standIn.body, hit.to, severity);
+            }
+        }
+        DamagePopup.Spawn(position, hit.value, Health.ToneFor(severity, lethal), crit);
     }
 
     private void BreakTrails()
@@ -881,7 +1266,7 @@ public class ReplayViewer : MonoBehaviour
     /// under an inactive parent so not one of its behaviours wakes up first — a copy that ran
     /// Unit.Awake or a Bullet's Start would join the match it is only depicting.
     /// </summary>
-    private GameObject MakeDisplayCopy(GameObject prefab, string copyName)
+    private GameObject MakeDisplayCopy(GameObject prefab, string copyName, bool keepPresentation = false)
     {
         if (prefab == null || stage == null)
             return null;
@@ -891,9 +1276,51 @@ public class ReplayViewer : MonoBehaviour
         holder.transform.SetParent(stage, false);
         GameObject copy = Instantiate(prefab, holder.transform);
         copy.name = copyName;
-        CharacterCarousel.StripForDisplay(copy);
+        if (keepPresentation)
+            StripGameplay(copy);
+        else
+            CharacterCarousel.StripForDisplay(copy);
+        foreach (Rigidbody body in copy.GetComponentsInChildren<Rigidbody>(true))
+            DestroyImmediate(body);
         copy.transform.SetParent(stage, true);
         Destroy(holder);
+        return copy;
+    }
+
+    /// <summary>
+    /// Takes the game's own behaviours and the network identity off a unit copy and leaves the rest:
+    /// its canvas and UI graphics, which the health bar is drawn with, and its colliders, which the
+    /// guard orb, the boost ring and the shield footprint all size themselves from and which a
+    /// replayed blast is clipped against.
+    /// </summary>
+    private static void StripGameplay(GameObject copy)
+    {
+        System.Reflection.Assembly game = typeof(ReplayViewer).Assembly;
+        foreach (MonoBehaviour behaviour in copy.GetComponentsInChildren<MonoBehaviour>(true))
+        {
+            if (behaviour == null)
+                continue;
+            System.Type type = behaviour.GetType();
+            if (type.Assembly == game || (type.Namespace?.StartsWith("Unity.Netcode") ?? false))
+                DestroyImmediate(behaviour);
+        }
+    }
+
+    private GameObject MakeBulletCopy(ReplayUnit shooter, ReplayEvent shot)
+    {
+        GameObject prefab = ResolveBulletPrefab(shooter);
+        GameObject copy = MakeDisplayCopy(prefab, "ReplayBullet");
+        if (copy == null)
+            return null;
+
+        List<Material> materials = prefab.GetComponent<Bullet>()?.teamMaterials;
+        Renderer renderer = copy.GetComponentInChildren<Renderer>();
+        if (renderer != null && materials != null && materials.Count >= 2)
+            renderer.sharedMaterial = GameLoop.IsTeamFriendlyToLocalPlayer(shooter.teamIndex)
+                ? materials[0]
+                : materials[1];
+        if ((shot.detail & ReplayDetail.VolleyShot) != 0)
+            TripleVolley.ApplyVolleyVisualDimensions(copy);
         return copy;
     }
 
