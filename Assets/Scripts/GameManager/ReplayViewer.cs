@@ -596,6 +596,7 @@ public class ReplayViewer : MonoBehaviour
         closeOnLanding = false;
 
         RestoreLiveUnits();
+        boundHud?.ClearReplayCardHealth();
         foreach (Vector2Int cell in reshownWalls)
         {
             if (loop != null && loop.TryGetWallInstance(cell, out GameObject wall))
@@ -776,9 +777,14 @@ public class ReplayViewer : MonoBehaviour
         shownTime = Mathf.Clamp(time, 0f, round.Duration);
 
         bool continuous = poseRound == roundNumber && Mathf.Abs(shownTime - poseTime) <= TrailBreakSeconds;
+        bool advancing =
+            poseRound == roundNumber
+            && shownTime > poseTime
+            && shownTime - poseTime <= MaxCueCatchUpSeconds;
         if (poseRound != roundNumber && round.hasHill)
             loop.ShowReplayHill(round.hill);
         PoseStandIns(round, shownTime);
+        ShowCardHealth(round, shownTime, advancing);
         ShowWallsAt(roundNumber, shownTime);
         ShowSmoke(round, shownTime);
         ShowFog(round, shownTime);
@@ -828,6 +834,38 @@ public class ReplayViewer : MonoBehaviour
                 standIn.canvasHeight,
                 nearest.health,
                 unit.maxHealth
+            );
+        }
+    }
+
+    /// <summary>
+    /// Puts every card on both strips at its unit's recorded health and life, so a hit replayed
+    /// knocks the card and a death replayed turns it over, exactly as the live round did. Only
+    /// playback moving forward animates; a scrub or a cut simply sets the cards.
+    /// </summary>
+    private void ShowCardHealth(ReplayRound round, float time, bool advancing)
+    {
+        if (boundHud == null)
+            return;
+
+        for (int i = 0; i < round.units.Count; i++)
+        {
+            ReplayUnit unit = round.units[i];
+            if (
+                unit.rosterSlot >= RosterRules.UnitsPerPlayer
+                || !round.TrySample(i, time, out _, out _, out ReplaySample sample)
+            )
+            {
+                continue;
+            }
+
+            boundHud.SetReplayCardHealth(
+                GameLoop.IsTeamFriendlyToLocalPlayer(unit.teamIndex),
+                unit.rosterSlot,
+                sample.health,
+                unit.maxHealth,
+                sample.Alive,
+                advancing
             );
         }
     }

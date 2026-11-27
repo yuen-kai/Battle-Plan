@@ -469,7 +469,8 @@ public class GameHUDController : MonoBehaviour
         int cooldownRoundsRemaining,
         float currentHealth,
         float maxHealth,
-        bool alive
+        bool alive,
+        bool animate = false
     )
     {
         if (!TryGetEnemyCard(cardIndex, out UnitCardElement card))
@@ -481,8 +482,50 @@ public class GameHUDController : MonoBehaviour
             cooldownRoundsRemaining,
             currentHealth,
             maxHealth,
-            alive
+            alive,
+            animate
         );
+    }
+
+    public void SetCardHealth(
+        int cardIndex,
+        float currentHealth,
+        float maxHealth,
+        bool alive,
+        bool animate
+    )
+    {
+        if (TryGetCard(cardIndex, out UnitCardElement card))
+            card.SetHealth(currentHealth, maxHealth, alive, animate);
+    }
+
+    /// <summary>
+    /// Shows a replayed moment on the card strips in place of the live board, until
+    /// <see cref="ClearReplayCardHealth"/> hands them back.
+    /// </summary>
+    public void SetReplayCardHealth(
+        bool friendly,
+        int cardIndex,
+        float currentHealth,
+        float maxHealth,
+        bool alive,
+        bool animate
+    )
+    {
+        UnitCardElement card = null;
+        bool found = friendly
+            ? TryGetCard(cardIndex, out card)
+            : TryGetEnemyCard(cardIndex, out card);
+        if (found)
+            card.ShowReplayHealth(currentHealth, maxHealth, alive, animate);
+    }
+
+    public void ClearReplayCardHealth()
+    {
+        foreach (UnitCardElement card in cards)
+            card?.ClearReplayHealth();
+        foreach (UnitCardElement card in enemyCards)
+            card?.ClearReplayHealth();
     }
 
     public void SetCardsInteractable(bool interactable)

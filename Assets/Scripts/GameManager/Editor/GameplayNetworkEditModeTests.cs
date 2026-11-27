@@ -2510,10 +2510,7 @@ public class GameplayNetworkEditModeTests
                 host.Q<Label>("unit-card-health-value").text,
                 Is.EqualTo("75 / 120 HP")
             );
-            Assert.That(
-                host.Q<Label>("unit-card-ability").text,
-                Is.EqualTo("Area Lock · ready")
-            );
+            Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Area Lock"));
             Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ACTIVE"));
             Assert.That(
                 host.Q<VisualElement>("enemy-unit-card-0-root")
@@ -2528,23 +2525,84 @@ public class GameplayNetworkEditModeTests
             Assert.That(
                 host.Q<VisualElement>("unit-card-flip-indicator")
                     .ClassListContains("hidden"),
-                Is.True,
-                "Enemy status cards must not expose the friendly mode indicator."
+                Is.False,
+                "Enemy cards carry the same charge disc as the dock."
             );
+            Assert.That(card.IsFaceDown, Is.False);
 
             card.ConfigureEnemy(data, true, 2, 0f, 120f, false);
 
             Assert.That(host.Q<Label>("unit-card-health-value").text, Is.EqualTo("0 / 120 HP"));
-            Assert.That(
-                host.Q<Label>("unit-card-ability").text,
-                Is.EqualTo("Area Lock · ready in 2 rounds")
-            );
+            Assert.That(host.Q<Label>("unit-card-ability").text, Is.EqualTo("Area Lock"));
+            Assert.That(host.Q<Label>("unit-card-cooldown").text, Is.EqualTo("2"));
+            Assert.That(card.IsFaceDown, Is.True, "An eliminated unit's card lies face down.");
             Assert.That(host.Q<Label>("unit-card-state").text, Is.EqualTo("ELIMINATED"));
             Assert.That(
                 host.Q<VisualElement>("enemy-unit-card-0-root")
                     .ClassListContains("unit-card--enemy-eliminated"),
                 Is.True
             );
+        }
+        finally
+        {
+            card.Dispose();
+            Object.DestroyImmediate(data);
+        }
+    }
+
+    [Test]
+    public void UnitCardTurnsFaceDownOnDeathAndFollowsReplayUntilCleared()
+    {
+        const string cardPath = "Assets/UI/Shared/Templates/UnitCard.uxml";
+        VisualTreeAsset cardAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+            cardPath
+        );
+        Assert.That(cardAsset, Is.Not.Null, $"Could not import {cardPath}.");
+
+        TemplateContainer host = cardAsset.Instantiate();
+        UnitCardElement card = new(host, 0);
+        UnitData data = ScriptableObject.CreateInstance<UnitData>();
+        data.unitName = "Soldier";
+        data.maxHealth = 100f;
+        try
+        {
+            card.Configure(data, false, 0, () => { });
+            Assert.That(
+                host.Q<VisualElement>("unit-card-health-fill").style.width.value.value,
+                Is.EqualTo(100f),
+                "A freshly configured card starts at full health."
+            );
+
+            card.SetHealth(0f, 100f, false, false);
+            Assert.That(card.IsFaceDown, Is.True);
+            Assert.That(
+                host.Q<VisualElement>("unit-card-back").ClassListContains("hidden"),
+                Is.False
+            );
+            Assert.That(host.Q<Label>("unit-card-back-name").text, Is.EqualTo("Soldier"));
+
+            card.SetDisabled(true);
+            VisualElement cardRoot = host.Q<VisualElement>("unit-card-0-root");
+            Assert.That(cardRoot.ClassListContains("unit-card--disabled"), Is.True);
+
+            card.ShowReplayHealth(40f, 100f, true, false);
+            Assert.That(card.IsFaceDown, Is.False, "A replayed moment before the death stands the card up.");
+            Assert.That(
+                cardRoot.ClassListContains("unit-card--disabled"),
+                Is.False,
+                "A replayed card looks as it did then, not as the live board has it."
+            );
+            Assert.That(
+                host.Q<VisualElement>("unit-card-health-fill").style.width.value.value,
+                Is.EqualTo(40f)
+            );
+
+            card.SetHealth(0f, 100f, false, false);
+            Assert.That(card.IsFaceDown, Is.False, "Live updates wait behind a replay.");
+
+            card.ClearReplayHealth();
+            Assert.That(card.IsFaceDown, Is.True, "Leaving the replay hands the card back to the live board.");
+            Assert.That(cardRoot.ClassListContains("unit-card--disabled"), Is.True);
         }
         finally
         {

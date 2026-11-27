@@ -369,7 +369,23 @@
 
 .enemy-unit-cards {
     flex-grow: 0;
-    height: 78px;
+    height: 84px;
+}
+
+/* A dying card lifts off the strip as it turns over, so the strips do not clip their cards.
+   On a phone the dock scrolls sideways and has to clip, and the lift is scaled down to match. */
+.unit-cards,
+.enemy-unit-cards,
+.unit-cards .unity-scroll-view__content-viewport,
+.enemy-unit-cards .unity-scroll-view__content-viewport {
+    overflow: visible;
+}
+
+.phone .unit-cards,
+.phone .enemy-unit-cards,
+.phone .unit-cards .unity-scroll-view__content-viewport,
+.phone .enemy-unit-cards .unity-scroll-view__content-viewport {
+    overflow: hidden;
 }
 
 .enemy-unit-cards .unity-scroll-view__content-container {
@@ -857,9 +873,19 @@
     border-color: var(--toy-danger-copy);
 }
 
-/* === UNIT CARDS === */
+/* === UNIT CARDS ===
+
+   One card for both crews: portrait, whose it is, what its round can be spent on, the charge
+   disc, and a segmented health bar across the full foot of the card. The only thing that says
+   which crew a card belongs to is its leading rule, team blue or team red, the same paint the
+   bodies on the board wear.
+
+   Each card is a physical slab rather than a flat plate: lit along the top, a sheen falling down
+   the face, a three-pixel edge of thickness under the health bar, and a soft shadow on the band
+   beneath it. That depth is what lets a hit knock the card and a death turn it face down. */
 
 .unit-card-host {
+    position: relative;
     flex-grow: 1;
     flex-shrink: 0;
     width: 0;
@@ -874,12 +900,8 @@
 }
 
 .enemy-unit-card-host {
-    flex-grow: 1;
-    flex-shrink: 0;
-    width: 0;
     min-width: 220px;
     max-width: 320px;
-    min-height: 72px;
     margin-right: 6px;
 }
 
@@ -887,61 +909,122 @@
     margin-right: 0;
 }
 
-/* The leading rule is the card's identity: team colour at rest, the selection
-   mark while the card is the one being edited, and the accent once its ability
-   is the order. A player scanning the dock reads that three-pixel edge long
-   before they read the name on the card. */
+.unit-card-shadow {
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    bottom: 0;
+    height: 10px;
+    background-image: url("project://database/Assets/UI/Shared/Textures/ScrimTop.png");
+    -unity-background-scale-mode: stretch-to-fill;
+    -unity-background-image-tint-color: rgba(4, 7, 9, 0.75);
+}
+
 .unit-card {
     position: relative;
     flex-grow: 1;
     width: 100%;
-    height: 100%;
-    min-height: 76px;
+    min-height: 70px;
+    margin-bottom: 5px;
     flex-direction: row;
     overflow: hidden;
     background-color: var(--toy-surface-raised);
+    background-image: url("project://database/Assets/UI/Shared/Textures/PanelSheen.png");
+    -unity-background-scale-mode: stretch-to-fill;
     border-width: var(--toy-stroke-thin);
     border-color: var(--toy-edge);
+    border-top-color: var(--toy-edge-strong);
     border-left-width: var(--toy-accent-rule);
     border-left-color: var(--toy-team-friendly);
+    border-bottom-width: 3px;
+    border-bottom-color: rgb(11, 15, 18);
     border-radius: var(--toy-radius-md);
 }
 
-/* Selection and "ability ordered" were two shades of one orange, which left the
-   loudest colour in the interface meaning both "you are pointing at this" and
-   "this is what the unit will do with its round". They are separate facts, so
-   they are now separate marks. Selection takes --toy-select — on the HUD's dark
-   chrome that is the near-white everything else inverts to — and it moves the
-   line work only, leaving the accent free to answer the question the dock
-   exists for. */
+.unit-card--enemy {
+    border-left-color: var(--toy-team-enemy);
+}
+
+/* Selection moves the line work only, leaving the accent free to mean "ordered". The slab's
+   foot takes a darker step of the same outline so the card keeps its thickness when lit. */
 .unit-card--selected {
     border-color: var(--toy-select);
     border-left-color: var(--toy-select);
+    border-bottom-color: var(--toy-select-pressed);
 }
 
-/* Ordered. The only filled card on the strip, so the dock answers "what have I
-   already committed" from across the screen without a word being read. */
 .unit-card--ability {
     background-color: var(--toy-primary-tint);
     border-color: var(--toy-primary-pressed);
     border-left-color: var(--toy-primary);
+    border-bottom-color: rgb(92, 55, 6);
 }
 
-/* Ordered and being edited at once. The accent keeps the fill and the leading
-   rule, selection keeps the outline, and neither fact hides the other. */
 .unit-card--ability.unit-card--selected {
     border-color: var(--toy-select);
     border-left-color: var(--toy-primary);
+    border-bottom-color: var(--toy-select-pressed);
 }
 
-/* Fading the card fades its type with it, and which unit is gone is still
-   something the player is reading. Held high enough that the ability line stays
-   above 4.5:1 against the faded plate; the red rule and the state line are what
-   say the card is out. */
 .unit-card--disabled {
-    opacity: 0.8;
-    border-color: var(--toy-danger-pressed);
     border-left-color: var(--toy-danger);
+}
+
+/* Face down. The back is the same slab with nothing on it but a framed hatch and the name of
+   the unit that fell, so the strip keeps its places and still says who is gone. */
+.unit-card--down {
+    background-color: var(--toy-ground);
+    background-image: none;
+    border-color: var(--toy-disabled-border);
+    border-top-color: var(--toy-edge);
+    border-left-color: var(--toy-disabled-ink);
+    border-bottom-color: rgb(8, 11, 13);
+}
+
+.unit-card__back {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.unit-card__back-hatch {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 6px;
+    bottom: 6px;
+    background-image: url("project://database/Assets/UI/Shared/Textures/Hatch.png");
+    background-repeat: repeat;
+    background-size: 18px 18px;
+    -unity-background-image-tint-color: rgba(173, 199, 209, 0.16);
+    border-width: 1px;
+    border-color: var(--toy-divider);
+}
+
+.unit-card__back-name {
+    padding: 2px 10px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 15px;
+    color: var(--toy-text-muted);
+    letter-spacing: var(--toy-track-label);
+    background-color: var(--toy-ground);
+    white-space: nowrap;
+}
+
+/* Darkens the face as it turns edge-on, which is most of what makes a flat flip read as a turn
+   in depth. Driven by UnitCardElement and fully clear at rest. */
+.unit-card__shade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    opacity: 0;
+    background-color: rgb(0, 0, 0);
 }
 
 .unit-card__select {
@@ -949,7 +1032,8 @@
     flex-grow: 1;
     width: 100%;
     min-width: 0;
-    padding: 0;
+    padding: 0 0 6px 0;
+    margin: 0;
     flex-direction: row;
     align-items: stretch;
     overflow: hidden;
@@ -984,6 +1068,11 @@
     border-color: var(--toy-focus);
 }
 
+.unit-card--enemy .unit-card__select,
+.unit-card--enemy .unit-card__select:disabled {
+    opacity: 1;
+}
+
 .unit-card__ability-vignette {
     position: absolute;
     left: 0;
@@ -998,25 +1087,11 @@
     transition-property: opacity;
 }
 
-/* A warm cast behind the card, not a graphic on top of it. At the old 0.42 the flare
-   painted opaque brown shapes across the label; even at 0.13 its peak was still a
-   solid brown. The amber border and label carry the state, so this only needs to
-   warm the surface. */
 .unit-card--ability .unit-card__ability-vignette {
     opacity: 0.06;
 }
 
-/* 4:3, the shape of a portrait file, so the picture fills the frame instead of
-   being fitted into a box of a different shape and leaving bands of bare plate
-   over and under the character.
-
-   Height is what gives way to get there, not width. A plate that keeps the
-   card's full 78 can only hold a 4:3 picture at 104 wide, and the copy cannot
-   pay that: at 1700 the ability line already has ten pixels less than it wants
-   with the frame at its old 78. So the plate hugs the picture and centres in the
-   row, which costs the copy nothing and crops nothing off the character. The two
-   numbers are tied by hand — USS has no aspect-ratio property — so anything that
-   changes one changes the other. */
+/* 4:3, the shape of a portrait file; the two numbers are tied by hand. */
 .unit-card__portrait {
     position: relative;
     align-self: center;
@@ -1032,45 +1107,78 @@
     flex-grow: 1;
     min-width: 0;
     justify-content: center;
-    padding: 8px 12px;
+    padding: 6px 12px;
+    -unity-text-align: middle-left;
 }
 
-/* Shared skeleton. The two strips are different components wearing one template,
-   so each sets its own size where it needs to differ. */
 .unit-card__name {
     -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 11px;
+    color: var(--toy-text-copy);
+    letter-spacing: var(--toy-track-label);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.unit-card__ability {
+    margin-top: 2px;
+    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
+    font-size: 19px;
     color: var(--toy-text);
     letter-spacing: var(--toy-track-label);
     white-space: nowrap;
     overflow: hidden;
 }
 
+.unit-card--ability-cooldown .unit-card__ability {
+    color: var(--toy-text-copy);
+}
+
+.unit-card--ability .unit-card__ability {
+    color: var(--toy-primary-copy);
+}
+
+/* Kept for the state the card reports to tests and tooling; the card face itself says it by
+   turning over. */
+.unit-card__state,
+.unit-card__health-value {
+    display: none;
+}
+
+/* One continuous bar across the full width of the card's foot, under the portrait as well as
+   the copy, so the strip reads as one row of health at a glance. */
 .unit-card__health {
-    min-height: 14px;
-    margin-top: 5px;
-    flex-direction: row;
-    align-items: center;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 6px;
 }
 
 .unit-card__health-track {
     position: relative;
     flex-grow: 1;
-    height: 9px;
-    margin-right: 9px;
     overflow: hidden;
     background-color: var(--toy-inset);
-    border-width: var(--toy-stroke-thin);
-    border-color: var(--toy-edge);
-    border-radius: 0;
+    border-top-width: 1px;
+    border-top-color: rgba(0, 0, 0, 0.55);
 }
 
-/* The fill was danger red at every level on both teams, so its colour repeated
-   what its width already said. UnitCardElement drives these three from the
-   thresholds in TeamPalette, which the world-space bar over the unit reads too
-   — the two bars show one number and used to disagree about its colour. */
+.unit-card__health-loss,
 .unit-card__health-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
     width: 0%;
-    height: 100%;
+}
+
+/* The chunk a hit just took, held for a beat in pale ink and then drained into the fill. */
+.unit-card__health-loss {
+    background-color: rgba(255, 236, 214, 0.85);
+}
+
+.unit-card__health-fill {
     background-color: var(--toy-health-high);
     transition-duration: var(--toy-motion-fast);
     transition-property: background-color;
@@ -1088,116 +1196,7 @@
     background-color: var(--toy-health-critical);
 }
 
-/* Drawn over the fill rather than under it, so the chunks survive at every
-   length instead of disappearing as the bar empties. */
-.unit-card__health-ticks {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    background-image: url("project://database/Assets/UI/Shared/Textures/HealthTicks.png");
-    background-repeat: repeat;
-    background-size: 14px 8px;
-}
-
-.unit-card__health-value {
-    min-width: 78px;
-    font-size: 14px;
-    color: var(--toy-text);
-    -unity-text-align: middle-right;
-}
-
-.unit-card__ability {
-    color: var(--toy-text-copy);
-    white-space: normal;
-}
-
-/* === ABILITY CARDS ===
-
-   The dock is five ability buttons, not a second roster.
-
-   A unit's health, its position and its cooldown are all readable on the board
-   itself: the bar above it, the square under it, and the charge dial cut into
-   its base plate. What the board cannot take is the one order that is not a
-   place — spend this unit's round on its ability instead of on movement — so
-   that is the only thing these cards are for, and the ability is the headline
-   with the unit as the kicker above it. That is the exact inverse of the contact
-   cards along the top edge, which is what stops the two strips reading as one
-   component printed at two sizes. */
-
-/* Both lines hang off one left edge. Centred, they sat on two different widths
-   and the kicker floated above the name aligned to nothing; the portrait is
-   already a hard left edge, so the type may as well use it. Inherited by both
-   labels, and set here because the card's button ancestor centres its text. */
-.unit-card--friendly .unit-card__copy {
-    -unity-text-align: middle-left;
-}
-
-/* Whose. The portrait beside it has already answered this, so the line only
-   confirms it. De-emphasis is carried by size and tracking rather than by
-   value: the muted step lands at 4.5:1 on a card, which is not a quiet label at
-   eleven pixels, it is a squint. Held clear of the state mark on its right. */
-.unit-card--friendly .unit-card__name {
-    padding-right: 76px;
-    font-size: 11px;
-    color: var(--toy-text-copy);
-}
-
-/* What pressing the card orders, and the only word on it a player should have
-   to hunt for. The display face, because this is chrome rather than prose. */
-.unit-card--friendly .unit-card__ability {
-    margin-top: 2px;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: 19px;
-    color: var(--toy-text);
-    letter-spacing: var(--toy-track-label);
-    white-space: nowrap;
-    overflow: hidden;
-}
-
-/* Recharging, so the name is a fact about the unit rather than an offer. Kept a
-   real step above muted: the count in the disc is what says unavailable, and it
-   says it without relying on the colour. */
-.unit-card--friendly.unit-card--ability-cooldown .unit-card__ability {
-    color: var(--toy-text-copy);
-}
-
-/* Ordered. */
-.unit-card--friendly.unit-card--ability .unit-card__ability {
-    color: var(--toy-primary-copy);
-}
-
-/* A dead unit's card keeps its place so the dock does not reflow mid-round, and
-   says so with a mark laid over the copy rather than a line stacked under it: a
-   card sized for two lines cannot grow a third, and the one that tried was
-   clipped top and bottom. Same treatment the contact strip already gives the
-   same fact. */
-.unit-card--friendly .unit-card__state {
-    position: absolute;
-    top: 0;
-    right: 0;
-    min-height: 13px;
-    margin-top: 0;
-    font-size: 11px;
-}
-
-.unit-card__state {
-    min-height: 0;
-    margin-top: 4px;
-    -unity-font-definition: url("project://database/Assets/Fonts/OswaldCaps/OswaldCaps-Regular UI SDF.asset");
-    font-size: 13px;
-    color: var(--toy-danger-copy);
-    letter-spacing: var(--toy-track-label);
-}
-
-/* The ability slot is a disc, because every ability in every game of this shape
-   is a disc: round frame, and a number over it while it recharges.
-
-   It sits in the row rather than pinned over a corner of the card, so the card
-   reads left to right as portrait, name, charge, and nothing has to reserve
-   space for anything. Only the dock ever draws it — the contact strip hides its
-   own — so its states below are written unscoped. */
+/* The ability slot is a disc: round frame, and a number over it while it recharges. */
 .unit-card__flip-indicator {
     flex-shrink: 0;
     align-self: center;
@@ -1214,9 +1213,6 @@
     transition-property: border-color, background-color;
 }
 
-/* The flip glyph went with the mechanic that named it: a card with one face is
-   not turned over, it is pressed. Its node stays on as the charged pip, which is
-   what the disc shows when it has no count to show instead. */
 .unit-card__flip-icon {
     position: absolute;
     width: 9px;
@@ -1241,9 +1237,6 @@
     border-color: var(--toy-text-copy);
 }
 
-/* Ordered. The disc is the only place the accent is spent at full strength and
-   only ever on the cards whose round is already committed, which is what keeps
-   it meaning "this is the action" rather than "this is a card". */
 .unit-card--ability .unit-card__flip-indicator {
     background-color: var(--toy-primary);
     border-color: var(--toy-primary-hover);
@@ -1253,9 +1246,6 @@
     background-color: var(--toy-text-on-accent);
 }
 
-/* Recharging. The pip gives way to the rounds still to come, the same number the
-   dial on the unit's own base plate is working through, so the count is legible
-   without the colour and the two surfaces never disagree. */
 .unit-card__flip-indicator--cooldown {
     background-color: var(--toy-inset);
     border-color: var(--toy-divider);
@@ -1269,97 +1259,10 @@
     color: var(--toy-text-muted);
 }
 
-/* A dead unit has no round to spend, so its card drops the disc rather than
-   dimming it. Faded, a charged pip still reads as an ability sitting ready, and
-   the one thing this card must not say is "press me". */
 .unit-card--disabled .unit-card__flip-indicator {
     display: none;
 }
 
-/* === ENEMY CONTACT CARDS === */
-
-/* The enemy strip's whole identity is its leading rule, so it carries the team
-   red the enemy units on the board are painted with, not the destructive-action
-   red. */
-.unit-card--enemy {
-    min-height: 72px;
-    background-color: var(--toy-surface-quiet);
-    border-color: var(--toy-edge);
-    border-left-color: var(--toy-team-enemy);
-}
-
-/* On a dark card "stronger" means brighter, so the active enemy ring steps up to
-   the light copy red rather than down to the deep one. */
-.unit-card--enemy-active {
-    border-color: var(--toy-team-enemy-copy);
-    border-left-color: var(--toy-team-enemy-copy);
-}
-
-.unit-card--enemy-eliminated {
-    background-color: var(--toy-disabled-surface);
-    border-color: var(--toy-disabled-border);
-    border-left-color: var(--toy-text-muted);
-}
-
-.unit-card--enemy .unit-card__select {
-    min-width: 0;
-    background-color: var(--toy-transparent);
-    border-width: 0;
-    opacity: 1;
-}
-
-.unit-card--enemy .unit-card__select:disabled {
-    background-color: var(--toy-transparent);
-    opacity: 1;
-}
-
-.unit-card--enemy .unit-card__copy {
-    position: relative;
-    justify-content: center;
-    padding: 6px 9px;
-}
-
-.unit-card--enemy .unit-card__name {
-    padding-right: 84px;
-    font-size: 14px;
-    white-space: nowrap;
-}
-
-.unit-card--enemy .unit-card__health-track {
-    height: 7px;
-}
-
-.unit-card--enemy .unit-card__ability {
-    margin-top: 3px;
-    font-size: 12px;
-    white-space: normal;
-}
-
-.unit-card--enemy .unit-card__state {
-    position: absolute;
-    top: 0;
-    right: 0;
-    min-height: 13px;
-    margin-top: 0;
-    font-size: 12px;
-    color: var(--toy-danger-copy);
-}
-
-.unit-card--enemy-eliminated .unit-card__name,
-.unit-card--enemy-eliminated .unit-card__ability,
-.unit-card--enemy-eliminated .unit-card__health-value {
-    color: var(--toy-text-muted);
-}
-
-.unit-card--enemy-eliminated .unit-card__health-fill {
-    background-color: var(--toy-text-muted);
-}
-
-.unit-card--enemy-eliminated .unit-card__state {
-    color: var(--toy-text-muted);
-}
-
-.unit-card--enemy .unit-card__flip-indicator,
 .unit-card--enemy .unit-card__ability-vignette {
     display: none;
 }
@@ -1980,62 +1883,17 @@
     max-width: 280px;
 }
 
-.compact .unit-card__select {
-    flex-grow: 1;
-    width: 100%;
-    min-width: 0;
-}
-
-/* A compact ability card bottoms out at 240 wide, where the ability line has 51
-   pixels to spare and no more, so the frame steps down rather than the copy. Same
-   ratio, same picture size as the old 48-wide frame rendered anyway — it is the
-   plate around it that stops being oversized. Friendly only: the enemy card has
-   room to spare at this breakpoint and keeps the full frame. */
-.compact .unit-card--friendly .unit-card__portrait {
+.compact .unit-card__portrait {
     width: 48px;
     min-width: 48px;
     height: 36px;
 }
 
 .compact .unit-card__copy {
-    padding: 6px 42px 6px 9px;
-}
-
-.compact .unit-card__name {
-    font-size: 15px;
-}
-
-.compact .unit-card__ability {
-    font-size: 10px;
-}
-
-.compact .unit-card__state {
-    font-size: 10px;
-}
-
-.compact .unit-card--enemy .unit-card__name {
-    padding-right: 78px;
-}
-
-.compact .unit-card--enemy .unit-card__state,
-.compact .unit-card--enemy .unit-card__health-value {
-    font-size: 11px;
-}
-
-/* The sizes above were written when both strips shared one hierarchy. An ability
-   card inverts it, so it restates its own here rather than inheriting a 15px
-   kicker over a 10px headline. The copy also stops reserving a column for the
-   disc, which now sits in the row beside it. */
-.compact .unit-card--friendly .unit-card__copy {
     padding: 6px 9px;
 }
 
-.compact .unit-card--friendly .unit-card__name {
-    padding-right: 68px;
-    font-size: 11px;
-}
-
-.compact .unit-card--friendly .unit-card__ability {
+.compact .unit-card__ability {
     font-size: 17px;
 }
 
@@ -2215,37 +2073,14 @@
 }
 
 .phone .unit-card {
-    min-height: 92px;
-}
-
-.phone .unit-card__select {
-    width: 100%;
-    min-width: 0;
-    min-height: 84px;
+    min-height: 86px;
 }
 
 .phone .unit-card__copy {
-    padding: 8px 42px 8px 9px;
-}
-
-.phone .unit-card__name {
-    font-size: 15px;
-}
-
-.phone .unit-card__ability {
-    font-size: 11px;
-}
-
-.phone .unit-card--friendly .unit-card__copy {
     padding: 8px 9px;
 }
 
-.phone .unit-card--friendly .unit-card__name {
-    padding-right: 68px;
-    font-size: 11px;
-}
-
-.phone .unit-card--friendly .unit-card__ability {
+.phone .unit-card__ability {
     font-size: 17px;
 }
 
@@ -2257,31 +2092,19 @@
 .phone .enemy-unit-card-host {
     width: 210px;
     min-width: 210px;
+    max-width: 210px;
 }
 
 .phone .unit-card--enemy {
-    min-height: 72px;
-    flex-direction: row;
-}
-
-.phone .unit-card--enemy .unit-card__select {
-    width: 100%;
-    min-height: 0;
+    min-height: 66px;
 }
 
 .phone .unit-card--enemy .unit-card__copy {
     padding: 5px 8px;
 }
 
-.phone .unit-card--enemy .unit-card__name {
-    padding-right: 78px;
-    font-size: 14px;
-}
-
-.phone .unit-card--enemy .unit-card__ability,
-.phone .unit-card--enemy .unit-card__state,
-.phone .unit-card--enemy .unit-card__health-value {
-    font-size: 10px;
+.phone .unit-card--enemy .unit-card__ability {
+    font-size: 15px;
 }
 
 .phone .phase-notch .phase-label {
@@ -2429,9 +2252,8 @@
 
 /* The ability cards' own height is already the floor a short viewport wants, so
    there is nothing left here to take off them. */
-.short .enemy-unit-card-host,
-.short .unit-card--enemy {
-    min-height: 72px;
+.short .enemy-unit-card-host {
+    min-height: 76px;
 }
 
 .short .phase-notch .phase-label {

@@ -1588,7 +1588,7 @@ public class GameLoop : NetworkBehaviour
                 teamNames[teamIndex]
             );
         }
-        RefreshAllEnemyUnitCards();
+        RefreshAllUnitCards();
     }
 
     void SetupUnitsAndCards(
@@ -1723,7 +1723,7 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
-    private void RefreshAllEnemyUnitCards()
+    private void RefreshAllUnitCards()
     {
         if (!IsServer || NetworkManager == null)
             return;
@@ -1738,13 +1738,20 @@ public class GameLoop : NetworkBehaviour
                 continue;
             }
 
+            foreach (GameObject ownUnit in GetTeamUnits(viewerTeamIndex))
+                SendFriendlyUnitCardHealth(ownUnit, viewerClientId, false);
             int enemyTeamIndex = GetEnemyTeamIndex(viewerTeamIndex);
             foreach (GameObject enemyUnit in GetTeamUnits(enemyTeamIndex))
-                SendEnemyUnitCardStatus(enemyUnit, viewerClientId);
+                SendEnemyUnitCardStatus(enemyUnit, viewerClientId, false);
         }
     }
 
-    public void NotifyEnemyUnitStatusChanged(GameObject unit)
+    /// <summary>
+    /// Sends a unit's health, life and charge to the card each crew keeps for it: its owner's dock
+    /// and the opponent's contact strip. A board being restored rather than played updates the cards
+    /// without shaking or turning them.
+    /// </summary>
+    public void NotifyUnitCardStatusChanged(GameObject unit)
     {
         if (
             !IsServer
@@ -1756,22 +1763,62 @@ public class GameLoop : NetworkBehaviour
             return;
         }
 
+        bool animate = !Health.SuppressPresentation;
         for (int viewerTeamIndex = 0; viewerTeamIndex < TeamCount; viewerTeamIndex++)
         {
             if (
-                viewerTeamIndex == identity.TeamIndex
-                || !TryGetHumanClientId(viewerTeamIndex, out ulong viewerClientId)
+                !TryGetHumanClientId(viewerTeamIndex, out ulong viewerClientId)
                 || !NetworkManager.ConnectedClients.ContainsKey(viewerClientId)
             )
             {
                 continue;
             }
 
-            SendEnemyUnitCardStatus(unit, viewerClientId);
+            if (viewerTeamIndex == identity.TeamIndex)
+                SendFriendlyUnitCardHealth(unit, viewerClientId, animate);
+            else
+                SendEnemyUnitCardStatus(unit, viewerClientId, animate);
         }
     }
 
-    private void SendEnemyUnitCardStatus(GameObject unit, ulong viewerClientId)
+    private void SendFriendlyUnitCardHealth(GameObject unit, ulong viewerClientId, bool animate)
+    {
+        Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+        Health health = unit != null ? unit.GetComponent<Health>() : null;
+        if (
+            identity == null
+            || health == null
+            || identity.RosterSlot < 0
+            || identity.RosterSlot >= RosterRules.UnitsPerPlayer
+        )
+        {
+            return;
+        }
+
+        SetUnitCardHealthClientRpc(
+            identity.RosterSlot,
+            health.CurrentHealth,
+            health.MaxHealth,
+            health.IsAlive,
+            animate,
+            NetworkHelper.ToClient(viewerClientId)
+        );
+    }
+
+    [ClientRpc]
+    private void SetUnitCardHealthClientRpc(
+        int cardIndex,
+        float currentHealth,
+        float maxHealth,
+        bool alive,
+        bool animate,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        GameHUDController.Instance?.SetCardHealth(cardIndex, currentHealth, maxHealth, alive, animate);
+    }
+
+    private void SendEnemyUnitCardStatus(GameObject unit, ulong viewerClientId, bool animate)
     {
         Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
         Health health = unit != null ? unit.GetComponent<Health>() : null;
@@ -1807,6 +1854,7 @@ public class GameLoop : NetworkBehaviour
             health.IsAlive,
             unit.GetComponent<Ability>() != null,
             identity.AbilityCooldownRoundsRemaining,
+            animate,
             NetworkHelper.ToClient(viewerClientId)
         );
     }
@@ -1820,6 +1868,7 @@ public class GameLoop : NetworkBehaviour
         bool alive,
         bool hasAbility,
         int cooldownRoundsRemaining,
+        bool animate,
         ClientRpcParams clientRpcParams = default
     )
     {
@@ -1833,7 +1882,8 @@ public class GameLoop : NetworkBehaviour
             cooldownRoundsRemaining,
             currentHealth,
             maxHealth,
-            alive
+            alive,
+            animate
         );
     }
 
@@ -3083,7 +3133,7 @@ public class GameLoop : NetworkBehaviour
             break;
         }
 
-        NotifyEnemyUnitStatusChanged(unit);
+        NotifyUnitCardStatusChanged(unit);
     }
 
     [ClientRpc]
@@ -6659,7 +6709,7 @@ public class GameLoop : NetworkBehaviour
                 SetCardDisabledClientRpc(i, true, NetworkHelper.ToClient(clientId));
         }
 
-        RefreshAllEnemyUnitCards();
+        RefreshAllUnitCards();
         InitializeCameraPositionClientRpc(teamIndex, NetworkHelper.ToClient(clientId));
         SetCardsInteractableClientRpc(false, NetworkHelper.ToClient(clientId));
         ResendReplayRounds(clientId);
@@ -8222,7 +8272,7 @@ public class GameLoop : NetworkBehaviour
                     NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
                 }
                 unit.GetComponent<Ability>()?.ResetForRespawn();
-                NotifyEnemyUnitStatusChanged(unit);
+                NotifyUnitCardStatusChanged(unit);
             }
 
             // Fog is off once a match is over, but a unit fog had hidden before it died comes back

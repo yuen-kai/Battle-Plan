@@ -262,7 +262,7 @@ public class Health : NetworkBehaviour
         }
         if (currentHealth.Value > 0f)
         {
-            GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
+            GameLoop.Instance?.NotifyUnitCardStatusChanged(gameObject);
             return;
         }
 
@@ -276,7 +276,7 @@ public class Health : NetworkBehaviour
         GetComponent<Movement>()?.ClearTemporaryMoveSpeedBoost();
         ClearDamageReduction();
         GameLoop.Instance?.DisableUnitCard(gameObject);
-        GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
+        GameLoop.Instance?.NotifyUnitCardStatusChanged(gameObject);
 
         // Leave the NetworkObject active through this frame's network update so the final
         // NetworkVariable values can be sent before round-end arbitration.
@@ -377,7 +377,7 @@ public class Health : NetworkBehaviour
         currentHealth.Value = unitData.maxHealth;
         isAlive.Value = true;
         GetComponent<AnimationHandler>()?.PlayAnimation("Idle");
-        GameLoop.Instance?.NotifyEnemyUnitStatusChanged(gameObject);
+        GameLoop.Instance?.NotifyUnitCardStatusChanged(gameObject);
         return true;
     }
 

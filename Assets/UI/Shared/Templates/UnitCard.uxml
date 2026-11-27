@@ -1,20 +1,11 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:VisualElement name="unit-card-shadow" class="unit-card-shadow" picking-mode="Ignore" />
     <ui:VisualElement name="unit-card-root" class="unit-card">
         <ui:Button name="unit-card-select" class="unit-card__select" tooltip="Select this unit">
             <ui:VisualElement name="unit-card-ability-vignette" class="unit-card__ability-vignette" picking-mode="Ignore" />
             <ui:VisualElement name="unit-card-portrait" class="unit-card__portrait" picking-mode="Ignore" />
             <ui:VisualElement class="unit-card__copy" picking-mode="Ignore">
                 <ui:Label name="unit-card-name" text="Unit" class="unit-card__name" picking-mode="Ignore" />
-                <ui:VisualElement name="unit-card-health" class="unit-card__health hidden" picking-mode="Ignore">
-                    <ui:VisualElement class="unit-card__health-track" picking-mode="Ignore">
-                        <ui:VisualElement name="unit-card-health-fill" class="unit-card__health-fill" picking-mode="Ignore" />
-                        <!-- The segment separators sit above the fill, so the bar is chopped into
-                             fixed chunks the way a health bar in this genre is read: "lost two
-                             blocks", not "lost thirteen percent". -->
-                        <ui:VisualElement class="unit-card__health-ticks" picking-mode="Ignore" />
-                    </ui:VisualElement>
-                    <ui:Label name="unit-card-health-value" text="HP UNKNOWN" class="unit-card__health-value mono" picking-mode="Ignore" />
-                </ui:VisualElement>
                 <ui:Label name="unit-card-ability" text="Move only" class="unit-card__ability" picking-mode="Ignore" />
                 <ui:Label name="unit-card-state" class="unit-card__state" picking-mode="Ignore" />
             </ui:VisualElement>
@@ -22,6 +13,18 @@
                 <ui:VisualElement name="unit-card-flip-icon" class="unit-card__flip-icon" picking-mode="Ignore" />
                 <ui:Label name="unit-card-cooldown" class="unit-card__cooldown hidden" picking-mode="Ignore" />
             </ui:VisualElement>
+            <ui:VisualElement name="unit-card-health" class="unit-card__health" picking-mode="Ignore">
+                <ui:VisualElement class="unit-card__health-track" picking-mode="Ignore">
+                    <ui:VisualElement name="unit-card-health-loss" class="unit-card__health-loss" picking-mode="Ignore" />
+                    <ui:VisualElement name="unit-card-health-fill" class="unit-card__health-fill" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:Label name="unit-card-health-value" text="HP UNKNOWN" class="unit-card__health-value" picking-mode="Ignore" />
+            </ui:VisualElement>
         </ui:Button>
+        <ui:VisualElement name="unit-card-back" class="unit-card__back hidden" picking-mode="Ignore">
+            <ui:VisualElement class="unit-card__back-hatch" picking-mode="Ignore" />
+            <ui:Label name="unit-card-back-name" class="unit-card__back-name" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="unit-card-shade" class="unit-card__shade" picking-mode="Ignore" />
     </ui:VisualElement>
 </ui:UXML>

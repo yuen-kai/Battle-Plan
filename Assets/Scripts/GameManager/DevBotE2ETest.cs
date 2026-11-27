@@ -426,13 +426,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
                     : string.Empty;
             bool hasAbility = enemy != null && enemy.GetComponent<Ability>() != null;
             int cooldown = identity != null ? identity.AbilityCooldownRoundsRemaining : 0;
-            string cooldownText = cooldown == 1 ? "1 round" : $"{cooldown} rounds";
-            string expectedAbility =
-                !hasAbility
-                    ? "Move only"
-                    : cooldown == 0
-                        ? $"{data?.abilityName ?? "Ability"} · ready"
-                        : $"{data?.abilityName ?? "Ability"} · ready in {cooldownText}";
+            string expectedAbility = !hasAbility ? "Move only" : data?.abilityName ?? "Ability";
 
             Check(
                 card != null && selectButton != null && !selectButton.enabledInHierarchy,
@@ -703,7 +697,7 @@ public sealed class DevBotE2ETestRunner : MonoBehaviour
         {
             Unit probeIdentity = abilityStatusProbe.GetComponent<Unit>();
             bool startedCooldown = probeIdentity.TryStartAbilityCooldown();
-            loop.NotifyEnemyUnitStatusChanged(abilityStatusProbe);
+            loop.NotifyUnitCardStatusChanged(abilityStatusProbe);
             yield return null;
 
             Label probeAbility = hudRoot
