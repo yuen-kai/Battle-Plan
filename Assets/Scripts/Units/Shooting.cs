@@ -119,6 +119,8 @@ public class Shooting : NetworkBehaviour
         );
     }
 
+    public void ServerClearTargetLock() => ClearTargetLock();
+
     private void ClearTargetLock()
     {
         if (IsServer && targetLock.Value.Active)

@@ -122,6 +122,25 @@ public class Unit : NetworkBehaviour
         ClearStun();
     }
 
+    /// <summary>Clears the round's statuses and sets the ability charge a recorded board had.</summary>
+    public void ServerRestoreState(int cooldownRounds)
+    {
+        if (!IsServer)
+            return;
+        if (stunCoroutine != null)
+        {
+            StopCoroutine(stunCoroutine);
+            stunCoroutine = null;
+        }
+        if (stunState.Value.Active)
+            stunState.Value = default;
+        abilityCooldownRoundsRemaining.Value = Mathf.Clamp(cooldownRounds, 0, Mathf.Max(0, ConfiguredAbilityCooldownRounds));
+        GetComponent<Movement>()?.ClearDiveRecovery();
+        GetComponent<Movement>()?.ClearTemporaryMoveSpeedBoost();
+        GetComponent<Health>()?.ClearDamageReduction();
+        GetComponent<Shooting>()?.ServerClearTargetLock();
+    }
+
     private void ClearStun()
     {
         if (IsServer && stunState.Value.Active)

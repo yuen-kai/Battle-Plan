@@ -41,6 +41,11 @@ public class ReplayViewer : MonoBehaviour
     private const float CasterFlashIntensity = 1.5f;
     private const float BeamFadeSeconds = 0.2f;
 
+    // How long the board has to rest on a round's opening frame before it is handed over to orders,
+    // so stepping or dragging through a round start does not stand a whole board up on the way past.
+    private const float BranchSettleSeconds = 0.3f;
+    private static readonly Color BranchTint = new(0.56f, 0.38f, 1f, 0.13f);
+
     public static bool IsViewing { get; private set; }
 
     private GameLoop loop;
@@ -87,6 +92,12 @@ public class ReplayViewer : MonoBehaviour
     private int poseRound = -1;
     private float poseTime;
     private int smokeChange = -2;
+
+    private bool inBranchSession;
+    private int settleTarget = -1;
+    private float settleShownTime;
+    private float settleSince;
+    private GameObject branchTint;
 
     private readonly Dictionary<int, int> beamRush = new();
     private readonly HashSet<int> beamsFading = new();
@@ -149,7 +160,152 @@ public class ReplayViewer : MonoBehaviour
         if (IsViewing && timelapseElapsed >= 0f)
             AdvanceTimelapse(Time.unscaledDeltaTime);
 
+        if (IsViewing && postMatch)
+            SettleIntoBranch();
+        else if (inBranchSession && !IsViewing)
+            FollowBranch();
+
         RefreshBar();
+        RefreshBranchTint();
+    }
+
+    // === BRANCHES ===
+
+    private bool BranchPlanningHere(out int round)
+    {
+        round = loop.BranchPlanningRound;
+        return inBranchSession && !IsViewing && round >= 0;
+    }
+
+    /// <summary>
+    /// Resting on a position the board can be ordered from — a round's opening frame, or the end of
+    /// the last round with both crews still standing — hands the live board over to orders for that
+    /// round, Chess.com style: the next move made from here is a test of the line, not the line.
+    /// </summary>
+    private void SettleIntoBranch()
+    {
+        int target = -1;
+        if (
+            loop.CanBranch
+            && timelapseElapsed < 0f
+            && Archive.TryGet(shownRound, out ReplayRound round)
+        )
+        {
+            if (shownTime <= RoundStartTolerance)
+                target = shownRound;
+            else if (
+                shownRound == Archive.LatestRoundNumber
+                && shownTime >= round.Duration - RoundStartTolerance
+                && BothCrewsStanding(round)
+            )
+                target = shownRound + 1;
+        }
+
+        if (target < 0)
+        {
+            settleTarget = -1;
+            return;
+        }
+        if (settleTarget != target || !Mathf.Approximately(settleShownTime, shownTime))
+        {
+            settleTarget = target;
+            settleShownTime = shownTime;
+            settleSince = Time.unscaledTime;
+            return;
+        }
+        if (Time.unscaledTime - settleSince < BranchSettleSeconds)
+            return;
+
+        settleTarget = -1;
+        inBranchSession = true;
+        Close(false);
+        loop.BeginBranchPlanning(target);
+    }
+
+    private static bool BothCrewsStanding(ReplayRound round)
+    {
+        if (round.frames.Count == 0)
+            return false;
+        bool[] standing = new bool[GameLoop.TeamCount];
+        ReplaySample[] last = round.frames[^1];
+        for (int i = 0; i < round.units.Count && i < last.Length; i++)
+        {
+            if (last[i].Alive && round.units[i].teamIndex < standing.Length)
+                standing[round.units[i].teamIndex] = true;
+        }
+        return System.Array.TrueForAll(standing, crew => crew);
+    }
+
+    /// <summary>A branch round that ended with a crew wiped out has no next orders; show how it ended.</summary>
+    private void FollowBranch()
+    {
+        if (loop.IsBranchExecuting || loop.BranchPlanningRound >= 0)
+            return;
+        int last = Archive.LatestRoundNumber;
+        if (!Archive.TryGet(last, out ReplayRound round))
+            return;
+        Open(true);
+        ShowAt(last, round.Duration);
+    }
+
+    private void LeaveBranchPlanning()
+    {
+        loop.CancelBranchPlanning();
+        Open(true);
+    }
+
+    private void ExitToResults()
+    {
+        if (IsViewing)
+        {
+            Close(true);
+            return;
+        }
+        loop.EndBranching();
+        inBranchSession = false;
+        boundHud?.ReturnToResults();
+    }
+
+    private void RefreshBranchTint()
+    {
+        bool tinted =
+            IsViewing ? Archive != null && Archive.IsBranchRound(shownRound)
+            : inBranchSession
+                && (
+                    loop.IsBranchExecuting
+                    || (
+                        loop.BranchPlanningRound >= 0
+                        && (
+                            Archive.IsBranchRound(loop.BranchPlanningRound)
+                            || (Archive.HasBranch && !Archive.TryGet(loop.BranchPlanningRound, out _))
+                        )
+                    )
+                );
+
+        if (tinted && branchTint == null)
+            branchTint = BuildBranchTint();
+        if (branchTint != null)
+            branchTint.SetActive(tinted);
+    }
+
+    /// <summary>A violet wash over the deck: the board being shown is a test of the line, not the line.</summary>
+    private static GameObject BuildBranchTint()
+    {
+        GameObject tint = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        tint.name = "ReplayBranchTint";
+        Object.Destroy(tint.GetComponent<Collider>());
+        Rect board = GameLoop.gridBounds;
+        float half = GameLoop.cellSize * 0.5f;
+        tint.transform.SetPositionAndRotation(
+            new Vector3(board.center.x, 0.03f, board.center.y),
+            Quaternion.Euler(90f, 0f, 0f)
+        );
+        tint.transform.localScale = new Vector3(board.width + half * 2f, board.height + half * 2f, 1f);
+        Renderer renderer = tint.GetComponent<Renderer>();
+        renderer.material = new Material(Shader.Find("Sprites/Default")) { color = BranchTint };
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        return tint;
     }
 
     private void LateUpdate()
@@ -191,6 +347,21 @@ public class ReplayViewer : MonoBehaviour
         bool hasRounds = archive != null && archive.Count > 0;
         boundHud.SetWatchReplayAvailable(hasRounds);
 
+        if (!IsViewing && inBranchSession)
+        {
+            boundHud.SetReplayLayer(layer, false);
+            if (loop.IsBranchExecuting || !BranchPlanningHere(out int planning))
+            {
+                boundHud.SetReplayBar(false, false, false, 1f);
+                return;
+            }
+            if (archive.TryGet(planning, out _))
+                boundHud.SetReplayBar(PreviousRound(planning) >= 0, true, true, 0f);
+            else
+                boundHud.SetReplayBar(true, true, true, 1f);
+            return;
+        }
+
         if (!IsViewing)
         {
             bool canReplay = hasRounds && RoundPlanningOpen && !MatchOver;
@@ -217,6 +388,34 @@ public class ReplayViewer : MonoBehaviour
         ReplayArchive archive = Archive;
         if (archive == null || archive.Count == 0)
             return;
+
+        if (BranchPlanningHere(out int planning))
+        {
+            if (archive.TryGet(planning, out _))
+            {
+                LeaveBranchPlanning();
+                ShowAt(planning, 0f);
+                int previous = PreviousRound(planning);
+                if (direction < 0 && previous >= 0)
+                    BeginTimelapse(previous, 0f, false);
+                else if (direction > 0)
+                    BeginTimelapse(NextRound(planning) >= 0 ? NextRound(planning) : planning, 0f, NextRound(planning) < 0);
+                return;
+            }
+
+            if (direction > 0)
+            {
+                ExitToResults();
+                return;
+            }
+            int head = archive.LatestRoundNumber;
+            if (!archive.TryGet(head, out ReplayRound headRound))
+                return;
+            LeaveBranchPlanning();
+            ShowAt(head, headRound.Duration);
+            BeginTimelapse(head, 0f, false);
+            return;
+        }
 
         if (!IsViewing)
         {
@@ -257,6 +456,23 @@ public class ReplayViewer : MonoBehaviour
             return;
 
         bool atLiveEnd = progress >= 1f - LiveEndTolerance;
+        if (BranchPlanningHere(out int planning))
+        {
+            if (archive.TryGet(planning, out ReplayRound planned))
+            {
+                if (progress <= LiveEndTolerance)
+                    return;
+                LeaveBranchPlanning();
+                ShowAt(planning, Mathf.Clamp01(progress) * planned.Duration);
+                return;
+            }
+            if (atLiveEnd || !archive.TryGet(archive.LatestRoundNumber, out ReplayRound last))
+                return;
+            LeaveBranchPlanning();
+            ShowAt(last.roundNumber, Mathf.Clamp01(progress) * last.Duration);
+            return;
+        }
+
         if (!IsViewing)
         {
             if (atLiveEnd || !RoundPlanningOpen || MatchOver)
@@ -300,6 +516,7 @@ public class ReplayViewer : MonoBehaviour
             break;
         }
 
+        loop.NotifyRecapStarted();
         boundHud?.HideResultsForReplay();
         Open(true);
         ShowAt(first, 0f);
@@ -390,7 +607,14 @@ public class ReplayViewer : MonoBehaviour
         shownRound = -1;
 
         if (returnToResults && postMatch)
+        {
+            if (inBranchSession)
+            {
+                loop.EndBranching();
+                inBranchSession = false;
+            }
             boundHud?.ReturnToResults();
+        }
         postMatch = false;
     }
 

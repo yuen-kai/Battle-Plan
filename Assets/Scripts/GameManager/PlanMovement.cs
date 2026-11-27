@@ -64,7 +64,7 @@ public partial class PlanMovement : MonoBehaviour
     /// which units may be selected, which cards answer for them, which destinations conflict, and
     /// which lane a route draws in — asks this first.
     /// </summary>
-    private static bool DualControl => SandboxSession.IsActive;
+    private static bool DualControl => SandboxSession.IsActive || GameLoop.BranchControlActive;
 
     private static int LocalTeamIndex =>
         GameLoop.Instance != null ? GameLoop.Instance.LocalTeamIndex : -1;
@@ -232,7 +232,7 @@ public partial class PlanMovement : MonoBehaviour
         // Every dodge window elsewhere runs its own short clock out. The sandbox opens it wide and
         // hands the designer the same button the planning phase has, so a dive can be drawn, looked
         // at and redrawn before it is committed.
-        dodgeCommitAvailable = units != null && SandboxSession.IsActive;
+        dodgeCommitAvailable = units != null && DualControl;
         planningUnlockCallback = unlockCallback;
         planningRoundToken = planningRound;
         planningCommitVersion = 0;

@@ -93,6 +93,9 @@ public struct ReplayUnit : INetworkSerializable
     public sbyte catalogIndex;
     public ushort maxHealth;
 
+    /// <summary>Rounds of ability cooldown the unit carried into the round, before any cast spent it.</summary>
+    public byte startCooldown;
+
     public void NetworkSerialize<T>(BufferSerializer<T> serializer)
         where T : IReaderWriter
     {
@@ -100,6 +103,7 @@ public struct ReplayUnit : INetworkSerializable
         serializer.SerializeValue(ref rosterSlot);
         serializer.SerializeValue(ref catalogIndex);
         serializer.SerializeValue(ref maxHealth);
+        serializer.SerializeValue(ref startCooldown);
     }
 }
 
@@ -821,12 +825,80 @@ public class ReplayArchive
 
     public event Action Changed;
 
-    public IReadOnlyCollection<int> RoundNumbers => rounds.Keys;
+    // The test branch: rounds played from a recorded round's opening board instead of the ones
+    // that really followed it. Only one exists at a time, and from its first round on it replaces
+    // the canon line wherever the archive is read.
+    private readonly SortedDictionary<int, ReplayRound> branch = new();
+    private int branchFrom = -1;
+
+    public bool HasBranch => branchFrom >= 0;
+
+    /// <summary>The line being shown: canon up to the branch point, then the branch's own rounds.</summary>
+    public IReadOnlyCollection<int> RoundNumbers
+    {
+        get
+        {
+            if (!HasBranch)
+                return rounds.Keys;
+            List<int> line = new();
+            foreach (int number in rounds.Keys)
+            {
+                if (number < branchFrom)
+                    line.Add(number);
+            }
+            line.AddRange(branch.Keys);
+            return line;
+        }
+    }
+
+    public bool IsBranchRound(int roundNumber) => HasBranch && roundNumber >= branchFrom && branch.ContainsKey(roundNumber);
+
+    /// <summary>
+    /// Starts the test branch at <paramref name="roundNumber"/>. Inside the current branch that
+    /// overrides it from there on; anywhere earlier it replaces the branch outright.
+    /// </summary>
+    public void StartBranchAt(int roundNumber)
+    {
+        if (HasBranch && roundNumber >= branchFrom)
+        {
+            List<int> stale = new();
+            foreach (int number in branch.Keys)
+            {
+                if (number >= roundNumber)
+                    stale.Add(number);
+            }
+            foreach (int number in stale)
+                branch.Remove(number);
+        }
+        else
+        {
+            branch.Clear();
+            branchFrom = roundNumber;
+        }
+        Changed?.Invoke();
+    }
+
+    public void AddBranchRound(ReplayRound round)
+    {
+        if (!HasBranch || round == null || round.roundNumber < branchFrom)
+            return;
+        branch[round.roundNumber] = round;
+        Changed?.Invoke();
+    }
+
+    public void ClearBranch()
+    {
+        branch.Clear();
+        branchFrom = -1;
+        Changed?.Invoke();
+    }
 
     public void Clear()
     {
         rounds.Clear();
         expected.Clear();
+        branch.Clear();
+        branchFrom = -1;
         Changed?.Invoke();
     }
 
@@ -924,17 +996,21 @@ public class ReplayArchive
         Changed?.Invoke();
     }
 
-    public bool TryGet(int roundNumber, out ReplayRound round) =>
-        rounds.TryGetValue(roundNumber, out round);
+    public bool TryGet(int roundNumber, out ReplayRound round)
+    {
+        if (HasBranch && roundNumber >= branchFrom)
+            return branch.TryGetValue(roundNumber, out round);
+        return rounds.TryGetValue(roundNumber, out round);
+    }
 
-    public int Count => rounds.Count;
+    public int Count => RoundNumbers.Count;
 
     public int LatestRoundNumber
     {
         get
         {
             int latest = -1;
-            foreach (int number in rounds.Keys)
+            foreach (int number in RoundNumbers)
                 latest = number;
             return latest;
         }

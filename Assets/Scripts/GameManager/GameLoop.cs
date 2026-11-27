@@ -1882,6 +1882,125 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
+    /// <summary>
+    /// Carries out one round's committed orders, from the dodge window through to every unit and
+    /// projectile at rest. Shared by the match's own round loop and by a replay branch, which runs
+    /// a round the match never played through exactly the same resolution.
+    /// </summary>
+    private IEnumerator ExecuteRoundOrders(PathsDict paths)
+    {
+        // === ABILITY DODGE PHASE (start of execution, when applicable) ===
+        // Ability plans were chosen during planning; before any movement, threatened enemies
+        // get a chance to dodge. Dive paths returned here have already replaced the dodgers'
+        // planned moves inside `paths` (and cancelled their own ability plans).
+        List<(GameObject unit, Vector3 square, UnitData data)> activations =
+            CollectAbilityActivations(paths);
+        if (activations.Count > 0)
+        {
+            // The president's Close Ranks wipes its own crew's plans at execution, so those
+            // abilities never fire. Resolve that before the window opens rather than after:
+            // telegraphing one, or making an enemy spend its dive answering it, prompts a
+            // dodge against an ability that is already cancelled.
+            yield return StartCoroutine(
+                RunDodgePhase(ActivationsSurvivingAlliedCancels(activations), paths)
+            );
+            // Dodging cancels the dodger's own ability plan; re-collect what survived.
+            activations = CollectAbilityActivations(paths);
+        }
+        if (matchEnded)
+            yield break;
+        CaptureReplayStartCooldowns();
+        HashSet<Unit> cooldownsStartedThisRound = new();
+        activations = StartAbilityCooldowns(activations, cooldownsStartedThisRound);
+
+        // Dodge telegraphs are planning aids, not execution VFX. Clear them on every client
+        // before movement and abilities start so lines/discs cannot linger into resolution.
+        HideAbilityTelegraphsClientRpc();
+        currentPhase = Phase.Executing;
+        // Smoke is thrown now rather than placed, so each screen registers when its own
+        // canister lands instead of all of them up front. The window has to stay open for as
+        // long as abilities are still resolving.
+        acceptingSmokeRegistrations = true;
+        setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
+
+        // Last word on allied destinations before anyone marches: dodge dives and bot orders
+        // reach this point without ever having passed through the planning-phase rule.
+        ApplyFriendlyEndCellSeparation(paths);
+        Dictionary<GameObject, Vector2Int> cellsBeforeExecution = CaptureUnitCells();
+
+        // Both crews' final orders, captured while dives are still distinguishable from moves.
+        if (!branchExecuting)
+            RecordBattleReportPlans(paths);
+        BeginReplayRound(paths, activations);
+
+        ExecuteMoves(paths);
+
+        // Fire abilities alongside movement; each ability handles its own pauses/transitions.
+        // Order-cancelling abilities run first so what they reach does not depend on the
+        // order activations were collected in.
+        foreach (
+            var activation in activations.OrderByDescending(candidate =>
+                candidate.unit.GetComponent<Ability>()?.CancelsAlliedOrders ?? false
+            )
+        )
+        {
+            StartCoroutine(RunAbility(activation.unit, activation.square, activation.data));
+        }
+
+        StartCoroutine(ResolveUnitOverlaps(paths, cellsBeforeExecution));
+
+        while (
+            !matchEnded
+            && (
+                CheckStillShooting()
+                || runningAbilities > 0
+                || resolvingOverlaps
+                || IsReturnFireWindowOpen
+            )
+        )
+        {
+            //THINKING: ability activates such that theres movement/gameplay extension
+            //If moving continues during this time restart checkStillMoving
+            if (CheckStillMoving() || IsReturnFireWindowOpen)
+            {
+                // Null-safe like its sibling at the top of planning: every Shooting unsubscribes
+                // on despawn, so a teardown mid-execution (a match shutting down, a sandbox
+                // restarting, the last units dying together) empties these delegates. Invoking
+                // one bare threw a NullReferenceException that killed this coroutine, stranding
+                // the round mid-execution instead of letting it wind down.
+                OrderContinueShooting?.Invoke();
+                while (CheckStillMoving() || IsReturnFireWindowOpen)
+                {
+                    yield return null;
+                }
+                yield return null; // Wait a bit before stopping shooting
+            }
+            OrderAllowShooting?.Invoke(false);
+
+            yield return null;
+        }
+
+        if (matchEnded)
+            yield break;
+
+        // A dead shooter is inactive, so its own shooting coroutine can no longer hold the
+        // round open. Wait on the server-wide projectile registry before round-end arbitration.
+        while (!matchEnded && Bullet.ActiveServerBulletCount > 0)
+            yield return null;
+
+        if (matchEnded)
+            yield break;
+
+        acceptingSmokeRegistrations = false;
+        HideAbilityTelegraphsClientRpc();
+        TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
+        ClearMoveSpeedBoosts();
+        ClearDamageReductions();
+        if (!branchExecuting)
+            RecordBattleReportOutcomes();
+        EndReplayRound();
+    }
+
     IEnumerator GameLoopTemp()
     {
         if (!IsServer)
@@ -2130,113 +2249,9 @@ public class GameLoop : NetworkBehaviour
                 devSubmittedPaths = null;
             }
 
-            // === ABILITY DODGE PHASE (start of execution, when applicable) ===
-            // Ability plans were chosen during planning; before any movement, threatened enemies
-            // get a chance to dodge. Dive paths returned here have already replaced the dodgers'
-            // planned moves inside `paths` (and cancelled their own ability plans).
-            List<(GameObject unit, Vector3 square, UnitData data)> activations =
-                CollectAbilityActivations(paths);
-            if (activations.Count > 0)
-            {
-                // The president's Close Ranks wipes its own crew's plans at execution, so those
-                // abilities never fire. Resolve that before the window opens rather than after:
-                // telegraphing one, or making an enemy spend its dive answering it, prompts a
-                // dodge against an ability that is already cancelled.
-                yield return StartCoroutine(
-                    RunDodgePhase(ActivationsSurvivingAlliedCancels(activations), paths)
-                );
-                // Dodging cancels the dodger's own ability plan; re-collect what survived.
-                activations = CollectAbilityActivations(paths);
-            }
+            yield return ExecuteRoundOrders(paths);
             if (matchEnded)
                 yield break;
-            HashSet<Unit> cooldownsStartedThisRound = new();
-            activations = StartAbilityCooldowns(activations, cooldownsStartedThisRound);
-
-            // Dodge telegraphs are planning aids, not execution VFX. Clear them on every client
-            // before movement and abilities start so lines/discs cannot linger into resolution.
-            HideAbilityTelegraphsClientRpc();
-            currentPhase = Phase.Executing;
-            // Smoke is thrown now rather than placed, so each screen registers when its own
-            // canister lands instead of all of them up front. The window has to stay open for as
-            // long as abilities are still resolving.
-            acceptingSmokeRegistrations = true;
-            setOverlayUITextClientRpc("Executing Moves", MessagePerspective.Neutral);
-
-            // Last word on allied destinations before anyone marches: dodge dives and bot orders
-            // reach this point without ever having passed through the planning-phase rule.
-            ApplyFriendlyEndCellSeparation(paths);
-            Dictionary<GameObject, Vector2Int> cellsBeforeExecution = CaptureUnitCells();
-
-            // Both crews' final orders, captured while dives are still distinguishable from moves.
-            RecordBattleReportPlans(paths);
-            BeginReplayRound(paths, activations);
-
-            ExecuteMoves(paths);
-
-            // Fire abilities alongside movement; each ability handles its own pauses/transitions.
-            // Order-cancelling abilities run first so what they reach does not depend on the
-            // order activations were collected in.
-            foreach (
-                var activation in activations.OrderByDescending(candidate =>
-                    candidate.unit.GetComponent<Ability>()?.CancelsAlliedOrders ?? false
-                )
-            )
-            {
-                StartCoroutine(RunAbility(activation.unit, activation.square, activation.data));
-            }
-
-            StartCoroutine(ResolveUnitOverlaps(paths, cellsBeforeExecution));
-
-            while (
-                !matchEnded
-                && (
-                    CheckStillShooting()
-                    || runningAbilities > 0
-                    || resolvingOverlaps
-                    || IsReturnFireWindowOpen
-                )
-            )
-            {
-                //THINKING: ability activates such that theres movement/gameplay extension
-                //If moving continues during this time restart checkStillMoving
-                if (CheckStillMoving() || IsReturnFireWindowOpen)
-                {
-                    // Null-safe like its sibling at the top of planning: every Shooting unsubscribes
-                    // on despawn, so a teardown mid-execution (a match shutting down, a sandbox
-                    // restarting, the last units dying together) empties these delegates. Invoking
-                    // one bare threw a NullReferenceException that killed this coroutine, stranding
-                    // the round mid-execution instead of letting it wind down.
-                    OrderContinueShooting?.Invoke();
-                    while (CheckStillMoving() || IsReturnFireWindowOpen)
-                    {
-                        yield return null;
-                    }
-                    yield return null; // Wait a bit before stopping shooting
-                }
-                OrderAllowShooting?.Invoke(false);
-
-                yield return null;
-            }
-
-            if (matchEnded)
-                yield break;
-
-            // A dead shooter is inactive, so its own shooting coroutine can no longer hold the
-            // round open. Wait on the server-wide projectile registry before round-end arbitration.
-            while (!matchEnded && Bullet.ActiveServerBulletCount > 0)
-                yield return null;
-
-            if (matchEnded)
-                yield break;
-
-            acceptingSmokeRegistrations = false;
-            HideAbilityTelegraphsClientRpc();
-            TickAbilityCooldownsAfterRound(cooldownsStartedThisRound);
-            ClearMoveSpeedBoosts();
-            ClearDamageReductions();
-            RecordBattleReportOutcomes();
-            EndReplayRound();
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
             // path resolves a survivor or simultaneous-wipe draw.
@@ -3327,7 +3342,7 @@ public class GameLoop : NetworkBehaviour
             botPlayer != null
             // The sandbox designer answers for this crew too, so the bot must not answer first: a
             // stand-still response entered here would close the window before a dive could be drawn.
-            && sandboxDirector == null
+            && !DesignerControlsBothCrews
             && dodgeAlerted.TryGetValue(botPlayer.TeamIndex, out HashSet<GameObject> botAlerted)
         )
         {
@@ -3385,12 +3400,12 @@ public class GameLoop : NetworkBehaviour
             // dive can be drawn and reconsidered without a clock deciding the round.
             float window =
                 TutorialSession.IsActive ? TutorialSession.PlanningSeconds
-                : SandboxSession.IsActive ? SandboxSession.PlanningSeconds
+                : SandboxSession.IsActive || branchControl ? SandboxSession.PlanningSeconds
                 : activations.Max(entry => entry.data.timeDivePerUnit) * mostAlerted;
             double endTime = NetworkManager.Singleton.ServerTime.Time + window;
             dodgeWindowEndTime = endTime;
 
-            if (sandboxDirector != null)
+            if (DesignerControlsBothCrews)
                 OpenSandboxDodgeWindow(endTime);
             else
             {
@@ -3476,7 +3491,7 @@ public class GameLoop : NetworkBehaviour
 
             // The sandbox designer answers for every alerted crew, so they are asked for a dive
             // rather than told to wait for a response that is theirs to give.
-            bool isThreatened = sandboxDirector != null || dodgeAlerted.ContainsKey(teamIndex);
+            bool isThreatened = DesignerControlsBothCrews || dodgeAlerted.ContainsKey(teamIndex);
             bool isCaster = casterTeamsAwaitingDodge.Contains(teamIndex);
             setOverlayUITextClientRpc(
                 GetDodgeGuidance(isThreatened, isCaster),
@@ -3579,7 +3594,7 @@ public class GameLoop : NetworkBehaviour
     /// </summary>
     private bool TryGetDodgeAudienceClientId(int teamIndex, out ulong clientId)
     {
-        return sandboxDirector != null
+        return DesignerControlsBothCrews
             ? TryGetHumanClientId(HostTeamIndex, out clientId)
             : TryGetHumanClientId(teamIndex, out clientId);
     }
@@ -3632,7 +3647,7 @@ public class GameLoop : NetworkBehaviour
         // The sandbox designer answered for the opposing crew in the same window. Those dives cannot
         // travel with the sender's own — this path only ever accepts the sender's team — so they are
         // read back here, from the session, exactly as their orders are when planning closes.
-        if (sandboxDirector != null)
+        if (DesignerControlsBothCrews)
             AcceptDodgeResponse(OpponentTeamIndex, SandboxSession.ConsumeEnemyDodge());
     }
 
@@ -6064,7 +6079,7 @@ public class GameLoop : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     void PlayAgainServerRpc(ServerRpcParams rpcParams = default)
     {
-        if (!matchEnded)
+        if (!matchEnded || rematchClosed)
             return;
 
         ulong sender = rpcParams.Receive.SenderClientId;
@@ -6165,6 +6180,7 @@ public class GameLoop : NetworkBehaviour
         LastBattleReport = null;
         ResetReplayRecording();
         playAgain.Clear();
+        rematchClosed = false;
         submittedTeamPaths.Clear();
         latestTeamPlanVersions.Clear();
         retractedTeamPathFallbacks.Clear();
@@ -7848,6 +7864,311 @@ public class GameLoop : NetworkBehaviour
         LastBattleReport = report;
     }
 
+    // === REPLAY BRANCHES (local host) ===
+
+    // A branch is a round the match never played, run through the real simulation from a recorded
+    // round's opening board with one seat ordering both crews. It only ever runs where nobody else
+    // can see the board: a bot match, or a host the opponent has already left.
+    private bool branchControl;
+    private bool branchExecuting;
+    private int branchPlanningRound = -1;
+    private int branchPlanningToken;
+    private Coroutine branchCoroutine;
+    private readonly Dictionary<GameObject, int> replayStartCooldowns = new();
+
+    public static bool BranchControlActive => Instance != null && Instance.branchControl;
+    public bool IsBranchExecuting => branchExecuting;
+
+    /// <summary>The round a branch is waiting on orders for, or -1.</summary>
+    public int BranchPlanningRound => branchPlanningRound;
+
+    private bool DesignerControlsBothCrews => sandboxDirector != null || branchControl;
+
+    // Once either player of a match against another person opens the full replay, the two of
+    // them are no longer heading for a rematch together, and a replay of their own is free to
+    // leave the room for a private copy of the board.
+    private bool rematchClosed;
+
+    public void NotifyRecapStarted()
+    {
+        if (Options.IsBotMatch || !IsSpawned)
+            return;
+        RecapStartedServerRpc();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RecapStartedServerRpc()
+    {
+        rematchClosed = true;
+        playAgain.Clear();
+        RematchClosedClientRpc();
+    }
+
+    [ClientRpc]
+    private void RematchClosedClientRpc() =>
+        GameHUDController.Instance?.SetResultButtonsEnabled(false, true);
+
+    public bool CanBranch =>
+        IsServer
+        && IsClient
+        && LastMatchResult.HasValue
+        && NetworkManager != null
+        && NetworkManager.ConnectedClientsIds.Count == 1;
+
+    /// <summary>
+    /// Opens orders for <paramref name="roundNumber"/>. A round already in the replay is set up from
+    /// its recorded opening board first; the round after the last one plays on from the board as
+    /// it stands.
+    /// </summary>
+    public void BeginBranchPlanning(int roundNumber)
+    {
+        if (!CanBranch || branchExecuting)
+            return;
+
+        CancelBranchPlanning();
+        Replays.TryGet(roundNumber, out ReplayRound opening);
+        branchCoroutine = StartCoroutine(RunBranchRound(roundNumber, opening, ++branchPlanningToken));
+    }
+
+    public void CancelBranchPlanning()
+    {
+        if (branchExecuting || branchPlanningRound < 0)
+            return;
+
+        branchPlanningToken++;
+        if (branchCoroutine != null)
+            StopCoroutine(branchCoroutine);
+        branchCoroutine = null;
+        branchPlanningRound = -1;
+        planningChangesOpen = false;
+        currentPhase = Phase.Idle;
+        FinishPlanningClientRpc();
+        SetCardsInteractableClientRpc(false);
+        GameHUDController.Instance?.HidePlanningCommit();
+    }
+
+    /// <summary>Leaves branching and hands the board back to the finished match.</summary>
+    public void EndBranching()
+    {
+        CancelBranchPlanning();
+        if (!branchControl)
+            return;
+        branchControl = false;
+        matchEnded = true;
+        currentPhase = Phase.Idle;
+        BotFrozenUnits.SetTeamFrozen(OpponentTeamIndex, false);
+        Replays.ClearBranch();
+        GameHUDController.Instance?.SuppressTimer(false);
+    }
+
+    private IEnumerator RunBranchRound(int number, ReplayRound opening, int token)
+    {
+        branchPlanningRound = number;
+        if (!branchControl)
+        {
+            branchControl = true;
+            BotFrozenUnits.SetTeamFrozen(OpponentTeamIndex, true);
+            GameHUDController.Instance?.SuppressTimer(true);
+            GameHUDController.Instance?.EnableSandboxEnemyCardPresses();
+        }
+        matchEnded = false;
+
+        if (opening != null)
+        {
+            RestoreBoardFrom(opening);
+            yield return null;
+            if (token != branchPlanningToken)
+                yield break;
+        }
+
+        roundNumber = number;
+        branchPlanningRound = number;
+        resolvingOverlaps = false;
+        unitsBeingShoved.Clear();
+        returnFireWindowUntil = 0f;
+        OrderStillShooting?.Invoke(true);
+        submittedTeamPaths.Clear();
+        latestTeamPlanVersions.Clear();
+        retractedTeamPathFallbacks.Clear();
+        dodgeAlertedTeamsThisRound.Clear();
+        SandboxSession.ConsumeEnemyPlan();
+        SandboxSession.ConsumeEnemyDodge();
+        currentPhase = Phase.Planning;
+        double endTime = NetworkManager.Singleton.ServerTime.Time + SandboxSession.PlanningSeconds;
+        planningDeadline = endTime;
+        planningChangesOpen = true;
+        SetCardsInteractableClientRpc(true);
+        setOverlayUITextClientRpc("Planning", MessagePerspective.Friendly);
+        StartPlanningClientRpc(endTime, roundNumber);
+
+        double committedAt = -1d;
+        while (token == branchPlanningToken)
+        {
+            double now = NetworkManager.Singleton.ServerTime.Time;
+            if (submittedTeamPaths.ContainsKey(HostTeamIndex))
+            {
+                if (committedAt < 0d)
+                    committedAt = now;
+                else if (now - committedAt >= planningUndoGraceSeconds)
+                    break;
+            }
+            else
+            {
+                committedAt = -1d;
+            }
+            yield return null;
+        }
+        if (token != branchPlanningToken)
+            yield break;
+
+        planningChangesOpen = false;
+        SetPlanningCommitLockedForHumanTeams();
+        FinishPlanningClientRpc();
+        SetCardsInteractableClientRpc(false);
+        branchPlanningRound = -1;
+
+        submittedTeamPaths[OpponentTeamIndex] = SanitizePaths(
+            SandboxSession.ConsumeEnemyPlan(),
+            OpponentTeamIndex
+        );
+        PathsDict paths = new();
+        foreach (PathsDict teamPaths in submittedTeamPaths.OrderBy(entry => entry.Key).Select(entry => entry.Value))
+        {
+            foreach (var kvp in teamPaths)
+                paths[kvp.Key] = kvp.Value;
+        }
+
+        Replays.StartBranchAt(number);
+        branchExecuting = true;
+        yield return ExecuteRoundOrders(paths);
+        branchExecuting = false;
+        currentPhase = Phase.Idle;
+        if (!branchControl)
+            yield break;
+
+        AdvanceSmokeDeploymentsForRoundBoundary();
+        ClearMoveSpeedBoosts();
+        ClearDamageReductions();
+        if (Enumerable.Range(0, TeamCount).All(HasLivingTeamUnits))
+            branchCoroutine = StartCoroutine(RunBranchRound(number + 1, null, ++branchPlanningToken));
+    }
+
+    /// <summary>
+    /// Stands the live board up as a recorded round opened: every unit on its cell and facing, at its
+    /// health, alive or not, with the charge it had going in; the cover still standing then; the
+    /// smoke then lying on it; the hill as it was held. Nothing is played while it happens — this is
+    /// setting a board, not a round.
+    /// </summary>
+    private void RestoreBoardFrom(ReplayRound opening)
+    {
+        Health.SuppressPresentation = true;
+        try
+        {
+            for (int i = 0; i < opening.units.Count; i++)
+            {
+                ReplayUnit recorded = opening.units[i];
+                GameObject[] crew = GetTeamUnits(recorded.teamIndex);
+                GameObject unit = recorded.rosterSlot < crew.Length ? crew[recorded.rosterSlot] : null;
+                if (unit == null || opening.frames.Count == 0)
+                    continue;
+
+                ReplaySample sample = opening.frames[0][i];
+                Health health = unit.GetComponent<Health>();
+                bool wasAlive = health != null && health.IsAlive;
+                health?.ServerRestoreState(
+                    sample.Alive,
+                    sample.health,
+                    sample.Position,
+                    Quaternion.Euler(0f, sample.Yaw, 0f)
+                );
+                if (!sample.Alive)
+                {
+                    if (wasAlive)
+                        DisableUnitCard(unit);
+                    continue;
+                }
+                if (!wasAlive)
+                    SetUnitCardDisabled(unit, false);
+
+                Unit identity = unit.GetComponent<Unit>();
+                if (identity != null)
+                {
+                    identity.ServerRestoreState(recorded.startCooldown);
+                    NotifyAbilityCooldownChanged(unit, identity.AbilityCooldownRoundsRemaining);
+                }
+                unit.GetComponent<Ability>()?.ResetForRespawn();
+                NotifyEnemyUnitStatusChanged(unit);
+            }
+
+            // Fog is off once a match is over, but a unit fog had hidden before it died comes back
+            // still carrying that hiding; a restored board shows every unit standing on it.
+            for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+            {
+                foreach (GameObject unit in GetTeamUnits(teamIndex))
+                {
+                    if (IsLivingUnit(unit))
+                        SetUnitVisualsLocal(unit, true);
+                }
+            }
+
+            RestoreCoverAsOf(opening.roundNumber);
+
+            ClearActiveSmokeCells();
+            smokeDeployments.Clear();
+            if (opening.smokeCells.Count > 0)
+            {
+                smokeDeployments.Add(new SmokeDeployment(new HashSet<Vector2Int>(opening.smokeCells), 1));
+                RebuildActiveSmokeCellsFromDeployments();
+                ShowSmokeScreenClientRpc(
+                    activeSmokeCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x).Select(gridCoordToWorld).ToArray()
+                );
+            }
+
+            if (opening.hasHill)
+                replicatedHillControl.Value = opening.hill;
+        }
+        finally
+        {
+            Health.SuppressPresentation = false;
+        }
+    }
+
+    /// <summary>Every wall of the map back up, less the ones destroyed before this round began.</summary>
+    private void RestoreCoverAsOf(int roundNumber)
+    {
+        MapDefinition pristine = MapCatalog.ById(Options.mapId);
+        if (pristine == null)
+            return;
+
+        HashSet<Vector2Int> destroyed = new();
+        foreach (int number in Replays.RoundNumbers)
+        {
+            if (number >= roundNumber || !Replays.TryGet(number, out ReplayRound earlier))
+                continue;
+            foreach (ReplayEvent replayEvent in earlier.events)
+            {
+                if (replayEvent.kind == ReplayEventKind.WallDestroyed)
+                    destroyed.Add(GridSystem.ConvertToGridCoords(replayEvent.from));
+            }
+        }
+
+        MapDefinition board = EnsureWallDestructionMap();
+        foreach (Vector2Int cell in pristine.Walls)
+        {
+            bool standing = !destroyed.Contains(cell);
+            if (standing)
+                board.Walls.Add(cell);
+            else
+                board.Walls.Remove(cell);
+            if (TryGetWallInstance(cell, out GameObject wall) && wall.activeSelf != standing)
+            {
+                wall.SetActive(standing);
+                RefreshWallCornerPlugsAround(cell);
+            }
+        }
+        serverFogDirty = true;
+    }
+
     // === REPLAY RECORDING (server) ===
 
     // A round that runs away (a stalemate of return fire, say) stops sampling rather than growing a
@@ -7902,6 +8223,11 @@ public class GameLoop : NetworkBehaviour
                         ),
                         maxHealth = (ushort)(
                             health != null ? Mathf.CeilToInt(health.MaxHealth) : 0
+                        ),
+                        startCooldown = (byte)Mathf.Clamp(
+                            replayStartCooldowns.TryGetValue(units[slot], out int carried) ? carried : 0,
+                            0,
+                            byte.MaxValue
                         ),
                     }
                 );
@@ -7965,6 +8291,24 @@ public class GameLoop : NetworkBehaviour
         if (replayFrameCoroutine != null)
             StopCoroutine(replayFrameCoroutine);
         replayFrameCoroutine = StartCoroutine(RecordReplayFrames());
+    }
+
+    /// <summary>
+    /// The charge every unit carries into the round, taken before this round's casts spend theirs,
+    /// so a branch opened on this round starts from the board the players actually planned on.
+    /// </summary>
+    private void CaptureReplayStartCooldowns()
+    {
+        replayStartCooldowns.Clear();
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            foreach (GameObject unit in GetTeamUnits(teamIndex))
+            {
+                Unit identity = unit != null ? unit.GetComponent<Unit>() : null;
+                if (identity != null)
+                    replayStartCooldowns[unit] = identity.AbilityCooldownRoundsRemaining;
+            }
+        }
     }
 
     /// <summary>The threatened shape, resolved exactly as the dodge telegraph resolves it.</summary>
@@ -8374,6 +8718,12 @@ public class GameLoop : NetworkBehaviour
         SampleReplayTracks(true);
         recordingReplayRound = null;
 
+        if (branchExecuting)
+        {
+            Replays.AddBranchRound(round.FilterForTeam(-1));
+            return;
+        }
+
         recordedReplayRounds.Add(round);
         if (!matchEnded)
             DeliverReplayRound(round, null);
@@ -8397,7 +8747,7 @@ public class GameLoop : NetworkBehaviour
 
             // The sandbox designer commands both crews from one seat and has already seen every
             // order on the board, so that seat keeps the whole round.
-            int viewer = sandboxDirector != null || matchEnded ? -1 : teamIndex;
+            int viewer = DesignerControlsBothCrews || matchEnded ? -1 : teamIndex;
             SendReplayRound(round.FilterForTeam(viewer), clientId);
         }
     }

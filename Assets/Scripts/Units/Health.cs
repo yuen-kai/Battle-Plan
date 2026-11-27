@@ -203,6 +203,35 @@ public class Health : NetworkBehaviour
             damageReductionActive.Value = false;
     }
 
+    /// <summary>
+    /// Set while a replay branch is standing a recorded board up, so the units it revives, kills
+    /// and heals into place do so without the hit, death and number effects of a real round.
+    /// </summary>
+    public static bool SuppressPresentation;
+
+    /// <summary>Puts this unit where a recorded board had it: alive or not, at that health.</summary>
+    public void ServerRestoreState(bool alive, float health, Vector3 position, Quaternion rotation)
+    {
+        if (!IsServer)
+            return;
+
+        if (alive)
+        {
+            if (!isAlive.Value)
+                RespawnAt(position, rotation);
+            else
+                transform.SetPositionAndRotation(position, rotation);
+            currentHealth.Value = Mathf.Clamp(health, 1f, MaxHealth);
+            return;
+        }
+
+        if (!isAlive.Value)
+            return;
+        currentHealth.Value = 0f;
+        isAlive.Value = false;
+        gameObject.SetActive(false);
+    }
+
     public void TakeDamage(float damage, bool crit = false)
     {
         if (!IsServer || !isAlive.Value)
@@ -362,6 +391,8 @@ public class Health : NetworkBehaviour
     private void OnHealthChanged(float previousValue, float newValue)
     {
         UpdateHealthFill(newValue);
+        if (SuppressPresentation)
+            return;
 
 #if UNITY_EDITOR
         if (devSuppressImpact)
@@ -438,7 +469,7 @@ public class Health : NetworkBehaviour
         // two most important reads on the board and they must not share a silhouette, so nothing
         // here travels outward and nothing here is warm. Spawned as independent objects so they
         // outlive the deactivation below.
-        if (previousValue && !newValue)
+        if (previousValue && !newValue && !SuppressPresentation)
         {
             // Viewer-relative, matching the unit body and its tracers. The team read belongs to
             // the body going down — it is the unit's own paint, and it is the last of it anyone

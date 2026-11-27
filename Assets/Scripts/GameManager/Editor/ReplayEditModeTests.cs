@@ -397,4 +397,78 @@ public class ReplayEditModeTests
         }
         Assert.That(total, Is.LessThan(48 * 1024));
     }
+
+    private static ReplayArchive ArchiveOfRounds(int count)
+    {
+        ReplayArchive archive = new();
+        for (int number = 1; number <= count; number++)
+        {
+            ReplayRound round = BuildRound();
+            round.roundNumber = number;
+            archive.Receive(RoundTrip(round.BuildHeader()));
+            for (int frame = 0; frame < round.frames.Count; frame += round.FramesPerChunk)
+                archive.Receive(RoundTrip(round.BuildFrameChunk(frame)));
+            for (int i = 0; i < round.events.Count; i += ReplayRound.EventsPerChunk)
+                archive.Receive(RoundTrip(round.BuildEventChunk(i)));
+            foreach (ReplayTrack track in round.tracks)
+                archive.Receive(new ReplayTrackMessage { roundNumber = number, track = track });
+        }
+        return archive;
+    }
+
+    private static ReplayRound BranchRound(int number)
+    {
+        ReplayRound round = BuildRound();
+        round.roundNumber = number;
+        round.events.Clear();
+        return round;
+    }
+
+    [Test]
+    public void Branch_ReplacesTheCanonLineFromWhereItStarts()
+    {
+        ReplayArchive archive = ArchiveOfRounds(5);
+        archive.StartBranchAt(3);
+        archive.AddBranchRound(BranchRound(3));
+        archive.AddBranchRound(BranchRound(4));
+
+        Assert.That(archive.RoundNumbers, Is.EqualTo(new[] { 1, 2, 3, 4 }));
+        Assert.That(archive.IsBranchRound(2), Is.False);
+        Assert.That(archive.IsBranchRound(3), Is.True);
+        Assert.That(archive.TryGet(3, out ReplayRound three), Is.True);
+        Assert.That(three.events, Is.Empty, "round 3 is now the branch's, not canon's");
+        Assert.That(archive.TryGet(5, out _), Is.False, "canon after the branch point is out of the line");
+        Assert.That(archive.LatestRoundNumber, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void Branch_OverriddenPartWayDropsOnlyItsOwnLaterRounds()
+    {
+        ReplayArchive archive = ArchiveOfRounds(5);
+        archive.StartBranchAt(2);
+        archive.AddBranchRound(BranchRound(2));
+        archive.AddBranchRound(BranchRound(3));
+        archive.AddBranchRound(BranchRound(4));
+
+        archive.StartBranchAt(3);
+
+        Assert.That(archive.RoundNumbers, Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(archive.IsBranchRound(2), Is.True);
+    }
+
+    [Test]
+    public void Branch_StartedBeforeTheOldOneReplacesItAndClearingRestoresCanon()
+    {
+        ReplayArchive archive = ArchiveOfRounds(5);
+        archive.StartBranchAt(4);
+        archive.AddBranchRound(BranchRound(4));
+
+        archive.StartBranchAt(2);
+        Assert.That(archive.RoundNumbers, Is.EqualTo(new[] { 1 }));
+
+        archive.ClearBranch();
+        Assert.That(archive.RoundNumbers, Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
+        Assert.That(archive.TryGet(4, out ReplayRound four), Is.True);
+        Assert.That(four.events, Is.Not.Empty);
+    }
 }
