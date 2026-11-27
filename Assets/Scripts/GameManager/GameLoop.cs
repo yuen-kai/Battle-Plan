@@ -824,11 +824,13 @@ public class GameLoop : NetworkBehaviour
         );
     }
 
-    // Store camera positions and rotations as a list of (Vector3 position, Quaternion rotation) tuples
-    private List<(Vector3 position, Quaternion rotation)> cameraPositions = new()
+    // Each seat looks down the board from its own side. Only the angle is authored: where the camera
+    // stands is solved from the viewport the HUD leaves it (FramedCameraPosition), so resizing the
+    // chrome reframes the board instead of needing these retuned.
+    private readonly Quaternion[] cameraRotations =
     {
-        (new Vector3(18.9f, 24.4f, 3.4f), new Quaternion(0.59543306f, 0f, 0f, 0.8034049f)),
-        (new Vector3(18.9f, 24.4f, 21.0f), new Quaternion(0f, 0.80340505f, -0.5954329f, 0f)),
+        new(0.59543306f, 0f, 0f, 0.8034049f),
+        new(0f, 0.80340505f, -0.5954329f, 0f),
     };
 
     // Game Settings
@@ -841,6 +843,13 @@ public class GameLoop : NetworkBehaviour
 
     // Actions
     public static System.Action<bool> OrderAllowShooting;
+    // Room left between the board's edge and the viewport's, as a fraction of each half-extent. Wide
+    // enough that the phase tab hanging into the top of the view never covers the far row.
+    private const float BoardFramingMargin = 0.08f;
+
+    private int framedCameraTeamIndex = -1;
+    private Vector3 framedCameraPosition;
+
     public static System.Action<bool> OrderStillShooting;
     public static System.Action OrderContinueShooting;
 
@@ -1447,13 +1456,13 @@ public class GameLoop : NetworkBehaviour
         ClientRpcParams clientRpcParams = default
     )
     {
-        if (teamIndex >= 0 && teamIndex < spawns.Count && teamIndex < cameraPositions.Count)
+        if (teamIndex >= 0 && teamIndex < spawns.Count && teamIndex < cameraRotations.Length)
         {
             if (teamCameraParent != null)
             {
                 ImpactCamera.PrepareForExternalCameraMotion(TeamCamera);
-                teamCameraParent.transform.position = cameraPositions[teamIndex].position;
-                teamCameraParent.transform.rotation = cameraPositions[teamIndex].rotation;
+                teamCameraParent.transform.rotation = cameraRotations[teamIndex];
+                RestCameraAtFraming(teamIndex);
                 TeamCamera?.GetComponent<BoardCameraController>()?.ResetInputState();
             }
         }
@@ -1468,6 +1477,51 @@ public class GameLoop : NetworkBehaviour
             GameObject wall = NetworkHelper.Spawn(wallPrefab, worldPos, Quaternion.identity);
             Vector3 heightOffset = Helper.heightOffset(wall.transform);
             wall.transform.position += heightOffset;
+
+    private static Rect BoardFootprint =>
+        new(
+            gridBounds.xMin - cellSize * 0.5f,
+            gridBounds.yMin - cellSize * 0.5f,
+            gridBounds.width + cellSize,
+            gridBounds.height + cellSize
+        );
+
+    private Vector3 FramedCameraPosition(int teamIndex)
+    {
+        Camera view = TeamCamera;
+        return BoardCameraController.FrameBoard(
+            BoardFootprint,
+            cameraRotations[teamIndex],
+            view != null ? view.fieldOfView : 60f,
+            view != null ? view.aspect : 16f / 9f,
+            BoardFramingMargin
+        );
+    }
+
+    private void RestCameraAtFraming(int teamIndex)
+    {
+        framedCameraTeamIndex = teamIndex;
+        framedCameraPosition = FramedCameraPosition(teamIndex);
+        teamCameraParent.transform.position = framedCameraPosition;
+    }
+
+    /// <summary>
+    /// Re-solves the resting frame after the viewport changed shape. A camera the player has panned
+    /// or zoomed away from that frame is theirs and is left where it is.
+    /// </summary>
+    public void RefitBoardCamera()
+    {
+        if (
+            framedCameraTeamIndex < 0
+            || teamCameraParent == null
+            || (teamCameraParent.transform.position - framedCameraPosition).sqrMagnitude > 1e-4f
+        )
+        {
+            return;
+        }
+
+        RestCameraAtFraming(framedCameraTeamIndex);
+    }
 
             // Registered as it is spawned rather than left to the lazy scan. The scan reads the
             // scene, and a board rebuilt in place still has the previous walls in it for the rest
@@ -4328,7 +4382,7 @@ public class GameLoop : NetworkBehaviour
         ClientRpcParams clientRpcParams = default
     )
     {
-        if (teamIndex < 0 || teamIndex >= cameraPositions.Count || teamCameraParent == null)
+        if (teamIndex < 0 || teamIndex >= cameraRotations.Length || teamCameraParent == null)
             return;
 
         StartCoroutine(EaseCameraIntoLegFraming(teamIndex, seconds));
@@ -4336,12 +4390,12 @@ public class GameLoop : NetworkBehaviour
 
     private IEnumerator EaseCameraIntoLegFraming(int teamIndex, float seconds)
     {
-        (Vector3 position, Quaternion rotation) framing = cameraPositions[teamIndex];
-        Vector3 offset =
-            framing.rotation * Vector3.back * LegCameraPullBack + Vector3.up * LegCameraLift;
+        framedCameraTeamIndex = -1;
+        Quaternion rotation = cameraRotations[teamIndex];
+        Vector3 offset = rotation * Vector3.back * LegCameraPullBack + Vector3.up * LegCameraLift;
 
         ImpactCamera.PrepareForExternalCameraMotion(TeamCamera);
-        teamCameraParent.transform.rotation = framing.rotation;
+        teamCameraParent.transform.rotation = rotation;
 
         // Real seconds, and read rather than accumulated: a summed per-frame delta overshoots the
         // wall clock under a dev fast-forward, and this has to finish with the curtain that hides
@@ -4355,18 +4409,15 @@ public class GameLoop : NetworkBehaviour
         {
             float eased = Mathf.Clamp01(elapsed / seconds);
             eased = 1f - (1f - eased) * (1f - eased) * (1f - eased);
-            teamCameraParent.transform.position = Vector3.Lerp(
-                framing.position + offset,
-                framing.position,
-                eased
-            );
+            Vector3 resting = FramedCameraPosition(teamIndex);
+            teamCameraParent.transform.position = Vector3.Lerp(resting + offset, resting, eased);
             yield return null;
         }
 
         if (teamCameraParent == null)
             yield break;
 
-        teamCameraParent.transform.position = framing.position;
+        RestCameraAtFraming(teamIndex);
         TeamCamera?.GetComponent<BoardCameraController>()?.ResetInputState();
     }
 

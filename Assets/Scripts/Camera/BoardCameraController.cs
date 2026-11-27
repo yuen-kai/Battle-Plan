@@ -330,6 +330,52 @@ public sealed class BoardCameraController : MonoBehaviour
         return (clampedHeight - currentHeight) / forwardY;
     }
 
+    /// <summary>
+    /// Where a camera held at <paramref name="rotation"/> has to stand so the whole board footprint
+    /// sits inside its view with <paramref name="margin"/> left on every side, balanced top to bottom.
+    /// Derived from the view itself rather than authored, so anything that changes how much screen
+    /// the board gets — a taller dock, a breakpoint, a different aspect — reframes it for free.
+    /// </summary>
+    public static Vector3 FrameBoard(
+        Rect footprint,
+        Quaternion rotation,
+        float verticalFovDegrees,
+        float aspect,
+        float margin
+    )
+    {
+        Vector3 forward = rotation * Vector3.forward;
+        Vector3 up = rotation * Vector3.up;
+        Vector3 right = rotation * Vector3.right;
+        Vector3 centre = new(footprint.center.x, BoardPlaneHeight, footprint.center.y);
+        float halfTanVertical =
+            Mathf.Tan(verticalFovDegrees * 0.5f * Mathf.Deg2Rad) * (1f - Mathf.Clamp01(margin));
+        float halfTanHorizontal = halfTanVertical * Mathf.Max(aspect, 0.01f);
+
+        float above = float.MinValue;
+        float below = float.MinValue;
+        float across = float.MinValue;
+        foreach (float x in new[] { footprint.xMin, footprint.xMax })
+        {
+            foreach (float z in new[] { footprint.yMin, footprint.yMax })
+            {
+                Vector3 offset = new Vector3(x, BoardPlaneHeight, z) - centre;
+                float depth = Vector3.Dot(offset, forward);
+                float rise = Vector3.Dot(offset, up);
+                above = Mathf.Max(above, rise / halfTanVertical - depth);
+                below = Mathf.Max(below, -rise / halfTanVertical - depth);
+                across = Mathf.Max(
+                    across,
+                    Mathf.Abs(Vector3.Dot(offset, right)) / halfTanHorizontal - depth
+                );
+            }
+        }
+
+        float distance = Mathf.Max((above + below) * 0.5f, across);
+        float lift = halfTanVertical * (above - below) * 0.5f;
+        return centre - forward * distance + up * lift;
+    }
+
     public static Vector2 ClampFocusToBoard(Vector2 focus, Rect boardBounds, float padding)
     {
         float safePadding = Mathf.Max(0f, padding);

@@ -83,6 +83,12 @@ public class GameHUDController : MonoBehaviour
     private VisualElement planningCommit;
     private Label planningCommitStatus;
     private Button lockInButton;
+    private VisualElement replayBar;
+    private Button replayPrevButton;
+    private Button replayNextButton;
+    private Slider replayScrubber;
+    private Action<int> replayStepAction;
+    private Action<float> replayScrubAction;
     private Button playAgainButton;
     private Button mainMenuButton;
     private VisualElement reportReveal;
@@ -259,6 +265,10 @@ public class GameHUDController : MonoBehaviour
         planningCommit = root.Q<VisualElement>("planning-commit");
         planningCommitStatus = root.Q<Label>("planning-commit-status");
         lockInButton = root.Q<Button>("lock-in-button");
+        replayBar = root.Q<VisualElement>("replay-bar");
+        replayPrevButton = root.Q<Button>("replay-prev-button");
+        replayNextButton = root.Q<Button>("replay-next-button");
+        replayScrubber = root.Q<Slider>("replay-scrubber");
         exitMatchButton = root.Q<Button>("exit-match-button");
         settingsButton = root.Q<Button>("settings-button");
         settingsOverlay = RequireElement<VisualElement>("settings-overlay");
@@ -302,6 +312,14 @@ public class GameHUDController : MonoBehaviour
         settings.Bind();
         if (lockInButton != null)
             lockInButton.clicked += OnLockInClicked;
+        if (replayPrevButton != null)
+            replayPrevButton.clicked += OnReplayPreviousClicked;
+        if (replayNextButton != null)
+            replayNextButton.clicked += OnReplayNextClicked;
+        replayScrubber?.RegisterValueChangedCallback(OnReplayScrubbed);
+        cardsContainer?.contentContainer.RegisterCallback<GeometryChangedEvent>(
+            OnCrewGeometryChanged
+        );
         if (lessonPopupButton != null)
             lessonPopupButton.clicked += OnLessonDismissClicked;
         root.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
@@ -340,6 +358,14 @@ public class GameHUDController : MonoBehaviour
         settings.Unbind();
         if (lockInButton != null)
             lockInButton.clicked -= OnLockInClicked;
+        if (replayPrevButton != null)
+            replayPrevButton.clicked -= OnReplayPreviousClicked;
+        if (replayNextButton != null)
+            replayNextButton.clicked -= OnReplayNextClicked;
+        replayScrubber?.UnregisterValueChangedCallback(OnReplayScrubbed);
+        cardsContainer?.contentContainer.UnregisterCallback<GeometryChangedEvent>(
+            OnCrewGeometryChanged
+        );
         if (lessonPopupButton != null)
             lessonPopupButton.clicked -= OnLessonDismissClicked;
         root.UnregisterCallback<GeometryChangedEvent>(OnGeometryChanged);
@@ -1581,6 +1607,55 @@ public class GameHUDController : MonoBehaviour
         ClearActiveOverlay(settingsOverlay, restoreFocus ? settingsButton : null);
     }
 
+    /// <summary>
+    /// The round-history bar under the crew. It stays on screen for the whole match and only changes
+    /// which of its three controls are live, so the dock never reflows and the board never reframes
+    /// when replay becomes available or goes away.
+    /// </summary>
+    public void SetReplayBar(bool canStepBack, bool canStepForward, bool canScrub, float progress)
+    {
+        replayPrevButton?.SetEnabled(canStepBack);
+        replayNextButton?.SetEnabled(canStepForward);
+        replayScrubber?.SetEnabled(canScrub);
+        replayScrubber?.SetValueWithoutNotify(Mathf.Clamp01(progress));
+    }
+
+    public void SetReplayHandlers(Action<int> step, Action<float> scrub)
+    {
+        replayStepAction = step;
+        replayScrubAction = scrub;
+    }
+
+    private void OnCrewGeometryChanged(GeometryChangedEvent evt) => MatchReplayBarToCrew();
+
+    /// <summary>
+    /// Spans the bar across exactly the cards above it. The strip is wider than its cards whenever a
+    /// crew is short or the cards hit their maximum width, and a bar run out to the strip's edge
+    /// would leave its forward arrow hanging under empty dock.
+    /// </summary>
+    private void MatchReplayBarToCrew()
+    {
+        if (replayBar == null || cardsContainer == null)
+            return;
+
+        Rect strip = cardsContainer.worldBound;
+        float crewRight = strip.xMin;
+        foreach (VisualElement card in cardsContainer.Children())
+        {
+            if (card.resolvedStyle.display != DisplayStyle.None)
+                crewRight = Mathf.Max(crewRight, card.worldBound.xMax);
+        }
+
+        float width = Mathf.Min(crewRight - strip.xMin, strip.width);
+        replayBar.style.width = width > 0f ? width : StyleKeyword.Auto;
+    }
+
+    private void OnReplayPreviousClicked() => replayStepAction?.Invoke(-1);
+
+    private void OnReplayNextClicked() => replayStepAction?.Invoke(1);
+
+    private void OnReplayScrubbed(ChangeEvent<float> evt) => replayScrubAction?.Invoke(evt.newValue);
+
     private static bool IsShowing(VisualElement overlay)
     {
         return overlay != null && !overlay.ClassListContains("hidden");
@@ -1881,7 +1956,10 @@ public class GameHUDController : MonoBehaviour
 
         var fitted = new Rect(0f, bottom, 1f, height);
         if (boardCamera.rect != fitted)
+        {
             boardCamera.rect = fitted;
+            GameLoop.Instance?.RefitBoardCamera();
+        }
     }
 
     // Panel space runs downwards from the top edge, so the top bar contributes its lower edge and
