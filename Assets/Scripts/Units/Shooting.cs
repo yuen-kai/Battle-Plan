@@ -391,7 +391,13 @@ public class Shooting : NetworkBehaviour
             bulletPierces,
             ignoreAdjacentWalls
         );
-        GameLoop.Instance?.RecordReplayShot(gameObject, origin, direction, range * GameLoop.cellSize);
+        GameLoop.Instance?.RecordReplayShot(
+            gameObject,
+            origin,
+            direction,
+            range * GameLoop.cellSize,
+            unitData.bulletSpeed * GameLoop.cellSize
+        );
 
         if (consumeAmmo)
             currentAmmo--;

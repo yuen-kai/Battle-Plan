@@ -176,6 +176,13 @@ public class BunkerBuster : Ability
             {
                 CameraEffects.Instance?.CameraShakeClientRpc(0.7f, 0.18f);
                 ExplosionFxClientRpc(impactPoint, AreaRadius);
+                GameLoop.Instance?.RecordReplayFx(
+                    ReplayFxCue.RocketExplosion,
+                    gameObject,
+                    impactPoint,
+                    impactPoint,
+                    AreaRadius
+                );
                 if (rocketExplosionPrefab == null)
                     return;
 
@@ -216,7 +223,10 @@ public class BunkerBuster : Ability
     }
 
     [ClientRpc]
-    private void ExplosionFxClientRpc(Vector3 explosionPosition, float areaRadius)
+    private void ExplosionFxClientRpc(Vector3 explosionPosition, float areaRadius) =>
+        PlayExplosionFx(explosionPosition, areaRadius);
+
+    public static void PlayExplosionFx(Vector3 explosionPosition, float areaRadius)
     {
         float blast = areaRadius * GameLoop.cellSize;
         Color scorch = new(1f, 0.35f, 0.05f);

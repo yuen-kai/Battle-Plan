@@ -119,6 +119,7 @@ public class NetworkHelper : NetworkBehaviour
             {
                 netObj.Spawn();
             }
+            GameLoop.Instance?.TrackReplaySpawn(instance);
 
             // Set parent after network spawn to ensure proper parenting across network
             if (parent != null)

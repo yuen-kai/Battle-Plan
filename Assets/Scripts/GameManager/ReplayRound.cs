@@ -29,6 +29,27 @@ public enum ReplayEventKind : byte
     Shot = 0,
     Ability = 1,
     WallDestroyed = 2,
+    Fx = 3,
+    Death = 4,
+}
+
+/// <summary>
+/// The one-shot effects an ability fires on every screen. Each names the static player its live
+/// RPC also calls, so a replayed effect is the same effect rather than a lookalike.
+/// </summary>
+public enum ReplayFxCue : byte
+{
+    None = 0,
+    GrenadeExplosion = 1,
+    RocketExplosion = 2,
+    LaserBeam = 3,
+    LaserImpact = 4,
+    ArcCharge = 5,
+    ArcZap = 6,
+    PogoLanding = 7,
+    LeapLaunch = 8,
+    LeapImpact = 9,
+    BarrageMuzzle = 10,
 }
 
 /// <summary>One unit's identity in a round, in the order its samples are stored.</summary>
@@ -39,9 +60,6 @@ public struct ReplayUnit : INetworkSerializable
     public sbyte catalogIndex;
     public ushort maxHealth;
 
-    /// <summary>Height the body stands at, which samples leave out because it never changes.</summary>
-    public short standHeight;
-
     public void NetworkSerialize<T>(BufferSerializer<T> serializer)
         where T : IReaderWriter
     {
@@ -49,16 +67,16 @@ public struct ReplayUnit : INetworkSerializable
         serializer.SerializeValue(ref rosterSlot);
         serializer.SerializeValue(ref catalogIndex);
         serializer.SerializeValue(ref maxHealth);
-        serializer.SerializeValue(ref standHeight);
     }
 }
 
-/// <summary>Where one unit was at one instant. Eight bytes, because frames dominate the payload.</summary>
+/// <summary>Where one unit was at one instant. Ten bytes, because frames dominate the payload.</summary>
 public struct ReplaySample : INetworkSerializable
 {
     public const float PositionScale = 100f;
 
     public short x;
+    public short y;
     public short z;
     public byte yaw;
     public ushort health;
@@ -67,7 +85,7 @@ public struct ReplaySample : INetworkSerializable
     public bool Alive => (flags & ReplaySampleFlags.Alive) != 0;
     public bool Known => (flags & ReplaySampleFlags.Known) != 0;
 
-    public Vector3 Position => new(x / PositionScale, 0f, z / PositionScale);
+    public Vector3 Position => new(x / PositionScale, y / PositionScale, z / PositionScale);
     public float Yaw => yaw * (360f / 256f);
 
     public static ReplaySample Capture(Vector3 position, float yawDegrees, float health, bool alive)
@@ -75,6 +93,7 @@ public struct ReplaySample : INetworkSerializable
         return new ReplaySample
         {
             x = QuantizePosition(position.x),
+            y = QuantizePosition(position.y),
             z = QuantizePosition(position.z),
             yaw = (byte)(Mathf.RoundToInt(Mathf.Repeat(yawDegrees, 360f) * (256f / 360f)) & 0xFF),
             health = (ushort)Mathf.Clamp(Mathf.CeilToInt(health), 0, ushort.MaxValue),
@@ -97,6 +116,7 @@ public struct ReplaySample : INetworkSerializable
         where T : IReaderWriter
     {
         serializer.SerializeValue(ref x);
+        serializer.SerializeValue(ref y);
         serializer.SerializeValue(ref z);
         serializer.SerializeValue(ref yaw);
         serializer.SerializeValue(ref health);
@@ -189,6 +209,10 @@ public struct ReplayEvent : INetworkSerializable
     public Vector3 from;
     public Vector3 to;
     public ReplaySampleFlags seenBy;
+    public ReplayFxCue cue;
+
+    /// <summary>Shot speed, effect radius or beam duration, depending on the kind.</summary>
+    public float value;
 
     public float Time => timeCentiseconds / 100f;
 
@@ -205,6 +229,120 @@ public struct ReplayEvent : INetworkSerializable
         byte seen = (byte)seenBy;
         serializer.SerializeValue(ref seen);
         seenBy = (ReplaySampleFlags)seen;
+        byte cueByte = (byte)cue;
+        serializer.SerializeValue(ref cueByte);
+        cue = (ReplayFxCue)cueByte;
+        serializer.SerializeValue(ref value);
+    }
+}
+
+/// <summary>The smoke on the board from <see cref="Time"/> on, as a whole set rather than a delta.</summary>
+public class ReplaySmokeChange
+{
+    public ushort timeCentiseconds;
+    public List<Vector2Int> cells = new();
+
+    public float Time => timeCentiseconds / 100f;
+}
+
+public struct ReplayTrackPoint
+{
+    public ushort timeCentiseconds;
+    public Vector3 position;
+    public Vector3 euler;
+    public float scale;
+
+    public float Time => timeCentiseconds / 100f;
+}
+
+/// <summary>
+/// Something the server spawned on the network mid-round — a grenade in flight, a rocket, a smoke
+/// canister, an explosion — followed from spawn to despawn. Identified by its network prefab, which
+/// every peer already holds, so the viewer stands up a copy of the very object that flew.
+/// </summary>
+public class ReplayTrack : INetworkSerializable
+{
+    public uint prefabHash;
+    public ushort endCentiseconds;
+    public List<ReplayTrackPoint> points = new();
+
+    public float StartTime => points.Count > 0 ? points[0].Time : 0f;
+    public float EndTime => endCentiseconds / 100f;
+
+    public bool TrySample(float time, out Vector3 position, out Quaternion rotation, out float scale)
+    {
+        position = default;
+        rotation = Quaternion.identity;
+        scale = 1f;
+        if (points.Count == 0 || time < StartTime || time > EndTime)
+            return false;
+
+        int upper = points.FindIndex(point => point.Time > time);
+        if (upper < 0)
+            upper = points.Count - 1;
+        int lower = Mathf.Max(0, upper - 1);
+        ReplayTrackPoint a = points[lower];
+        ReplayTrackPoint b = points[upper];
+        float span = b.Time - a.Time;
+        float blend = span > 1e-4f ? Mathf.Clamp01((time - a.Time) / span) : 1f;
+        if (time >= b.Time)
+            blend = 1f;
+
+        position = Vector3.Lerp(a.position, b.position, blend);
+        rotation = Quaternion.Slerp(Quaternion.Euler(a.euler), Quaternion.Euler(b.euler), blend);
+        scale = Mathf.Lerp(a.scale, b.scale, blend);
+        return true;
+    }
+
+    public ReplayTrack Clone() =>
+        new()
+        {
+            prefabHash = prefabHash,
+            endCentiseconds = endCentiseconds,
+            points = new List<ReplayTrackPoint>(points),
+        };
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref prefabHash);
+        serializer.SerializeValue(ref endCentiseconds);
+        int count = points?.Count ?? 0;
+        serializer.SerializeValue(ref count);
+        if (serializer.IsReader)
+            points = new List<ReplayTrackPoint>(count);
+        for (int i = 0; i < count; i++)
+        {
+            ReplayTrackPoint point = serializer.IsWriter ? points[i] : default;
+            serializer.SerializeValue(ref point.timeCentiseconds);
+            ReplayRound.SerializePoint(serializer, ref point.position);
+            byte pitch = (byte)(Mathf.RoundToInt(Mathf.Repeat(point.euler.x, 360f) * (256f / 360f)) & 0xFF);
+            byte yaw = (byte)(Mathf.RoundToInt(Mathf.Repeat(point.euler.y, 360f) * (256f / 360f)) & 0xFF);
+            byte roll = (byte)(Mathf.RoundToInt(Mathf.Repeat(point.euler.z, 360f) * (256f / 360f)) & 0xFF);
+            serializer.SerializeValue(ref pitch);
+            serializer.SerializeValue(ref yaw);
+            serializer.SerializeValue(ref roll);
+            ReplayRound.SerializeTenths(serializer, ref point.scale);
+            if (serializer.IsReader)
+            {
+                point.euler = new Vector3(pitch, yaw, roll) * (360f / 256f);
+                points.Add(point);
+            }
+        }
+    }
+}
+
+public struct ReplayTrackMessage : INetworkSerializable
+{
+    public int roundNumber;
+    public ReplayTrack track;
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref roundNumber);
+        track ??= new ReplayTrack();
+        track.NetworkSerialize(serializer);
     }
 }
 
@@ -232,6 +370,8 @@ public class ReplayRound
     public List<ReplayUnit> units = new();
     public List<ReplayPlan> plans = new();
     public List<Vector2Int> smokeCells = new();
+    public List<ReplaySmokeChange> smokeChanges = new();
+    public List<ReplayTrack> tracks = new();
 
     /// <summary>Frame 0 is the board as the round opened; each later frame is <see cref="FrameInterval"/> on.</summary>
     public List<ReplaySample[]> frames = new();
@@ -298,7 +438,10 @@ public class ReplayRound
             roundNumber = roundNumber,
             units = new List<ReplayUnit>(units),
             smokeCells = new List<Vector2Int>(smokeCells),
+            smokeChanges = new List<ReplaySmokeChange>(smokeChanges),
         };
+        foreach (ReplayTrack track in tracks)
+            copy.tracks.Add(track.Clone());
 
         List<HashSet<Vector2Int>> seenCells = new(units.Count);
         for (int i = 0; i < units.Count; i++)
@@ -323,6 +466,7 @@ public class ReplayRound
                 else
                 {
                     sample.x = 0;
+                    sample.y = 0;
                     sample.z = 0;
                     sample.yaw = 0;
                 }
@@ -381,6 +525,8 @@ public class ReplayRound
             units = units,
             plans = plans,
             smokeCells = smokeCells,
+            smokeChanges = smokeChanges,
+            trackCount = tracks.Count,
         };
 
     public ReplayFrameChunk BuildFrameChunk(int firstFrame)
@@ -469,6 +615,8 @@ public struct ReplayRoundHeader : INetworkSerializable
     public List<ReplayUnit> units;
     public List<ReplayPlan> plans;
     public List<Vector2Int> smokeCells;
+    public List<ReplaySmokeChange> smokeChanges;
+    public int trackCount;
 
     public void NetworkSerialize<T>(BufferSerializer<T> serializer)
         where T : IReaderWriter
@@ -476,7 +624,21 @@ public struct ReplayRoundHeader : INetworkSerializable
         serializer.SerializeValue(ref roundNumber);
         serializer.SerializeValue(ref frameCount);
         serializer.SerializeValue(ref eventCount);
+        serializer.SerializeValue(ref trackCount);
         ReplayRound.SerializeCells(serializer, ref smokeCells);
+
+        int changeCount = smokeChanges?.Count ?? 0;
+        serializer.SerializeValue(ref changeCount);
+        if (serializer.IsReader)
+            smokeChanges = new List<ReplaySmokeChange>(changeCount);
+        for (int i = 0; i < changeCount; i++)
+        {
+            ReplaySmokeChange change = serializer.IsWriter ? smokeChanges[i] : new ReplaySmokeChange();
+            serializer.SerializeValue(ref change.timeCentiseconds);
+            ReplayRound.SerializeCells(serializer, ref change.cells);
+            if (serializer.IsReader)
+                smokeChanges.Add(change);
+        }
 
         int unitCount = units?.Count ?? 0;
         serializer.SerializeValue(ref unitCount);
@@ -550,7 +712,7 @@ public struct ReplayEventChunk : INetworkSerializable
 public class ReplayArchive
 {
     private readonly SortedDictionary<int, ReplayRound> rounds = new();
-    private readonly Dictionary<int, (int frames, int events)> expected = new();
+    private readonly Dictionary<int, (int frames, int events, int tracks)> expected = new();
 
     public event Action Changed;
 
@@ -580,16 +742,21 @@ public class ReplayArchive
             Changed?.Invoke();
     }
 
+    /// <summary>
+    /// Starts assembling a round. A copy already held stays readable until its replacement is
+    /// whole, so the post-match reveal never pulls a round out from under the viewer.
+    /// </summary>
     public void Receive(ReplayRoundHeader header)
     {
-        rounds.Remove(header.roundNumber);
-        expected[header.roundNumber] = (header.frameCount, header.eventCount);
+        expected[header.roundNumber] = (header.frameCount, header.eventCount, header.trackCount);
         pending[header.roundNumber] = new ReplayRound
         {
             roundNumber = header.roundNumber,
             units = header.units ?? new List<ReplayUnit>(),
             plans = header.plans ?? new List<ReplayPlan>(),
             smokeCells = header.smokeCells ?? new List<Vector2Int>(),
+            smokeChanges = header.smokeChanges ?? new List<ReplaySmokeChange>(),
+            tracks = new List<ReplayTrack>(header.trackCount),
             frames = new List<ReplaySample[]>(header.frameCount),
             events = new List<ReplayEvent>(header.eventCount),
         };
@@ -620,6 +787,15 @@ public class ReplayArchive
         TryComplete(chunk.roundNumber);
     }
 
+    public void Receive(ReplayTrackMessage message)
+    {
+        if (!pending.TryGetValue(message.roundNumber, out ReplayRound round) || message.track == null)
+            return;
+
+        round.tracks.Add(message.track);
+        TryComplete(message.roundNumber);
+    }
+
     private readonly Dictionary<int, ReplayRound> pending = new();
 
     private void TryComplete(int roundNumber)
@@ -629,6 +805,7 @@ public class ReplayArchive
             || !expected.TryGetValue(roundNumber, out var counts)
             || round.frames.Count < counts.frames
             || round.events.Count < counts.events
+            || round.tracks.Count < counts.tracks
         )
         {
             return;

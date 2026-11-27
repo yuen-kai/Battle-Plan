@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class ShatterLeap : Ability
 {
-    private const float AbilityTime = 2.1f;
+    public const float AbilityTime = 2.1f;
 
     private const float RecoverySeconds = 1.2f;
 
@@ -75,6 +75,13 @@ public class ShatterLeap : Ability
         unitCollider.enabled = false;
 
         LaunchFxClientRpc(targetPosition, AreaRadius, AbilityTime);
+        GameLoop.Instance?.RecordReplayFx(
+            ReplayFxCue.LeapLaunch,
+            gameObject,
+            transform.position,
+            targetPosition,
+            AreaRadius
+        );
 
         float elapsed = 0f;
 
@@ -96,6 +103,13 @@ public class ShatterLeap : Ability
 
         CameraEffects.Instance?.CameraShakeClientRpc(0.4f, 0.07f);
         ImpactFxClientRpc(targetPosition, AreaRadius);
+        GameLoop.Instance?.RecordReplayFx(
+            ReplayFxCue.LeapImpact,
+            gameObject,
+            targetPosition,
+            targetPosition,
+            AreaRadius
+        );
         ApplyLandingDamage(FindEnemiesInLandingRadius(targetPosition, AreaRadius));
 
         unitCollider.enabled = true;
@@ -149,10 +163,23 @@ public class ShatterLeap : Ability
         Vector3 landingPosition,
         float areaRadius,
         float flightSeconds
+    ) =>
+        PlayLaunchFx(
+            landingPosition,
+            areaRadius,
+            flightSeconds,
+            GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1),
+            transform
+        );
+
+    public static void PlayLaunchFx(
+        Vector3 landingPosition,
+        float areaRadius,
+        float flightSeconds,
+        Color teamColor,
+        Transform leaper
     )
     {
-        Color teamColor = GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1);
-
         AbilityWindup.Play(
             null,
             landingPosition,
@@ -162,13 +189,20 @@ public class ShatterLeap : Ability
             areaRadius * GameLoop.cellSize
         );
 
-        ShatterLeapTrail.Attach(transform, teamColor, flightSeconds);
+        if (leaper != null)
+            ShatterLeapTrail.Attach(leaper, teamColor, flightSeconds);
     }
 
     [ClientRpc]
-    private void ImpactFxClientRpc(Vector3 landingPosition, float areaRadius)
+    private void ImpactFxClientRpc(Vector3 landingPosition, float areaRadius) =>
+        PlayImpactFx(
+            landingPosition,
+            areaRadius,
+            GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1)
+        );
+
+    public static void PlayImpactFx(Vector3 landingPosition, float areaRadius, Color teamColor)
     {
-        Color teamColor = GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1);
         float blast = areaRadius * GameLoop.cellSize;
 
         ImpactShockwave.Spawn(

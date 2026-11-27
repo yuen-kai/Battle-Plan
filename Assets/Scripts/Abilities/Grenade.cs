@@ -95,6 +95,13 @@ public partial class Grenade : Ability
             {
                 CameraEffects.Instance.CameraShakeClientRpc();
                 ExplosionFxClientRpc(targetPosition, AreaRadius);
+                GameLoop.Instance?.RecordReplayFx(
+                    ReplayFxCue.GrenadeExplosion,
+                    gameObject,
+                    targetPosition,
+                    targetPosition,
+                    AreaRadius
+                );
                 GameObject explosionEffect = NetworkHelper.Spawn(
                     grenadeExplosionPrefab,
                     targetPosition,
@@ -110,7 +117,10 @@ public partial class Grenade : Ability
     }
 
     [ClientRpc]
-    private void ExplosionFxClientRpc(Vector3 explosionPosition, float areaRadius)
+    private void ExplosionFxClientRpc(Vector3 explosionPosition, float areaRadius) =>
+        PlayExplosionFx(explosionPosition, areaRadius);
+
+    public static void PlayExplosionFx(Vector3 explosionPosition, float areaRadius)
     {
         float blast = areaRadius * GameLoop.cellSize;
         Color alarm = new(1f, 0.77f, 0f);

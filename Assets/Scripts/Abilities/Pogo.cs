@@ -84,6 +84,7 @@ public partial class Pogo : Ability
         // Landing on every peer. A third of the shake a grenade takes: enough to say a body with
         // weight arrived, not enough to say something went off.
         LandingFxClientRpc(targetPosition);
+        GameLoop.Instance?.RecordReplayFx(ReplayFxCue.PogoLanding, gameObject, targetPosition, targetPosition);
         CameraEffects.Instance?.CameraShakeClientRpc(0.25f, 0.035f);
 
         transform.GetComponent<Collider>().enabled = true;
@@ -95,9 +96,14 @@ public partial class Pogo : Ability
     }
 
     [ClientRpc]
-    private void LandingFxClientRpc(Vector3 landingPosition)
+    private void LandingFxClientRpc(Vector3 landingPosition) =>
+        PlayLandingFx(
+            landingPosition,
+            GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1)
+        );
+
+    public static void PlayLandingFx(Vector3 landingPosition, Color teamColor)
     {
-        Color teamColor = GameLoop.GetTeamColorForViewer(GetComponent<Unit>()?.TeamIndex ?? -1);
 
         // An arrival, and deliberately the opposite read to a death: everything here leaves the
         // point of contact outward and upward, and the rider is still standing in the middle of it

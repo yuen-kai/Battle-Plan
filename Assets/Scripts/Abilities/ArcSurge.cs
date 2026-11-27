@@ -27,6 +27,13 @@ public class ArcSurge : Ability
 
         BeginInterruptibleAbilityAction();
         ShowChargeClientRpc(NetworkObjectId, transform.position, HandOrigin(), AreaRadius);
+        GameLoop.Instance?.RecordReplayFx(
+            ReplayFxCue.ArcCharge,
+            gameObject,
+            transform.position,
+            HandOrigin(),
+            AreaRadius
+        );
 
         yield return new WaitForSeconds(ChargeSeconds);
 
@@ -39,6 +46,13 @@ public class ArcSurge : Ability
         foreach (BlockedStrike strike in blocked)
             GameLoop.Instance?.ReportShieldBlockedDamage(strike.ShieldOwner, strike.Point);
 
+        GameLoop.Instance?.RecordReplayFx(
+            ReplayFxCue.ArcZap,
+            gameObject,
+            transform.position,
+            HandOrigin(),
+            AreaRadius
+        );
         ShowZapClientRpc(
             transform.position,
             HandOrigin(),
@@ -193,7 +207,9 @@ public class ArcSurge : Ability
         Vector3 casterPosition,
         Vector3 focus,
         float areaRadius
-    )
+    ) => PlayChargeFx(casterId, casterPosition, focus, areaRadius);
+
+    public static void PlayChargeFx(ulong casterId, Vector3 casterPosition, Vector3 focus, float areaRadius)
     {
         ArcSurgeVFX.SpawnCharge(
             casterId,
@@ -217,6 +233,14 @@ public class ArcSurge : Ability
         Vector3 origin,
         Vector3[] strikePoints,
         float areaRadius
+    ) => PlayZapFx(casterPosition, origin, strikePoints, areaRadius, true);
+
+    public static void PlayZapFx(
+        Vector3 casterPosition,
+        Vector3 origin,
+        Vector3[] strikePoints,
+        float areaRadius,
+        bool punchCamera
     )
     {
         Color bolt = BoltColor();
@@ -234,7 +258,8 @@ public class ArcSurge : Ability
             groundDust: 0f
         );
         ImpactCore.Spawn(origin, bolt, GameLoop.cellSize * CoreShare, CorePunch);
-        ImpactCamera.Punch(casterPosition, CameraPunch);
+        if (punchCamera)
+            ImpactCamera.Punch(casterPosition, CameraPunch);
 
         ArcSurgeVFX.SpawnArcs(
             origin,

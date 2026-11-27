@@ -188,6 +188,12 @@ public class Health : NetworkBehaviour
         }
 
         isAlive.Value = false;
+        GameLoop.Instance?.RecordReplayEvent(
+            ReplayEventKind.Death,
+            gameObject,
+            transform.position,
+            transform.position
+        );
         GetComponent<Movement>()?.ClearTemporaryMoveSpeedBoost();
         ClearDamageReduction();
         GameLoop.Instance?.DisableUnitCard(gameObject);

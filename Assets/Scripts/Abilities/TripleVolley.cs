@@ -50,7 +50,16 @@ public class TripleVolley : Ability
         Vector3[] fanDirections = ComputeFanDirections(direction3D);
         Vector3 origin = transform.position;
         foreach (Vector3 fanDirection in fanDirections)
+        {
             CreateVolleyProjectile(origin, fanDirection, data, authoritative: true);
+            GameLoop.Instance?.RecordReplayShot(
+                gameObject,
+                origin,
+                fanDirection,
+                data.bulletRange * GameLoop.cellSize,
+                data.bulletSpeed * GameLoop.cellSize
+            );
+        }
 
         FireVolleyClientRpc(origin, fanDirections[0], fanDirections[1], fanDirections[2]);
         GetComponent<AnimationHandler>()?.TriggerAnimation("Shoot");

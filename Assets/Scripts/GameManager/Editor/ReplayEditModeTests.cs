@@ -86,6 +86,29 @@ public class ReplayEditModeTests
             from = Cell(3, 3),
             to = Cell(3, 3),
         });
+        round.events.Add(new ReplayEvent
+        {
+            timeCentiseconds = 420,
+            kind = ReplayEventKind.Fx,
+            cue = ReplayFxCue.GrenadeExplosion,
+            unitIndex = 0,
+            from = Cell(4, 4),
+            to = Cell(4, 4),
+            value = 1.5f,
+            seenBy = ReplaySample.SeenBy(Viewer),
+        });
+
+        round.smokeChanges.Add(new ReplaySmokeChange
+        {
+            timeCentiseconds = 350,
+            cells = new List<Vector2Int> { new(6, 6), new(2, 7) },
+        });
+
+        ReplayTrack grenade = new() { prefabHash = 0xBEEF, endCentiseconds = 420 };
+        grenade.points.Add(new ReplayTrackPoint { timeCentiseconds = 320, position = Cell(1, 1), scale = 1f });
+        grenade.points.Add(new ReplayTrackPoint { timeCentiseconds = 370, position = Cell(2, 2) + Vector3.up * 2f, euler = new Vector3(0f, 90f, 0f), scale = 1f });
+        grenade.points.Add(new ReplayTrackPoint { timeCentiseconds = 420, position = Cell(4, 4), scale = 1f });
+        round.tracks.Add(grenade);
         return round;
     }
 
@@ -115,6 +138,9 @@ public class ReplayEditModeTests
             archive.Receive(RoundTrip(round.BuildFrameChunk(frame)));
         for (int i = 0; i < round.events.Count; i += ReplayRound.EventsPerChunk)
             archive.Receive(RoundTrip(round.BuildEventChunk(i)));
+        Assert.That(archive.TryGet(round.roundNumber, out _), Is.EqualTo(round.tracks.Count == 0));
+        foreach (ReplayTrack track in round.tracks)
+            archive.Receive(RoundTrip(new ReplayTrackMessage { roundNumber = round.roundNumber, track = track }));
 
         Assert.That(archive.TryGet(round.roundNumber, out ReplayRound shipped), Is.True);
         return shipped;
@@ -133,7 +159,20 @@ public class ReplayEditModeTests
         Assert.That(read.smokeCells, Is.EqualTo(new List<Vector2Int> { new(6, 6) }));
         Assert.That(read.frames.Count, Is.EqualTo(FrameCount));
         Assert.That(read.Duration, Is.EqualTo((FrameCount - 1) * ReplayRound.FrameInterval).Within(1e-4f));
-        Assert.That(read.events.Count, Is.EqualTo(3));
+        Assert.That(read.events.Count, Is.EqualTo(4));
+
+        ReplayEvent explosion = read.events.Find(e => e.kind == ReplayEventKind.Fx);
+        Assert.That(explosion.cue, Is.EqualTo(ReplayFxCue.GrenadeExplosion));
+        Assert.That(explosion.value, Is.EqualTo(1.5f));
+
+        Assert.That(read.smokeChanges.Count, Is.EqualTo(1));
+        Assert.That(read.smokeChanges[0].Time, Is.EqualTo(3.5f).Within(1e-4f));
+        Assert.That(read.smokeChanges[0].cells.Count, Is.EqualTo(2));
+
+        Assert.That(read.tracks.Count, Is.EqualTo(1));
+        Assert.That(read.tracks[0].prefabHash, Is.EqualTo(0xBEEFu));
+        Assert.That(read.tracks[0].points.Count, Is.EqualTo(3));
+        Assert.That(read.frames[10][1].Position.y, Is.EqualTo(Cell(5, 2).y).Within(0.01f));
 
         ReplayPlan ability = read.plans[0];
         Assert.That(ability.kind, Is.EqualTo(ReplayPlanKind.Ability));
@@ -205,6 +244,31 @@ public class ReplayEditModeTests
         Assert.That(reveal.frames[FrameCount - 1][1].Known, Is.True);
         Assert.That(reveal.plans.Find(plan => plan.unitIndex == 1).route.Count, Is.EqualTo(3));
         Assert.That(reveal.events.Count, Is.EqualTo(source.events.Count));
+    }
+
+    [Test]
+    public void FilterForTeam_KeepsThrownObjectsAndSmokeThatEveryScreenSawLive()
+    {
+        ReplayRound view = BuildRound().FilterForTeam(Opponent);
+
+        Assert.That(view.tracks.Count, Is.EqualTo(1));
+        Assert.That(view.smokeChanges.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Track_FollowsItsPathAndVanishesOutsideItsLife()
+    {
+        ReplayTrack track = BuildRound().tracks[0];
+
+        Assert.That(track.TrySample(3.1f, out _, out _, out _), Is.False);
+        Assert.That(track.TrySample(4.3f, out _, out _, out _), Is.False);
+
+        Assert.That(track.TrySample(3.45f, out Vector3 midway, out _, out _), Is.True);
+        Vector3 expected = Vector3.Lerp(Cell(1, 1), Cell(2, 2) + Vector3.up * 2f, 0.5f);
+        Assert.That(Vector3.Distance(midway, expected), Is.LessThan(0.01f));
+
+        Assert.That(track.TrySample(4.2f, out Vector3 landed, out _, out _), Is.True);
+        Assert.That(Vector3.Distance(landed, Cell(4, 4)), Is.LessThan(0.01f));
     }
 
     [Test]

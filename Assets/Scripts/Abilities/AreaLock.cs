@@ -14,6 +14,8 @@ public class AreaLock : Ability
 
     // Threat-red laser regardless of team: it reads as "danger line" to both players.
     static readonly Color LaserGlow = new(1f, 0.14f, 0.25f);
+    public static Color LaserGlowColor => LaserGlow;
+    private int laserReplayEvent = -1;
 
     private BeamVFX serverBeam;
     private BeamVFX clientBeam;
@@ -21,6 +23,13 @@ public class AreaLock : Ability
     // The beam is a raycast that stops at the first wall it meets and the kill only happens on an
     // enemy collider it reaches, so a wall between the caster and the aim point is the whole shot.
     public override AbilityLineOfFire LineOfFire => AbilityLineOfFire.Required;
+
+    protected override void OnAbilityInterrupted()
+    {
+        base.OnAbilityInterrupted();
+        GameLoop.Instance?.EndReplayFx(laserReplayEvent);
+        laserReplayEvent = -1;
+    }
 
     public override void ResetForRespawn()
     {
@@ -56,6 +65,10 @@ public class AreaLock : Ability
         serverBeam = BeamVFX.Create(transform, startPosition, beamEnd, LaserGlow);
         serverBeam.Pulse();
         ShowLaserClientRpc(startPosition, beamEnd);
+        laserReplayEvent =
+            GameLoop.Instance != null
+                ? GameLoop.Instance.RecordReplayFx(ReplayFxCue.LaserBeam, gameObject, startPosition, beamEnd)
+                : -1;
 
         yield return StartCoroutine(
             transform.GetComponent<Movement>().RotateToFaceTarget(targetPosition, rotationSpeed)
@@ -168,6 +181,8 @@ public class AreaLock : Ability
             serverBeam = null;
         }
         HideLaserClientRpc();
+        GameLoop.Instance?.EndReplayFx(laserReplayEvent);
+        laserReplayEvent = -1;
         transform.GetComponent<Shooting>().stillShooting = false;
         yield return new WaitForSeconds(1f); //moment to regain composure
         if (transform.GetComponent<Shooting>().allowShooting)
@@ -196,6 +211,7 @@ public class AreaLock : Ability
         // NetworkVariable callback when the damage below replicates.
         ImpactFxClientRpc(endPos);
         ImpactShockwave.Spawn(endPos, LaserGlow, 3f);
+        GameLoop.Instance?.RecordReplayFx(ReplayFxCue.LaserImpact, gameObject, endPos, endPos);
         CameraEffects.Instance?.CameraShakeClientRpc();
 
         target.GetComponent<Health>()?.TakeDamage(AbilityDamage);

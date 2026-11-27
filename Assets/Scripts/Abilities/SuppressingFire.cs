@@ -60,6 +60,12 @@ public class SuppressingFire : Ability
         yield return new WaitForSeconds(WindUpSeconds);
 
         BarrageFxClientRpc(transform.position, direction3D);
+        GameLoop.Instance?.RecordReplayFx(
+            ReplayFxCue.BarrageMuzzle,
+            gameObject,
+            transform.position,
+            transform.position + direction3D
+        );
 
         SpreadZoneWeights barrageZones = new(
             BarrageEdgeWeight,
@@ -189,13 +195,16 @@ public class SuppressingFire : Ability
     [ClientRpc]
     private void BarrageFxClientRpc(Vector3 origin, Vector3 direction)
     {
-        Color muzzle = AbilityJuice.Alarm;
-        Vector3 muzzlePosition = origin + direction.normalized * (GameLoop.cellSize * 0.4f);
-
-        ImpactCore.Spawn(muzzlePosition, muzzle, 1.1f, 1.4f);
+        PlayBarrageMuzzleFx(origin, direction);
         CameraEffects.Instance?.CameraShakeClientRpc(
             BarrageShots * SecondsBetweenShots,
             0.02f
         );
+    }
+
+    public static void PlayBarrageMuzzleFx(Vector3 origin, Vector3 direction)
+    {
+        Vector3 muzzlePosition = origin + direction.normalized * (GameLoop.cellSize * 0.4f);
+        ImpactCore.Spawn(muzzlePosition, AbilityJuice.Alarm, 1.1f, 1.4f);
     }
 }

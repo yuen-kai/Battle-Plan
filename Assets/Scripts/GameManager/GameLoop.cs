@@ -2314,6 +2314,7 @@ public class GameLoop : NetworkBehaviour
             )
         );
         RebuildActiveSmokeCellsFromDeployments();
+        RecordReplaySmoke();
 
         RefreshServerFogForSmokeChange();
         if (IsSpawned && NetworkManager != null && NetworkManager.IsListening)
@@ -3106,10 +3107,12 @@ public class GameLoop : NetworkBehaviour
         int teamIndex
     )
     {
-        Color teamColor = GetTeamColorForViewer(teamIndex);
         StartCoroutine(FlashAbilityCasterWhenVisible(unitReference));
-        ImpactShockwave.Spawn(activationPosition, teamColor, 1.8f, 0.45f);
+        PlayAbilityActivationFx(activationPosition, GetTeamColorForViewer(teamIndex));
     }
+
+    public static void PlayAbilityActivationFx(Vector3 activationPosition, Color teamColor) =>
+        ImpactShockwave.Spawn(activationPosition, teamColor, 1.8f, 0.45f);
 
     private static IEnumerator FlashAbilityCasterWhenVisible(NetworkObjectReference unitReference)
     {
@@ -7852,6 +7855,7 @@ public class GameLoop : NetworkBehaviour
         ReplayRound round = new() { roundNumber = roundNumber };
         round.smokeCells.AddRange(ActiveSmokeCells);
         replayUnitObjects.Clear();
+        openReplayTracks.Clear();
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
         {
             GameObject[] units = GetTeamUnits(teamIndex);
@@ -7872,9 +7876,6 @@ public class GameLoop : NetworkBehaviour
                         ),
                         maxHealth = (ushort)(
                             health != null ? Mathf.CeilToInt(health.MaxHealth) : 0
-                        ),
-                        standHeight = ReplaySample.QuantizePosition(
-                            units[slot].transform.position.y
                         ),
                     }
                 );
@@ -8010,6 +8011,7 @@ public class GameLoop : NetworkBehaviour
             frame[i] = sample;
         }
         recordingReplayRound.frames.Add(frame);
+        SampleReplayTracks(false);
     }
 
     private bool IsSeenForReplay(int teamIndex, GameObject unit, Vector3 position)
@@ -8027,15 +8029,22 @@ public class GameLoop : NetworkBehaviour
     /// ability going off, a wall coming down. Tagged with who could see it from the visibility the
     /// last frame computed, so a hidden shooter's tracer is not handed to the crew it was hidden from.
     /// </summary>
-    public void RecordReplayEvent(ReplayEventKind kind, GameObject actor, Vector3 from, Vector3 to)
+    public int RecordReplayEvent(
+        ReplayEventKind kind,
+        GameObject actor,
+        Vector3 from,
+        Vector3 to,
+        ReplayFxCue cue = ReplayFxCue.None,
+        float value = 0f
+    )
     {
         ReplayRound round = recordingReplayRound;
         if (!IsServer || round == null || round.events.Count >= ReplayRound.MaxEvents)
-            return;
+            return -1;
 
         int unitIndex = actor != null ? replayUnitObjects.IndexOf(actor) : -1;
         if (kind != ReplayEventKind.WallDestroyed && unitIndex < 0)
-            return;
+            return -1;
 
         ReplaySampleFlags seenBy = ReplaySampleFlags.None;
         for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
@@ -8055,16 +8064,121 @@ public class GameLoop : NetworkBehaviour
         round.events.Add(
             new ReplayEvent
             {
-                timeCentiseconds = (ushort)Mathf.Clamp(
-                    Mathf.RoundToInt((Time.time - replayRoundStartTime) * 100f),
-                    0,
-                    ushort.MaxValue
-                ),
+                timeCentiseconds = ReplayNow(),
                 kind = kind,
                 unitIndex = (byte)Mathf.Max(0, unitIndex),
                 from = from,
                 to = to,
                 seenBy = seenBy,
+                cue = cue,
+                value = value,
+            }
+        );
+        return round.events.Count - 1;
+    }
+
+    private ushort ReplayNow() =>
+        (ushort)Mathf.Clamp(
+            Mathf.RoundToInt((Time.time - replayRoundStartTime) * 100f),
+            0,
+            ushort.MaxValue
+        );
+
+    /// <summary>
+    /// Records a one-shot effect an ability is firing on every screen. Returns the event so an
+    /// effect that lasts — a held beam — can be closed with <see cref="EndReplayFx"/>.
+    /// </summary>
+    public int RecordReplayFx(ReplayFxCue cue, GameObject caster, Vector3 from, Vector3 to, float value = 0f) =>
+        RecordReplayEvent(ReplayEventKind.Fx, caster, from, to, cue, value);
+
+    public void EndReplayFx(int eventIndex)
+    {
+        ReplayRound round = recordingReplayRound;
+        if (round == null || eventIndex < 0 || eventIndex >= round.events.Count)
+            return;
+        ReplayEvent replayEvent = round.events[eventIndex];
+        replayEvent.value = Mathf.Max(0f, ReplayNow() / 100f - replayEvent.Time);
+        round.events[eventIndex] = replayEvent;
+    }
+
+    // === REPLAY TRACKS (server) ===
+
+    private const int MaxReplayTracks = 48;
+    private readonly List<(GameObject body, ReplayTrack track)> openReplayTracks = new();
+
+    /// <summary>
+    /// Follows a network object spawned mid-round — anything thrown, fired or blown up — so the
+    /// replay can fly the same object along the same path.
+    /// </summary>
+    public void TrackReplaySpawn(GameObject spawned)
+    {
+        ReplayRound round = recordingReplayRound;
+        if (
+            !IsServer
+            || round == null
+            || spawned == null
+            || spawned.GetComponent<Unit>() != null
+            || round.tracks.Count + openReplayTracks.Count >= MaxReplayTracks
+        )
+        {
+            return;
+        }
+
+        NetworkObject networkObject = spawned.GetComponent<NetworkObject>();
+        if (networkObject == null)
+            return;
+
+        ReplayTrack track = new() { prefabHash = networkObject.PrefabIdHash };
+        AddReplayTrackPoint(track, spawned.transform);
+        openReplayTracks.Add((spawned, track));
+    }
+
+    private void AddReplayTrackPoint(ReplayTrack track, Transform body)
+    {
+        track.points.Add(
+            new ReplayTrackPoint
+            {
+                timeCentiseconds = ReplayNow(),
+                position = body.position,
+                euler = body.eulerAngles,
+                scale = body.lossyScale.x,
+            }
+        );
+    }
+
+    private void SampleReplayTracks(bool closeAll)
+    {
+        ReplayRound round = recordingReplayRound;
+        if (round == null)
+            return;
+
+        for (int i = openReplayTracks.Count - 1; i >= 0; i--)
+        {
+            (GameObject body, ReplayTrack track) = openReplayTracks[i];
+            bool gone = body == null || !body.activeInHierarchy;
+            if (!gone)
+                AddReplayTrackPoint(track, body.transform);
+            if (!gone && !closeAll)
+                continue;
+
+            track.endCentiseconds = ReplayNow();
+            round.tracks.Add(track);
+            openReplayTracks.RemoveAt(i);
+        }
+    }
+
+    /// <summary>The smoke standing on the board from this moment on.</summary>
+    private void RecordReplaySmoke()
+    {
+        ReplayRound round = recordingReplayRound;
+        if (!IsServer || round == null)
+            return;
+
+        round.smokeChanges.Add(
+            new ReplaySmokeChange
+            {
+                timeCentiseconds = ReplayNow(),
+                cells = activeSmokeCells.OrderBy(cell => cell.y).ThenBy(cell => cell.x).ToList(),
             }
         );
     }
@@ -8073,7 +8187,13 @@ public class GameLoop : NetworkBehaviour
     /// A shot is kept as a tracer from the muzzle to whatever first stops it, read off the same
     /// colliders the bullet itself will meet, so a replayed shot never passes through cover.
     /// </summary>
-    public void RecordReplayShot(GameObject shooter, Vector3 origin, Vector3 direction, float distance)
+    public void RecordReplayShot(
+        GameObject shooter,
+        Vector3 origin,
+        Vector3 direction,
+        float distance,
+        float speed
+    )
     {
         if (!IsServer || recordingReplayRound == null || shooter == null)
             return;
@@ -8094,7 +8214,7 @@ public class GameLoop : NetworkBehaviour
             }
         }
 
-        RecordReplayEvent(ReplayEventKind.Shot, shooter, origin, end);
+        RecordReplayEvent(ReplayEventKind.Shot, shooter, origin, end, ReplayFxCue.None, speed);
     }
 
     /// <summary>Closes the open recording and hands each seat its own view of it. Idempotent.</summary>
@@ -8110,6 +8230,7 @@ public class GameLoop : NetworkBehaviour
             replayFrameCoroutine = null;
         }
         CaptureReplayFrame();
+        SampleReplayTracks(true);
         recordingReplayRound = null;
 
         recordedReplayRounds.Add(round);
@@ -8148,6 +8269,11 @@ public class GameLoop : NetworkBehaviour
             ReceiveReplayFramesClientRpc(round.BuildFrameChunk(frame), target);
         for (int replayEvent = 0; replayEvent < round.events.Count; replayEvent += ReplayRound.EventsPerChunk)
             ReceiveReplayEventsClientRpc(round.BuildEventChunk(replayEvent), target);
+        foreach (ReplayTrack track in round.tracks)
+            ReceiveReplayTrackClientRpc(
+                new ReplayTrackMessage { roundNumber = round.roundNumber, track = track },
+                target
+            );
     }
 
     /// <summary>
@@ -8174,6 +8300,7 @@ public class GameLoop : NetworkBehaviour
     private void ResetReplayRecording()
     {
         recordingReplayRound = null;
+        openReplayTracks.Clear();
         recordedReplayRounds.Clear();
         replayUnitObjects.Clear();
         if (replayFrameCoroutine != null)
@@ -8200,6 +8327,12 @@ public class GameLoop : NetworkBehaviour
         ReplayFrameChunk chunk,
         ClientRpcParams clientRpcParams = default
     ) => Replays.Receive(chunk);
+
+    [ClientRpc]
+    private void ReceiveReplayTrackClientRpc(
+        ReplayTrackMessage message,
+        ClientRpcParams clientRpcParams = default
+    ) => Replays.Receive(message);
 
     [ClientRpc]
     private void ReceiveReplayEventsClientRpc(
