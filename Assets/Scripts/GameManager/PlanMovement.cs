@@ -154,6 +154,9 @@ public partial class PlanMovement : MonoBehaviour
     /// chip, which must not close a session that opened while it was waiting.
     /// </summary>
     public bool IsPlanningSessionOpen => planningActive;
+
+    /// <summary>A round's planning window, as opposed to a dodge response, is open on this screen.</summary>
+    public bool IsRoundPlanningOpen => planningActive && planningInitialized && useUnitCards;
     public bool CanEditPlan => planningActive && planningInitialized && !planningSubmitted;
     public bool CanUnlockPlan => IsCommitAcknowledged && !HasPlanningDeadlineElapsed();
 
@@ -283,7 +286,7 @@ public partial class PlanMovement : MonoBehaviour
         )
         {
             GameHUDController.Instance?.SetTimer(timer);
-            if (!CanEditPlan || SandboxSession.IsBoardEditLive)
+            if (!CanEditPlan || SandboxSession.IsBoardEditLive || ReplayViewer.IsViewing)
             {
                 // Board-edit mode spends the same drag on moving a unit between squares, so the
                 // planner lets go of the pointer entirely rather than reading it twice. It is only

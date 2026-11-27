@@ -105,6 +105,15 @@ public partial class PlanMovement
             ribbon.SetRoute(plan.Item2, laneMap);
     }
 
+    /// <summary>Lets the replay borrow the board without the live orders showing through it.</summary>
+    public void SetPlanningVisualsHidden(bool hidden)
+    {
+        if (planVisualsFolder != null)
+            planVisualsFolder.SetActive(!hidden);
+        if (moveOverlay != null)
+            moveOverlay.SetActive(!hidden);
+    }
+
     void InitializeVisuals()
     {
         plans = new PathsDict();

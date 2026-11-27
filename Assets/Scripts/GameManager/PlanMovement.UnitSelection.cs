@@ -58,7 +58,7 @@ public partial class PlanMovement
 
     private bool TryActivateUnitCard(int cardIndex, bool enemyStrip)
     {
-        if (Mouse.CameraGestureActive || !CanEditPlan || !useUnitCards)
+        if (Mouse.CameraGestureActive || !CanEditPlan || !useUnitCards || ReplayViewer.IsViewing)
             return false;
 
         GameObject unit = FindCardUnit(cardIndex, enemyStrip);

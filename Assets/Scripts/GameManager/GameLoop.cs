@@ -452,6 +452,16 @@ public class GameLoop : NetworkBehaviour
         Vector3 square,
         int teamIndex
     )> activeShieldTelegraphs = new();
+
+    // The route a travelling ability takes to its target starts on its caster, so it is only shown
+    // to seats that could already see where the caster stands.
+    private readonly List<(
+        GameObject caster,
+        Vector3[] points,
+        AbilityPathKind kind,
+        int casterTeamIndex
+    )> activeTelegraphPaths = new();
+    private static readonly List<Vector3> telegraphPathPoints = new();
     private int runningAbilities;
 
     // A unit that walks into a rifle is shot at the whole way in, because movement is what holds
@@ -833,6 +843,13 @@ public class GameLoop : NetworkBehaviour
         new(0f, 0.80340505f, -0.5954329f, 0f),
     };
 
+    // Room left between the board's edge and the viewport's, as a fraction of each half-extent. Wide
+    // enough that the phase tab hanging into the top of the view never covers the far row.
+    private const float BoardFramingMargin = 0.08f;
+
+    private int framedCameraTeamIndex = -1;
+    private Vector3 framedCameraPosition;
+
     // Game Settings
     const float planningTimePerUnit = 6f;
     const float minimumPlanningTime = 12f;
@@ -843,13 +860,6 @@ public class GameLoop : NetworkBehaviour
 
     // Actions
     public static System.Action<bool> OrderAllowShooting;
-    // Room left between the board's edge and the viewport's, as a fraction of each half-extent. Wide
-    // enough that the phase tab hanging into the top of the view never covers the far row.
-    private const float BoardFramingMargin = 0.08f;
-
-    private int framedCameraTeamIndex = -1;
-    private Vector3 framedCameraPosition;
-
     public static System.Action<bool> OrderStillShooting;
     public static System.Action OrderContinueShooting;
 
@@ -1085,6 +1095,11 @@ public class GameLoop : NetworkBehaviour
         Instance = this;
         TeamCamera = teamCameraParent != null ? teamCameraParent.GetComponent<Camera>() : null;
         BoardCameraController.Attach(TeamCamera);
+        if (IsClient)
+        {
+            ReplayViewer viewer = GetComponent<ReplayViewer>();
+            (viewer != null ? viewer : gameObject.AddComponent<ReplayViewer>()).Bind(this);
+        }
 
         replicatedMatchOptions.OnValueChanged += OnMatchOptionsChanged;
         teamZeroParticipant.OnValueChanged += OnTeamParticipantChanged;
@@ -1102,6 +1117,7 @@ public class GameLoop : NetworkBehaviour
         LastBattleReport = null;
         battleReport = null;
         openReportRound = null;
+        ResetReplayRecording();
         disconnectRecoveryStarted = false;
         rejoinHoldTeamIndex = -1;
         rejoinHoldDeadline = 0d;
@@ -1468,16 +1484,6 @@ public class GameLoop : NetworkBehaviour
         }
     }
 
-    void StartGame()
-    {
-        unitSpawnTransforms.Clear();
-        foreach (var pos in wallLayout)
-        {
-            Vector3 worldPos = gridCoordToWorld(pos);
-            GameObject wall = NetworkHelper.Spawn(wallPrefab, worldPos, Quaternion.identity);
-            Vector3 heightOffset = Helper.heightOffset(wall.transform);
-            wall.transform.position += heightOffset;
-
     private static Rect BoardFootprint =>
         new(
             gridBounds.xMin - cellSize * 0.5f,
@@ -1522,6 +1528,16 @@ public class GameLoop : NetworkBehaviour
 
         RestCameraAtFraming(framedCameraTeamIndex);
     }
+
+    void StartGame()
+    {
+        unitSpawnTransforms.Clear();
+        foreach (var pos in wallLayout)
+        {
+            Vector3 worldPos = gridCoordToWorld(pos);
+            GameObject wall = NetworkHelper.Spawn(wallPrefab, worldPos, Quaternion.identity);
+            Vector3 heightOffset = Helper.heightOffset(wall.transform);
+            wall.transform.position += heightOffset;
 
             // Registered as it is spawned rather than left to the lazy scan. The scan reads the
             // scene, and a board rebuilt in place still has the previous walls in it for the rest
@@ -2154,6 +2170,7 @@ public class GameLoop : NetworkBehaviour
 
             // Both crews' final orders, captured while dives are still distinguishable from moves.
             RecordBattleReportPlans(paths);
+            BeginReplayRound(paths, activations);
 
             ExecuteMoves(paths);
 
@@ -2219,6 +2236,7 @@ public class GameLoop : NetworkBehaviour
             ClearMoveSpeedBoosts();
             ClearDamageReductions();
             RecordBattleReportOutcomes();
+            EndReplayRound();
 
             // Elimination takes precedence over objective control. The existing post-loop EndGame
             // path resolves a survivor or simultaneous-wipe draw.
@@ -2512,6 +2530,8 @@ public class GameLoop : NetworkBehaviour
             return false;
 
         ApplyWallDestructionLocal(cell);
+        Vector3 wallCentre = gridCoordToWorld(cell);
+        RecordReplayEvent(ReplayEventKind.WallDestroyed, null, wallCentre, wallCentre);
 
         if (IsSpawned && NetworkManager != null && NetworkManager.IsListening)
             DestroyWallCellClientRpc(cell);
@@ -3062,6 +3082,8 @@ public class GameLoop : NetworkBehaviour
             );
         }
 
+        RecordReplayEvent(ReplayEventKind.Ability, unit, unit.transform.position, square);
+
         Ability ability = unit.GetComponent<Ability>();
         if (ability == null)
             yield break;
@@ -3152,6 +3174,7 @@ public class GameLoop : NetworkBehaviour
         dodgeWindowEndTime = 0d;
         activeTelegraphs.Clear();
         activeShieldTelegraphs.Clear();
+        activeTelegraphPaths.Clear();
         foreach (var (unit, square, data) in activations)
         {
             bool isCone = unit.GetComponent<SuppressingFire>() != null;
@@ -3195,6 +3218,23 @@ public class GameLoop : NetworkBehaviour
                 coneHalfSpread,
                 casterTeamIndex
             );
+
+            Ability ability = unit.GetComponent<Ability>();
+            if (!data.responseDistLine && !isCone && ability != null)
+            {
+                AbilityPathKind pathKind = ability.BuildPlannedPath(
+                    square,
+                    data,
+                    telegraphPathPoints
+                );
+                if (pathKind != AbilityPathKind.None && telegraphPathPoints.Count >= 2)
+                {
+                    activeTelegraphPaths.Add(
+                        (unit, telegraphPathPoints.ToArray(), pathKind, casterTeamIndex)
+                    );
+                    SendAbilityPathTelegraph(activeTelegraphPaths[^1]);
+                }
+            }
 
             NetworkObject casterObject = unit.GetComponent<NetworkObject>();
             if (
@@ -3860,6 +3900,59 @@ public class GameLoop : NetworkBehaviour
             clientTelegraphs.Add(preview);
     }
 
+    void SendAbilityPathTelegraph(
+        (GameObject caster, Vector3[] points, AbilityPathKind kind, int casterTeamIndex) path,
+        ulong? onlyClientId = null
+    )
+    {
+        if (path.caster == null || NetworkManager == null)
+            return;
+
+        HashSet<ulong> audience = new();
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (
+                TryGetDodgeAudienceClientId(teamIndex, out ulong clientId)
+                && NetworkManager.ConnectedClients.ContainsKey(clientId)
+                && (!onlyClientId.HasValue || clientId == onlyClientId.Value)
+                && (
+                    teamIndex == path.casterTeamIndex
+                    || CanTeamObserveUnit(teamIndex, path.caster)
+                )
+            )
+            {
+                audience.Add(clientId);
+            }
+        }
+
+        foreach (ulong clientId in audience)
+        {
+            ShowAbilityPathTelegraphClientRpc(
+                path.points,
+                path.kind,
+                path.casterTeamIndex,
+                NetworkHelper.ToClient(clientId)
+            );
+        }
+    }
+
+    [ClientRpc]
+    void ShowAbilityPathTelegraphClientRpc(
+        Vector3[] points,
+        AbilityPathKind kind,
+        int casterTeamIndex,
+        ClientRpcParams clientRpcParams = default
+    )
+    {
+        Color color =
+            casterTeamIndex >= 0
+                ? GetTeamColorForViewer(casterTeamIndex)
+                : TeamPalette.AbilityTelegraph;
+        AbilityPathIndicator indicator = AbilityPathIndicator.Create(null, "AbilityTelegraphPath");
+        indicator.Show(points, kind, color.WithAlpha(0.8f));
+        clientTelegraphs.Add(indicator.gameObject);
+    }
+
     // The dive-range overlay the dodger is given stacks an opaque outline quad at world y=0.227.
     // A transparent telegraph under that height is depth-rejected wherever the overlay covers it,
     // so the ability being answered vanishes exactly when the answer is being drawn. Same
@@ -3870,7 +3963,19 @@ public class GameLoop : NetworkBehaviour
     // Shared blast footprint for ability telegraphs: anything that damages an area around where it
     // lands, whether it got there down a lane or through the air. Centred on the deck the blast is
     // measured across, since a rocket's endpoint arrives carrying its flight height.
-    void CreateTelegraphBlastDisc(Vector3 center, float radiusCells, Color color)
+    void CreateTelegraphBlastDisc(Vector3 center, float radiusCells, Color color) =>
+        clientTelegraphs.Add(BuildTelegraphBlastDisc(null, center, radiusCells, color));
+
+    void CreateTelegraphCellOutline(Vector2Int cell, Color color) =>
+        clientTelegraphs.Add(BuildTelegraphCellOutline(null, cell, color));
+
+    /// <summary>The blast footprint the dodge telegraph and the replay both draw.</summary>
+    public static GameObject BuildTelegraphBlastDisc(
+        Transform parent,
+        Vector3 center,
+        float radiusCells,
+        Color color
+    )
     {
         GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         Collider markerCollider = marker.GetComponent<Collider>();
@@ -3883,12 +3988,13 @@ public class GameLoop : NetworkBehaviour
         var rend = marker.GetComponent<Renderer>();
         rend.material = new Material(Shader.Find("Sprites/Default"));
         rend.material.color = color.WithAlpha(0.5f);
-        clientTelegraphs.Add(marker);
+        marker.transform.SetParent(parent, true);
+        return marker;
     }
 
     // Shared single-cell square outline for ability telegraphs (Smoke's per-cell footprint and
     // any zero-radius point-target ability, e.g. Pogo's Jump).
-    void CreateTelegraphCellOutline(Vector2Int cell, Color color)
+    public static GameObject BuildTelegraphCellOutline(Transform parent, Vector2Int cell, Color color)
     {
         GameObject marker = new($"AbilityTelegraphCell_{cell.x}_{cell.y}");
         LineRenderer lineRenderer = marker.AddComponent<LineRenderer>();
@@ -3909,7 +4015,21 @@ public class GameLoop : NetworkBehaviour
                 cellCenter + new Vector3(halfSize, 0f, -halfSize),
             }
         );
-        clientTelegraphs.Add(marker);
+        marker.transform.SetParent(parent, true);
+        return marker;
+    }
+
+    /// <summary>
+    /// Steps the live board's own overlays aside for the replay: the fog wash reports what can be
+    /// seen now, and the smoke cloud stands where smoke is now, neither of which is true of a past
+    /// round being shown on the same board.
+    /// </summary>
+    public void SetLiveBoardOverlaysVisible(bool visible)
+    {
+        if (fogOverlayRoot != null)
+            fogOverlayRoot.SetActive(visible);
+        if (clientSmokeVisualRoot != null)
+            clientSmokeVisualRoot.SetActive(visible);
     }
 
     [ClientRpc]
@@ -4308,6 +4428,7 @@ public class GameLoop : NetworkBehaviour
         legTransitionStarted = false;
         battleReport = null;
         openReportRound = null;
+        ResetReplayRecording();
         submittedTeamPaths.Clear();
         latestTeamPlanVersions.Clear();
         retractedTeamPathFallbacks.Clear();
@@ -5892,6 +6013,8 @@ public class GameLoop : NetworkBehaviour
         RecordBattleReportOutcomes();
         if (battleReport != null)
             SendBattleReportClientRpc(battleReport);
+        EndReplayRound();
+        StartCoroutine(RevealReplayRounds());
 
         EndGameClientRpc(result);
     }
@@ -6011,6 +6134,7 @@ public class GameLoop : NetworkBehaviour
         openReportRound = null;
         LastMatchResult = null;
         LastBattleReport = null;
+        ResetReplayRecording();
         playAgain.Clear();
         submittedTeamPaths.Clear();
         latestTeamPlanVersions.Clear();
@@ -6469,6 +6593,7 @@ public class GameLoop : NetworkBehaviour
         RefreshAllEnemyUnitCards();
         InitializeCameraPositionClientRpc(teamIndex, NetworkHelper.ToClient(clientId));
         SetCardsInteractableClientRpc(false, NetworkHelper.ToClient(clientId));
+        ResendReplayRounds(clientId);
         if (!RestoreRejoinedDodgeWindow(teamIndex, clientId))
         {
             setOverlayUITextClientRpc(
@@ -6555,6 +6680,9 @@ public class GameLoop : NetworkBehaviour
                 target
             );
         }
+
+        foreach (var path in activeTelegraphPaths)
+            SendAbilityPathTelegraph(path, clientId);
 
         // devMode drives dodges from DevInput on the server, so there is no client prompt to give
         // back. A team already counted as answered must not be prompted again: the second
@@ -7690,6 +7818,394 @@ public class GameLoop : NetworkBehaviour
     {
         LastBattleReport = report;
     }
+
+    // === REPLAY RECORDING (server) ===
+
+    // A round that runs away (a stalemate of return fire, say) stops sampling rather than growing a
+    // payload without bound. Sixty seconds is several times the longest real execution.
+    private const int MaxReplayFrames = 600;
+
+    /// <summary>Rounds as this screen is allowed to see them, reassembled from the server's chunks.</summary>
+    public ReplayArchive Replays { get; } = new();
+
+    private readonly List<ReplayRound> recordedReplayRounds = new();
+    private readonly List<GameObject> replayUnitObjects = new();
+    private readonly HashSet<Vector2Int>[] replayVisibleCells = new HashSet<Vector2Int>[TeamCount];
+    private ReplayRound recordingReplayRound;
+    private float replayRoundStartTime;
+    private Coroutine replayFrameCoroutine;
+
+    /// <summary>
+    /// Opens the round's recording on the board as execution is about to start, with the orders it
+    /// is about to carry out. Shares its moment with <see cref="RecordBattleReportPlans"/> for the
+    /// same reason: dives are still distinguishable from moves here.
+    /// </summary>
+    private void BeginReplayRound(
+        PathsDict paths,
+        List<(GameObject unit, Vector3 square, UnitData data)> activations
+    )
+    {
+        recordingReplayRound = null;
+        if (!IsServer || recordedReplayRounds.Count >= BattleReport.MaxRecordedRounds)
+            return;
+
+        ReplayRound round = new() { roundNumber = roundNumber };
+        round.smokeCells.AddRange(ActiveSmokeCells);
+        replayUnitObjects.Clear();
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            GameObject[] units = GetTeamUnits(teamIndex);
+            for (int slot = 0; slot < units.Length; slot++)
+            {
+                if (units[slot] == null)
+                    continue;
+
+                Health health = units[slot].GetComponent<Health>();
+                UnitData fielded = units[slot].GetComponent<Movement>()?.unitData;
+                round.units.Add(
+                    new ReplayUnit
+                    {
+                        teamIndex = (byte)teamIndex,
+                        rosterSlot = (byte)slot,
+                        catalogIndex = (sbyte)(
+                            fielded != null && allUnits != null ? allUnits.units.IndexOf(fielded) : -1
+                        ),
+                        maxHealth = (ushort)(
+                            health != null ? Mathf.CeilToInt(health.MaxHealth) : 0
+                        ),
+                        standHeight = ReplaySample.QuantizePosition(
+                            units[slot].transform.position.y
+                        ),
+                    }
+                );
+                replayUnitObjects.Add(units[slot]);
+            }
+        }
+
+        for (int i = 0; i < replayUnitObjects.Count; i++)
+        {
+            GameObject unit = replayUnitObjects[i];
+            ReplayPlan plan = new() { unitIndex = (byte)i };
+            if (!IsLivingUnit(unit))
+            {
+                plan.kind = ReplayPlanKind.Eliminated;
+                round.plans.Add(plan);
+                continue;
+            }
+
+            (bool isAbility, List<Vector3> route) =
+                paths != null && paths.TryGetValue(unit, out var committed)
+                    ? committed
+                    : (false, null);
+            plan.route = ToGridPath(route);
+            if (diveUnitsThisRound.Contains(unit))
+                plan.kind = ReplayPlanKind.Dodge;
+            else if (isAbility)
+                plan.kind = ReplayPlanKind.Ability;
+            else
+                plan.kind = plan.route.Count >= 2 ? ReplayPlanKind.Move : ReplayPlanKind.Held;
+
+            if (plan.kind == ReplayPlanKind.Ability)
+            {
+                int activation = activations.FindIndex(candidate => candidate.unit == unit);
+                if (activation < 0)
+                    plan.kind = ReplayPlanKind.Held;
+                else
+                    DescribeReplayAbility(
+                        plan,
+                        unit,
+                        activations[activation].square,
+                        activations[activation].data
+                    );
+            }
+            round.plans.Add(plan);
+        }
+
+        recordingReplayRound = round;
+        replayRoundStartTime = Time.time;
+        CaptureReplayFrame();
+        if (replayFrameCoroutine != null)
+            StopCoroutine(replayFrameCoroutine);
+        replayFrameCoroutine = StartCoroutine(RecordReplayFrames());
+    }
+
+    /// <summary>The threatened shape, resolved exactly as the dodge telegraph resolves it.</summary>
+    private static void DescribeReplayAbility(
+        ReplayPlan plan,
+        GameObject unit,
+        Vector3 square,
+        UnitData data
+    )
+    {
+        bool isCone = unit.GetComponent<SuppressingFire>() != null;
+        Vector3 effectSquare = ResolveAbilityEffectSquare(unit, square, data);
+        if (isCone)
+            effectSquare = SuppressingFire.ResolveConeAimPoint(unit, square);
+        else if (data.responseDistLine)
+            effectSquare = ResolveLineAbilityEndpoint(unit, square);
+
+        plan.abilityOrigin = unit.transform.position;
+        plan.abilitySquare = effectSquare;
+        plan.abilityRadiusCells = isCone ? data.bulletRange : data.abilityRadius;
+        plan.abilityLine = data.responseDistLine && !isCone;
+        plan.abilityCone = isCone;
+        plan.abilitySmoke = unit.GetComponent<Smoke>() != null;
+        plan.abilityShield = unit.GetComponent<ShieldStance>() != null;
+        plan.abilityPicked = square;
+        plan.abilityConeHalfSpread = isCone ? SuppressingFire.BarrageSpreadDegrees : 0f;
+
+        Ability ability = unit.GetComponent<Ability>();
+        if (ability == null)
+            return;
+        AbilityPathKind pathKind = ability.BuildPlannedPath(square, data, telegraphPathPoints);
+        if (pathKind == AbilityPathKind.None || telegraphPathPoints.Count < 2)
+            return;
+        plan.abilityPathKind = pathKind;
+        plan.abilityPath.AddRange(telegraphPathPoints);
+    }
+
+    private IEnumerator RecordReplayFrames()
+    {
+        while (recordingReplayRound != null)
+        {
+            yield return new WaitForSeconds(ReplayRound.FrameInterval);
+            if (recordingReplayRound == null || recordingReplayRound.frames.Count >= MaxReplayFrames)
+                yield break;
+            CaptureReplayFrame();
+        }
+    }
+
+    private void CaptureReplayFrame()
+    {
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+            replayVisibleCells[teamIndex] = FogOfWarEnabled
+                ? ComputeVisibleCellsForTeam(teamIndex)
+                : null;
+
+        ReplaySample[] frame = new ReplaySample[replayUnitObjects.Count];
+        for (int i = 0; i < replayUnitObjects.Count; i++)
+        {
+            GameObject unit = replayUnitObjects[i];
+            if (unit == null)
+            {
+                frame[i] = recordingReplayRound.frames.Count > 0
+                    ? recordingReplayRound.frames[^1][i]
+                    : default;
+                continue;
+            }
+
+            Health health = unit.GetComponent<Health>();
+            ReplaySample sample = ReplaySample.Capture(
+                unit.transform.position,
+                unit.transform.eulerAngles.y,
+                health != null ? health.CurrentHealth : 0f,
+                IsLivingUnit(unit)
+            );
+            int ownTeam = recordingReplayRound.units[i].teamIndex;
+            for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+            {
+                if (teamIndex == ownTeam || IsSeenForReplay(teamIndex, unit, unit.transform.position))
+                    sample.flags |= ReplaySample.SeenBy(teamIndex);
+            }
+            frame[i] = sample;
+        }
+        recordingReplayRound.frames.Add(frame);
+    }
+
+    private bool IsSeenForReplay(int teamIndex, GameObject unit, Vector3 position)
+    {
+        return IsTargetObservable(
+            FogOfWarEnabled,
+            replayVisibleCells[teamIndex],
+            GridSystem.ConvertToGridCoords(position),
+            unit != null && IsForceRevealedToTeam(unit, teamIndex)
+        );
+    }
+
+    /// <summary>
+    /// Server-only entry for anything worth replaying that is not a unit's position: a shot, an
+    /// ability going off, a wall coming down. Tagged with who could see it from the visibility the
+    /// last frame computed, so a hidden shooter's tracer is not handed to the crew it was hidden from.
+    /// </summary>
+    public void RecordReplayEvent(ReplayEventKind kind, GameObject actor, Vector3 from, Vector3 to)
+    {
+        ReplayRound round = recordingReplayRound;
+        if (!IsServer || round == null || round.events.Count >= ReplayRound.MaxEvents)
+            return;
+
+        int unitIndex = actor != null ? replayUnitObjects.IndexOf(actor) : -1;
+        if (kind != ReplayEventKind.WallDestroyed && unitIndex < 0)
+            return;
+
+        ReplaySampleFlags seenBy = ReplaySampleFlags.None;
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            bool own = unitIndex >= 0 && round.units[unitIndex].teamIndex == teamIndex;
+            if (
+                own
+                || kind == ReplayEventKind.WallDestroyed
+                || IsSeenForReplay(teamIndex, actor, from)
+                || IsSeenForReplay(teamIndex, null, to)
+            )
+            {
+                seenBy |= ReplaySample.SeenBy(teamIndex);
+            }
+        }
+
+        round.events.Add(
+            new ReplayEvent
+            {
+                timeCentiseconds = (ushort)Mathf.Clamp(
+                    Mathf.RoundToInt((Time.time - replayRoundStartTime) * 100f),
+                    0,
+                    ushort.MaxValue
+                ),
+                kind = kind,
+                unitIndex = (byte)Mathf.Max(0, unitIndex),
+                from = from,
+                to = to,
+                seenBy = seenBy,
+            }
+        );
+    }
+
+    /// <summary>
+    /// A shot is kept as a tracer from the muzzle to whatever first stops it, read off the same
+    /// colliders the bullet itself will meet, so a replayed shot never passes through cover.
+    /// </summary>
+    public void RecordReplayShot(GameObject shooter, Vector3 origin, Vector3 direction, float distance)
+    {
+        if (!IsServer || recordingReplayRound == null || shooter == null)
+            return;
+
+        Vector3 end = origin + direction * distance;
+        float nearest = distance;
+        foreach (RaycastHit hit in Physics.RaycastAll(origin, direction, distance))
+        {
+            if (hit.collider == null || hit.transform.IsChildOf(shooter.transform))
+                continue;
+            bool stops =
+                hit.collider.gameObject.layer == LayerMask.NameToLayer("Walls")
+                || hit.collider.GetComponentInParent<Unit>() != null;
+            if (stops && hit.distance < nearest)
+            {
+                nearest = hit.distance;
+                end = hit.point;
+            }
+        }
+
+        RecordReplayEvent(ReplayEventKind.Shot, shooter, origin, end);
+    }
+
+    /// <summary>Closes the open recording and hands each seat its own view of it. Idempotent.</summary>
+    private void EndReplayRound()
+    {
+        ReplayRound round = recordingReplayRound;
+        if (!IsServer || round == null)
+            return;
+
+        if (replayFrameCoroutine != null)
+        {
+            StopCoroutine(replayFrameCoroutine);
+            replayFrameCoroutine = null;
+        }
+        CaptureReplayFrame();
+        recordingReplayRound = null;
+
+        recordedReplayRounds.Add(round);
+        if (!matchEnded)
+            DeliverReplayRound(round, null);
+    }
+
+    private void DeliverReplayRound(ReplayRound round, ulong? onlyClientId)
+    {
+        HashSet<ulong> delivered = new();
+        for (int teamIndex = 0; teamIndex < TeamCount; teamIndex++)
+        {
+            if (
+                !TryGetHumanClientId(teamIndex, out ulong clientId)
+                || (onlyClientId.HasValue && clientId != onlyClientId.Value)
+                || NetworkManager == null
+                || !NetworkManager.ConnectedClients.ContainsKey(clientId)
+                || !delivered.Add(clientId)
+            )
+            {
+                continue;
+            }
+
+            // The sandbox designer commands both crews from one seat and has already seen every
+            // order on the board, so that seat keeps the whole round.
+            int viewer = sandboxDirector != null || matchEnded ? -1 : teamIndex;
+            SendReplayRound(round.FilterForTeam(viewer), clientId);
+        }
+    }
+
+    private void SendReplayRound(ReplayRound round, ulong clientId)
+    {
+        ClientRpcParams target = NetworkHelper.ToClient(clientId);
+        ReceiveReplayHeaderClientRpc(round.BuildHeader(), target);
+        for (int frame = 0; frame < round.frames.Count; frame += round.FramesPerChunk)
+            ReceiveReplayFramesClientRpc(round.BuildFrameChunk(frame), target);
+        for (int replayEvent = 0; replayEvent < round.events.Count; replayEvent += ReplayRound.EventsPerChunk)
+            ReceiveReplayEventsClientRpc(round.BuildEventChunk(replayEvent), target);
+    }
+
+    /// <summary>
+    /// The post-match reveal: every round again, unfiltered. One round a frame, because the whole
+    /// match at once would land in the transport's send queue as a single burst.
+    /// </summary>
+    private IEnumerator RevealReplayRounds()
+    {
+        foreach (ReplayRound round in recordedReplayRounds.ToArray())
+        {
+            if (!IsSpawned)
+                yield break;
+            DeliverReplayRound(round, null);
+            yield return null;
+        }
+    }
+
+    private void ResendReplayRounds(ulong clientId)
+    {
+        foreach (ReplayRound round in recordedReplayRounds)
+            DeliverReplayRound(round, clientId);
+    }
+
+    private void ResetReplayRecording()
+    {
+        recordingReplayRound = null;
+        recordedReplayRounds.Clear();
+        replayUnitObjects.Clear();
+        if (replayFrameCoroutine != null)
+        {
+            StopCoroutine(replayFrameCoroutine);
+            replayFrameCoroutine = null;
+        }
+        Replays.Clear();
+        if (IsServer && IsSpawned && NetworkManager != null && NetworkManager.IsListening)
+            ClearReplaysClientRpc();
+    }
+
+    [ClientRpc]
+    private void ClearReplaysClientRpc() => Replays.Clear();
+
+    [ClientRpc]
+    private void ReceiveReplayHeaderClientRpc(
+        ReplayRoundHeader header,
+        ClientRpcParams clientRpcParams = default
+    ) => Replays.Receive(header);
+
+    [ClientRpc]
+    private void ReceiveReplayFramesClientRpc(
+        ReplayFrameChunk chunk,
+        ClientRpcParams clientRpcParams = default
+    ) => Replays.Receive(chunk);
+
+    [ClientRpc]
+    private void ReceiveReplayEventsClientRpc(
+        ReplayEventChunk chunk,
+        ClientRpcParams clientRpcParams = default
+    ) => Replays.Receive(chunk);
 
     /// <summary>Living units of both teams, in team then roster order.</summary>
     private static IEnumerable<GameObject> EnumerateLivingUnits()

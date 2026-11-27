@@ -89,6 +89,10 @@ public class GameHUDController : MonoBehaviour
     private Slider replayScrubber;
     private Action<int> replayStepAction;
     private Action<float> replayScrubAction;
+    private Button[] replayLayerButtons;
+    private Action<ReplayPlanLayer> replayLayerAction;
+    private Button watchReplayButton;
+    private Action watchReplayAction;
     private Button playAgainButton;
     private Button mainMenuButton;
     private VisualElement reportReveal;
@@ -269,6 +273,13 @@ public class GameHUDController : MonoBehaviour
         replayPrevButton = root.Q<Button>("replay-prev-button");
         replayNextButton = root.Q<Button>("replay-next-button");
         replayScrubber = root.Q<Slider>("replay-scrubber");
+        replayLayerButtons = new[]
+        {
+            root.Q<Button>("replay-layer-mine"),
+            root.Q<Button>("replay-layer-enemy"),
+            root.Q<Button>("replay-layer-both"),
+        };
+        watchReplayButton = root.Q<Button>("watch-replay-button");
         exitMatchButton = root.Q<Button>("exit-match-button");
         settingsButton = root.Q<Button>("settings-button");
         settingsOverlay = RequireElement<VisualElement>("settings-overlay");
@@ -317,6 +328,13 @@ public class GameHUDController : MonoBehaviour
         if (replayNextButton != null)
             replayNextButton.clicked += OnReplayNextClicked;
         replayScrubber?.RegisterValueChangedCallback(OnReplayScrubbed);
+        for (int i = 0; i < replayLayerButtons.Length; i++)
+        {
+            if (replayLayerButtons[i] != null)
+                replayLayerButtons[i].clickable.clickedWithEventInfo += OnReplayLayerClicked;
+        }
+        if (watchReplayButton != null)
+            watchReplayButton.clicked += OnWatchReplayClicked;
         cardsContainer?.contentContainer.RegisterCallback<GeometryChangedEvent>(
             OnCrewGeometryChanged
         );
@@ -363,6 +381,13 @@ public class GameHUDController : MonoBehaviour
         if (replayNextButton != null)
             replayNextButton.clicked -= OnReplayNextClicked;
         replayScrubber?.UnregisterValueChangedCallback(OnReplayScrubbed);
+        for (int i = 0; i < replayLayerButtons.Length; i++)
+        {
+            if (replayLayerButtons[i] != null)
+                replayLayerButtons[i].clickable.clickedWithEventInfo -= OnReplayLayerClicked;
+        }
+        if (watchReplayButton != null)
+            watchReplayButton.clicked -= OnWatchReplayClicked;
         cardsContainer?.contentContainer.UnregisterCallback<GeometryChangedEvent>(
             OnCrewGeometryChanged
         );
@@ -1648,6 +1673,54 @@ public class GameHUDController : MonoBehaviour
 
         float width = Mathf.Min(crewRight - strip.xMin, strip.width);
         replayBar.style.width = width > 0f ? width : StyleKeyword.Auto;
+    }
+
+    public void SetReplayLayerHandler(Action<ReplayPlanLayer> choose) => replayLayerAction = choose;
+
+    /// <summary>Marks whose orders are drawn. Only live while a round is being shown.</summary>
+    public void SetReplayLayer(ReplayPlanLayer selected, bool interactable)
+    {
+        for (int i = 0; i < replayLayerButtons.Length; i++)
+        {
+            Button button = replayLayerButtons[i];
+            if (button == null)
+                continue;
+            button.SetEnabled(interactable);
+            button.EnableInClassList("replay-layer--selected", i == (int)selected);
+        }
+    }
+
+    private void OnReplayLayerClicked(EventBase evt)
+    {
+        int index = System.Array.IndexOf(replayLayerButtons, evt.currentTarget as Button);
+        if (index >= 0)
+            replayLayerAction?.Invoke((ReplayPlanLayer)index);
+    }
+
+    public void SetWatchReplayHandler(Action watch) => watchReplayAction = watch;
+
+    public void SetWatchReplayAvailable(bool available) =>
+        watchReplayButton?.EnableInClassList("hidden", !available);
+
+    private void OnWatchReplayClicked() => watchReplayAction?.Invoke();
+
+    /// <summary>Steps the results aside so the board behind them can be replayed.</summary>
+    public void HideResultsForReplay()
+    {
+        if (resultsOverlay == null)
+            return;
+        resultsOverlay.AddToClassList("hidden");
+        ClearActiveOverlay(resultsOverlay, null);
+    }
+
+    /// <summary>Brings the results back as they were, without landing the verdict a second time.</summary>
+    public void ReturnToResults()
+    {
+        if (resultsOverlay == null)
+            return;
+        resultsOverlay.RemoveFromClassList("hidden");
+        resultsOverlay.BringToFront();
+        ActivateOverlay(resultsOverlay, watchReplayButton);
     }
 
     private void OnReplayPreviousClicked() => replayStepAction?.Invoke(-1);

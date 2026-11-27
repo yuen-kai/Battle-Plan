@@ -346,23 +346,25 @@ public class Unit : NetworkBehaviour
         }
     }
 
-    void SetTeamIndicators()
-    {
-        GameObject[] teamIndicators = GetComponentsInChildren<Transform>()
-            .Where(t => t.CompareTag("TeamIndicatorProp"))
-            .Select(t => t.gameObject)
-            .ToArray();
+    void SetTeamIndicators() =>
+        ApplyTeamIndicators(gameObject, teamMaterials, IsFriendlyToLocalPlayer);
 
-        foreach (GameObject indicator in teamIndicators)
+    /// <summary>
+    /// Paints a body's team props, live or not. A display copy of a unit has lost this component
+    /// along with every other behaviour, so it is handed the prefab's materials instead.
+    /// </summary>
+    public static void ApplyTeamIndicators(GameObject body, List<Material> materials, bool friendly)
+    {
+        if (body == null || materials == null || materials.Count < 2)
+            return;
+
+        foreach (Transform part in body.GetComponentsInChildren<Transform>())
         {
-            Renderer renderer = indicator.GetComponent<Renderer>();
-            if (renderer != null && teamMaterials != null && teamMaterials.Count >= 2)
-            {
-                renderer.materials = new[]
-                {
-                    IsFriendlyToLocalPlayer ? teamMaterials[0] : teamMaterials[1],
-                };
-            }
+            if (!part.CompareTag("TeamIndicatorProp"))
+                continue;
+            Renderer renderer = part.GetComponent<Renderer>();
+            if (renderer != null)
+                renderer.materials = new[] { friendly ? materials[0] : materials[1] };
         }
     }
 

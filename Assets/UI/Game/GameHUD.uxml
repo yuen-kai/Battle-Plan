@@ -75,6 +75,20 @@
                         <ui:Button name="replay-next-button" class="button replay-bar__step" enabled="false">
                             <ui:VisualElement class="toy-icon toy-icon--chevron-right replay-bar__icon" picking-mode="Ignore" />
                         </ui:Button>
+                        <ui:VisualElement name="replay-layers" class="replay-layers">
+                            <ui:Button name="replay-layer-mine" class="button replay-layer" enabled="false">
+                                <ui:VisualElement class="toy-icon toy-icon--player replay-layer__icon replay-layer__icon--mine" picking-mode="Ignore" />
+                            </ui:Button>
+                            <ui:Button name="replay-layer-enemy" class="button replay-layer" enabled="false">
+                                <ui:VisualElement class="toy-icon toy-icon--player replay-layer__icon replay-layer__icon--enemy" picking-mode="Ignore" />
+                            </ui:Button>
+                            <ui:Button name="replay-layer-both" class="button replay-layer replay-layer--selected" enabled="false">
+                                <ui:VisualElement class="replay-layer__pair" picking-mode="Ignore">
+                                    <ui:VisualElement class="toy-icon toy-icon--player replay-layer__icon replay-layer__icon--enemy replay-layer__icon--behind" picking-mode="Ignore" />
+                                    <ui:VisualElement class="toy-icon toy-icon--player replay-layer__icon replay-layer__icon--mine replay-layer__icon--front" picking-mode="Ignore" />
+                                </ui:VisualElement>
+                            </ui:Button>
+                        </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement class="hud-header-actions">
@@ -203,6 +217,7 @@
                 </ui:ScrollView>
                 <ui:VisualElement class="results-actions">
                     <ui:Button name="play-again-button" text="Play again" class="button button--primary results-button" />
+                    <ui:Button name="watch-replay-button" text="Watch replay" class="button results-button hidden" />
                     <ui:Button name="main-menu-button" text="Main menu" class="button results-button" />
                 </ui:VisualElement>
             </ui:VisualElement>

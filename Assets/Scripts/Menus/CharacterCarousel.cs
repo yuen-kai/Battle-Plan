@@ -433,7 +433,7 @@ public class CharacterCarousel : MonoBehaviour
         slots.Clear();
     }
 
-    private static void StripForDisplay(GameObject instance)
+    public static void StripForDisplay(GameObject instance)
     {
         foreach (Canvas canvas in instance.GetComponentsInChildren<Canvas>(true))
             canvas.gameObject.SetActive(false);

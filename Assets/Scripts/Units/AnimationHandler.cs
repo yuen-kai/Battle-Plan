@@ -155,9 +155,14 @@ public class AnimationHandler : NetworkBehaviour
             replicatedState.Value = new FixedString32Bytes(animationName);
     }
 
-    private void Enter(string animationName)
+    private void Enter(string animationName) => EnterState(Rig, animationName);
+
+    /// <summary>
+    /// Enters a logical state on any rig, including a display copy that no longer carries this
+    /// component, with the same legacy fallback a live unit gets.
+    /// </summary>
+    public static void EnterState(Animator rig, string animationName)
     {
-        Animator rig = Rig;
         if (rig == null || string.IsNullOrEmpty(animationName))
             return;
 

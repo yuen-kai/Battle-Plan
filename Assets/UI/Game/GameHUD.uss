@@ -498,6 +498,87 @@
     background-color: var(--toy-disabled-ink);
 }
 
+/* Whose orders are drawn. The figure is the crew, so the toggle reads by the colour the board
+   already gives each side, and the pair is both of them standing together. */
+
+.replay-bar.toybox-ui .replay-layers {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-left: 12px;
+}
+
+.replay-bar.toybox-ui .replay-layer {
+    width: 44px;
+    min-width: 44px;
+    height: 36px;
+    min-height: 36px;
+    margin: 0 0 0 4px;
+    padding: 0;
+    justify-content: center;
+}
+
+.replay-bar.toybox-ui .replay-layer__icon {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    margin-right: 0;
+}
+
+.replay-bar.toybox-ui .replay-layer__pair {
+    width: 28px;
+    height: 18px;
+}
+
+.replay-bar.toybox-ui .replay-layer__pair .replay-layer__icon {
+    position: absolute;
+    top: 0;
+}
+
+.replay-bar.toybox-ui .replay-layer__icon--behind {
+    right: 0;
+}
+
+.replay-bar.toybox-ui .replay-layer__icon--front {
+    left: 0;
+}
+
+.replay-bar.toybox-ui .replay-layer .replay-layer__icon--mine {
+    -unity-background-image-tint-color: var(--toy-team-friendly-copy);
+}
+
+.replay-bar.toybox-ui .replay-layer .replay-layer__icon--enemy {
+    -unity-background-image-tint-color: var(--toy-team-enemy-copy);
+}
+
+.replay-bar.toybox-ui .replay-layer--selected {
+    background-color: var(--toy-select);
+    border-color: var(--toy-select);
+    border-left-width: var(--toy-accent-rule);
+    border-left-color: var(--toy-primary);
+}
+
+.replay-bar.toybox-ui .replay-layer:hover .replay-layer__icon--mine,
+.replay-bar.toybox-ui .replay-layer--selected .replay-layer__icon--mine {
+    -unity-background-image-tint-color: var(--toy-team-friendly);
+}
+
+.replay-bar.toybox-ui .replay-layer:hover .replay-layer__icon--enemy,
+.replay-bar.toybox-ui .replay-layer--selected .replay-layer__icon--enemy {
+    -unity-background-image-tint-color: var(--toy-team-enemy);
+}
+
+.replay-bar.toybox-ui .replay-layer:disabled .replay-layer__icon,
+.replay-bar.toybox-ui .replay-layer:disabled:hover .replay-layer__icon {
+    -unity-background-image-tint-color: var(--toy-disabled-ink);
+}
+
+.replay-bar.toybox-ui .replay-layer--selected:disabled,
+.replay-bar.toybox-ui .replay-layer--selected:disabled:hover {
+    background-color: var(--toy-disabled-surface);
+    border-color: var(--toy-edge);
+    border-left-color: var(--toy-disabled-ink);
+}
+
 /* === FEEDBACK STRIPS === */
 
 /* Shares the notch's band above the dock, kept left so the two never meet. */
@@ -2065,6 +2146,16 @@
 .phone .replay-bar.toybox-ui .replay-bar__step {
     width: 56px;
     min-width: 56px;
+}
+
+.phone .replay-bar.toybox-ui .replay-layer {
+    height: var(--toy-target-compact);
+    min-height: var(--toy-target-compact);
+}
+
+.phone.short .replay-bar.toybox-ui .replay-layer {
+    height: 36px;
+    min-height: 36px;
 }
 
 .phone.short .replay-bar,
