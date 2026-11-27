@@ -17,10 +17,13 @@ public enum ReplayPlanLayer
 /// </summary>
 public class ReplayViewer : MonoBehaviour
 {
-    // Stepping between rounds plays the recorded frames between them at this multiple of the
-    // speed they happened at, so a round reads as time moving rather than as a cut.
-    private const float TimelapseSpeed = 2.5f;
-    private const float MinTimelapseSeconds = 0.05f;
+    // Stepping between rounds plays the recorded frames between them over this long, so a round
+    // reads as time moving rather than as a cut, whatever its length.
+    private const float TimelapseSeconds = 1f;
+
+    // The live planning board is the end of the round that led to it, so the slider's far right
+    // on the latest round is the live board rather than a frame of the replay.
+    private const float LiveEndTolerance = 0.001f;
     private const float ScrubPlanAlpha = 0.35f;
     private const float RoundStartTolerance = 0.05f;
     private const float MovingThreshold = 0.05f;
@@ -190,7 +193,8 @@ public class ReplayViewer : MonoBehaviour
 
         if (!IsViewing)
         {
-            boundHud.SetReplayBar(hasRounds && RoundPlanningOpen && !MatchOver, false, false, 1f);
+            bool canReplay = hasRounds && RoundPlanningOpen && !MatchOver;
+            boundHud.SetReplayBar(canReplay, false, canReplay, 1f);
             boundHud.SetReplayLayer(layer, false);
             return;
         }
@@ -242,10 +246,36 @@ public class ReplayViewer : MonoBehaviour
         BeginTimelapse(next >= 0 ? next : shownRound, 0f, next < 0);
     }
 
+    /// <summary>
+    /// Scrubs the round on the bar. Live planning is the latest round's last frame, so dragging off
+    /// the right end opens the replay on that round and dragging back onto it hands the board back.
+    /// </summary>
     private void Scrub(float progress)
     {
-        if (!IsViewing || !Archive.TryGet(shownRound, out ReplayRound round))
+        ReplayArchive archive = Archive;
+        if (archive == null)
             return;
+
+        bool atLiveEnd = progress >= 1f - LiveEndTolerance;
+        if (!IsViewing)
+        {
+            if (atLiveEnd || !RoundPlanningOpen || MatchOver)
+                return;
+            int latest = archive.LatestRoundNumber;
+            if (!archive.TryGet(latest, out ReplayRound live))
+                return;
+            Open(false);
+            ShowAt(latest, Mathf.Clamp01(progress) * live.Duration);
+            return;
+        }
+
+        if (!archive.TryGet(shownRound, out ReplayRound round))
+            return;
+        if (atLiveEnd && !postMatch && shownRound == archive.LatestRoundNumber)
+        {
+            Close(false);
+            return;
+        }
 
         timelapseElapsed = -1f;
         ShowAt(shownRound, Mathf.Clamp01(progress) * round.Duration);
@@ -446,8 +476,7 @@ public class ReplayViewer : MonoBehaviour
         foreach ((int _, float from, float to) in timelapse)
             total += Mathf.Abs(to - from);
 
-        float duration = Mathf.Max(MinTimelapseSeconds, total / TimelapseSpeed);
-        float progress = Mathf.Clamp01(timelapseElapsed / duration);
+        float progress = total > 0f ? Mathf.Clamp01(timelapseElapsed / TimelapseSeconds) : 1f;
         float travelled = progress * total;
         int round = landingRound;
         float time = 0f;
