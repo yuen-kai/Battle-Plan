@@ -68,10 +68,10 @@
                 <ui:VisualElement name="hud-crew" class="hud-crew">
                     <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
                     <ui:VisualElement name="replay-bar" class="replay-bar toybox-ui">
+                        <ui:Slider name="replay-scrubber" low-value="0" high-value="1" value="1" fill="true" class="toy-slider replay-bar__scrubber" enabled="false" />
                         <ui:Button name="replay-prev-button" class="button replay-bar__step" enabled="false">
                             <ui:VisualElement class="toy-icon toy-icon--chevron-left replay-bar__icon" picking-mode="Ignore" />
                         </ui:Button>
-                        <ui:Slider name="replay-scrubber" low-value="0" high-value="1" value="1" fill="true" class="toy-slider replay-bar__scrubber" enabled="false" />
                         <ui:Button name="replay-next-button" class="button replay-bar__step" enabled="false">
                             <ui:VisualElement class="toy-icon toy-icon--chevron-right replay-bar__icon" picking-mode="Ignore" />
                         </ui:Button>
