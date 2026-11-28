@@ -69,12 +69,6 @@
                     <ui:ScrollView name="unit-cards" mode="Horizontal" class="unit-cards" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
                     <ui:VisualElement name="replay-bar" class="replay-bar toybox-ui">
                         <ui:Slider name="replay-scrubber" low-value="0" high-value="1" value="1" fill="true" class="toy-slider replay-bar__scrubber" enabled="false" />
-                        <ui:Button name="replay-prev-button" class="button replay-bar__step" enabled="false">
-                            <ui:VisualElement class="toy-icon toy-icon--chevron-left replay-bar__icon" picking-mode="Ignore" />
-                        </ui:Button>
-                        <ui:Button name="replay-next-button" class="button replay-bar__step" enabled="false">
-                            <ui:VisualElement class="toy-icon toy-icon--chevron-right replay-bar__icon" picking-mode="Ignore" />
-                        </ui:Button>
                         <ui:VisualElement name="replay-layers" class="replay-layers">
                             <ui:Button name="replay-layer-mine" class="button replay-layer" enabled="false">
                                 <ui:VisualElement class="toy-icon toy-icon--player replay-layer__icon replay-layer__icon--mine" picking-mode="Ignore" />
@@ -87,6 +81,14 @@
                                     <ui:VisualElement class="toy-icon toy-icon--player replay-layer__icon replay-layer__icon--enemy replay-layer__icon--behind" picking-mode="Ignore" />
                                     <ui:VisualElement class="toy-icon toy-icon--player replay-layer__icon replay-layer__icon--mine replay-layer__icon--front" picking-mode="Ignore" />
                                 </ui:VisualElement>
+                            </ui:Button>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="replay-bar__steps">
+                            <ui:Button name="replay-prev-button" class="button replay-bar__step" enabled="false">
+                                <ui:VisualElement class="toy-icon toy-icon--chevron-left replay-bar__icon" picking-mode="Ignore" />
+                            </ui:Button>
+                            <ui:Button name="replay-next-button" class="button replay-bar__step" enabled="false">
+                                <ui:VisualElement class="toy-icon toy-icon--chevron-right replay-bar__icon" picking-mode="Ignore" />
                             </ui:Button>
                         </ui:VisualElement>
                     </ui:VisualElement>
