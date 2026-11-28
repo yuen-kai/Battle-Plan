@@ -12,7 +12,6 @@ public class CharacterSelectionUIController : NetworkBehaviour
 {
     private const int UnitsPerPlayer = RosterRules.UnitsPerPlayer;
     private const float RosterWheelStep = 60f;
-    private static readonly int[] BotRoster = GameLoop.DefaultBotRoster;
 
     [SerializeField]
     private UnitDatabase allUnits;
@@ -699,8 +698,9 @@ public class CharacterSelectionUIController : NetworkBehaviour
         ulong opponentId;
         if (options.IsBotMatch)
         {
+            int[] botRoster = RosterRules.BuildRandomRoster(allUnits?.units, new System.Random());
             RosterValidationResult botValidation = RosterRules.Validate(
-                BotRoster,
+                botRoster,
                 allUnits?.units
             );
             if (!botValidation.IsValid)
@@ -711,7 +711,7 @@ public class CharacterSelectionUIController : NetworkBehaviour
                 return;
             }
             opponentId = GameLoop.BotParticipantId;
-            opponentRoster = BotRoster;
+            opponentRoster = botRoster;
         }
         else
         {

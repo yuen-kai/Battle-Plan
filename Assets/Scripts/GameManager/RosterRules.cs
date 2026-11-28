@@ -97,6 +97,56 @@ public static class RosterRules
         return roster.ToArray();
     }
 
+    /// <summary>
+    /// A crew of distinct eligible units drawn at random, with no more than
+    /// <paramref name="maxPerClass"/> sharing a role while the catalog allows it. Returns fewer
+    /// than <see cref="UnitsPerPlayer"/> units only when the catalog cannot supply them, which
+    /// <see cref="Validate"/> then reports.
+    /// </summary>
+    public static int[] BuildRandomRoster(
+        IReadOnlyList<UnitData> unitCatalog,
+        System.Random random,
+        int maxPerClass = 2
+    )
+    {
+        if (random == null)
+            throw new System.ArgumentNullException(nameof(random));
+
+        List<int> pool = new();
+        for (int unitIndex = 0; unitCatalog != null && unitIndex < unitCatalog.Count; unitIndex++)
+        {
+            if (IsUnitEligible(unitCatalog, unitIndex))
+                pool.Add(unitIndex);
+        }
+        for (int i = pool.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            (pool[i], pool[j]) = (pool[j], pool[i]);
+        }
+
+        List<int> roster = new(UnitsPerPlayer);
+        Dictionary<UnitClass, int> perClass = new();
+        foreach (int unitIndex in pool)
+        {
+            if (roster.Count == UnitsPerPlayer)
+                break;
+            UnitClass unitClass = unitCatalog[unitIndex].unitClass;
+            perClass.TryGetValue(unitClass, out int count);
+            if (count >= maxPerClass)
+                continue;
+            perClass[unitClass] = count + 1;
+            roster.Add(unitIndex);
+        }
+        foreach (int unitIndex in pool)
+        {
+            if (roster.Count == UnitsPerPlayer)
+                break;
+            if (!roster.Contains(unitIndex))
+                roster.Add(unitIndex);
+        }
+        return roster.ToArray();
+    }
+
     public static RosterValidationResult ValidateCatalog(IReadOnlyList<UnitData> unitCatalog)
     {
         if (unitCatalog == null)

@@ -32,16 +32,30 @@ public readonly struct BotDodgeThreat
     }
 }
 
-public readonly struct BotSmokeAlly
+public readonly struct BotShooter
 {
     public readonly Vector2Int Cell;
     public readonly float ShotRange;
+    public readonly float Weight;
 
-    public BotSmokeAlly(Vector2Int cell, float shotRange)
+    public BotShooter(Vector2Int cell, float shotRange, float weight = 1f)
     {
         Cell = cell;
         ShotRange = Mathf.Max(0f, shotRange);
+        Weight = Mathf.Max(0f, weight);
     }
+}
+
+/// <summary>
+/// The temperament a bot crew is dealt for a match. Rush closes to brawling range and spends its
+/// ability eagerly; Skirmish fights from most of its range; Anchor holds the edge of its range,
+/// advances in shorter steps, and values screens and shields over damage.
+/// </summary>
+public enum BotPlaystyle
+{
+    Rush,
+    Skirmish,
+    Anchor,
 }
 
 /// <summary>
@@ -149,21 +163,40 @@ public static class BotFrozenUnits
 }
 
 /// <summary>
-/// Server-only deterministic opponent. Planning consumes only the bot's fog observation and
-/// its own last-known memory, except in Escort the President, where <see cref="IgnoresFog"/>
-/// grants full board knowledge so the motorcade is hunted rather than searched for. Dodge
-/// planning consumes public ability telegraphs, never the opponent's submitted movement plans.
+/// Server-only opponent. Planning consumes only the bot's fog observation and its own last-known
+/// memory, except in Escort the President, where <see cref="IgnoresFog"/> grants full board
+/// knowledge so the motorcade is hunted rather than searched for. Dodge planning consumes public
+/// ability telegraphs, never the opponent's submitted movement plans.
+/// <para>
+/// The static helpers are deterministic unless handed a <see cref="System.Random"/>; the live bot
+/// always hands them its own, so it picks among near-equal routes and ability uses instead of
+/// repeating the same opening every match.
+/// </para>
 /// </summary>
 public sealed class BotPlayer
 {
+    public const int RandomRouteSlack = 2;
+    public const int RandomExplorationSlack = 3;
+    public const float SmokeThreatStepAllowance = 1f;
+    public const float MinimumSmokeScore = 1f;
+    public const float SupportTrailDistance = 2.5f;
+    private const float BrawlerRange = 3f;
+    private const float AbilityValueNoise = 1f;
+    private const float LostShotPenalty = 0.75f;
+    private const float DefaultEnemyShotRange = 5f;
+
     private readonly GameLoop gameLoop;
+    private readonly System.Random random;
     private readonly BotKnowledge knowledge = new();
     private readonly HashSet<Vector2Int> visibleEnemyCells = new();
+    private readonly Dictionary<Vector2Int, GameObject> visibleEnemyUnits = new();
+    private readonly Dictionary<ulong, GameObject> enemyUnitsById = new();
     private readonly HashSet<Vector2Int> observedCells = new();
     private readonly Dictionary<Vector2Int, int> lastObservedEpoch = new();
     private int observationEpoch;
 
     public int TeamIndex { get; }
+    public BotPlaystyle Playstyle { get; }
     public BotKnowledge Knowledge => knowledge;
     public bool IgnoresFog => gameLoop.Options.IsEscort;
     public int PlanningContributionCount { get; private set; }
@@ -171,11 +204,32 @@ public sealed class BotPlayer
     public int AbilityContributionCount { get; private set; }
     public bool LastPlanUsedAbility { get; private set; }
 
-    public BotPlayer(GameLoop gameLoop, int teamIndex)
+    public BotPlayer(GameLoop gameLoop, int teamIndex, int? seed = null)
     {
         this.gameLoop = gameLoop ?? throw new ArgumentNullException(nameof(gameLoop));
         TeamIndex = teamIndex;
+        random = seed.HasValue ? new System.Random(seed.Value) : new System.Random();
+        Playstyle = (BotPlaystyle)random.Next(Enum.GetValues(typeof(BotPlaystyle)).Length);
+        Debug.Log($"[Bot] Team {teamIndex} plays {Playstyle}");
     }
+
+    private float EngageRangeFactor =>
+        Playstyle switch
+        {
+            BotPlaystyle.Rush => 0.55f,
+            BotPlaystyle.Skirmish => 0.8f,
+            _ => 1f,
+        };
+    private float AbilityThreshold => Playstyle == BotPlaystyle.Rush ? 1f : 1.5f;
+    private float SupportBias => Playstyle == BotPlaystyle.Anchor ? 1.4f : 1f;
+    private float DamageBias => Playstyle == BotPlaystyle.Rush ? 1.3f : 1f;
+    private float ShortStepChance =>
+        Playstyle switch
+        {
+            BotPlaystyle.Rush => 0f,
+            BotPlaystyle.Skirmish => 0.15f,
+            _ => 0.35f,
+        };
 
     public PathsDict CreatePlanningContribution(int roundNumber)
     {
@@ -202,7 +256,7 @@ public sealed class BotPlayer
             .ToArray();
         TryChooseAbility(
             abilityCandidateUnits,
-            roundNumber,
+            botUnits,
             out abilityUnit,
             out abilityTarget,
             out abilityNeedsTarget
@@ -212,11 +266,30 @@ public sealed class BotPlayer
             AbilityContributionCount++;
 
         HashSet<Vector2Int> occupiedCells = new(botUnits.Select(GetCell).Concat(visibleEnemyCells));
+        List<Vector2Int> crewDestinations = new();
+        Vector2Int abilityLanding = default;
+        bool abilityRelocatesCaster =
+            abilityUnit != null
+            && abilityNeedsTarget
+            && abilityUnit
+                .GetComponent<Ability>()
+                .TryGetCasterDestination(
+                    GameLoop.gridCoordToWorld(abilityTarget),
+                    abilityUnit.GetComponent<Movement>().unitData,
+                    out abilityLanding
+                );
+        if (abilityRelocatesCaster)
+        {
+            occupiedCells.Add(abilityLanding);
+            crewDestinations.Add(abilityLanding);
+        }
+
         List<Vector2Int> targets = GetStrategicTargets(
             gameLoop.Options.gameMode,
             knowledge.GetTargetCells(),
             TeamIndex
         );
+        Vector2Int? focusTarget = ChooseFocusTarget(botUnits, targets);
 
         ResolveEscortRoles(
             out GameObject ownPresident,
@@ -224,13 +297,17 @@ public sealed class BotPlayer
             out List<Vector2Int> escortCrewTargets
         );
 
-        // The president plans first so his crew can screen the cell he commits to.
-        if (ownPresident != null)
-            botUnits = botUnits.OrderByDescending(unit => unit == ownPresident).ToArray();
+        // The president plans first so his crew can screen the cell he commits to; screeners plan
+        // last so they can settle behind wherever the rest of the crew is heading.
+        botUnits = botUnits
+            .OrderByDescending(unit => unit == ownPresident)
+            .ThenBy(IsScreener)
+            .ToArray();
 
         foreach (GameObject unit in botUnits)
         {
             Vector3 startWorld = GridSystem.GetNearestGridCell(unit);
+            Vector2Int start = GetCell(unit);
             if (BotFrozenUnits.IsFrozen(unit, TeamIndex))
             {
                 // Frozen means it never moves and never spends the ability slot; whether it shoots
@@ -238,6 +315,7 @@ public sealed class BotPlayer
                 // Shooting. A frozen crew still returns fire, which is what a sandbox opponent
                 // standing on a square is expected to do.
                 plans[unit] = (false, new List<Vector3> { startWorld });
+                crewDestinations.Add(start);
                 continue;
             }
             if (unit == abilityUnit)
@@ -248,30 +326,260 @@ public sealed class BotPlayer
                         new List<Vector3> { startWorld, GameLoop.gridCoordToWorld(abilityTarget) }
                     )
                     : (true, new List<Vector3> { startWorld });
+                if (!abilityRelocatesCaster)
+                    crewDestinations.Add(start);
                 continue;
             }
 
-            Vector2Int start = GetCell(unit);
             occupiedCells.Remove(start);
+            UnitData data = unit.GetComponent<Movement>().unitData;
+            List<Vector2Int> unitTargets =
+                unit == ownPresident
+                    ? presidentTargets
+                    : escortCrewTargets
+                        ?? ChooseRoleTargets(
+                            unit,
+                            data,
+                            start,
+                            targets,
+                            focusTarget,
+                            crewDestinations,
+                            occupiedCells
+                        );
             List<Vector2Int> cellPath = BuildMovementPath(
                 start,
-                unit == ownPresident ? presidentTargets : escortCrewTargets ?? targets,
+                unitTargets,
                 visibleEnemyCells,
                 occupiedCells,
-                unit.GetComponent<Movement>().unitData.moveDist,
+                data.moveDist,
                 observedCells,
-                lastObservedEpoch
+                lastObservedEpoch,
+                random
             );
+            if (
+                (unitTargets == null || unitTargets.Count == 0)
+                && cellPath.Count > 2
+                && random.NextDouble() < ShortStepChance
+            )
+            {
+                cellPath.RemoveAt(cellPath.Count - 1);
+            }
             if (unit == ownPresident && cellPath.Count > 0)
                 escortCrewTargets = BuildEscortScreenTargets(cellPath[^1], TeamIndex);
             // Movement speeds vary by unit, so reserving only matching timesteps is unsafe.
             // Reserve every cell in an earlier unit's route to prevent crossings and edge swaps.
             ReservePathCells(occupiedCells, cellPath);
+            crewDestinations.Add(cellPath[^1]);
 
             plans[unit] = (false, cellPath.Select(GameLoop.gridCoordToWorld).ToList());
         }
 
         return plans;
+    }
+
+    private static bool IsScreener(GameObject unit)
+    {
+        return unit.GetComponent<Smoke>() != null;
+    }
+
+    /// <summary>
+    /// Where a unit goes in Elimination once it knows where an enemy is: a firing position at the
+    /// range its role and the crew's playstyle want, rather than walking into the enemy's square.
+    /// A screener trails the crew instead, keeping its smoke in reach of everyone it covers.
+    /// Objective modes keep the objective as the destination.
+    /// </summary>
+    private List<Vector2Int> ChooseRoleTargets(
+        GameObject unit,
+        UnitData data,
+        Vector2Int start,
+        List<Vector2Int> strategicTargets,
+        Vector2Int? focusTarget,
+        IReadOnlyList<Vector2Int> crewDestinations,
+        ISet<Vector2Int> blockedCells
+    )
+    {
+        if (gameLoop.Options.gameMode != GameMode.Elimination)
+            return strategicTargets;
+
+        if (IsScreener(unit) && crewDestinations.Count > 0)
+        {
+            List<Vector2Int> trail = BuildSupportTargets(
+                crewDestinations,
+                strategicTargets,
+                blockedCells
+            );
+            if (trail.Count > 0)
+                return trail;
+        }
+
+        if (strategicTargets.Count == 0)
+            return strategicTargets;
+
+        Vector2Int nearest = strategicTargets
+            .OrderBy(cell => GridDistance(start, cell))
+            .ThenBy(cell => cell.x)
+            .ThenBy(cell => cell.y)
+            .First();
+        Vector2Int quarry =
+            focusTarget.HasValue
+            && GridDistance(start, focusTarget.Value) <= GridDistance(start, nearest) + 3
+                ? focusTarget.Value
+                : nearest;
+
+        List<Vector2Int> firingPositions = BuildEngagementTargets(
+            quarry,
+            data.targetRange,
+            PreferredEngageDistance(data),
+            blockedCells
+        );
+        if (firingPositions.Count == 0)
+            return strategicTargets;
+        if (firingPositions.Contains(start) && random.NextDouble() > 0.2)
+            return new List<Vector2Int> { start };
+        return firingPositions;
+    }
+
+    private float PreferredEngageDistance(UnitData data)
+    {
+        if (data.targetRange < BrawlerRange)
+            return 1f;
+        float factor = EngageRangeFactor;
+        if (data.unitClass == UnitClass.Controller || data.unitClass == UnitClass.Support)
+            factor = Mathf.Max(factor, 0.85f);
+        return Mathf.Clamp(data.targetRange * factor, 1.5f, data.targetRange);
+    }
+
+    /// <summary>
+    /// The crew converges on one enemy rather than each unit chasing its own: the weakest visible
+    /// enemy, or failing that the remembered one nearest the crew.
+    /// </summary>
+    private Vector2Int? ChooseFocusTarget(
+        IReadOnlyList<GameObject> crew,
+        IReadOnlyList<Vector2Int> strategicTargets
+    )
+    {
+        if (gameLoop.Options.gameMode != GameMode.Elimination || strategicTargets.Count == 0)
+            return null;
+
+        List<Vector2Int> visible = strategicTargets.Where(visibleEnemyCells.Contains).ToList();
+        if (visible.Count > 0)
+        {
+            float weakest = visible.Min(HealthFractionAt);
+            List<Vector2Int> weakestCells = visible
+                .Where(cell => HealthFractionAt(cell) <= weakest + 0.1f)
+                .ToList();
+            return weakestCells[random.Next(weakestCells.Count)];
+        }
+
+        Vector2 centroid = Centroid(crew.Select(GetCell));
+        return strategicTargets
+            .OrderBy(cell => Vector2.Distance(centroid, cell))
+            .ThenBy(cell => cell.x)
+            .ThenBy(cell => cell.y)
+            .First();
+    }
+
+    private float HealthFractionAt(Vector2Int cell)
+    {
+        Health health = visibleEnemyUnits.TryGetValue(cell, out GameObject enemy)
+            ? enemy.GetComponent<Health>()
+            : null;
+        return health != null && health.MaxHealth > 0f ? health.CurrentHealth / health.MaxHealth : 1f;
+    }
+
+    /// <summary>
+    /// Open cells with a line of sight to <paramref name="enemyCell"/>, at about
+    /// <paramref name="preferredDistance"/> from it and never beyond <paramref name="shotRange"/>.
+    /// </summary>
+    public static List<Vector2Int> BuildEngagementTargets(
+        Vector2Int enemyCell,
+        float shotRange,
+        float preferredDistance,
+        ISet<Vector2Int> blockedCells
+    )
+    {
+        float reach = Mathf.Max(1f, shotRange) + 0.0001f;
+        float near = Mathf.Max(0.5f, preferredDistance - 1f);
+        float far = Mathf.Min(reach, preferredDistance + 0.5f);
+        List<Vector2Int> cells = new();
+        for (int column = 0; column < GridSystem.ColumnCount; column++)
+        {
+            for (int row = 0; row < GridSystem.RowCount; row++)
+            {
+                Vector2Int cell = new(column, row);
+                float distance = Vector2.Distance(cell, enemyCell);
+                if (
+                    cell == enemyCell
+                    || distance < near
+                    || distance > far
+                    || GameLoop.wallLayout.Contains(cell)
+                    || (blockedCells != null && blockedCells.Contains(cell))
+                    || !GridSystem.HasGridLineOfSight(cell, enemyCell)
+                )
+                {
+                    continue;
+                }
+                cells.Add(cell);
+            }
+        }
+        return cells;
+    }
+
+    /// <summary>
+    /// Open cells just behind the crew — near its centre, and further from every known enemy than
+    /// the crew itself is — so a screener stays in smoke reach of the units it protects.
+    /// </summary>
+    public static List<Vector2Int> BuildSupportTargets(
+        IEnumerable<Vector2Int> crewCells,
+        IReadOnlyCollection<Vector2Int> threatCells,
+        ISet<Vector2Int> blockedCells
+    )
+    {
+        List<Vector2Int> crew = (crewCells ?? Enumerable.Empty<Vector2Int>()).ToList();
+        List<Vector2Int> cells = new();
+        if (crew.Count == 0)
+            return cells;
+
+        Vector2 centroid = Centroid(crew);
+        List<Vector2Int> threats = (threatCells ?? Array.Empty<Vector2Int>()).ToList();
+        float crewThreatDistance =
+            threats.Count == 0 ? 0f : threats.Min(threat => Vector2.Distance(centroid, threat));
+        for (int column = 0; column < GridSystem.ColumnCount; column++)
+        {
+            for (int row = 0; row < GridSystem.RowCount; row++)
+            {
+                Vector2Int cell = new(column, row);
+                float fromCentre = Vector2.Distance(cell, centroid);
+                if (
+                    fromCentre < 1f
+                    || fromCentre > SupportTrailDistance
+                    || GameLoop.wallLayout.Contains(cell)
+                    || (blockedCells != null && blockedCells.Contains(cell))
+                    || (
+                        threats.Count > 0
+                        && threats.Min(threat => Vector2.Distance(cell, threat))
+                            < crewThreatDistance + 0.5f
+                    )
+                )
+                {
+                    continue;
+                }
+                cells.Add(cell);
+            }
+        }
+        return cells;
+    }
+
+    private static Vector2 Centroid(IEnumerable<Vector2Int> cells)
+    {
+        Vector2 sum = Vector2.zero;
+        int count = 0;
+        foreach (Vector2Int cell in cells)
+        {
+            sum += cell;
+            count++;
+        }
+        return count == 0 ? Vector2.zero : sum / count;
     }
 
     public const int EscortScreenLeadCells = 2;
@@ -516,12 +824,69 @@ public sealed class BotPlayer
         visibleEnemyCells.Clear();
         visibleEnemyCells.UnionWith(sightings.Select(sighting => sighting.Cell));
 
+        enemyUnitsById.Clear();
+        foreach (GameObject enemy in GameLoop.GetTeamUnits(GameLoop.GetEnemyTeamIndex(TeamIndex)))
+        {
+            if (enemy != null)
+                enemyUnitsById[GetStableUnitId(enemy)] = enemy;
+        }
+        visibleEnemyUnits.Clear();
+        foreach (BotEnemySighting sighting in sightings)
+        {
+            if (enemyUnitsById.TryGetValue(sighting.EnemyId, out GameObject enemy))
+                visibleEnemyUnits[sighting.Cell] = enemy;
+        }
+
         knowledge.Update(visibleCells, sightings);
     }
 
+    private List<BotShooter> GetKnownEnemyShooters()
+    {
+        return knowledge
+            .LastKnownCells.OrderBy(entry => entry.Key)
+            .Select(entry => new BotShooter(
+                entry.Value,
+                enemyUnitsById.TryGetValue(entry.Key, out GameObject enemy)
+                    ? ShotRangeOf(enemy)
+                    : DefaultEnemyShotRange
+            ))
+            .ToList();
+    }
+
+    private static float ShotRangeOf(GameObject unit)
+    {
+        UnitData data = unit.GetComponent<Movement>()?.unitData;
+        return unit.GetComponent<Shooting>() != null && data != null ? data.targetRange : 0f;
+    }
+
+    /// <summary>
+    /// How much keeping enemy fire off this ally is worth: more the more wounded it is, and far
+    /// more for an escorted president.
+    /// </summary>
+    private float ScreenWeightOf(GameObject ally)
+    {
+        Health health = ally.GetComponent<Health>();
+        float missing =
+            health != null && health.MaxHealth > 0f
+                ? 1f - health.CurrentHealth / health.MaxHealth
+                : 0f;
+        float weight = 1f + 1.5f * Mathf.Clamp01(missing);
+        return ally == gameLoop.GetPresident(TeamIndex) ? weight * 3f : weight;
+    }
+
+    private static bool IsWithin(Vector2Int from, Vector2Int to, float range)
+    {
+        return (to - from).sqrMagnitude <= range * range + 0.0001f;
+    }
+
+    /// <summary>
+    /// The round has one ability slot. Every unit that could spend it proposes its best use with
+    /// a value; the slot goes to the highest after a little noise, and stays unspent when nothing
+    /// clears the playstyle's bar.
+    /// </summary>
     private void TryChooseAbility(
-        IReadOnlyList<GameObject> botUnits,
-        int roundNumber,
+        IReadOnlyList<GameObject> casters,
+        IReadOnlyList<GameObject> crew,
         out GameObject selectedUnit,
         out Vector2Int target,
         out bool needsTarget
@@ -530,154 +895,323 @@ public sealed class BotPlayer
         selectedUnit = null;
         target = default;
         needsTarget = false;
+        float bestValue = AbilityThreshold;
+        List<BotShooter> knownEnemies = GetKnownEnemyShooters();
 
-        List<(GameObject unit, int index, UnitData data)> candidates = botUnits
-            .Select((unit, index) => (unit, index, data: unit.GetComponent<Movement>()?.unitData))
-            .Where(candidate =>
-                candidate.data != null
-                && candidate.unit.GetComponent<Ability>() != null
-                && candidate.unit.GetComponent<Unit>()?.CanUseAbility == true
-            )
-            .OrderBy(candidate =>
-                candidate.data.selectAbilitySquare ? (candidate.data.abilityRadius > 0f ? 0 : 1) : 2
-            )
-            .ThenBy(candidate =>
-                (candidate.index - roundNumber % botUnits.Count + botUnits.Count) % botUnits.Count
-            )
-            .ToList();
-
-        foreach (var candidate in candidates)
+        foreach (GameObject unit in casters)
         {
-            Vector2Int start = GetCell(candidate.unit);
-            if (candidate.unit.GetComponent<Smoke>() != null)
-            {
-                if (!candidate.data.selectAbilitySquare || candidate.data.selectAbilityDirection)
-                    continue;
-
-                List<BotSmokeAlly> allies = botUnits
-                    .Select(unit =>
-                    {
-                        UnitData allyData = unit.GetComponent<Movement>()?.unitData;
-                        float shotRange =
-                            unit.GetComponent<Shooting>() != null && allyData != null
-                                ? allyData.targetRange
-                                : 0f;
-                        return new BotSmokeAlly(GetCell(unit), shotRange);
-                    })
-                    .ToList();
-                if (
-                    !TryChooseSmokeCenter(
-                        start,
-                        candidate.data.abilitySquareRange,
-                        allies,
-                        knowledge.GetTargetCells(),
-                        visibleEnemyCells,
-                        gameLoop.ActiveSmokeCells,
-                        out Vector2Int smokeTarget,
-                        out _
-                    )
+            UnitData data = unit.GetComponent<Movement>()?.unitData;
+            Ability ability = unit.GetComponent<Ability>();
+            if (data == null || ability == null || unit.GetComponent<Unit>()?.CanUseAbility != true)
+                continue;
+            if (
+                !TryEvaluateAbility(
+                    unit,
+                    data,
+                    ability,
+                    crew,
+                    knownEnemies,
+                    out Vector2Int optionTarget,
+                    out bool optionNeedsTarget,
+                    out float value
                 )
-                {
-                    continue;
-                }
-
-                selectedUnit = candidate.unit;
-                target = smokeTarget;
-                needsTarget = true;
-                return;
+            )
+            {
+                continue;
             }
 
-            if (visibleEnemyCells.Count == 0)
+            float noisyValue = value + (float)random.NextDouble() * AbilityValueNoise;
+            if (noisyValue <= bestValue)
                 continue;
 
-            if (candidate.data.selectAbilityDirection)
-            {
-                foreach (
-                    Vector2Int visibleTarget in visibleEnemyCells
-                        .OrderBy(cell => GridDistance(start, cell))
-                        .ThenBy(cell => cell.x)
-                        .ThenBy(cell => cell.y)
-                )
-                {
-                    Vector2Int delta = visibleTarget - start;
-                    int directionalDistance = Mathf.Max(Mathf.Abs(delta.x), Mathf.Abs(delta.y));
-                    int engageRange =
-                        candidate.data.abilityFixedDistance
-                        + Mathf.CeilToInt(candidate.data.targetRange);
-                    if (directionalDistance > engageRange)
-                        continue;
+            bestValue = noisyValue;
+            selectedUnit = unit;
+            target = optionTarget;
+            needsTarget = optionNeedsTarget;
+        }
+    }
 
-                    Vector2Int direction = new(Math.Sign(delta.x), Math.Sign(delta.y));
-                    Vector2Int directionTarget = start + direction;
-                    Vector2Int destination = GridSystem.GetDirectionalDestination(
-                        start,
-                        direction,
-                        candidate.data.abilityFixedDistance,
-                        GameLoop.wallLayout
-                    );
+    private bool TryEvaluateAbility(
+        GameObject unit,
+        UnitData data,
+        Ability ability,
+        IReadOnlyList<GameObject> crew,
+        IReadOnlyList<BotShooter> knownEnemies,
+        out Vector2Int target,
+        out bool needsTarget,
+        out float value
+    )
+    {
+        target = default;
+        needsTarget = false;
+        value = 0f;
+        Vector2Int start = GetCell(unit);
+
+        if (ability is Smoke)
+        {
+            if (!data.selectAbilitySquare || data.selectAbilityDirection)
+                return false;
+            List<BotShooter> allies = crew.Select(ally => new BotShooter(
+                    GetCell(ally),
+                    ShotRangeOf(ally),
+                    ScreenWeightOf(ally)
+                ))
+                .ToList();
+            if (
+                !TryChooseSmokeCenter(
+                    start,
+                    data.abilitySquareRange,
+                    allies,
+                    knownEnemies,
+                    visibleEnemyCells,
+                    gameLoop.ActiveSmokeCells,
+                    out target,
+                    out float score,
+                    random
+                )
+            )
+            {
+                return false;
+            }
+            needsTarget = true;
+            value = score * SupportBias;
+            return true;
+        }
+
+        if (visibleEnemyCells.Count == 0)
+            return false;
+
+        if (ability is ShieldStance)
+            return TryEvaluateShield(start, data, out target, out needsTarget, out value);
+        if (ability is Pogo)
+            return TryEvaluatePogo(start, data, crew, out target, out needsTarget, out value);
+        if (data.selectAbilityDirection)
+            return TryEvaluateDirectional(start, data, out target, out needsTarget, out value);
+
+        AbilityLineOfFire lineOfFire = ability.LineOfFire;
+        if (!data.selectAbilitySquare)
+        {
+            bool isRecall = ability is PresidentialRecall;
+            float reach = !isRecall && data.abilityRadius > 0f ? data.abilityRadius : data.targetRange;
+            int caught = visibleEnemyCells.Count(cell =>
+                IsWithin(start, cell, reach) && HasUsableLineOfFire(start, cell, lineOfFire)
+            );
+            if (caught == 0)
+                return false;
+            value = isRecall ? 3f : (1.5f + 1.2f * caught) * DamageBias;
+            return true;
+        }
+
+        List<Vector2Int> aims = OrderAimCandidates(start, visibleEnemyCells, lineOfFire)
+            .Where(cell =>
+                GridDistance(start, cell) <= data.abilitySquareRange
+                && (data.responseDistLine || !GameLoop.wallLayout.Contains(cell))
+            )
+            .ToList();
+        if (aims.Count == 0)
+            return false;
+
+        needsTarget = true;
+        if (data.responseDistLine || data.abilityRadius <= 0f)
+        {
+            target = aims[0];
+            value = 2.5f * DamageBias;
+            return true;
+        }
+
+        int bestCaught = 0;
+        foreach (Vector2Int aim in aims)
+        {
+            int caught = visibleEnemyCells.Count(cell => IsWithin(aim, cell, data.abilityRadius));
+            if (caught <= bestCaught)
+                continue;
+            bestCaught = caught;
+            target = aim;
+        }
+        value = (1.5f + 1.2f * bestCaught) * DamageBias;
+        return true;
+    }
+
+    private bool TryEvaluateDirectional(
+        Vector2Int start,
+        UnitData data,
+        out Vector2Int target,
+        out bool needsTarget,
+        out float value
+    )
+    {
+        target = default;
+        needsTarget = false;
+        value = 0f;
+        int shotRange = Mathf.CeilToInt(data.targetRange);
+        foreach (
+            Vector2Int visibleTarget in visibleEnemyCells
+                .OrderBy(cell => GridDistance(start, cell))
+                .ThenBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+        )
+        {
+            Vector2Int delta = visibleTarget - start;
+            int directionalDistance = Mathf.Max(Mathf.Abs(delta.x), Mathf.Abs(delta.y));
+            if (directionalDistance > data.abilityFixedDistance + shotRange)
+                continue;
+
+            Vector2Int direction = new(Math.Sign(delta.x), Math.Sign(delta.y));
+            Vector2Int directionTarget = start + direction;
+            Vector2Int destination = GridSystem.GetDirectionalDestination(
+                start,
+                direction,
+                data.abilityFixedDistance,
+                GameLoop.wallLayout
+            );
+            if (
+                direction == Vector2Int.zero
+                || !GridSystem.IsCellInBounds(directionTarget)
+                || destination == start
+                || WouldAbandonHill(gameLoop.Options.gameMode, start, destination)
+                || GridDistance(destination, visibleTarget) > shotRange
+                || !GridSystem.HasGridLineOfSight(destination, visibleTarget)
+            )
+            {
+                continue;
+            }
+
+            target = directionTarget;
+            needsTarget = true;
+            value = 2.5f * DamageBias;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// A shield is worth raising only toward enemies close enough to be shooting at the bearer
+    /// this round, and is turned to face as many of them as one direction can.
+    /// </summary>
+    private bool TryEvaluateShield(
+        Vector2Int start,
+        UnitData data,
+        out Vector2Int target,
+        out bool needsTarget,
+        out float value
+    )
+    {
+        target = default;
+        needsTarget = false;
+        value = 0f;
+        List<Vector2Int> shooters = visibleEnemyCells
+            .Where(cell =>
+                IsWithin(
+                    cell,
+                    start,
+                    (visibleEnemyUnits.TryGetValue(cell, out GameObject enemy)
+                        ? ShotRangeOf(enemy)
+                        : DefaultEnemyShotRange) + SmokeThreatStepAllowance
+                )
+                && GridSystem.HasGridLineOfSight(cell, start)
+            )
+            .ToList();
+        if (shooters.Count == 0)
+            return false;
+
+        int bestCovered = 0;
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                Vector2Int direction = new(dx, dy);
+                if (direction == Vector2Int.zero || !GridSystem.IsCellInBounds(start + direction))
+                    continue;
+                Vector2 facing = ((Vector2)direction).normalized;
+                int covered = shooters.Count(cell =>
+                    Vector2.Dot(((Vector2)(cell - start)).normalized, facing) > 0.7f
+                );
+                if (covered <= bestCovered)
+                    continue;
+                bestCovered = covered;
+                target = start + direction;
+            }
+        }
+        if (bestCovered == 0)
+            return false;
+
+        needsTarget = true;
+        value = (1f + 1.2f * bestCovered) * SupportBias;
+        return true;
+    }
+
+    /// <summary>
+    /// Pogo is a reposition, not an attack: it lands on open ground in shooting range of a
+    /// visible enemy, preferably behind it for the backstab, and away from the rest of its crew.
+    /// </summary>
+    private bool TryEvaluatePogo(
+        Vector2Int start,
+        UnitData data,
+        IReadOnlyList<GameObject> crew,
+        out Vector2Int target,
+        out bool needsTarget,
+        out float value
+    )
+    {
+        target = default;
+        needsTarget = false;
+        value = 0f;
+        HashSet<Vector2Int> occupied = new(crew.Select(GetCell).Concat(visibleEnemyCells));
+        bool alreadyHasShot = visibleEnemyCells.Any(cell =>
+            IsWithin(start, cell, data.targetRange) && GridSystem.HasGridLineOfSight(start, cell)
+        );
+        float bestScore = float.NegativeInfinity;
+
+        foreach (KeyValuePair<Vector2Int, GameObject> quarry in visibleEnemyUnits)
+        {
+            Vector2 enemyFacing = new(
+                quarry.Value.transform.forward.x,
+                quarry.Value.transform.forward.z
+            );
+            for (int column = 0; column < GridSystem.ColumnCount; column++)
+            {
+                for (int row = 0; row < GridSystem.RowCount; row++)
+                {
+                    Vector2Int landing = new(column, row);
+                    float distance = Vector2.Distance(landing, quarry.Key);
                     if (
-                        direction == Vector2Int.zero
-                        || !GridSystem.IsCellInBounds(directionTarget)
-                        || destination == start
-                        || WouldAbandonHill(gameLoop.Options.gameMode, start, destination)
-                        || GridDistance(destination, visibleTarget)
-                            > Mathf.CeilToInt(candidate.data.targetRange)
-                        || !GridSystem.HasGridLineOfSight(destination, visibleTarget)
+                        distance < 2f
+                        || !IsWithin(landing, quarry.Key, data.targetRange)
+                        || GridDistance(start, landing) > data.abilitySquareRange
+                        || occupied.Contains(landing)
+                        || GameLoop.wallLayout.Contains(landing)
+                        || WouldAbandonHill(gameLoop.Options.gameMode, start, landing)
+                        || !GridSystem.HasGridLineOfSight(landing, quarry.Key)
                     )
                     {
                         continue;
                     }
 
-                    selectedUnit = candidate.unit;
-                    target = directionTarget;
-                    needsTarget = true;
-                    return;
+                    bool behind = Vector2.Dot(enemyFacing, landing - quarry.Key) < 0f;
+                    int exposure = visibleEnemyUnits.Count(other =>
+                        other.Key != quarry.Key
+                        && IsWithin(other.Key, landing, ShotRangeOf(other.Value))
+                        && GridSystem.HasGridLineOfSight(other.Key, landing)
+                    );
+                    float score =
+                        (behind ? 1.5f : 0f)
+                        - 0.6f * exposure
+                        + (1f - HealthFractionAt(quarry.Key))
+                        + (float)random.NextDouble() * 0.3f;
+                    if (score <= bestScore)
+                        continue;
+                    bestScore = score;
+                    target = landing;
                 }
-                continue;
-            }
-
-            AbilityLineOfFire lineOfFire = candidate.unit.GetComponent<Ability>().LineOfFire;
-
-            if (!candidate.data.selectAbilitySquare)
-            {
-                bool enemyClose = visibleEnemyCells.Any(cell =>
-                    GridDistance(start, cell) <= Mathf.CeilToInt(candidate.data.targetRange)
-                    && HasUsableLineOfFire(start, cell, lineOfFire)
-                );
-                if (!enemyClose)
-                    continue;
-
-                selectedUnit = candidate.unit;
-                needsTarget = false;
-                return;
-            }
-
-            foreach (Vector2Int visibleTarget in OrderAimCandidates(
-                start,
-                visibleEnemyCells,
-                lineOfFire
-            ))
-            {
-                if (GridDistance(start, visibleTarget) > candidate.data.abilitySquareRange)
-                    continue;
-                if (!candidate.data.responseDistLine && GameLoop.wallLayout.Contains(visibleTarget))
-                {
-                    continue;
-                }
-                if (
-                    candidate.unit.GetComponent<Pogo>() != null
-                    && WouldAbandonHill(gameLoop.Options.gameMode, start, visibleTarget)
-                )
-                {
-                    continue;
-                }
-
-                selectedUnit = candidate.unit;
-                target = visibleTarget;
-                needsTarget = true;
-                return;
             }
         }
+
+        if (float.IsNegativeInfinity(bestScore))
+            return false;
+
+        needsTarget = true;
+        value = (alreadyHasShot ? 0.5f : 1.5f) + Mathf.Max(0f, bestScore);
+        return true;
     }
 
     /// <summary>
@@ -729,59 +1263,79 @@ public sealed class BotPlayer
     }
 
     /// <summary>
-    /// Selects a legal 3x3 Smoke center using only allied state, visible enemy cells, and
-    /// fog-bounded last-known enemy cells. Remembered enemies contribute possible incoming lanes,
-    /// but only currently visible enemies can count as confirmed friendly shot opportunities.
+    /// Selects a legal 3x3 Smoke center that cuts real incoming fire. A lane counts only when the
+    /// enemy at one end could actually shoot the ally at the other — within its shot range plus a
+    /// step — so a crew a board away never draws a screen. Each lane is worth the ally's weight;
+    /// smoke that would also blind a shot an ally has right now on a visible enemy costs some back.
+    /// Enemy positions are visible or fog-bounded last-known cells only. Centers within a quarter
+    /// point of the best are picked between at random when <paramref name="random"/> is given.
     /// </summary>
     public static bool TryChooseSmokeCenter(
         Vector2Int casterCell,
         int castRange,
-        IEnumerable<BotSmokeAlly> allies,
-        IEnumerable<Vector2Int> knownEnemyCells,
+        IEnumerable<BotShooter> allies,
+        IEnumerable<BotShooter> knownEnemies,
         IEnumerable<Vector2Int> currentlyVisibleEnemyCells,
         IEnumerable<Vector2Int> activeSmokeCells,
         out Vector2Int selectedCenter,
-        out int selectedScore
+        out float selectedScore,
+        System.Random random = null
     )
     {
-        List<BotSmokeAlly> allyList = (allies ?? Enumerable.Empty<BotSmokeAlly>())
+        List<BotShooter> allyList = (allies ?? Enumerable.Empty<BotShooter>())
             .Where(ally => GridSystem.IsCellInBounds(ally.Cell))
-            .OrderBy(ally => ally.Cell.x)
-            .ThenBy(ally => ally.Cell.y)
-            .ThenBy(ally => ally.ShotRange)
             .ToList();
-        List<Vector2Int> knownEnemies = (
-            knownEnemyCells ?? Enumerable.Empty<Vector2Int>()
-        )
-            .Where(GridSystem.IsCellInBounds)
-            .Distinct()
-            .OrderBy(cell => cell.x)
-            .ThenBy(cell => cell.y)
+        List<BotShooter> enemyList = (knownEnemies ?? Enumerable.Empty<BotShooter>())
+            .Where(enemy => GridSystem.IsCellInBounds(enemy.Cell))
             .ToList();
         List<Vector2Int> visibleEnemies = (
             currentlyVisibleEnemyCells ?? Enumerable.Empty<Vector2Int>()
         )
             .Where(GridSystem.IsCellInBounds)
             .Distinct()
-            .OrderBy(cell => cell.x)
-            .ThenBy(cell => cell.y)
             .ToList();
         HashSet<Vector2Int> existingSmoke = new(
-            (activeSmokeCells ?? Enumerable.Empty<Vector2Int>())
-                .Where(GridSystem.IsCellInBounds)
+            (activeSmokeCells ?? Enumerable.Empty<Vector2Int>()).Where(GridSystem.IsCellInBounds)
         );
 
         selectedCenter = default;
-        selectedScore = 0;
-        if (
-            !GridSystem.IsCellInBounds(casterCell)
-            || allyList.Count == 0
-            || knownEnemies.Count == 0
-        )
-        {
+        selectedScore = 0f;
+        if (!GridSystem.IsCellInBounds(casterCell) || allyList.Count == 0 || enemyList.Count == 0)
             return false;
+
+        List<(Vector2Int enemy, Vector2Int ally, float weight)> threatLanes = new();
+        foreach (BotShooter enemy in enemyList)
+        {
+            foreach (BotShooter ally in allyList)
+            {
+                if (
+                    IsWithin(enemy.Cell, ally.Cell, enemy.ShotRange + SmokeThreatStepAllowance)
+                    && IsOpenShotLine(enemy.Cell, ally.Cell, existingSmoke)
+                )
+                {
+                    threatLanes.Add((enemy.Cell, ally.Cell, ally.Weight));
+                }
+            }
+        }
+        if (threatLanes.Count == 0)
+            return false;
+
+        List<(Vector2Int ally, Vector2Int enemy)> ownShots = new();
+        foreach (Vector2Int enemyCell in visibleEnemies)
+        {
+            foreach (BotShooter ally in allyList)
+            {
+                if (
+                    IsWithin(ally.Cell, enemyCell, ally.ShotRange)
+                    && IsOpenShotLine(ally.Cell, enemyCell, existingSmoke)
+                )
+                {
+                    ownShots.Add((ally.Cell, enemyCell));
+                }
+            }
         }
 
+        List<(Vector2Int center, float score)> scored = new();
         int legalCastRange = Mathf.Max(0, castRange);
         for (int column = 0; column < GridSystem.ColumnCount; column++)
         {
@@ -797,77 +1351,33 @@ public sealed class BotPlayer
                     continue;
                 }
 
-                int score = ScoreSmokeCenter(
-                    center,
-                    allyList,
-                    knownEnemies,
-                    visibleEnemies,
-                    existingSmoke
+                HashSet<Vector2Int> footprint = new(
+                    GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
                 );
-                if (
-                    score <= 0
-                    || score < selectedScore
-                    || (
-                        score == selectedScore
-                        && selectedScore > 0
-                        && CompareCells(center, selectedCenter) >= 0
-                    )
-                )
-                {
-                    continue;
-                }
-
-                selectedCenter = center;
-                selectedScore = score;
+                float score =
+                    threatLanes
+                        .Where(lane =>
+                            GridSystem.DoesCellSegmentCrossCells(lane.enemy, lane.ally, footprint)
+                        )
+                        .Sum(lane => lane.weight)
+                    - LostShotPenalty
+                        * ownShots.Count(shot =>
+                            GridSystem.DoesCellSegmentCrossCells(shot.ally, shot.enemy, footprint)
+                        );
+                if (score >= MinimumSmokeScore)
+                    scored.Add((center, score));
             }
         }
+        if (scored.Count == 0)
+            return false;
 
-        return selectedScore > 0;
-    }
-
-    private static int ScoreSmokeCenter(
-        Vector2Int center,
-        IReadOnlyList<BotSmokeAlly> allies,
-        IReadOnlyList<Vector2Int> knownEnemyCells,
-        IReadOnlyList<Vector2Int> visibleEnemyCells,
-        ISet<Vector2Int> activeSmokeCells
-    )
-    {
-        HashSet<Vector2Int> footprint = new(
-            GridSystem.GetSquareFootprint(center, Smoke.FootprintRadius)
-        );
-        int score = 0;
-
-        foreach (Vector2Int enemyCell in knownEnemyCells)
-        {
-            foreach (BotSmokeAlly ally in allies)
-            {
-                if (
-                    IsOpenShotLine(enemyCell, ally.Cell, activeSmokeCells)
-                    && GridSystem.DoesCellSegmentCrossCells(enemyCell, ally.Cell, footprint)
-                )
-                {
-                    score++;
-                }
-            }
-        }
-
-        foreach (Vector2Int enemyCell in visibleEnemyCells)
-        {
-            foreach (BotSmokeAlly ally in allies)
-            {
-                if (
-                    IsWithinShotRange(ally, enemyCell)
-                    && IsOpenShotLine(ally.Cell, enemyCell, activeSmokeCells)
-                    && GridSystem.DoesCellSegmentCrossCells(ally.Cell, enemyCell, footprint)
-                )
-                {
-                    score--;
-                }
-            }
-        }
-
-        return score;
+        float best = scored.Max(option => option.score);
+        List<(Vector2Int center, float score)> contenders = scored
+            .Where(option => option.score >= best - (random == null ? 0f : 0.25f))
+            .ToList();
+        (selectedCenter, selectedScore) =
+            random == null ? contenders[0] : contenders[random.Next(contenders.Count)];
+        return true;
     }
 
     private static bool IsOpenShotLine(
@@ -881,13 +1391,6 @@ public sealed class BotPlayer
             && !GridSystem.DoesCellSegmentCrossCells(start, end, activeSmokeCells);
     }
 
-    private static bool IsWithinShotRange(BotSmokeAlly ally, Vector2Int target)
-    {
-        Vector2Int delta = target - ally.Cell;
-        float squaredDistance = delta.x * delta.x + delta.y * delta.y;
-        return squaredDistance <= ally.ShotRange * ally.ShotRange + 0.0001f;
-    }
-
     /// <summary>
     /// Prioritizes visible or remembered enemy targets. When none are reachable, explores toward
     /// the nearest unobserved frontier using only observation history and public board geometry.
@@ -899,12 +1402,11 @@ public sealed class BotPlayer
         ISet<Vector2Int> blockedCells,
         int maxSteps,
         IEnumerable<Vector2Int> observedCells = null,
-        IReadOnlyDictionary<Vector2Int, int> observationEpochs = null
+        IReadOnlyDictionary<Vector2Int, int> observationEpochs = null,
+        System.Random random = null
     )
     {
-        List<Vector2Int> bestPath = null;
-        Vector2Int bestTarget = default;
-        bool stopShortOfBestTarget = false;
+        List<(List<Vector2Int> path, bool isVisibleEnemy)> routes = new();
         foreach (
             Vector2Int candidate in (targetCells ?? Enumerable.Empty<Vector2Int>())
                 .Distinct()
@@ -926,31 +1428,30 @@ public sealed class BotPlayer
             }
 
             List<Vector2Int> path = GridSystem.FindPath(start, candidate, blockedCells);
-            if (
-                path == null
-                || (
-                    bestPath != null
-                    && (
-                        path.Count > bestPath.Count
-                        || (
-                            path.Count == bestPath.Count && CompareCells(candidate, bestTarget) >= 0
-                        )
-                    )
-                )
-            )
-            {
-                continue;
-            }
-
-            bestPath = path;
-            bestTarget = candidate;
-            stopShortOfBestTarget = isVisibleEnemy;
+            if (path != null)
+                routes.Add((path, isVisibleEnemy));
         }
 
-        if (bestPath == null)
+        List<Vector2Int> bestPath = null;
+        bool stopShortOfBestTarget = false;
+        if (routes.Count > 0)
         {
-            bestPath = FindExplorationPath(start, observedCells, observationEpochs, blockedCells);
-            stopShortOfBestTarget = false;
+            (bestPath, stopShortOfBestTarget) = PickNearBest(
+                routes,
+                route => route.path.Count,
+                random,
+                RandomRouteSlack
+            );
+        }
+        else
+        {
+            bestPath = FindExplorationPath(
+                start,
+                observedCells,
+                observationEpochs,
+                blockedCells,
+                random
+            );
         }
 
         if (bestPath == null || bestPath.Count == 0)
@@ -962,6 +1463,24 @@ public sealed class BotPlayer
 
         int steps = Mathf.Min(Mathf.Max(0, maxSteps), availableSteps);
         return bestPath.GetRange(0, steps + 1);
+    }
+
+    /// <summary>
+    /// The first option with the lowest cost, or — given a <paramref name="random"/> — any option
+    /// within <paramref name="slack"/> of it. Options must arrive in their deterministic order.
+    /// </summary>
+    private static T PickNearBest<T>(
+        IReadOnlyList<T> options,
+        Func<T, int> cost,
+        System.Random random,
+        int slack
+    )
+    {
+        int best = options.Min(cost);
+        List<T> contenders = options
+            .Where(option => cost(option) <= best + (random == null ? 0 : slack))
+            .ToList();
+        return random == null ? contenders[0] : contenders[random.Next(contenders.Count)];
     }
 
     public static void ReservePathCells(
@@ -980,7 +1499,8 @@ public sealed class BotPlayer
         Vector2Int start,
         IEnumerable<Vector2Int> observedCells,
         IReadOnlyDictionary<Vector2Int, int> observationEpochs,
-        ISet<Vector2Int> blockedCells
+        ISet<Vector2Int> blockedCells,
+        System.Random random
     )
     {
         HashSet<Vector2Int> observed = new(
@@ -1034,54 +1554,42 @@ public sealed class BotPlayer
                     && !GameLoop.wallLayout.Contains(cell)
                     && (blockedCells == null || !blockedCells.Contains(cell))
                 )
-                .OrderBy(cell =>
-                    observationEpochs != null && observationEpochs.TryGetValue(cell, out int epoch)
-                        ? epoch
-                        : int.MinValue
-                )
-                .ThenBy(cell => cell.x)
+                .OrderBy(cell => cell.x)
                 .ThenBy(cell => cell.y)
                 .ToList();
         }
-        List<Vector2Int> bestPath = null;
-        Vector2Int bestTarget = default;
-        int bestEpoch = int.MaxValue;
 
+        List<(List<Vector2Int> path, int epoch)> routes = new();
         foreach (Vector2Int candidate in candidates)
         {
             List<Vector2Int> path = GridSystem.FindPath(start, candidate, blockedCells);
             if (path == null)
                 continue;
-
-            int candidateEpoch =
-                observationEpochs != null && observationEpochs.TryGetValue(candidate, out int epoch)
-                    ? epoch
-                    : int.MinValue;
-            bool better =
-                bestPath == null
-                || (patrolObservedCells && candidateEpoch < bestEpoch)
-                || (
-                    (!patrolObservedCells || candidateEpoch == bestEpoch)
-                    && (
-                        preferLongestPath
-                            ? path.Count > bestPath.Count
-                            : path.Count < bestPath.Count
-                    )
+            routes.Add(
+                (
+                    path,
+                    observationEpochs != null && observationEpochs.TryGetValue(candidate, out int epoch)
+                        ? epoch
+                        : int.MinValue
                 )
-                || (
-                    (!patrolObservedCells || candidateEpoch == bestEpoch)
-                    && path.Count == bestPath.Count
-                    && CompareCells(candidate, bestTarget) < 0
-                );
-            if (!better)
-                continue;
+            );
+        }
+        if (routes.Count == 0)
+            return null;
 
-            bestPath = path;
-            bestTarget = candidate;
-            bestEpoch = candidateEpoch;
+        if (patrolObservedCells)
+        {
+            int stalest = routes.Min(route => route.epoch);
+            routes = routes.Where(route => route.epoch == stalest).ToList();
         }
 
-        return bestPath;
+        return PickNearBest(
+                routes,
+                route => preferLongestPath ? -route.path.Count : route.path.Count,
+                random,
+                RandomExplorationSlack
+            )
+            .path;
     }
 
     public static Vector2Int ChooseSafestDodgeCell(
