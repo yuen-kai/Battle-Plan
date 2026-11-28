@@ -19,7 +19,7 @@ public class ReplayViewer : MonoBehaviour
 {
     // Stepping between rounds plays the recorded frames between them over this long, so a round
     // reads as time moving rather than as a cut, whatever its length.
-    private const float TimelapseSeconds = 1f;
+    private const float TimelapseSeconds = 0.3f;
 
     // The live planning board is the end of the round that led to it, so the slider's far right
     // on the latest round is the live board rather than a frame of the replay.
