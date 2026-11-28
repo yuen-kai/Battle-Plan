@@ -239,6 +239,9 @@ public class DashRush : Ability
     /// cells down the line stays put until the charge gets there instead of flying off the instant
     /// the ability is declared. Each shove is fired without a yield so its own slide-and-stun
     /// coroutine (see AbilityKnockback) runs alongside the rest of the charge instead of halting it.
+    /// The shove runs on the GameLoop rather than on Ramrod: a shove books its unit with the round,
+    /// which waits for it to land, and Ramrod dying mid-charge would otherwise stop that coroutine
+    /// with the booking still held and the round never closing.
     /// </summary>
     private void ShoveEnemiesOnContact(List<GameObject> enemiesOnTheLine, Vector2Int direction)
     {
@@ -261,7 +264,8 @@ public class DashRush : Ability
                 continue;
 
             enemiesOnTheLine.RemoveAt(index);
-            StartCoroutine(AbilityKnockback.ShoveOffPath(enemy, direction, KnockbackStunSeconds));
+            MonoBehaviour host = GameLoop.Instance != null ? GameLoop.Instance : this;
+            host.StartCoroutine(AbilityKnockback.ShoveOffPath(enemy, direction, KnockbackStunSeconds));
         }
     }
 
